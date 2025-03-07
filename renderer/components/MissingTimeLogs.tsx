@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { MagicCard } from './magicui/magic-card';
 
 interface MissingLog {
   id: string;
@@ -13,6 +14,8 @@ export default function MissingTimeLogs() {
   const [missingLogs, setMissingLogs] = useState<MissingLog[]>([]);
 
   return (
+    <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
+
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Missing Time Logs</h2>
       <div className="overflow-x-auto">
@@ -44,5 +47,6 @@ export default function MissingTimeLogs() {
         </table>
       </div>
     </div>
+    </MagicCard>
   );
 }

@@ -13,6 +13,7 @@ import { DeductionsDialog } from '@/renderer/components/DeductionsDialog';
 import { usePathname, useRouter } from 'next/navigation';
 import { createEmployeeModel, Employee } from '@/renderer/model/employee';
 import RootLayout from '@/renderer/components/layout';
+import AddButton from "@/renderer/components/magicui/add-button";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -225,7 +226,7 @@ export default function PayrollPage() {
           <button
             onClick={handleDeductionsClick}
             disabled={!selectedEmployeeId || isLoading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Generate Payroll
           </button>
@@ -284,24 +285,10 @@ export default function PayrollPage() {
               <h3 className="mt-2 text-xl font-semibold text-gray-900">No Employee Selected</h3>
               <p className="mt-2 text-sm text-gray-500">Please select an employee from the dropdown menu to view their payroll details.</p>
               <div className="mt-6">
-                <span
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                <AddButton
+                  text="Select Employee"
                   onClick={() => handleLinkClick("/")}
-                >
-                  <svg
-                    className="mr-2 -ml-1 h-5 w-5 text-gray-400"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  Select Employee
-                </span>
+                />
               </div>
             </div>
           ) : (

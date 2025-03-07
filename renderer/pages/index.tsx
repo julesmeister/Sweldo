@@ -25,7 +25,7 @@ export default function HomePage() {
       <Head>
         <title>Sweldo - Employee Management</title>
       </Head>
-      <div className="px-4 py-6 sm:px-0">
+      <div className="px-4 py-12 sm:px-0">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="col-span-1 md:col-span-3">
             <EmployeeList />

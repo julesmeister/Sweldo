@@ -25,7 +25,7 @@ import {
   EmploymentType,
 } from "@/renderer/model/settings";
 import RootLayout from "@/renderer/components/layout";
-import { MagicCard } from "../components/magic-card";
+import { MagicCard } from "../components/magicui/magic-card";
 
 interface SettingSection {
   key: string;

@@ -2,13 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ShineBorder } from '@/renderer/components/shine-border';
+import { ShineBorder } from '@/renderer/components/magicui/shine-border';
 import * as XLSX from 'xlsx-js-style';
 import { Payroll } from '@/renderer/model/payroll';
 import { useExcelStore } from '@/renderer/stores/excelStore';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/renderer/stores/settingsStore';
-import { MagicCard } from '@/renderer/components/magic-card';
+import { MagicCard } from '@/renderer/components/magicui/magic-card';
 type SheetRow = (string | number | null)[];
 
 export function ExcelUpload() {

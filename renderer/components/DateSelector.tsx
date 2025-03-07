@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShineBorder } from "@/renderer/components/shine-border"; // Updated import for ShineBorder component
+import { ShineBorder } from "@/renderer/components/magicui/shine-border"; // Updated import for ShineBorder component
 import create from "zustand";
-import { MagicCard } from "./magic-card";
+import { MagicCard } from "./magicui/magic-card";
 
 interface DateSelectorState {
   selectedMonth: number;

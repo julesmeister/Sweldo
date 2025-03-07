@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MagicCard } from './magic-card';
+import { MagicCard } from './magicui/magic-card';
 
 interface Holiday {
   id: string;
@@ -39,7 +39,12 @@ export default function HolidayCalendar() {
           </div>
         ))}
         {holidays.length === 0 && (
-          <p className="text-center text-gray-500">No holidays for the selected period</p>
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="text-gray-400 text-2xl">📅</div>
+            <p className="text-center text-gray-500 font-medium">
+              No holidays for the selected month
+            </p>
+          </div>
         )}
       </div>
     </div>

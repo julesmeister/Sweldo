@@ -14,7 +14,8 @@ import { useRouter } from "next/navigation";
 
 import { Loan } from "@/renderer/model/loan";
 import RootLayout from "@/renderer/components/layout";
-import { MagicCard } from "../components/magic-card";
+import { MagicCard } from "../components/magicui/magic-card";
+import AddButton from "@/renderer/components/magicui/add-button";
 
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -350,24 +351,10 @@ export default function LoansPage() {
                     their loans.
                   </p>
                   <div className="mt-6">
-                    <span
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                    <AddButton
+                      text="Select Employee"
                       onClick={() => handleLinkClick("/")}
-                    >
-                      <svg
-                        className="mr-2 -ml-1 h-5 w-5 text-gray-400"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Select Employee
-                    </span>
+                    />
                   </div>
                 </div>
               )}

@@ -8,7 +8,8 @@ import { Holiday, createHolidayModel } from "@/renderer/model/holiday";
 import HolidayForm from "@/renderer/components/HolidayForm";
 import { fetchHolidays } from "@/renderer/services/fetchHolidays";
 import RootLayout from "@/renderer/components/layout";
-import { MagicCard } from "../components/magic-card";
+import { MagicCard } from "../components/magicui/magic-card";
+import AddButton from "@/renderer/components/magicui/add-button";
 
 interface Employee {
   // Add Employee interface properties here
@@ -274,24 +275,10 @@ export default function HolidaysPage() {
                         !isNaN(endDate.getTime()) &&
                         !isNaN(holiday.multiplier)
                       );
-                    }).length > 0 && <span
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                    }).length > 0 && <AddButton
+                      text="Add Holiday"
                       onClick={handleNewHolidayClick}
-                    >
-                      <svg
-                        className="mr-2 -ml-1 h-5 w-5 text-gray-400"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Add Holiday
-                    </span>}
+                    />}
                   </div>
                   {holidays.filter((holiday) => {
                     const startDate = new Date(holiday.startDate);
@@ -440,24 +427,10 @@ export default function HolidaysPage() {
                       </p>
 
                       <div className="mt-6">
-                        <span
-                          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                        <AddButton
+                          text="Add Holiday"
                           onClick={handleNewHolidayClick}
-                        >
-                          <svg
-                            className="mr-2 -ml-1 h-5 w-5 text-gray-400"
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          Add Holiday
-                        </span>
+                        />
                       </div>
                     </div>
                   )}

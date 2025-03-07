@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useEmployeeStore } from '@/renderer/stores/employeeStore';
 import { Employee, createEmployeeModel } from '@/renderer/model/employee';
 import { useSettingsStore } from '@/renderer/stores/settingsStore';
-import { MagicCard } from './magic-card';
+import { MagicCard } from './magicui/magic-card';
 
 
 const EmployeeList: React.FC = () => {
