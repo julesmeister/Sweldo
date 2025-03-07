@@ -1,6 +1,6 @@
-appId: com.example.nextron
-productName: My Nextron App
-copyright: Copyright © 2018 Yoshihide Shiono
+appId: com.julesmeister.sweldo
+productName: Sweldo
+copyright: Copyright © 2025 julesmeister
 directories:
   output: dist
   buildResources: resources
