@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useEmployeeStore } from '@/renderer/stores/employeeStore';
 import { Employee, createEmployeeModel } from '@/renderer/model/employee';
 import { useSettingsStore } from '@/renderer/stores/settingsStore';
+import { MagicCard } from './magic-card';
 
 
 const EmployeeList: React.FC = () => {
@@ -14,18 +15,36 @@ const EmployeeList: React.FC = () => {
 
   useEffect(() => {
     const fetchEmployees = async () => {
-      const loadedEmployees = await employeeModel.loadActiveEmployees();
-      setEmployees(loadedEmployees);
+      if (!dbPath) {
+        console.warn('Database path not set');
+        return;
+      }
+
+      try {
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        console.error('Error loading employees:', error);
+        setEmployees([]);
+      }
     };
 
     fetchEmployees();
-  }, [employeeModel]);
+  }, [dbPath]); // Only re-run when dbPath changes
+
+  useEffect(() => {
+    if (!dbPath) {
+      setEmployees([]);
+    }
+  }, [dbPath]); // Reset employees when dbPath changes
 
   const handleRowClick = (employeeId: string) => {
     setSelectedEmployeeId(employeeId === selectedEmployeeId ? null : employeeId);
   };
 
   return (
+    <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
+
     <div className="bg-white rounded-lg shadow overflow-hidden hover:has-[.overflow-y-auto]:h-auto group">
       <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
         <h2 className="text-xl font-semibold text-gray-800">Employee List</h2>
@@ -34,7 +53,7 @@ const EmployeeList: React.FC = () => {
         </p>
       </div>
       <div className="overflow-x-auto">
-        <div className="h-[350px] group-hover:h-auto transition-all duration-300 ease-in-out overflow-y-auto">
+        <div className={`h-[350px] ${employees.length > 0 ? 'group-hover:h-auto transition-all duration-300 ease-in-out' : ''} overflow-y-auto`}>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -50,39 +69,60 @@ const EmployeeList: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {employees.map((employee) => (
-                <tr
-                  key={employee.id}
-                  onClick={() => handleRowClick(employee.id)}
-                  className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50 ${
-                    selectedEmployeeId === employee.id ? 'bg-indigo-50' : ''
-                  }`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {employee.id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <span className="text-sm font-medium text-indigo-600">
-                          {employee.name.split(' ').map(n => n[0]).join('')}
-                        </span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{employee.name}</div>
-                      </div>
+              {employees.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center">
+                    <div className="space-y-4">
+                      {dbPath ? (
+                        <div className="text-gray-500">
+                          <p className="text-sm">No employees found</p>
+                          <p className="text-xs text-gray-400">Add new employees in the Employee Management tab</p>
+                        </div>
+                      ) : (
+                        <div className="text-gray-500">
+                          <p className="text-sm">Database not configured</p>
+                          <p className="text-xs text-gray-400">Please set up your database path in the Settings tab</p>
+                        </div>
+                      )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {employee.lastPaymentPeriod ? `${employee.lastPaymentPeriod.start} - ${employee.lastPaymentPeriod.end}` : 'No payments made yet'}
-                  </td>
                 </tr>
-              ))}
+              ) : (
+                employees.map((employee) => ( 
+                  <tr
+                    key={employee.id}
+                    onClick={() => handleRowClick(employee.id)}
+                    className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50 ${
+                      selectedEmployeeId === employee.id ? 'bg-indigo-50' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {employee.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-indigo-600">
+                            {employee.name.split(' ').map(n => n[0]).join('')}
+                          </span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{employee.name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {employee.lastPaymentPeriod ? `${employee.lastPaymentPeriod.start} - ${employee.lastPaymentPeriod.end}` : 'No payments made yet'}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
     </div>
+    </MagicCard>
   );
 };
 

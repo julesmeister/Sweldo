@@ -8,7 +8,7 @@ import { Payroll } from '@/renderer/model/payroll';
 import { useExcelStore } from '@/renderer/stores/excelStore';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/renderer/stores/settingsStore';
-
+import { MagicCard } from '@/renderer/components/magic-card';
 type SheetRow = (string | number | null)[];
 
 export function ExcelUpload() {
@@ -118,8 +118,8 @@ export function ExcelUpload() {
   });
 
   return (
+    <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
     <div className="bg-white rounded-lg shadow p-6 relative overflow-hidden">
-      <ShineBorder shineColor={["#A07CFE", "#FE8FB5", "#FFBE7B"]} />
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-800">Upload Timesheet</h2>
         <p className="text-sm text-gray-600">
@@ -179,5 +179,6 @@ export function ExcelUpload() {
         </div>
       </div>
     </div>
+    </MagicCard>
   );
 }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Head from 'next/head'
 import EmployeeList from '@/renderer/components/EmployeeList';
 import {ExcelUpload} from '@/renderer/components/ExcelUpload';
@@ -8,9 +8,17 @@ import EditEmployee from '@/renderer/components/EditEmployee';
 import { useEmployeeStore } from '@/renderer/stores/employeeStore';
 import { motion } from 'framer-motion';
 import RootLayout from '@/renderer/components/layout'
+import { useSettingsStore } from '../stores/settingsStore';
 
 export default function HomePage() {
   const { selectedEmployeeId } = useEmployeeStore();
+  const { dbPath } = useSettingsStore();
+  const [showMissingTimeLogs, setShowMissingTimeLogs] = useState(true);
+  useEffect(() => {
+    if (!dbPath) {
+      setShowMissingTimeLogs(false);
+    }
+  }, [dbPath]); // Reset employees when dbPath changes
 
   return (
     <RootLayout>
@@ -41,9 +49,11 @@ export default function HomePage() {
           <div className="col-span-1">
             <HolidayCalendar />
           </div>
-          <div className="col-span-1">
-            <MissingTimeLogs />
-          </div>
+          {showMissingTimeLogs && (
+            <div className="col-span-1">
+              <MissingTimeLogs />
+            </div>
+          )}
         </div>
       </div>
     </RootLayout>
