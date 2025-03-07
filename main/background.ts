@@ -1,0 +1,146 @@
+import path from 'path'
+import { app, ipcMain, dialog } from 'electron'
+import serve from 'electron-serve'
+import { createWindow } from './helpers'
+import fs from 'fs/promises'
+import { ensureDir } from 'fs-extra'
+
+const isProd = process.env.NODE_ENV === 'production'
+
+if (isProd) {
+  serve({ directory: 'app' })
+} else {
+  app.setPath('userData', `${app.getPath('userData')} (development)`)
+}
+
+;(async () => {
+  await app.whenReady()
+
+  const mainWindow = createWindow('main', {
+    width: 1600,
+    height: 900,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  if (isProd) {
+    await mainWindow.loadURL('app://.')
+  } else {
+    const port = process.argv[2]
+    await mainWindow.loadURL(`http://localhost:${port}/`)
+    mainWindow.webContents.openDevTools()
+  }
+})()
+
+app.on('window-all-closed', () => {
+  app.quit()
+})
+
+// File system operations with security validation
+const validatePath = (filePath: string): boolean => {
+  // Add path validation logic here if needed
+  return true
+}
+
+// File system operations
+ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+  try {
+    if (!validatePath(filePath)) {
+      throw new Error('Invalid file path')
+    }
+    const content = await fs.readFile(filePath, 'utf-8')
+    return content
+  } catch (error) {
+    console.error('Error reading file:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
+  try {
+    if (!validatePath(filePath)) {
+      throw new Error('Invalid file path')
+    }
+    await fs.writeFile(filePath, content, 'utf-8')
+  } catch (error) {
+    console.error('Error writing file:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('fs:saveFile', async (_event, filePath: string, content: string) => {
+  try {
+    if (!validatePath(filePath)) {
+      throw new Error('Invalid file path')
+    }
+    await fs.writeFile(filePath, content, 'utf-8')
+  } catch (error) {
+    console.error('Error saving file:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('fs:ensureDir', async (_event, dirPath: string) => {
+  try {
+    if (!validatePath(dirPath)) {
+      throw new Error('Invalid directory path')
+    }
+    await ensureDir(dirPath)
+  } catch (error) {
+    console.error('Error ensuring directory exists:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('fs:fileExists', async (_event, filePath: string) => {
+  try {
+    if (!validatePath(filePath)) {
+      throw new Error('Invalid file path')
+    }
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+})
+
+// Dialog operations
+ipcMain.handle('dialog:openFolder', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    })
+    return result.canceled ? null : result.filePaths[0]
+  } catch (error) {
+    console.error('Error opening folder dialog:', error)
+    throw error
+  }
+})
+
+// Path resolution
+ipcMain.handle('fs:getFullPath', async (_event, { relativePath }) => {
+  try {
+    if (!relativePath) {
+      throw new Error('Relative path is required')
+    }
+    // Get the app's root directory
+    const appRoot = app.getAppPath()
+    // Resolve the full path
+    const fullPath = path.resolve(appRoot, relativePath)
+    // Validate the resolved path
+    if (!validatePath(fullPath)) {
+      throw new Error('Invalid path resolution')
+    }
+    return fullPath
+  } catch (error) {
+    console.error('Error resolving full path:', error)
+    throw error
+  }
+})
+
+ipcMain.on('message', async (event, arg) => {
+  event.reply('message', `${arg} World!`)
+})

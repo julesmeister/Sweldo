@@ -1,0 +1,322 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { PayrollSummary } from '@/renderer/components/PayrollSummary';
+import { PayrollList } from '@/renderer/components/PayrollList';
+import { useSettingsStore } from '@/renderer/stores/settingsStore';
+import { useLoadingStore } from '@/renderer/stores/loadingStore';
+import { useEmployeeStore } from '@/renderer/stores/employeeStore';
+import { useDateRangeStore } from '@/renderer/stores/dateRangeStore';
+import { Payroll, PayrollSummaryModel } from '@/renderer/model/payroll';
+import { DateRangePicker } from '@/renderer/components/DateRangePicker';
+import { DeductionsDialog } from '@/renderer/components/DeductionsDialog';
+import { usePathname, useRouter } from 'next/navigation';
+import { createEmployeeModel, Employee } from '@/renderer/model/employee';
+import RootLayout from '@/renderer/components/layout';
+
+// Helper function for safe localStorage access
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined') {
+        return localStorage.getItem(key);
+      }
+      return null;
+    } catch (e) {
+      console.warn('Failed to access localStorage:', e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn('Failed to write to localStorage:', e);
+    }
+  }
+};
+
+export default function PayrollPage() {
+  const [payrolls, setPayrolls] = useState<PayrollSummaryModel[]>([]);
+  const [selectedPayroll, setSelectedPayroll] = useState<PayrollSummaryModel | null>(null);
+  const [payrollSummary, setPayrollSummary] = useState<PayrollSummaryModel | null>(null);
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [refreshPayrolls, setRefreshPayrolls] = useState(false);
+  const [showDeductionsDialog, setShowDeductionsDialog] = useState(false);
+  const [clickPosition, setClickPosition] = useState<{ top: number; left: number; showAbove?: boolean } | null>(null);
+  const { isLoading, setLoading, setActiveLink } = useLoadingStore();
+  const { dbPath } = useSettingsStore();
+  const { selectedEmployeeId } = useEmployeeStore();
+  const { dateRange, setDateRange } = useDateRangeStore();
+  const [storedMonth, setStoredMonth] = useState<string | null>(null);
+  const [storedYear, setStoredYear] = useState<string | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Initialize date range from storage
+  useEffect(() => {
+    const month = safeStorage.getItem("selectedMonth");
+    const year = safeStorage.getItem("selectedYear");
+    
+    if (month !== null) setStoredMonth(month);
+    if (year !== null) setStoredYear(year);
+  }, []);
+
+  // Set default year if not present
+  useEffect(() => {
+    if (!storedYear) {
+      const currentYear = new Date().getFullYear().toString();
+      safeStorage.setItem("selectedYear", currentYear);
+      setStoredYear(currentYear);
+    }
+  }, [storedYear]);
+
+  // Update date range when month/year are available
+  useEffect(() => {
+    if (storedMonth && storedYear && !dateRange.startDate) {
+      const month = parseInt(storedMonth, 10);
+      const year = parseInt(storedYear, 10);
+      const startDate = new Date(year, month, 1);
+      const endDate = new Date(year, month + 1, 0);
+      setDateRange(startDate, endDate);
+    }
+  }, [storedMonth, storedYear, dateRange.startDate, setDateRange]);
+
+  useEffect(() => {
+    const loadPayrolls = async () => {
+      
+      console.log('Selected Employee ID:', selectedEmployeeId);
+      if (!selectedEmployeeId) {
+        // Expected state - no employee selected yet
+        return;
+      } else if (!dbPath) {
+        console.error('[PayrollPage] Database path is not set');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const month = new Date().getMonth() + 1;
+        const year = new Date().getFullYear();
+        
+        // Load employee first
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployee = await employeeModel.loadEmployeeById(selectedEmployeeId);
+        console.log('Loaded employee:', loadedEmployee);
+        setEmployee(loadedEmployee);
+        
+        // Then load payrolls
+        const employeePayrolls = await Payroll.loadPayrollSummaries(dbPath, selectedEmployeeId, year, month);
+        setPayrolls(employeePayrolls);
+      } catch (error: any) {
+        console.error('[PayrollPage] Error loading payrolls:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPayrolls();
+  }, [dbPath, selectedEmployeeId, setLoading, refreshPayrolls]);
+
+  const handleDeductionsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!dateRange.startDate || !dateRange.endDate || !selectedEmployeeId) {
+      alert('Please select a date range');
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+    const dialogHeight = 400; // Approximate height of dialog
+    const dialogWidth = 800; // Width of the dialog
+    const spacing = 8; // Space between dialog and trigger
+
+    // Calculate vertical position
+    const spaceBelow = windowHeight - rect.bottom;
+    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
+    const top = showAbove
+      ? rect.top - spacing
+      : rect.bottom + spacing;
+
+    // Calculate horizontal position
+    let left = rect.left + rect.width / 2 - dialogWidth / 2;
+
+    // Keep dialog within window bounds
+    left = Math.max(
+      spacing,
+      Math.min(left, windowWidth - dialogWidth - spacing)
+    );
+
+    // Calculate caret position relative to the dialog
+
+    setClickPosition({
+      top,
+      left,
+      showAbove,
+    });
+
+    setShowDeductionsDialog(true);
+  };
+
+  const handleConfirmDeductions = async (deductions: { 
+    sss: number; 
+    philHealth: number; 
+    pagIbig: number;
+    cashAdvanceDeductions:  number;
+  }) => {
+    console.log('[PayrollPage] Confirming deductions at', new Date().toTimeString(), ':', deductions);
+    setShowDeductionsDialog(false);
+    setLoading(true);
+    
+    try {
+      const payroll = new Payroll([], 'xlsx', dbPath);
+      // Ensure we have valid Date objects
+      const startDate = dateRange.startDate ? new Date(dateRange.startDate) : null;
+      const endDate = dateRange.endDate ? new Date(dateRange.endDate) : null;
+
+      if (!startDate || !endDate) {
+        throw new Error('Please select valid start and end dates');
+      }
+
+      const summary = await payroll.generatePayrollSummary(
+        selectedEmployeeId!,
+        startDate,
+        endDate,
+        {
+          sss: deductions.sss,
+          philHealth: deductions.philHealth,
+          pagIbig: deductions.pagIbig,
+          cashAdvanceDeductions: deductions.cashAdvanceDeductions
+        }
+      );
+
+      console.log('[PayrollPage] Payroll summary generated at', new Date().toTimeString(), ':', summary);
+      setPayrollSummary(summary);
+    } catch (error: any) {
+      console.error('[PayrollPage] Error generating payroll:', error);
+      alert('Failed to generate payroll. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkClick = (path: string) => {
+    if (path === pathname) return;
+    console.log('Setting loading state to true');
+    setLoading(true);
+    setActiveLink(path);
+    router.push(path);
+  };
+
+  return (
+    <RootLayout>
+    <div className="space-y-4 p-4 mt-4">
+
+      <div className="bg-white/40 backdrop-blur-sm rounded-lg shadow-sm border border-blue-100 p-3 mb-4 relative z-20">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <DateRangePicker
+              dateRange={dateRange}
+              onDateRangeChange={(startDate, endDate) => setDateRange(startDate, endDate)}
+            />
+          </div>
+          <button
+            onClick={handleDeductionsClick}
+            disabled={!selectedEmployeeId || isLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Generate Payroll
+          </button>
+        </div>
+      </div>
+
+      {showDeductionsDialog && (
+        <>
+          <div className="fixed inset-0 bg-black opacity-50 z-40" />
+          <DeductionsDialog
+            isOpen={showDeductionsDialog}
+            onClose={() => {
+              setShowDeductionsDialog(false);
+              setClickPosition(null);
+            }}
+            sss={employee?.sss || 0}
+            philHealth={employee?.philHealth || 0}
+            pagIbig={employee?.pagIbig || 0}
+            onConfirm={handleConfirmDeductions}
+            employeeId={selectedEmployeeId!}
+            dbPath={dbPath}
+            startDate={typeof dateRange.startDate === 'string' ? new Date(dateRange.startDate) : dateRange.startDate || new Date()}
+            endDate={typeof dateRange.endDate === 'string' ? new Date(dateRange.endDate) : dateRange.endDate || new Date()}
+            position={clickPosition}
+          />
+        </>
+      )}
+
+      {payrollSummary ? (
+        <div className="relative z-10">
+          <PayrollSummary 
+            data={payrollSummary} 
+            onClose={() => setPayrollSummary(null)} 
+          />
+        </div>
+      ) : (
+        <div className="relative z-10">
+          {selectedEmployeeId === null ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              <div className="mb-6">
+                <svg
+                  className="mx-auto h-24 w-24 text-gray-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+              <h3 className="mt-2 text-xl font-semibold text-gray-900">No Employee Selected</h3>
+              <p className="mt-2 text-sm text-gray-500">Please select an employee from the dropdown menu to view their payroll details.</p>
+              <div className="mt-6">
+                <span
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleLinkClick("/")}
+                >
+                  <svg
+                    className="mr-2 -ml-1 h-5 w-5 text-gray-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Select Employee
+                </span>
+              </div>
+            </div>
+          ) : (
+            <PayrollList
+              employee={employee}
+              payrolls={payrolls}
+              onSelectPayroll={setSelectedPayroll}
+              selectedEmployeeId={selectedEmployeeId!}
+              dbPath={dbPath}
+              onPayrollDeleted={() => setRefreshPayrolls(true)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+    </RootLayout>
+  );
+}

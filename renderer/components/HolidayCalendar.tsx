@@ -1,0 +1,45 @@
+'use client';
+
+import { useState } from 'react';
+
+interface Holiday {
+  id: string;
+  date: string;
+  name: string;
+  type: 'regular' | 'special';
+}
+
+export default function HolidayCalendar() {
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Holidays</h2>
+      <div className="space-y-4">
+        {holidays.map((holiday) => (
+          <div
+            key={holiday.id}
+            className="flex items-center justify-between p-4 border rounded-lg"
+          >
+            <div>
+              <p className="font-medium text-gray-900">{holiday.name}</p>
+              <p className="text-sm text-gray-500">{holiday.date}</p>
+            </div>
+            <span
+              className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                holiday.type === 'regular'
+                  ? 'bg-purple-100 text-purple-800'
+                  : 'bg-blue-100 text-blue-800'
+              }`}
+            >
+              {holiday.type === 'regular' ? 'Regular Holiday' : 'Special Holiday'}
+            </span>
+          </div>
+        ))}
+        {holidays.length === 0 && (
+          <p className="text-center text-gray-500">No holidays for the selected period</p>
+        )}
+      </div>
+    </div>
+  );
+}
