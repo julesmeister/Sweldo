@@ -11,6 +11,7 @@ import CashAdvanceForm from "@/renderer/components/CashAdvanceForm";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import RootLayout from "@/renderer/components/layout";
+import { MagicCard } from "../components/magic-card";
 
 export default function CashAdvancesPage() {
   const [cashAdvances, setCashAdvances] = useState<CashAdvance[]>([]);
@@ -247,7 +248,15 @@ export default function CashAdvancesPage() {
   return (
     <RootLayout>
     <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    <MagicCard
+              className="p-0.5 rounded-lg col-span-2"
+              gradientSize={200}
+              gradientColor="#9E7AFF"
+              gradientOpacity={0.8}
+              gradientFrom="#9E7AFF"
+              gradientTo="#FE8BBB"
+            >
+      <div className="px-4sm:px-0">
         <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
           <div className="col-span-1 md:col-span-1">
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -480,6 +489,7 @@ export default function CashAdvancesPage() {
           </div>
         </div>
       </div>
+      </MagicCard>
       {isDialogOpen && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40" />

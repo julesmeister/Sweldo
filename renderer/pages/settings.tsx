@@ -13,7 +13,11 @@ import {
   IoArrowBack,
 } from "react-icons/io5";
 import { MdOutlineDataset } from "react-icons/md";
-import { Employee, EmployeeModel, createEmployeeModel } from "@/renderer/model/employee";
+import {
+  Employee,
+  EmployeeModel,
+  createEmployeeModel,
+} from "@/renderer/model/employee";
 import { toast } from "sonner";
 import {
   createAttendanceSettingsModel,
@@ -21,6 +25,7 @@ import {
   EmploymentType,
 } from "@/renderer/model/settings";
 import RootLayout from "@/renderer/components/layout";
+import { MagicCard } from "../components/magic-card";
 
 interface SettingSection {
   key: string;
@@ -44,21 +49,21 @@ export default function SettingsPage() {
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings>();
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
-  const [sssRate, setSssRate] = useState('');
+  const [sssRate, setSssRate] = useState("");
 
   useEffect(() => {
-      const loadAttendanceSettings = async () => {
-        try {
+    const loadAttendanceSettings = async () => {
+      try {
         const settings = await attendanceSettingsModel.loadAttendanceSettings();
         const timeSettings = await attendanceSettingsModel.loadTimeSettings();
-          setEmploymentTypes(timeSettings);
-          console.log("Attendance settings loaded:", settings);
-          setAttendanceSettings(settings);
-        } catch (error) {
-          console.error("Error loading attendance settings:", error);
-        }
-      };
-      loadAttendanceSettings();
+        setEmploymentTypes(timeSettings);
+        console.log("Attendance settings loaded:", settings);
+        setAttendanceSettings(settings);
+      } catch (error) {
+        console.error("Error loading attendance settings:", error);
+      }
+    };
+    loadAttendanceSettings();
   }, []);
 
   useEffect(() => {
@@ -268,7 +273,9 @@ export default function SettingsPage() {
     );
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0];
@@ -279,8 +286,8 @@ export default function SettingsPage() {
         setDbPath(fullPath);
         setCurrentPath(fullPath);
       } catch (error) {
-        console.error('Failed to get full directory path:', error);
-        toast.error('Failed to get directory path');
+        console.error("Failed to get full directory path:", error);
+        toast.error("Failed to get directory path");
       }
     }
   };
@@ -288,10 +295,10 @@ export default function SettingsPage() {
   const handleSaveEmploymentTypes = async () => {
     try {
       await attendanceSettingsModel?.saveTimeSettings(employmentTypes);
-      toast.success('Employment types saved successfully');
+      toast.success("Employment types saved successfully");
     } catch (error) {
-      console.error('Error saving employment types:', error);
-      toast.error('Failed to save employment types');
+      console.error("Error saving employment types:", error);
+      toast.error("Failed to save employment types");
     }
   };
 
@@ -602,7 +609,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={handleSaveEmploymentTypes}
                     className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
@@ -637,7 +644,7 @@ export default function SettingsPage() {
                       type="text"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="4.5"
-                      value={sssRate ?? ''}
+                      value={sssRate ?? ""}
                       onChange={(e) => setSssRate(e.target.value)}
                     />
                   </div>
@@ -885,14 +892,15 @@ export default function SettingsPage() {
       icon: <MdOutlineDataset className="h-5 w-5" />,
       content: (
         <div className="">
-
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-2">Database Location</h2>
             <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
               <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
               <p className="text-sm text-gray-800 font-light">
-              Select the directory where your database (CSV) files will be
-              stored. A folder named 'SweldoDB' will be created here if it doesn't already exist and will contain CSV files and folders with employee and payroll data.
+                Select the directory where your database (CSV) files will be
+                stored. A folder named 'SweldoDB' will be created here if it
+                doesn't already exist and will contain CSV files and folders
+                with employee and payroll data.
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -918,7 +926,6 @@ export default function SettingsPage() {
               >
                 Browse
               </button>
-              
             </div>
           </div>
         </div>
@@ -928,44 +935,50 @@ export default function SettingsPage() {
 
   return (
     <RootLayout>
-    <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
-        <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
-          <div className="border-b border-gray-100">
-            <div className="flex items-center gap-1 px-6 bg-gray-50">
-              {sections.map((section) => (
-                <button
-                  key={section.key}
-                  onClick={() => handleSelectionChange(section.key)}
-                  className={`flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all ${
-                    selected === section.key
-                      ? "text-blue-600"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  <div
-                    className={`transition-colors ${
-                      selected === section.key
-                        ? "text-blue-600"
-                        : "text-gray-400"
-                    }`}
-                  >
-                    {section.icon}
-                  </div>
-                  <span>{section.title}</span>
-                  {selected === section.key && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
-                  )}
-                </button>
-              ))}
+      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+        <MagicCard
+          className="p-0.5 rounded-2xl col-span-2"
+          gradientSize={400}
+          gradientColor="#9E7AFF"
+          gradientOpacity={0.8}
+          gradientFrom="#9E7AFF"
+          gradientTo="#FE8BBB"
+        >
+          <div className="px-4 sm:px-0">
+            <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
+              <div className="border-b border-gray-100">
+                <div className="flex items-center gap-1 px-6 bg-gray-50">
+                  {sections.map((section) => (
+                    <button
+                      key={section.key}
+                      onClick={() => handleSelectionChange(section.key)}
+                      className={`flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all ${
+                        selected === section.key
+                          ? "text-blue-600"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      <div
+                        className={`transition-colors ${
+                          selected === section.key
+                            ? "text-blue-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {section.icon}
+                      </div>
+                      <span>{section.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="p-6">
+                {sections.find((section) => section.key === selected)?.content}
+              </div>
             </div>
           </div>
-          <div className="p-6">
-            {sections.find((section) => section.key === selected)?.content}
-          </div>
-        </div>
-      </div>
-    </main>
+        </MagicCard>
+      </main>
     </RootLayout>
   );
 }

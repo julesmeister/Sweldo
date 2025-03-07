@@ -53,18 +53,18 @@ export default function HolidaysPage() {
 
   useEffect(() => {
     const updateHeights = () => {
-      const currentSection = document.querySelector('.current-holidays');
-      const suggestedSection = document.querySelector('.suggested-holidays');
-      
+      const currentSection = document.querySelector(".current-holidays");
+      const suggestedSection = document.querySelector(".suggested-holidays");
+
       if (currentSection && suggestedSection) {
         // Get the content height without padding
-        const currentContent = currentSection.querySelector('.px-4.py-5');
-        const suggestedContent = suggestedSection.querySelector('.px-4.py-5');
-        
+        const currentContent = currentSection.querySelector(".px-4.py-5");
+        const suggestedContent = suggestedSection.querySelector(".px-4.py-5");
+
         if (currentContent && suggestedContent) {
           const currentHeight = currentContent.scrollHeight;
           const suggestedHeight = suggestedContent.scrollHeight;
-          
+
           const maxHeight = Math.max(currentHeight, suggestedHeight);
           setCurrentHeight(maxHeight);
         }
@@ -73,23 +73,23 @@ export default function HolidaysPage() {
 
     // Update heights on initial render and when data changes
     updateHeights();
-    
+
     // Update on window resize
-    window.addEventListener('resize', updateHeights);
+    window.addEventListener("resize", updateHeights);
 
     // Update when holidays or suggested holidays change
     const observer = new MutationObserver(updateHeights);
     const config = { childList: true, subtree: true };
-    
-    if (document.querySelector('.current-holidays')) {
-      observer.observe(document.querySelector('.current-holidays')!, config);
+
+    if (document.querySelector(".current-holidays")) {
+      observer.observe(document.querySelector(".current-holidays")!, config);
     }
-    if (document.querySelector('.suggested-holidays')) {
-      observer.observe(document.querySelector('.suggested-holidays')!, config);
+    if (document.querySelector(".suggested-holidays")) {
+      observer.observe(document.querySelector(".suggested-holidays")!, config);
     }
 
     return () => {
-      window.removeEventListener('resize', updateHeights);
+      window.removeEventListener("resize", updateHeights);
       observer.disconnect();
     };
   }, [holidays, suggestedHolidays]);
@@ -227,8 +227,7 @@ export default function HolidaysPage() {
     });
   }, [holidays.length, storedYear, storedMonth]);
 
-  useEffect(() => {
-  }, [selectedHoliday]);
+  useEffect(() => {}, [selectedHoliday]);
 
   function handleSaveHoliday(data: Holiday): void {
     // Implementation for saving holiday
@@ -246,16 +245,54 @@ export default function HolidaysPage() {
 
   return (
     <RootLayout>
-      <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-0">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Existing Holidays Section */}
-            <MagicCard className='p-0.5 rounded-lg col-span-2' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
-              <div className="bg-white shadow rounded-lg col-span-2 current-holidays" style={{ height: currentHeight }}>
+            <MagicCard
+              className="p-0.5 rounded-lg col-span-2"
+              gradientSize={200}
+              gradientColor="#9E7AFF"
+              gradientOpacity={0.8}
+              gradientFrom="#9E7AFF"
+              gradientTo="#FE8BBB"
+            >
+              <div
+                className="bg-white shadow rounded-lg col-span-2 current-holidays"
+                style={{ height: currentHeight }}
+              >
                 <div className="px-4 py-5 sm:p-6">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">
-                    Current Holidays
-                  </h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">
+                      Current Holidays
+                    </h2>
+                    {holidays.filter((holiday) => {
+                      const startDate = new Date(holiday.startDate);
+                      const endDate = new Date(holiday.endDate);
+                      return (
+                        !isNaN(startDate.getTime()) &&
+                        !isNaN(endDate.getTime()) &&
+                        !isNaN(holiday.multiplier)
+                      );
+                    }).length > 0 && <span
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                      onClick={handleNewHolidayClick}
+                    >
+                      <svg
+                        className="mr-2 -ml-1 h-5 w-5 text-gray-400"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      Add Holiday
+                    </span>}
+                  </div>
                   {holidays.filter((holiday) => {
                     const startDate = new Date(holiday.startDate);
                     const endDate = new Date(holiday.endDate);
@@ -333,7 +370,9 @@ export default function HolidaysPage() {
                                     ).toLocaleDateString()}
                                   </div>
                                   <div className="text-sm text-gray-500">
-                                    {new Date(holiday.endDate).toLocaleDateString()}
+                                    {new Date(
+                                      holiday.endDate
+                                    ).toLocaleDateString()}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -396,8 +435,30 @@ export default function HolidaysPage() {
                         No holidays added yet.
                       </p>
                       <p className="text-sm text-gray-500 mt-1">
-                        Click "Add Holiday" or select from suggestions to add one.
+                        Click "Add Holiday" or select from suggestions to add
+                        one.
                       </p>
+
+                      <div className="mt-6">
+                        <span
+                          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
+                          onClick={handleNewHolidayClick}
+                        >
+                          <svg
+                            className="mr-2 -ml-1 h-5 w-5 text-gray-400"
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Add Holiday
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -405,8 +466,18 @@ export default function HolidaysPage() {
             </MagicCard>
 
             {/* Suggested Holidays Section */}
-            <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
-              <div className="bg-white shadow rounded-lg suggested-holidays" style={{ height: currentHeight }}>
+            <MagicCard
+              className="p-0.5 rounded-lg"
+              gradientSize={200}
+              gradientColor="#9E7AFF"
+              gradientOpacity={0.8}
+              gradientFrom="#9E7AFF"
+              gradientTo="#FE8BBB"
+            >
+              <div
+                className="bg-white shadow rounded-lg suggested-holidays"
+                style={{ height: currentHeight }}
+              >
                 <div className="px-4 py-5 sm:p-6">
                   <h2 className="text-lg font-medium text-gray-900 mb-4">
                     Suggested Holidays for{" "}
@@ -426,7 +497,9 @@ export default function HolidaysPage() {
                       {suggestedHolidays.map((holiday) => (
                         <div
                           key={holiday.id}
-                          onClick={(e) => handleSuggestedHolidayClick(holiday, e)}
+                          onClick={(e) =>
+                            handleSuggestedHolidayClick(holiday, e)
+                          }
                           className="group relative flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer"
                         >
                           <div className="flex-1 min-w-0">
@@ -435,14 +508,18 @@ export default function HolidaysPage() {
                             </h3>
                             <div className="mt-1 flex items-center space-x-2 text-sm text-gray-500">
                               <span>
-                                {new Date(holiday.startDate).toLocaleDateString()}
+                                {new Date(
+                                  holiday.startDate
+                                ).toLocaleDateString()}
                               </span>
                               {new Date(holiday.startDate).toDateString() !==
                                 new Date(holiday.endDate).toDateString() && (
                                 <>
                                   <span>-</span>
                                   <span>
-                                    {new Date(holiday.endDate).toLocaleDateString()}
+                                    {new Date(
+                                      holiday.endDate
+                                    ).toLocaleDateString()}
                                   </span>
                                 </>
                               )}

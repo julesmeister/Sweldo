@@ -11,6 +11,7 @@ import LeaveForm from '@/renderer/components/LeaveForm';
 import { createEmployeeModel, Employee } from '@/renderer/model/employee';
 import { createLeaveModel } from '@/renderer/model/leave';
 import RootLayout from '@/renderer/components/layout';
+import { MagicCard } from '../components/magic-card';
 
 interface Leave {
   id: string;
@@ -246,8 +247,16 @@ export default function LeavesPage() {
   };
 
   return (<RootLayout>
-    <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+    <MagicCard
+              className="p-0.5 rounded-lg col-span-2"
+              gradientSize={200}
+              gradientColor="#9E7AFF"
+              gradientOpacity={0.8}
+              gradientFrom="#9E7AFF"
+              gradientTo="#FE8BBB"
+            >
+      <div className="px-4 sm:px-0">
         <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
           <div className="col-span-1 md:col-span-1">
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -418,6 +427,7 @@ export default function LeavesPage() {
           </div>
         </div>
       </div>
+      </MagicCard>
       {isDialogOpen && (
         <Fragment>
           <div className="fixed inset-0 bg-black/30 z-40" />

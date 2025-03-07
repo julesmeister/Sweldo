@@ -256,7 +256,7 @@ const TimesheetPage: React.FC = () => {
   return (
     <RootLayout>
       
-    <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
     <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
 
       <div className="px-4 sm:px-0">
