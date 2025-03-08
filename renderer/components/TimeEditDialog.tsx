@@ -154,45 +154,50 @@ export const TimeEditDialog: React.FC<TimeEditDialogProps> = ({
             </button>
           </div>
           
-          <form onSubmit={handleSubmit} className="p-4 space-y-4 bg-gray-900 rounded-b-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Time In
-              </label>
-              <input
-                type="time"
-                value={timeIn || ''}
-                onChange={(e) => setTimeIn(e.target.value || '')}
-                className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
-              />
+          <form onSubmit={handleSubmit} className="bg-gray-900 rounded-b-lg">
+            <div className="p-4 space-y-4">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Time In
+                  </label>
+                  <input
+                    type="time"
+                    value={timeIn || ''}
+                    onChange={(e) => setTimeIn(e.target.value || '')}
+                    className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Time Out
+                  </label>
+                  <input
+                    type="time"
+                    value={timeOut || ''}
+                    onChange={(e) => setTimeOut(e.target.value || '')}
+                    className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Time Out
-              </label>
-              <input
-                type="time"
-                value={timeOut || ''}
-                onChange={(e) => setTimeOut(e.target.value || '')}
-                className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-              >
-                Save
-              </button>
+            <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
+              <div className="flex flex-row space-x-3 w-full">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </form>
         </div>
