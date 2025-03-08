@@ -20,10 +20,8 @@ export class HolidayModel {
     // Ensure we start with an absolute path
     const absoluteDbPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
     this.filePath = path.join(absoluteDbPath, `SweldoDB/holidays/${year.toString()}_${month.toString()}_holidays.csv`);
-    console.log("Full file path:", this.filePath);
     // Ensure directory exists
     const directoryPath = path.dirname(this.filePath);
-    console.log("Directory path:", directoryPath);
     // Create directories recursively
     const parts = directoryPath.split(path.sep);
     let currentPath = absoluteDbPath; // Start from absoluteDbPath instead of dbPath
@@ -32,7 +30,6 @@ export class HolidayModel {
         currentPath = path.join(currentPath, part);
         try {
           window.electron.ensureDir(currentPath);
-          console.log("Created directory:", currentPath);
         } catch (error) {
           console.error(`Error creating directory ${currentPath}:`, error);
         }

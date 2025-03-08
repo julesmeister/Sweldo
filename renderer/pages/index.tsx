@@ -14,11 +14,11 @@ export default function HomePage() {
   const { selectedEmployeeId } = useEmployeeStore();
   const { dbPath } = useSettingsStore();
   const [showMissingTimeLogs, setShowMissingTimeLogs] = useState(true);
-  useEffect(() => {
-    if (!dbPath) {
-      setShowMissingTimeLogs(false);
-    }
-  }, [dbPath]); // Reset employees when dbPath changes
+  // useEffect(() => {
+  //   if (!dbPath) {
+  //     setShowMissingTimeLogs(false);
+  //   }
+  // }, [dbPath]); // Reset employees when dbPath changes
 
   return (
     <RootLayout>

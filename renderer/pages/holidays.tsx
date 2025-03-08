@@ -214,8 +214,6 @@ export default function HolidaysPage() {
       console.error("Invalid dbPath:", dbPath);
       return; // Prevent further execution if dbPath is invalid
     }
-    console.log("Using dbPath:", dbPath);
-    console.log("Selected year:", storedYear, "month:", storedMonth);
     const holidayModel = createHolidayModel(
       dbPath,
       parseInt(storedYear!, 10),

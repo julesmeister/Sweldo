@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import "@/resources/fonts.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import DateSelector from "@/renderer/components/DateSelector";
@@ -11,16 +11,72 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
+  // Refs to track positions of nav items
+  const navRefs = useRef<Record<string, HTMLAnchorElement>>({});
+  // State to track the position and width of the active link
+  const [highlighterStyle, setHighlighterStyle] = useState({
+    left: 0,
+    width: 0,
+    display: 'none' // Initially hidden
+  });
 
   useEffect(() => {
+    // Ensure the active link is set when the component mounts
     setActiveLink(pathname);
-  }, [pathname]);
+  }, []); // Only run on mount
+
+  useEffect(() => {
+    // Update the active link whenever the pathname changes
+    setActiveLink(pathname);
+    
+    // Update the highlighter position based on the active link
+    updateHighlighterPosition(pathname);
+  }, [pathname]); // Run whenever pathname changes
+
+  const updateHighlighterPosition = (path: string) => {
+    const activeElement = navRefs.current[path];
+    if (activeElement) {
+      const rect = activeElement.getBoundingClientRect();
+      // Use the parent container's rect instead of the nav
+      const containerRect = activeElement.parentElement?.getBoundingClientRect();
+      
+      setHighlighterStyle({
+        left: rect.left - (containerRect?.left || 0),
+        width: rect.width,
+        display: 'block'
+      });
+    }
+  };
 
   const handleLinkClick = (path: string) => {
-    if (path === pathname) return;
+    console.log(`Link clicked, navigating to ${path}`);
+    console.log(`Current pathname: ${pathname}`);
+    if (path === pathname) {
+      console.log("Link is the same as the current pathname, returning");
+      return;
+    }
     console.log('Setting loading state to true');
     setLoading(true);
-    setActiveLink(path);
+    
+    // Update highlighter position immediately for smooth animation
+    updateHighlighterPosition(path);
+    
+    // Add a brief delay before setting the active link to create a smooth transition
+    setTimeout(() => {
+      setActiveLink(path);
+      router.push(path);
+    }, 100); // 100ms delay for smooth transition
+  };
+
+  // Helper function to store references to nav links
+  const setNavRef = (path: string, el: HTMLAnchorElement | null) => {
+    if (el && !navRefs.current[path]) {
+      navRefs.current[path] = el;
+      // Update highlighter on initial render if this is the active path
+      if (path === activeLink) {
+        updateHighlighterPosition(path);
+      }
+    }
   };
 
   return (
@@ -40,92 +96,81 @@ export default function Navbar() {
               </motion.span>
             </div>
             <div className="hidden sm:ml-8 sm:flex sm:items-center sm:justify-between flex-1">
-              <div className="flex space-x-8">
+              <div className="flex space-x-8 relative">
+                {/* The sliding background element */}
+                <div 
+                  className="absolute bg-blue-900 rounded-full transition-all duration-300 ease-in-out z-0"
+                  style={{
+                    left: `${highlighterStyle.left}px`,
+                    width: `${highlighterStyle.width}px`,
+                    height: '2rem',
+                    transform: 'translateY(-50%)',
+                    top: '50%',
+                    display: highlighterStyle.display
+                  }}
+                />
+                
                 <Link
                   href="/"
-                  className={`${
-                    activeLink === "/"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
+                  ref={(el) => setNavRef("/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
                   onClick={() => handleLinkClick("/")}
                 >
                   Employees
                 </Link>
                 <Link
                   href="/timesheet"
-                  className={`${
-                    activeLink === "/timesheet"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/timesheet")}
+                  ref={(el) => setNavRef("/timesheet/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/timesheet/")}
                 >
                   Timesheet
                 </Link>
                 <Link
                   href="/payroll"
-                  className={`${
-                    activeLink === "/payroll"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/payroll")}
+                  ref={(el) => setNavRef("/payroll/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/payroll/")}
                 >
                   Payroll
                 </Link>
                 <Link
                   href="/holidays"
-                  className={`${
-                    activeLink === "/holidays"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/holidays")}
+                  ref={(el) => setNavRef("/holidays/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/holidays/")}
                 >
                   Holidays
                 </Link>
                 <Link
                   href="/leaves"
-                  className={`${
-                    activeLink === "/leaves"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/leaves")}
+                  ref={(el) => setNavRef("/leaves/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/leaves/")}
                 >
                   Leaves
                 </Link>
                 <Link
                   href="/cashAdvances"
-                  className={`${
-                    activeLink === "/cashAdvances"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/cashAdvances")}
+                  ref={(el) => setNavRef("/cashAdvances/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/cashAdvances/")}
                 >
                   Cash Advances
                 </Link>
                 <Link
                   href="/loans"
-                  className={`${
-                    activeLink === "/loans"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/loans")}
+                  ref={(el) => setNavRef("/loans/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/loans/")}
                 >
                   Loans
                 </Link>
                 <Link
                   href="/settings"
-                  className={`${
-                    activeLink === "/settings"
-                      ? "bg-blue-900 text-white rounded-full px-4 py-1"
-                      : "text-blue-100 hover:bg-blue-900 hover:text-white rounded-full px-4 py-1"
-                  } transition-all duration-200 inline-flex items-center`}
-                  onClick={() => handleLinkClick("/settings")}
+                  ref={(el) => setNavRef("/settings/", el)}
+                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                  onClick={() => handleLinkClick("/settings/")}
                 >
                   Settings
                 </Link>
