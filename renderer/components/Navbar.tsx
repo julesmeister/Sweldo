@@ -68,6 +68,10 @@ export default function Navbar() {
     setTimeout(() => {
       setActiveLink(path);
       router.push(path);
+      // Stop loading after navigation
+      setTimeout(() => {
+        setLoading(false);
+      }, 100);
     }, 100);
   };
 
