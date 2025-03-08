@@ -7,6 +7,18 @@ import { motion } from "framer-motion";
 import DateSelector from "@/renderer/components/DateSelector";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 
+// Define navigation links to avoid repetition
+const navLinks = [
+  { path: "/", label: "Employees" },
+  { path: "/timesheet/", label: "Timesheet" },
+  { path: "/payroll/", label: "Payroll" },
+  { path: "/holidays/", label: "Holidays" },
+  { path: "/leaves/", label: "Leaves" },
+  { path: "/cashAdvances/", label: "Cash Advances" },
+  { path: "/loans/", label: "Loans" },
+  { path: "/settings/", label: "Settings" }
+];
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,7 +49,6 @@ export default function Navbar() {
     const activeElement = navRefs.current[path];
     if (activeElement) {
       const rect = activeElement.getBoundingClientRect();
-      // Use the parent container's rect instead of the nav
       const containerRect = activeElement.parentElement?.getBoundingClientRect();
       
       setHighlighterStyle({
@@ -49,30 +60,21 @@ export default function Navbar() {
   };
 
   const handleLinkClick = (path: string) => {
-    console.log(`Link clicked, navigating to ${path}`);
-    console.log(`Current pathname: ${pathname}`);
-    if (path === pathname) {
-      console.log("Link is the same as the current pathname, returning");
-      return;
-    }
-    console.log('Setting loading state to true');
-    setLoading(true);
+    if (path === pathname) return;
     
-    // Update highlighter position immediately for smooth animation
+    setLoading(true);
     updateHighlighterPosition(path);
     
-    // Add a brief delay before setting the active link to create a smooth transition
     setTimeout(() => {
       setActiveLink(path);
       router.push(path);
-    }, 100); // 100ms delay for smooth transition
+    }, 100);
   };
 
   // Helper function to store references to nav links
   const setNavRef = (path: string, el: HTMLAnchorElement | null) => {
     if (el && !navRefs.current[path]) {
       navRefs.current[path] = el;
-      // Update highlighter on initial render if this is the active path
       if (path === activeLink) {
         updateHighlighterPosition(path);
       }
@@ -110,70 +112,18 @@ export default function Navbar() {
                   }}
                 />
                 
-                <Link
-                  href="/"
-                  ref={(el) => setNavRef("/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/")}
-                >
-                  Employees
-                </Link>
-                <Link
-                  href="/timesheet"
-                  ref={(el) => setNavRef("/timesheet/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/timesheet/")}
-                >
-                  Timesheet
-                </Link>
-                <Link
-                  href="/payroll"
-                  ref={(el) => setNavRef("/payroll/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/payroll/")}
-                >
-                  Payroll
-                </Link>
-                <Link
-                  href="/holidays"
-                  ref={(el) => setNavRef("/holidays/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/holidays/")}
-                >
-                  Holidays
-                </Link>
-                <Link
-                  href="/leaves"
-                  ref={(el) => setNavRef("/leaves/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/leaves/")}
-                >
-                  Leaves
-                </Link>
-                <Link
-                  href="/cashAdvances"
-                  ref={(el) => setNavRef("/cashAdvances/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/cashAdvances/")}
-                >
-                  Cash Advances
-                </Link>
-                <Link
-                  href="/loans"
-                  ref={(el) => setNavRef("/loans/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/loans/")}
-                >
-                  Loans
-                </Link>
-                <Link
-                  href="/settings"
-                  ref={(el) => setNavRef("/settings/", el)}
-                  className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
-                  onClick={() => handleLinkClick("/settings/")}
-                >
-                  Settings
-                </Link>
+                {/* Map through navigation links */}
+                {navLinks.map(({ path, label }) => (
+                  <Link
+                    key={path}
+                    href={path}
+                    ref={(el) => setNavRef(path, el)}
+                    className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                    onClick={() => handleLinkClick(path)}
+                  >
+                    {label}
+                  </Link>
+                ))}
               </div>
               <DateSelector />
             </div>
