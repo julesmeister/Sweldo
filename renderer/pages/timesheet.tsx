@@ -357,113 +357,140 @@ const TimesheetPage: React.FC = () => {
               </div>
               {selectedEmployeeId ? (
                 <div className="overflow-x-auto relative">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        {columns.map((column) => 
-                          column.visible && (
-                            <th
-                              key={column.key}
-                              scope="col"
-                              className={`${
-                                column.key === 'day'
-                                  ? 'sticky left-0 z-10 bg-gray-50'
-                                  : ''
-                              } px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                                column.key === 'day' ? 'w-20' : ''
+                  {timesheetEntries.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-4">
+                      <div className="text-center">
+                        <svg
+                          className="mx-auto h-12 w-12 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                          />
+                        </svg>
+                        <h3 className="mt-2 text-sm font-semibold text-gray-900">
+                          No timesheet entries found
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          You have to upload the excel file from the biometrics for this month to see records here.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {columns.map((column) => 
+                            column.visible && (
+                              <th
+                                key={column.key}
+                                scope="col"
+                                className={`${
+                                  column.key === 'day'
+                                    ? 'sticky left-0 z-10 bg-gray-50'
+                                    : ''
+                                } px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                                  column.key === 'day' ? 'w-20' : ''
+                                }`}
+                              >
+                                {tooltipContent[column.key as 'grossPay' | 'deductions'] ? (
+                                  <Tooltip 
+                                    content={tooltipContent[column.key as 'grossPay' | 'deductions']}
+                                    position="left"
+                                  >
+                                    {column.name}
+                                  </Tooltip>
+                                ) : (
+                                  column.name
+                                )}
+                              </th>
+                            )
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {Array.from(new Set(timesheetEntries.map(entry => entry.day))).map((day) => {
+                          const foundEntry = timesheetEntries.find(entry => entry.day === day);
+                          const foundCompensation = compensationEntries.find(({ date }) => new Date(date).getDate() === Number(day));
+                          const compensation = foundCompensation === undefined ? null : foundCompensation;
+
+                          if (!foundEntry) {
+                            return;
+                          }
+
+                          return (
+                            <tr 
+                              key={day}
+                              onClick={(event) => handleRowClick(foundEntry, compensation, event)}
+                              className={`cursor-pointer hover:bg-gray-50 ${
+                                selectedEntry?.entry.day === day ? 'bg-indigo-50' : ''
                               }`}
                             >
-                              {tooltipContent[column.key as 'grossPay' | 'deductions'] ? (
-                                <Tooltip 
-                                  content={tooltipContent[column.key as 'grossPay' | 'deductions']}
-                                  position="left"
-                                >
-                                  {column.name}
-                                </Tooltip>
-                              ) : (
-                                column.name
-                              )}
-                            </th>
-                          )
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {Array.from(new Set(timesheetEntries.map(entry => entry.day))).map((day) => {
-                        const foundEntry = timesheetEntries.find(entry => entry.day === day);
-                        const foundCompensation = compensationEntries.find(({ date }) => new Date(date).getDate() === Number(day));
-                        const compensation = foundCompensation === undefined ? null : foundCompensation;
-
-                        if (!foundEntry) {
-                          return null;
-                        }
-
-                        return (
-                          <tr 
-                            key={day}
-                            onClick={(event) => handleRowClick(foundEntry, compensation, event)}
-                            className={`cursor-pointer hover:bg-gray-50 ${
-                              selectedEntry?.entry.day === day ? 'bg-indigo-50' : ''
-                            }`}
-                          >
-                            {columns.map((column) => 
-                              column.visible && (
-                                column.key === 'timeIn' || column.key === 'timeOut' ? (
-                                  <EditableCell
-                                    key={column.key}
-                                    value={column.key === 'timeIn' ? foundEntry.timeIn || '' : foundEntry.timeOut || ''}
-                                    column={column}
-                                    rowData={foundEntry}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onSave={async (value, rowData) => {
-                                      const updatedEntry = { ...foundEntry, [column.key]: value };
-                                      await attendanceModel.saveOrUpdateAttendances(
-                                        [updatedEntry],
-                                        storedMonthInt,
-                                        year,
-                                        selectedEmployeeId!
-                                      );
-                                      // Refetch attendance data
-                                      const updatedAttendanceData = await attendanceModel.loadAttendancesById(storedMonthInt, year, selectedEmployeeId!);
-                                      setTimesheetEntries(updatedAttendanceData); 
-                                    }}
-                                    employmentTypes={employmentTypes}
-                                  />
-                                ) : (
-                                  <td
-                                    key={column.key}
-                                    className={`${
-                                      column.key === 'day'
-                                        ? 'sticky left-0 z-10 bg-white'
-                                        : ''
-                                    } px-6 py-4 whitespace-nowrap text-sm ${
-                                      column.key === 'day' ? 'font-medium text-gray-900' : 'text-gray-500'
-                                    }`}
-                                  >
-                                    {column.key === 'day' && day}
-                                    {column.key === 'dayType' && (compensation?.dayType || '-')}
-                                    {column.key === 'hoursWorked' && (compensation?.hoursWorked || '-')}
-                                    {column.key === 'overtimeMinutes' && (compensation?.overtimeMinutes || '-')}
-                                    {column.key === 'overtimePay' && (compensation?.overtimePay || '-')}
-                                    {column.key === 'undertimeMinutes' && (compensation?.undertimeMinutes || '-')}
-                                    {column.key === 'undertimeDeduction' && (compensation?.undertimeDeduction || '-')}
-                                    {column.key === 'lateMinutes' && (compensation?.lateMinutes || '-')}
-                                    {column.key === 'lateDeduction' && (compensation?.lateDeduction || '-')}
-                                    {column.key === 'holidayBonus' && (compensation?.holidayBonus || '-')}
-                                    {column.key === 'leaveType' && (compensation?.leaveType || '-')}
-                                    {column.key === 'leavePay' && (compensation?.leavePay || '-')}
-                                    {column.key === 'grossPay' && (compensation?.grossPay || '-')}
-                                    {column.key === 'deductions' && (compensation?.deductions || '-')}
-                                    {column.key === 'netPay' && (compensation?.netPay || '-')}
-                                  </td>
+                              {columns.map((column) => 
+                                column.visible && (
+                                  column.key === 'timeIn' || column.key === 'timeOut' ? (
+                                    <EditableCell
+                                      key={column.key}
+                                      value={column.key === 'timeIn' ? foundEntry.timeIn || '' : foundEntry.timeOut || ''}
+                                      column={column}
+                                      rowData={foundEntry}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onSave={async (value, rowData) => {
+                                        const updatedEntry = { ...foundEntry, [column.key]: value };
+                                        await attendanceModel.saveOrUpdateAttendances(
+                                          [updatedEntry],
+                                          storedMonthInt,
+                                          year,
+                                          selectedEmployeeId!
+                                        );
+                                        // Refetch attendance data
+                                        const updatedAttendanceData = await attendanceModel.loadAttendancesById(storedMonthInt, year, selectedEmployeeId!);
+                                        setTimesheetEntries(updatedAttendanceData); 
+                                      }}
+                                      employmentTypes={employmentTypes}
+                                    />
+                                  ) : (
+                                    <td
+                                      key={column.key}
+                                      className={`${
+                                        column.key === 'day'
+                                          ? 'sticky left-0 z-10 bg-white'
+                                          : ''
+                                      } px-6 py-4 whitespace-nowrap text-sm ${
+                                        column.key === 'day' ? 'font-medium text-gray-900' : 'text-gray-500'
+                                      }`}
+                                    >
+                                      {column.key === 'day' && day}
+                                      {column.key === 'dayType' && (compensation?.dayType || '-')}
+                                      {column.key === 'hoursWorked' && (compensation?.hoursWorked || '-')}
+                                      {column.key === 'overtimeMinutes' && (compensation?.overtimeMinutes || '-')}
+                                      {column.key === 'overtimePay' && (compensation?.overtimePay || '-')}
+                                      {column.key === 'undertimeMinutes' && (compensation?.undertimeMinutes || '-')}
+                                      {column.key === 'undertimeDeduction' && (compensation?.undertimeDeduction || '-')}
+                                      {column.key === 'lateMinutes' && (compensation?.lateMinutes || '-')}
+                                      {column.key === 'lateDeduction' && (compensation?.lateDeduction || '-')}
+                                      {column.key === 'holidayBonus' && (compensation?.holidayBonus || '-')}
+                                      {column.key === 'leaveType' && (compensation?.leaveType || '-')}
+                                      {column.key === 'leavePay' && (compensation?.leavePay || '-')}
+                                      {column.key === 'grossPay' && (compensation?.grossPay || '-')}
+                                      {column.key === 'deductions' && (compensation?.deductions || '-')}
+                                      {column.key === 'netPay' && (compensation?.netPay || '-')}
+                                    </td>
+                                  )
                                 )
-                              )
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 px-4">

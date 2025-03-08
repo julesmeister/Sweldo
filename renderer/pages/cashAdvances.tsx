@@ -5,7 +5,10 @@ import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
-import { CashAdvance, createCashAdvanceModel } from "@/renderer/model/cashAdvance";
+import {
+  CashAdvance,
+  createCashAdvanceModel,
+} from "@/renderer/model/cashAdvance";
 import { Employee, createEmployeeModel } from "@/renderer/model/employee";
 import CashAdvanceForm from "@/renderer/components/CashAdvanceForm";
 import { usePathname } from "next/navigation";
@@ -33,15 +36,16 @@ export default function CashAdvancesPage() {
   const { selectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
-  const cashAdvanceModel = useMemo(
-    () => {
-      if (!selectedEmployeeId || !dbPath) return null;
-      const month = storedMonth ? parseInt(storedMonth, 10) + 1 : new Date().getMonth() + 1;
-      const year = storedYear ? parseInt(storedYear, 10) : new Date().getFullYear();
-      return createCashAdvanceModel(dbPath, selectedEmployeeId, month, year);
-    },
-    [dbPath, selectedEmployeeId, storedMonth, storedYear]
-  );
+  const cashAdvanceModel = useMemo(() => {
+    if (!selectedEmployeeId || !dbPath) return null;
+    const month = storedMonth
+      ? parseInt(storedMonth, 10) + 1
+      : new Date().getMonth() + 1;
+    const year = storedYear
+      ? parseInt(storedYear, 10)
+      : new Date().getFullYear();
+    return createCashAdvanceModel(dbPath, selectedEmployeeId, month, year);
+  }, [dbPath, selectedEmployeeId, storedMonth, storedYear]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -57,17 +61,20 @@ export default function CashAdvancesPage() {
     const loadData = async () => {
       // Validate required data
       if (!selectedEmployeeId) {
-        console.log('No employee selected');
+        console.log("No employee selected");
         return;
       }
-      
+
       if (!dbPath) {
-        toast.error('Database path is not set');
+        toast.error("Database path is not set");
         return;
       }
 
       if (!employeeModel || !cashAdvanceModel) {
-        console.warn('Models not initialized:', { employeeModel: !!employeeModel, cashAdvanceModel: !!cashAdvanceModel });
+        console.warn("Models not initialized:", {
+          employeeModel: !!employeeModel,
+          cashAdvanceModel: !!cashAdvanceModel,
+        });
         return;
       }
 
@@ -78,16 +85,18 @@ export default function CashAdvancesPage() {
         if (emp !== null) setEmployee(emp);
 
         // Load cash advances
-        console.log('Loading cash advances for employee:', selectedEmployeeId);
-        const advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId);
-        console.log('Loaded cash advances:', advances);
+        console.log("Loading cash advances for employee:", selectedEmployeeId);
+        const advances = await cashAdvanceModel.loadCashAdvances(
+          selectedEmployeeId
+        );
+        console.log("Loaded cash advances:", advances);
         setCashAdvances(advances);
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error("Error loading data:", error);
         if (error instanceof Error) {
           toast.error(`Failed to load data: ${error.message}`);
         } else {
-          toast.error('Failed to load data');
+          toast.error("Failed to load data");
         }
       } finally {
         setLoading(false);
@@ -126,7 +135,11 @@ export default function CashAdvancesPage() {
     setSelectedCashAdvance(null);
   };
 
-  const setDialogPosition = (event: React.MouseEvent, advance?: CashAdvance, isButton: boolean = false) => {
+  const setDialogPosition = (
+    event: React.MouseEvent,
+    advance?: CashAdvance,
+    isButton: boolean = false
+  ) => {
     event.stopPropagation(); // Prevent event bubbling
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
@@ -153,10 +166,7 @@ export default function CashAdvancesPage() {
     }
 
     // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left,  dialogWidth * 1.1)
-    );
+    left = Math.max(spacing, Math.min(left, dialogWidth * 1.1));
 
     // Calculate caret position relative to the dialog
     const caretLeft = isButton
@@ -184,7 +194,7 @@ export default function CashAdvancesPage() {
   const router = useRouter();
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    console.log('Setting loading state to true');
+    console.log("Setting loading state to true");
     setLoading(true);
     setActiveLink(path);
     router.push(path);
@@ -192,7 +202,7 @@ export default function CashAdvancesPage() {
 
   async function handleSaveCashAdvance(data: CashAdvance): Promise<void> {
     if (!cashAdvanceModel) {
-      toast.error('System not properly initialized');
+      toast.error("System not properly initialized");
       return;
     }
 
@@ -204,10 +214,10 @@ export default function CashAdvancesPage() {
           ...data,
           id: selectedCashAdvance.id,
           employeeId: selectedEmployeeId!,
-          date: selectedCashAdvance.date
+          date: selectedCashAdvance.date,
         });
-        toast.success('Cash advance updated successfully', {
-          position: 'bottom-right',
+        toast.success("Cash advance updated successfully", {
+          position: "bottom-right",
           duration: 3000,
         });
       } else {
@@ -216,28 +226,30 @@ export default function CashAdvancesPage() {
           ...data,
           id: crypto.randomUUID(),
           employeeId: selectedEmployeeId!,
-          date: new Date()
+          date: new Date(),
         });
-        toast.success('Cash advance created successfully', {
-          position: 'bottom-right',
+        toast.success("Cash advance created successfully", {
+          position: "bottom-right",
           duration: 3000,
         });
       }
-      
+
       // Reload the cash advances to get the updated list
-      const advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId!);
+      const advances = await cashAdvanceModel.loadCashAdvances(
+        selectedEmployeeId!
+      );
       setCashAdvances(advances);
-      
+
       // Close the dialog
       handleCloseDialog();
     } catch (error) {
-      console.error('Error saving cash advance:', error);
+      console.error("Error saving cash advance:", error);
       toast.error(
         error instanceof Error
           ? `Error saving cash advance: ${error.message}`
-          : 'Error saving cash advance',
+          : "Error saving cash advance",
         {
-          position: 'bottom-right',
+          position: "bottom-right",
           duration: 3000,
         }
       );
@@ -248,26 +260,26 @@ export default function CashAdvancesPage() {
 
   return (
     <RootLayout>
-    <main className="max-w-12xl mx-auto py-6 sm:px-6 lg:px-8">
-    <MagicCard
-              className="p-0.5 rounded-lg col-span-2"
-              gradientSize={200}
-              gradientColor="#9E7AFF"
-              gradientOpacity={0.8}
-              gradientFrom="#9E7AFF"
-              gradientTo="#FE8BBB"
-            >
-      <div className="px-4sm:px-0">
-        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
-          <div className="col-span-1 md:col-span-1">
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                  {selectedEmployeeId
-                    ? employee?.name + "'s Cash Advances"
-                    : "Cash Advances"}
-                </h2>
-                {/* <div className="flex items-center space-x-4">
+      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+        <MagicCard
+          className="p-0.5 rounded-lg col-span-2"
+          gradientSize={200}
+          gradientColor="#9E7AFF"
+          gradientOpacity={0.8}
+          gradientFrom="#9E7AFF"
+          gradientTo="#FE8BBB"
+        >
+          <div className="px-4sm:px-0">
+            <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
+              <div className="col-span-1 md:col-span-1">
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                      {selectedEmployeeId
+                        ? employee?.name + "'s Cash Advances"
+                        : "Cash Advances"}
+                    </h2>
+                    {/* <div className="flex items-center space-x-4">
                   <button
                     onClick={handleCloseDialog}
                     className="text-gray-400 hover:text-gray-500"
@@ -288,222 +300,244 @@ export default function CashAdvancesPage() {
                     </svg>
                   </button>
                 </div> */}
-                <div className="relative flex items-center space-x-4">
-                  <button
-                    type="button"
-                    onClick={handleButtonClick}
-                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
-                  >
-                    Apply for Cash Advance
-                  </button>
-                </div>
-              </div>
-              {selectedEmployeeId ? (
-                <div className="overflow-x-auto relative">
-                  {cashAdvances.length === 0 ? (
+                    <div className="relative flex items-center space-x-4">
+                      <button
+                        type="button"
+                        onClick={handleButtonClick}
+                        className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+                      >
+                        Apply for Cash Advance
+                      </button>
+                    </div>
+                  </div>
+                  {selectedEmployeeId ? (
+                    <div className="overflow-x-auto relative">
+                      {cashAdvances.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-4">
+                          <div className="text-center">
+                            <svg
+                              className="mx-auto h-12 w-12 text-gray-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              />
+                            </svg>
+                            <h3 className="mt-2 text-sm font-semibold text-gray-900">
+                              No cash advances found
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              Get started by creating a new cash advance.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Date
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Amount
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Payment Type
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Approval Status
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Remaining Payments
+                              </th>
+                              <th
+                                scope="col"
+                                className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                              >
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {cashAdvances.map((advance) => (
+                              <tr
+                                key={advance.id}
+                                className="hover:bg-gray-50 cursor-pointer"
+                                onClick={(e) => handleRowClick(e, advance)}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(advance.date).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  ₱{advance.amount.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getScheduleColor(
+                                      advance.paymentSchedule
+                                    )}`}
+                                  >
+                                    {advance.paymentSchedule}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
+                                      advance.approvalStatus
+                                    )}`}
+                                  >
+                                    {advance.approvalStatus}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {advance.paymentSchedule === "Installment"
+                                    ? `${advance.installmentDetails?.remainingPayments} of ${advance.installmentDetails?.numberOfPayments}`
+                                    : "N/A"}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!cashAdvanceModel) {
+                                        toast.error(
+                                          "System not properly initialized"
+                                        );
+                                        return;
+                                      }
+
+                                      if (
+                                        !confirm(
+                                          "Are you sure you want to delete this cash advance?"
+                                        )
+                                      ) {
+                                        return;
+                                      }
+
+                                      setLoading(true);
+                                      try {
+                                        await cashAdvanceModel.deleteCashAdvance(
+                                          advance.id,
+                                          advance.date
+                                        );
+                                        const advances =
+                                          await cashAdvanceModel.loadCashAdvances(
+                                            selectedEmployeeId!
+                                          );
+                                        setCashAdvances(advances);
+                                        toast.success(
+                                          "Cash advance deleted successfully"
+                                        );
+                                      } catch (error) {
+                                        console.error(
+                                          "Error deleting cash advance:",
+                                          error
+                                        );
+                                        toast.error(
+                                          error instanceof Error
+                                            ? `Error deleting cash advance: ${error.message}`
+                                            : "Error deleting cash advance"
+                                        );
+                                      } finally {
+                                        setLoading(false);
+                                      }
+                                    }}
+                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ) : (
                     <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <div className="text-center">
+                      <div className="mb-6">
                         <svg
-                          className="mx-auto h-12 w-12 text-gray-400"
+                          className="mx-auto h-24 w-24 text-gray-300"
                           fill="none"
-                          stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
+                          stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            strokeWidth={1}
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                           />
                         </svg>
-                        <h3 className="mt-2 text-sm font-semibold text-gray-900">No cash advances found</h3>
-                        <p className="mt-1 text-sm text-gray-500">Get started by creating a new cash advance.</p>
+                      </div>
+                      <h3 className="mt-2 text-xl font-semibold text-gray-900">
+                        No Employee Selected
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Please select an employee from the dropdown menu to view
+                        their cash advances.
+                      </p>
+                      <div className="mt-6">
+                        <AddButton
+                          text="Select Employee"
+                          onClick={() => handleLinkClick("/")}
+                        />
                       </div>
                     </div>
-                  ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Date
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Amount
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Payment Type
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Approval Status
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Remaining Payments
-                          </th>
-                          <th
-                            scope="col"
-                            className="relative py-3.5 pl-3 pr-4 sm:pr-6"
-                          >
-                            <span className="sr-only">Actions</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {cashAdvances.map((advance) => (
-                          <tr
-                            key={advance.id}
-                            className="hover:bg-gray-50 cursor-pointer"
-                            onClick={(e) => handleRowClick(e, advance)}
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(advance.date).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              ₱{advance.amount.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span
-                                className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getScheduleColor(
-                                  advance.paymentSchedule
-                                )}`}
-                              >
-                                {advance.paymentSchedule}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span
-                                className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
-                                  advance.approvalStatus
-                                )}`}
-                              >
-                                {advance.approvalStatus}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {advance.paymentSchedule === "Installment"
-                                ? `${advance.installmentDetails?.remainingPayments} of ${advance.installmentDetails?.numberOfPayments}`
-                                : "N/A"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (!cashAdvanceModel) {
-                                    toast.error('System not properly initialized');
-                                    return;
-                                  }
-
-                                  if (!confirm('Are you sure you want to delete this cash advance?')) {
-                                    return;
-                                  }
-
-                                  setLoading(true);
-                                  try {
-                                    await cashAdvanceModel.deleteCashAdvance(advance.id, advance.date);
-                                    const advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId!);
-                                    setCashAdvances(advances);
-                                    toast.success('Cash advance deleted successfully');
-                                  } catch (error) {
-                                    console.error('Error deleting cash advance:', error);
-                                    toast.error(
-                                      error instanceof Error
-                                        ? `Error deleting cash advance: ${error.message}`
-                                        : 'Error deleting cash advance'
-                                    );
-                                  } finally {
-                                    setLoading(false);
-                                  }
-                                }}
-                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
-                              >
-                                Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   )}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 px-4">
-                  <div className="mb-6">
-                    <svg
-                      className="mx-auto h-24 w-24 text-gray-300"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="mt-2 text-xl font-semibold text-gray-900">
-                    No Employee Selected
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Please select an employee from the dropdown menu to view their cash advances.
-                  </p>
-                  <div className="mt-6">
-                    <AddButton
-                      text="Select Employee"
-                      onClick={() => handleLinkClick("/")}
-                    />
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      </MagicCard>
-      {isDialogOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-40" />
-          <div
-            className="fixed inset-0 z-50"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                handleCloseDialog();
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                handleCloseDialog();
-              }
-            }}
-            tabIndex={0}
-          >
-            <CashAdvanceForm
-              onClose={handleCloseDialog}
-              onSave={handleSaveCashAdvance}
-              initialData={selectedCashAdvance}
-              position={clickPosition!}
-            />
-          </div>
-        </>
-      )}
-    </main>
+        </MagicCard>
+        {isDialogOpen && (
+          <>
+            <div className="fixed inset-0 bg-black/50 z-40" />
+            <div
+              className="fixed inset-0 z-50"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  handleCloseDialog();
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  handleCloseDialog();
+                }
+              }}
+              tabIndex={0}
+            >
+              <CashAdvanceForm
+                onClose={handleCloseDialog}
+                onSave={handleSaveCashAdvance}
+                initialData={selectedCashAdvance}
+                position={clickPosition!}
+              />
+            </div>
+          </>
+        )}
+      </main>
     </RootLayout>
   );
 }
