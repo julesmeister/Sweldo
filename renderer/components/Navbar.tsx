@@ -59,20 +59,16 @@ export default function Navbar() {
     }
   };
 
-  const handleLinkClick = (path: string) => {
+  const handleLinkClick = async (path: string) => {
     if (path === pathname) return;
     
-    setLoading(true);
-    updateHighlighterPosition(path);
-    
-    setTimeout(() => {
+    try {
+      setLoading(true);
       setActiveLink(path);
-      router.push(path);
-      // Stop loading after navigation
-      setTimeout(() => {
-        setLoading(false);
-      }, 100);
-    }, 100);
+      await router.push(path);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Helper function to store references to nav links

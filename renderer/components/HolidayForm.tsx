@@ -72,37 +72,37 @@ export default function HolidayForm({
         const settings = await settingsModel.loadAttendanceSettings();
         setAttendanceSettings(settings);
         
-        // Set initial multiplier based on type
-        if (initialData) {
-          // For existing holiday, use the type from initialData to set correct multiplier
-          setMultiplier(
-            initialData.type === 'Regular' 
-              ? settings.regularHolidayMultiplier 
-              : settings.specialHolidayMultiplier
-          );
-        } else {
-          // For new holiday, use current type
-          setMultiplier(
-            type === 'Regular' 
-              ? settings.regularHolidayMultiplier 
-              : settings.specialHolidayMultiplier
-          );
+        // Only set initial multiplier on first load or when initialData changes
+        if (!attendanceSettings) {
+          if (initialData) {
+            setMultiplier(
+              initialData.type === 'Regular' 
+                ? settings.regularHolidayMultiplier 
+                : settings.specialHolidayMultiplier
+            );
+          } else {
+            setMultiplier(
+              type === 'Regular' 
+                ? settings.regularHolidayMultiplier 
+                : settings.specialHolidayMultiplier
+            );
+          }
         }
       } catch (error) {
         console.error('Error loading attendance settings:', error);
       }
     };
     loadSettings();
-  }, [initialData, type]);
+  }, [initialData, dbPath]); // Remove type from dependencies
 
   const handleTypeChange = (newType: 'Regular' | 'Special') => {
     setType(newType);
     if (attendanceSettings) {
-      setMultiplier(
-        newType === 'Regular' 
-          ? attendanceSettings.regularHolidayMultiplier 
-          : attendanceSettings.specialHolidayMultiplier
-      );
+      const newMultiplier = newType === 'Regular' 
+        ? attendanceSettings.regularHolidayMultiplier 
+        : attendanceSettings.specialHolidayMultiplier;
+      console.log(`[HolidayForm] Setting multiplier to ${newMultiplier} for ${newType} type`);
+      setMultiplier(newMultiplier);
     }
   };
 
@@ -299,8 +299,8 @@ export default function HolidayForm({
                     onClick={() => handleTypeChange('Regular')}
                     className={`px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
                       type === 'Regular'
-                        ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
-                        : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700'
+                        ? 'bg-blue-900/50 text-blue-300 border border-blue-700 [color-scheme:dark]'
+                        : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 [color-scheme:dark]'
                     }`}
                   >
                     Regular
@@ -310,8 +310,8 @@ export default function HolidayForm({
                     onClick={() => handleTypeChange('Special')}
                     className={`px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
                       type === 'Special'
-                        ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
-                        : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700'
+                        ? 'bg-blue-900/50 text-blue-300 border border-blue-700 [color-scheme:dark]'
+                        : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 [color-scheme:dark]'
                     }`}
                   >
                     Special

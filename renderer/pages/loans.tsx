@@ -32,10 +32,19 @@ export default function LoansPage() {
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
   const [employee, setEmployee] = useState<Employee | null>(null);
+
   const employeeModel = useMemo(() => dbPath ? createEmployeeModel(dbPath) : null, [dbPath]);
+  const loanModel = useMemo(
+    () => dbPath && selectedEmployeeId ? createLoanModel(dbPath, selectedEmployeeId) : null,
+    [dbPath, selectedEmployeeId]
+  );
   const pathname = usePathname();
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const router = useRouter();
+
+  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
+  const year = parseInt(storedYear!, 10);
+
   useEffect(() => {
     const loadEmployee = async () => {
       console.log("[LoansPage] Loading employee with ID", selectedEmployeeId);
@@ -70,13 +79,6 @@ export default function LoansPage() {
     loadEmployee();
   }, [dbPath, selectedEmployeeId, employeeModel, setLoading]);
 
-  const loanModel =
-    dbPath && selectedEmployeeId
-      ? createLoanModel(dbPath, selectedEmployeeId)
-      : null;
-
-  console.log("loanModel:", loanModel);
-
   useEffect(() => {
     if (typeof window !== "undefined") {
       const month = localStorage.getItem("selectedMonth");
@@ -95,9 +97,24 @@ export default function LoansPage() {
     }
   }, [storedYear]);
 
-  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
+  useEffect(() => {
+    const loadLoans = async () => {
+      if (!loanModel || !storedYear || storedMonthInt === 0) return;
+      
+      try {
+        setLoading(true);
+        const currentLoans = await loanModel.loadLoans(parseInt(storedYear), storedMonthInt);
+        setLoans(currentLoans);
+      } catch (error) {
+        console.error("[LoansPage] Error loading loans:", error);
+        toast.error("Failed to load loans");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const year = parseInt(storedYear!, 10);
+    loadLoans();
+  }, [loanModel, storedMonthInt, storedYear, setLoading]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -148,12 +165,15 @@ export default function LoansPage() {
     setIsDialogOpen(true);
   };
 
-  const handleLinkClick = (path: string) => {
+  const handleLinkClick = async (path: string) => {
     if (path === pathname) return;
-    console.log('Setting loading state to true');
-    setLoading(true);
-    setActiveLink(path);
-    router.push(path);
+    try {
+      setLoading(true);
+      setActiveLink(path);
+      await router.push(path);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveLoan = (data: Loan): void => {

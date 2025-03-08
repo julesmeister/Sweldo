@@ -132,7 +132,14 @@ export class Payroll {
 
       timeList?.forEach((timeString, j) => {
         if (!timeString) {
-          attendances.push({day: j+1, timeIn: null, timeOut: null });
+          attendances.push({
+            day: j+1,
+            timeIn: null,
+            timeOut: null,
+            employeeId: this.processColumn(rows[i], "ID:"),
+            month: this.dateRange.start.getMonth() + 1,
+            year: this.dateRange.start.getFullYear()
+          });
           return;
         }
 
@@ -175,7 +182,14 @@ export class Payroll {
           });
         }
 
-        attendances.push({ day: j + 1, timeIn, timeOut });
+        attendances.push({
+          day: j + 1,
+          timeIn,
+          timeOut,
+          employeeId: this.processColumn(rows[i], "ID:"),
+          month: this.dateRange.start.getMonth() + 1,
+          year: this.dateRange.start.getFullYear()
+        });
       });
 
       const id = this.processColumn(rows[i], "ID:");
