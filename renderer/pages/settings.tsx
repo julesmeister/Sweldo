@@ -35,7 +35,11 @@ interface SettingSection {
 }
 
 export default function SettingsPage() {
-  const { dbPath, setDbPath } = useSettingsStore();
+  const { dbPath, setDbPath, logoPath, setLogoPath } = useSettingsStore();
+  const [logoExists, setLogoExists] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const [isCheckingLogo, setIsCheckingLogo] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = React.useState<string>("attendance");
   const [currentPath, setCurrentPath] = useState(dbPath);
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
@@ -45,11 +49,39 @@ export default function SettingsPage() {
     null
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings>();
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [sssRate, setSssRate] = useState("");
+
+  useEffect(() => {
+    async function checkLogoExists() {
+      if (logoPath) {
+        setIsCheckingLogo(true);
+        try {
+          const exists = await window.electron.fileExists(logoPath);
+          setLogoExists(exists);
+          if (!exists) {
+            setLogoPath('');
+            setLogoError('The selected logo file no longer exists');
+          } else {
+            setLogoError('');
+          }
+        } catch (error) {
+          console.error('Error checking logo file:', error);
+          setLogoError('Error checking logo file');
+        } finally {
+          setIsCheckingLogo(false);
+        }
+      } else {
+        setLogoExists(false);
+        setIsCheckingLogo(false);
+      }
+    }
+    checkLogoExists();
+  }, [logoPath, setLogoPath]);
 
   useEffect(() => {
     const loadAttendanceSettings = async () => {
@@ -682,7 +714,7 @@ export default function SettingsPage() {
     },
     {
       key: "employeeManagement",
-      title: "Employee Management",
+      title: "Employee Activity",
       icon: <IoPeopleOutline className="w-5 h-5" />,
       content: (
         <div className="space-y-8">
@@ -881,6 +913,133 @@ export default function SettingsPage() {
                   ))}
                 </ul>
               </div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "logo",
+      title: "Company Logo",
+      icon: <MdOutlineDataset className="h-5 w-5" />,
+      content: (
+        <div className="">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-2">Company Logo</h2>
+            <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
+              <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
+              <p className="text-sm text-gray-800 font-light">
+                Select your company logo image file (PNG, JPG, or JPEG). The logo will be used in reports and other company documents.
+              </p>
+            </div>
+            {logoError && (
+              <div className="bg-red-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-red-300">
+                <IoInformationCircleOutline className="w-6 h-6 text-red-900" />
+                <p className="text-sm text-red-800 font-light">{logoError}</p>
+              </div>
+            )}
+            
+            {/* Logo Preview */}
+            {isCheckingLogo ? (
+              <div className="mb-4 p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center justify-center h-24 gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-600"></div>
+                  <div className="text-sm text-gray-500">Checking logo file...</div>
+                </div>
+              </div>
+            ) : !logoPath ? (
+              <div 
+                className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${isDragging ? 'border-blue-500 bg-blue-50' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  setLogoError('');
+
+                  const file = e.dataTransfer.files[0];
+                  if (!file) return;
+
+                  const ext = file.name.toLowerCase().split('.').pop();
+                  if (!['png', 'jpg', 'jpeg'].includes(ext || '')) {
+                    setLogoError('Please select a valid image file (PNG, JPG, or JPEG)');
+                    return;
+                  }
+
+                  setLogoPath(file.path);
+                }}
+              >
+                <div className="flex flex-col items-center justify-center h-24 gap-2 text-gray-400">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <div className="text-sm">{isDragging ? 'Drop image here' : 'No logo selected - Click browse or drag an image here'}</div>
+                </div>
+              </div>
+            ) : logoPath && logoExists && (
+              <div className="mb-4 p-4 border rounded-lg bg-gray-50">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Logo Preview</h3>
+                <div className="flex items-center justify-center bg-white border rounded-lg p-4">
+                  <img 
+                    src={logoPath ? `local-file://${logoPath}` : ''} 
+                    alt="Company Logo" 
+                    className="max-h-24 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = ''; // Clear the source on error
+                      console.error('Error loading logo:', logoPath);
+                    }} 
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center space-x-4">
+              <input
+                type="text"
+                value={logoPath}
+                readOnly
+                className="flex-1 p-2 border rounded-md bg-gray-50"
+                placeholder="Select logo image..."
+              />
+              <button
+                onClick={async () => {
+                  // Clear any existing error messages
+                  setLogoError('');
+                  
+                  const result = await window.electron.showOpenDialog({
+                    properties: ['openFile'],
+                    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }]
+                  });
+                  
+                  if (!result.canceled && result.filePaths.length > 0) {
+                    const filePath = result.filePaths[0];
+                    const ext = filePath.toLowerCase().split('.').pop();
+                    if (!['png', 'jpg', 'jpeg'].includes(ext || '')) {
+                      setLogoError('Please select a valid image file (PNG, JPG, or JPEG)');
+                      return;
+                    }
+                    setLogoError('');
+                    setLogoPath(filePath);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Browse
+              </button>
+              {logoPath && (
+                <button
+                  onClick={() => {
+                  setLogoPath('');
+                  setLogoError('');
+                }}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md border hover:bg-gray-200 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </div>
         </div>

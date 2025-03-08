@@ -1,5 +1,5 @@
 import path from 'path'
-import { app, ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog, protocol } from 'electron'
 import serve from 'electron-serve'
 import { createWindow } from './helpers'
 import fs from 'fs/promises'
@@ -15,6 +15,12 @@ if (isProd) {
 
 ;(async () => {
   await app.whenReady()
+
+  // Register protocol for loading local files
+  protocol.registerFileProtocol('local-file', (request, callback) => {
+    const filePath = request.url.replace('local-file://', '')
+    callback({ path: decodeURIComponent(filePath) })
+  })
 
   const mainWindow = createWindow('main', {
     width: 1600,
@@ -116,6 +122,16 @@ ipcMain.handle('dialog:openFolder', async () => {
     return result.canceled ? null : result.filePaths[0]
   } catch (error) {
     console.error('Error opening folder dialog:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('dialog:showOpenDialog', async (_event, options) => {
+  try {
+    const result = await dialog.showOpenDialog(options)
+    return result
+  } catch (error) {
+    console.error('Error showing open dialog:', error)
     throw error
   }
 })

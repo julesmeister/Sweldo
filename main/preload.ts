@@ -37,6 +37,9 @@ const fileSystem = {
   },
   async getFullPath(relativePath: string): Promise<string> {
     return await ipcRenderer.invoke('fs:getFullPath', { relativePath })
+  },
+  async showOpenDialog(options: { properties: string[], filters?: { name: string, extensions: string[] }[] }): Promise<{ canceled: boolean, filePaths: string[] }> {
+    return await ipcRenderer.invoke('dialog:showOpenDialog', options)
   }
 }
 
