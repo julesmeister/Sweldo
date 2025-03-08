@@ -1,6 +1,7 @@
 import { Employee, createEmployeeModel } from "./employee";
 import { DateRange, Attendance, ExcelData, createAttendanceModel } from "./attendance";
 import { Compensation, createCompensationModel } from "./compensation";
+import { MissingTimeModel, MissingTimeLog } from './missingTime';
 import * as Papa from 'papaparse';
 import { toast } from 'sonner';
 
@@ -127,6 +128,7 @@ export class Payroll {
     for (let i = 4; i < rows.length; i += 2) {
       const timeList = rows[i + 1]?.map((value) => value?.toString());
       const attendances: Attendance[] = [];
+      const missingTimeLogs: MissingTimeLog[] = [];
 
       timeList?.forEach((timeString, j) => {
         if (!timeString) {
@@ -158,6 +160,20 @@ export class Payroll {
           }
         }
 
+        // Check for missing time out when time in exists
+        if (timeIn && !timeOut) {
+          missingTimeLogs.push({
+            id: crypto.randomUUID(),
+            employeeId: this.processColumn(rows[i], "ID:"),
+            employeeName: this.processColumn(rows[i], "Name:"),
+            day: j + 1,
+            month: this.dateRange.start.getMonth() + 1,
+            year: this.dateRange.start.getFullYear(),
+            missingType: 'timeOut',
+            createdAt: new Date().toISOString()
+          });
+        }
+
         attendances.push({ day: j + 1, timeIn, timeOut });
       });
 
@@ -179,13 +195,19 @@ export class Payroll {
         });
 
         // Save attendances for each employee
-        const model = createAttendanceModel(this.dbPath);
-        await model.saveOrUpdateAttendances(
+        const attendanceModel = createAttendanceModel(this.dbPath);
+        await attendanceModel.saveOrUpdateAttendances(
           attendances, 
           this.dateRange.start.getMonth() + 1, 
           this.dateRange.start.getFullYear(), 
           id
         );
+
+        // Save missing time logs
+        const missingTimeModel = MissingTimeModel.createMissingTimeModel(this.dbPath);
+        for (const log of missingTimeLogs) {
+          await missingTimeModel.saveMissingTimeLog(log, this.dateRange.start.getMonth() + 1, this.dateRange.start.getFullYear());
+        }
       }
     }
     let model = createEmployeeModel(this.dbPath);

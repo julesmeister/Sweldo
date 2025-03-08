@@ -106,6 +106,10 @@ export class AttendanceModel {
     try {
       // Construct the file path
       const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
+      const directoryPath = `${this.folderPath}/${id}`;
+
+      // Ensure directory exists
+      await window.electron.ensureDir(directoryPath);
 
       // Load existing attendances
       const existingAttendances = await this.loadAttendancesById(month, year, id) || []; // Use an empty array if not found
@@ -113,6 +117,7 @@ export class AttendanceModel {
         console.log(`No existing attendances found for ${id} in ${year}-${month}`);
         return;
       }
+
       // Iterate through the new attendances
       for (const newAttendance of attendances) {
         const attendanceIndex = existingAttendances.findIndex(att => 

@@ -50,7 +50,7 @@ export default function HomePage() {
             <HolidayCalendar />
           </div>
           {showMissingTimeLogs && (
-            <div className="col-span-1">
+            <div className="col-span-2">
               <MissingTimeLogs />
             </div>
           )}
