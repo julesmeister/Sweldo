@@ -53,6 +53,10 @@ export default function SettingsPage() {
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings>();
+  const [holidayMultipliers, setHolidayMultipliers] = useState({
+    regular: '',
+    special: ''
+  });
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [sssRate, setSssRate] = useState("");
 
@@ -91,6 +95,10 @@ export default function SettingsPage() {
         setEmploymentTypes(timeSettings);
         console.log("Attendance settings loaded:", settings);
         setAttendanceSettings(settings);
+        setHolidayMultipliers({
+          regular: settings.regularHolidayMultiplier.toString(),
+          special: settings.specialHolidayMultiplier.toString()
+        });
       } catch (error) {
         console.error("Error loading attendance settings:", error);
       }
@@ -212,6 +220,35 @@ export default function SettingsPage() {
   // Function to check if an employee is selected
   const isEmployeeSelected = (employee: Employee) => {
     return selectedEmployees.some((selected) => selected.id === employee.id);
+  };
+
+  const handleSaveHolidayMultipliers = async () => {
+    try {
+      const regular = Number(holidayMultipliers.regular);
+      const special = Number(holidayMultipliers.special);
+      
+      if (isNaN(regular) || isNaN(special)) {
+        toast.error('Please enter valid numbers for multipliers');
+        return;
+      }
+      
+      if (regular <= 0 || special <= 0) {
+        toast.error('Multipliers must be greater than 0');
+        return;
+      }
+
+      await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
+      await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
+      
+      // Reload settings to confirm changes
+      const settings = await attendanceSettingsModel.loadAttendanceSettings();
+      setAttendanceSettings(settings);
+      
+      toast.success('Holiday multipliers updated successfully');
+    } catch (error) {
+      console.error('Error saving holiday multipliers:', error);
+      toast.error('Failed to update holiday multipliers');
+    }
   };
 
   const handleSelectionChange = (key: string | number) => {
@@ -470,7 +507,7 @@ export default function SettingsPage() {
     },
     {
       key: "holidays",
-      title: "Holiday Pay",
+      title: "Holidays",
       icon: <IoCalendarOutline className="w-5 h-5" />,
       content: (
         <div className="space-y-8">
@@ -490,12 +527,11 @@ export default function SettingsPage() {
                       type="text"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="2"
-                      value={attendanceSettings?.regularHolidayMultiplier || ""}
-                      onChange={(e) =>
-                        attendanceSettingsModel?.setRegularHolidayMultiplier(
-                          Number(e.target.value)
-                        )
-                      }
+                      value={holidayMultipliers.regular}
+                      onChange={(e) => setHolidayMultipliers(prev => ({
+                        ...prev,
+                        regular: e.target.value
+                      }))}                      
                     />
                   </div>
                   <div>
@@ -506,17 +542,19 @@ export default function SettingsPage() {
                       type="text"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="1.3"
-                      value={attendanceSettings?.specialHolidayMultiplier || ""}
-                      onChange={(e) =>
-                        attendanceSettingsModel?.setSpecialHolidayMultiplier(
-                          Number(e.target.value)
-                        )
-                      }
+                      value={holidayMultipliers.special}
+                      onChange={(e) => setHolidayMultipliers(prev => ({
+                        ...prev,
+                        special: e.target.value
+                      }))}                      
                     />
                   </div>
                 </div>
                 <div className="pt-4">
-                  <button className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  <button 
+                    onClick={handleSaveHolidayMultipliers}
+                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
                     Save Changes
                   </button>
                 </div>
@@ -714,7 +752,7 @@ export default function SettingsPage() {
     },
     {
       key: "employeeManagement",
-      title: "Employee Activity",
+      title: "Employee",
       icon: <IoPeopleOutline className="w-5 h-5" />,
       content: (
         <div className="space-y-8">

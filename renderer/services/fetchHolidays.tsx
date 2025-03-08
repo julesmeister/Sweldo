@@ -1,4 +1,4 @@
-interface Holiday {
+export interface Holiday {
   id: string;
   name: string;
   startDate: Date;
@@ -10,7 +10,7 @@ interface Holiday {
 const CALENDAR_API_URL = 'https://www.googleapis.com/calendar/v3/calendars/en.philippines%23holiday%40group.v.calendar.google.com/events';
 const API_KEY = 'AIzaSyCgpWYq2DON3a9GA555z5AUOQHAebgGNw0';
 
-export async function fetchHolidays(year: number): Promise<Holiday[]> {
+export async function fetchHolidays(year: number, regularMultiplier: number = 2, specialMultiplier: number = 1.3): Promise<Holiday[]> {
   try {
     // Create dates in UTC
     const timeMin = new Date(Date.UTC(year, 0, 1));
@@ -46,7 +46,7 @@ export async function fetchHolidays(year: number): Promise<Holiday[]> {
       startDate: new Date(event.start.date || event.start.dateTime),
       endDate: new Date(event.end.date || event.end.dateTime),
       type: event.description?.includes('Special') ? 'Special' : 'Regular',
-      multiplier: event.description?.includes('Special') ? 1.3 : 1.0,
+      multiplier: event.description?.includes('Special') ? specialMultiplier : regularMultiplier,
     }));
   } catch (error) {
     console.error('Error fetching holidays:', error);
