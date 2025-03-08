@@ -100,6 +100,13 @@ export default function HolidayCalendar() {
                     </tr>
                   );
                 })}
+              {holidays.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No holidays found for this month
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
