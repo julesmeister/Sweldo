@@ -5,11 +5,13 @@ import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { toast } from "sonner";
 import { Holiday, createHolidayModel } from "@/renderer/model/holiday";
+import { createAttendanceSettingsModel } from "@/renderer/model/settings";
 import HolidayForm from "@/renderer/components/HolidayForm";
 import { fetchHolidays } from "@/renderer/services/fetchHolidays";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
+import path from "path";
 
 export default function HolidaysPage() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -19,6 +21,10 @@ export default function HolidaysPage() {
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | undefined>(
     undefined
   );
+  const [attendanceSettings, setAttendanceSettings] = useState<{
+    regularHolidayMultiplier: number;
+    specialHolidayMultiplier: number;
+  } | null>(null);
   const { dbPath } = useSettingsStore();
 
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
@@ -90,6 +96,19 @@ export default function HolidaysPage() {
       observer.disconnect();
     };
   }, [holidays, suggestedHolidays]);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settingsModel = createAttendanceSettingsModel(dbPath);
+        const settings = await settingsModel.loadAttendanceSettings();
+        setAttendanceSettings(settings);
+      } catch (error) {
+        console.error('Error loading attendance settings:', error);
+      }
+    };
+    loadSettings();
+  }, [dbPath]);
 
   const setDialogPosition = (event: React.MouseEvent, holiday: Holiday) => {
     event.stopPropagation(); // Prevent event bubbling
@@ -214,6 +233,7 @@ export default function HolidaysPage() {
       console.error("Invalid dbPath:", dbPath);
       return; // Prevent further execution if dbPath is invalid
     }
+
     const holidayModel = createHolidayModel(
       dbPath,
       parseInt(storedYear!, 10),
@@ -227,7 +247,11 @@ export default function HolidaysPage() {
   useEffect(() => {}, [selectedHoliday]);
 
   function handleSaveHoliday(data: Holiday): void {
-    // Implementation for saving holiday
+    if (!dbPath) {
+      console.error("Invalid dbPath:", dbPath);
+      return;
+    }
+
     const holidayModel = createHolidayModel(
       dbPath,
       parseInt(storedYear!, 10),
@@ -376,7 +400,11 @@ export default function HolidaysPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900">
-                                    {holiday.multiplier}x
+                                    {attendanceSettings ? (
+                                      holiday.type === 'Regular' 
+                                        ? attendanceSettings.regularHolidayMultiplier 
+                                        : attendanceSettings.specialHolidayMultiplier
+                                    ) : holiday.multiplier}x
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -385,7 +413,7 @@ export default function HolidaysPage() {
                                       e.stopPropagation();
                                       // Handle delete
                                       const holidayModel = createHolidayModel(
-                                        dbPath[0],
+                                        dbPath,
                                         parseInt(storedYear!, 10),
                                         parseInt(storedMonth!, 10) + 1
                                       );
@@ -505,7 +533,11 @@ export default function HolidaysPage() {
                               {holiday.type}
                             </span>
                             <span className="text-sm text-gray-500">
-                              {holiday.multiplier}x
+                              {attendanceSettings ? (
+                                holiday.type === 'Regular' 
+                                  ? attendanceSettings.regularHolidayMultiplier 
+                                  : attendanceSettings.specialHolidayMultiplier
+                              ) : holiday.multiplier}x
                             </span>
                           </div>
                         </div>

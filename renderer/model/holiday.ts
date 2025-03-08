@@ -11,116 +11,136 @@ export interface Holiday {
 }
 
 export class HolidayModel {
-  filePath: string;
-  year: number;
-  month: number;
+  private basePath: string;
+  private year: number;
+  private month: number;
+
   constructor(dbPath: string, year: number, month: number) {
+    this.basePath = path.join(dbPath, 'SweldoDB/holidays');
     this.year = year;
     this.month = month;
-    // Ensure we start with an absolute path
-    const absoluteDbPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
-    this.filePath = path.join(absoluteDbPath, `SweldoDB/holidays/${year.toString()}_${month.toString()}_holidays.csv`);
+    
     // Ensure directory exists
-    const directoryPath = path.dirname(this.filePath);
-    // Create directories recursively
-    const parts = directoryPath.split(path.sep);
-    let currentPath = absoluteDbPath; // Start from absoluteDbPath instead of dbPath
-    for (const part of parts) {
-      if (part) {
-        currentPath = path.join(currentPath, part);
-        try {
-          window.electron.ensureDir(currentPath);
-        } catch (error) {
-          console.error(`Error creating directory ${currentPath}:`, error);
-        }
-      }
+    this.initializeModel();
+  }
+
+  private getFilePath(): string {
+    return `${this.basePath}/${this.year}_${this.month}_holidays.csv`;
+  }
+
+  private async initializeModel() {
+    try {
+      await window.electron.ensureDir(this.basePath);
+    } catch (error) {
+      console.error(`Error creating holiday directory:`, error);
     }
   }
 
   async createHoliday(holiday: Holiday): Promise<void> {
+    const filePath = this.getFilePath();
     const csvData = `${holiday.id},${holiday.startDate},${holiday.endDate},${holiday.name},${holiday.type},${holiday.multiplier}\n`;
-    await window.electron.saveFile(this.filePath, csvData);
+    await window.electron.saveFile(filePath, csvData);
   }
 
   async saveOrUpdateHoliday(holiday: Holiday): Promise<void> {
     try {
-      // Ensure directory exists before saving
-      const directoryPath = path.dirname(this.filePath);
-      await window.electron.ensureDir(directoryPath);
+      const filePath = this.getFilePath();
+      console.log(`[HolidayModel] Attempting to save/update holiday to:`, filePath);
+      console.log(`[HolidayModel] Holiday data to save:`, holiday);
 
-      // Check if file exists
-      const exists = await window.electron.fileExists(this.filePath);
-      
-      if (exists) {
-        // File exists, update it
-        const data = await window.electron.readFile(this.filePath);
-        const lines = data.split('\n');
+      const formatHolidayToCSV = (h: Holiday) => {
+        return `${h.id},${h.startDate.toISOString()},${h.endDate.toISOString()},${h.name},${h.type},${h.multiplier}`;
+      };
+
+      try {
+        const data = await window.electron.readFile(filePath);
+        console.log(`[HolidayModel] Existing file found, updating content`);
+        const lines = data.split('\n').filter(line => line.trim().length > 0);
         let holidayExists = false;
+
         const updatedLines = lines.map(line => {
           const fields = line.split(',');
           if (fields[0] === holiday.id) {
             holidayExists = true;
-            return `${holiday.id},${holiday.startDate},${holiday.endDate},${holiday.name},${holiday.type},${holiday.multiplier}`;
+            console.log(`[HolidayModel] Updating existing holiday entry`);
+            return formatHolidayToCSV(holiday);
           }
           return line;
         });
+
         if (!holidayExists) {
-          updatedLines.push(`${holiday.id},${holiday.startDate},${holiday.endDate},${holiday.name},${holiday.type},${holiday.multiplier}`);
+          console.log(`[HolidayModel] Adding new holiday entry`);
+          updatedLines.push(formatHolidayToCSV(holiday));
         }
-        await window.electron.saveFile(this.filePath, updatedLines.join('\n'));
-      } else {
-        // File doesn't exist, create it
-        const csvData = `${holiday.id},${holiday.startDate},${holiday.endDate},${holiday.name},${holiday.type},${holiday.multiplier}\n`;
-        await window.electron.saveFile(this.filePath, csvData);
+
+        await window.electron.saveFile(filePath, updatedLines.join('\n') + '\n');
+        console.log(`[HolidayModel] Successfully saved/updated holiday`);
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          console.log(`[HolidayModel] Creating new file for holiday entry`);
+          const csvData = formatHolidayToCSV(holiday) + '\n';
+          await window.electron.saveFile(filePath, csvData);
+          console.log(`[HolidayModel] Successfully created new file and saved holiday`);
+        } else {
+          console.error('[HolidayModel] Error saving/updating holiday:', error);
+          throw error;
+        }
       }
     } catch (error) {
-      console.error('Error updating holiday:', error);
+      console.error('[HolidayModel] Error in saveOrUpdateHoliday:', error);
       throw error;
     }
   }
 
   async loadHolidays(): Promise<Holiday[]> {
     try {
-      // Ensure directory exists before loading
-      const directoryPath = path.dirname(this.filePath);
-      await window.electron.ensureDir(directoryPath);
+      const filePath = this.getFilePath();
+      console.log(`[HolidayModel] Loading holidays from:`, filePath);
 
-      // Check if file exists
-      const exists = await window.electron.fileExists(this.filePath);
-      
-      if (exists) {
-        const data = await window.electron.readFile(this.filePath);
+      try {
+        const data = await window.electron.readFile(filePath);
         const lines = data.split('\n');
-        return lines.map(line => {
+
+        const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+
+        const holidays = nonEmptyLines.map(line => {
           const fields = line.split(',');
+
+          // Parse the dates from ISO format
+          const startDate = new Date(fields[1]);
+          const endDate = new Date(fields[2]);
+
           return {
             id: fields[0],
-            startDate: new Date(fields[1]),
-            endDate: new Date(fields[2]),
+            startDate,
+            endDate,
             name: fields[3],
-            type: fields[4],
-            multiplier: parseFloat(fields[5]),
+            type: fields[4] as 'Regular' | 'Special',
+            multiplier: parseFloat(fields[5])
           } as Holiday;
         });
-      } else {
-        console.log('[HolidayModel] No holidays file found, returning empty array');
-        return [];
+
+        return holidays;
+      } catch (error: any) {
+        if (error.code === 'ENOENT' || (error instanceof Error && error.message.includes('ENOENT'))) {
+          console.log(`[HolidayModel] No holidays file found, returning empty array`);
+          return [];
+        }
+        throw error;
       }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('ENOENT')) {
-        console.log('[HolidayModel] No holidays file found, returning empty array');
-        return [];
-      }
-      console.error('Error loading holidays:', error);
+      console.error('[HolidayModel] Error loading holidays:', error);
       throw error;
     }
   }
 
   async deleteHoliday(id: string): Promise<void> {
     try {
-      const holidays = await this.loadHolidays();
-      const updatedHolidays = holidays.filter(holiday => holiday.id !== id);
-      await this.saveHolidays(updatedHolidays);
+      const filePath = this.getFilePath();
+      const data = await window.electron.readFile(filePath);
+      const lines = data.split('\n');
+      const updatedLines = lines.filter(line => line.split(',')[0] !== id);
+      await window.electron.saveFile(filePath, updatedLines.join('\n'));
     } catch (error) {
       console.error('Error deleting holiday:', error);
       throw error;
@@ -128,8 +148,9 @@ export class HolidayModel {
   }
 
   async saveHolidays(holidays: Holiday[]): Promise<void> {
+    const filePath = this.getFilePath();
     const csvData = holidays.map(holiday => `${holiday.id},${holiday.startDate},${holiday.endDate},${holiday.name},${holiday.type},${holiday.multiplier}`).join('\n');
-    await window.electron.saveFile(this.filePath, csvData);
+    await window.electron.saveFile(filePath, csvData);
   }
 }
 

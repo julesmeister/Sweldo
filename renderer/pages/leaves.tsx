@@ -67,11 +67,12 @@ export default function LeavesPage() {
 
   useEffect(() => {
     const loadEmployeeAndLeaves = async () => {
-      if (!dbPath || !selectedEmployeeId || employeeModel == undefined) {
-        console.error('[LeavesPage] Database path is not set or no selectedEmployeeId provided or employeeModel.');
-        console.log('[LeavesPage] dbPath:', dbPath);
-        console.log('[LeavesPage] selectedEmployeeId:', selectedEmployeeId);
-        console.log('[LeavesPage] employeeModel:', employeeModel);
+      if (!dbPath || !selectedEmployeeId || !employeeModel) {
+        console.log('[LeavesPage] Missing dependencies:', {
+          dbPath: !!dbPath,
+          selectedEmployeeId: !!selectedEmployeeId,
+          employeeModel: !!employeeModel
+        });
         return;
       }
       
@@ -103,6 +104,14 @@ export default function LeavesPage() {
     
     loadEmployeeAndLeaves();
   }, [selectedEmployeeId, dbPath, employeeModel, setLoading, storedYearInt, storedMonthInt]);
+
+  useEffect(() => {
+    // Reset state when employee changes
+    if (!selectedEmployeeId) {
+      setEmployee(null);
+      setLeaves([]);
+    }
+  }, [selectedEmployeeId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -213,14 +222,15 @@ export default function LeavesPage() {
 
   const handleSaveLeave = async (leave: Leave) => {
     try {
-      if (!dbPath) {
-        console.error("[LeavesPage] Error: Database path is not set");
+      if (!dbPath || !selectedEmployeeId || !employeeModel) {
+        console.log("[LeavesPage] Missing dependencies:", {
+          dbPath: !!dbPath,
+          selectedEmployeeId: !!selectedEmployeeId,
+          employeeModel: !!employeeModel
+        });
         return;
       }
-      if (!selectedEmployeeId) {
-        console.error("[LeavesPage] Error: No employee selected");
-        return;
-      }
+      
       setLoading(true);
       const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
       
@@ -233,6 +243,7 @@ export default function LeavesPage() {
       console.log("[LeavesPage] Saving leave with data:", leaveWithEmployee);
       await leaveModel.saveOrUpdateLeave(leaveWithEmployee);
       setIsDialogOpen(false);
+      
       // Refresh leaves list
       if (employee) {
         const updatedLeaves = await leaveModel.loadLeaves(employee.id, storedYearInt, storedMonthInt);
@@ -242,6 +253,42 @@ export default function LeavesPage() {
     } catch (error: any) {
       console.error("[LeavesPage] Error saving leave:", error);
       toast.error(`Error saving leave: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteLeave = async (leave: Leave) => {
+    try {
+      if (!dbPath || !selectedEmployeeId || !employeeModel) {
+        console.log("[LeavesPage] Missing dependencies:", {
+          dbPath: !!dbPath,
+          selectedEmployeeId: !!selectedEmployeeId,
+          employeeModel: !!employeeModel
+        });
+        return;
+      }
+
+      if (!confirm('Are you sure you want to delete this leave request?')) {
+        return;
+      }
+
+      setLoading(true);
+      const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
+      await leaveModel.deleteLeave(leave.id, leave);
+      
+      if (employee) {
+        const loadedLeaves = await leaveModel.loadLeaves(employee.id, storedYearInt, storedMonthInt);
+        setLeaves(loadedLeaves);
+        toast.success('Leave request deleted successfully');
+      }
+    } catch (error) {
+      console.error('Error deleting leave:', error);
+      toast.error(
+        error instanceof Error
+          ? `Error deleting leave: ${error.message}`
+          : 'Error deleting leave'
+      );
     } finally {
       setLoading(false);
     }
@@ -268,7 +315,7 @@ export default function LeavesPage() {
                 <button
                   type="button"
                   onClick={handleNewLeaveClick}
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150 ease-in-out"
                 >
                   Request Leave
                 </button>
@@ -375,28 +422,7 @@ export default function LeavesPage() {
                               <button
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  if (!confirm('Are you sure you want to delete this leave request?')) {
-                                    return;
-                                  }
-                                  setLoading(true);
-                                  try {
-                                    const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
-                                    await leaveModel.deleteLeave(leave.id, leave);
-                                    if (employee) {
-                                      const loadedLeaves = await leaveModel.loadLeaves(employee.id, storedYearInt, storedMonthInt);
-                                      setLeaves(loadedLeaves);
-                                      toast.success('Leave request deleted successfully');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error deleting leave:', error);
-                                    toast.error(
-                                      error instanceof Error
-                                        ? `Error deleting leave: ${error.message}`
-                                        : 'Error deleting leave'
-                                    );
-                                  } finally {
-                                    setLoading(false);
-                                  }
+                                  await handleDeleteLeave(leave);
                                 }}
                                 className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
                               >

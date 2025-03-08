@@ -65,34 +65,35 @@ export default function HolidayForm({
   } | null>(null);
   const { dbPath } = useSettingsStore();
 
-
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const settingsModel = createAttendanceSettingsModel(dbPath);
         const settings = await settingsModel.loadAttendanceSettings();
         setAttendanceSettings(settings);
-        // Set initial multiplier based on type if no initial data
-        if (!initialData) {
-          setMultiplier(type === 'Regular' ? settings.regularHolidayMultiplier : settings.specialHolidayMultiplier);
+        
+        // Set initial multiplier based on type
+        if (initialData) {
+          // For existing holiday, use the type from initialData to set correct multiplier
+          setMultiplier(
+            initialData.type === 'Regular' 
+              ? settings.regularHolidayMultiplier 
+              : settings.specialHolidayMultiplier
+          );
+        } else {
+          // For new holiday, use current type
+          setMultiplier(
+            type === 'Regular' 
+              ? settings.regularHolidayMultiplier 
+              : settings.specialHolidayMultiplier
+          );
         }
       } catch (error) {
         console.error('Error loading attendance settings:', error);
       }
     };
     loadSettings();
-  }, []);
-
-  // Update multiplier when type changes
-  useEffect(() => {
-    if (attendanceSettings && !initialData) {
-      setMultiplier(
-        type === 'Regular' 
-          ? attendanceSettings.regularHolidayMultiplier 
-          : attendanceSettings.specialHolidayMultiplier
-      );
-    }
-  }, [type, attendanceSettings]);
+  }, [initialData, type]);
 
   const handleTypeChange = (newType: 'Regular' | 'Special') => {
     setType(newType);
@@ -104,16 +105,6 @@ export default function HolidayForm({
       );
     }
   };
-
-  useEffect(() => {
-    if (initialData) {
-      setName(initialData.name);
-      setStartDate(new Date(initialData.startDate).toISOString().split('T')[0]);
-      setEndDate(new Date(initialData.endDate).toISOString().split('T')[0]);
-      setType(initialData.type);
-      setMultiplier(initialData.multiplier);
-    }
-  }, [initialData]);
 
   const validateForm = (): boolean => {
     const newErrors: {
@@ -267,7 +258,7 @@ export default function HolidayForm({
                   }}
                   className={`block w-full bg-gray-800 border ${
                     errors.dates ? 'border-red-500' : 'border-gray-700'
-                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]`}
+                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600`}
                   required
                 />
               </div>
@@ -287,7 +278,7 @@ export default function HolidayForm({
                   }}
                   className={`block w-full bg-gray-800 border ${
                     errors.dates ? 'border-red-500' : 'border-gray-700'
-                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]`}
+                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600`}
                   required
                 />
               </div>
