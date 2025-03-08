@@ -11,10 +11,6 @@ import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 
-interface Employee {
-  // Add Employee interface properties here
-}
-
 export default function HolidaysPage() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [suggestedHolidays, setSuggestedHolidays] = useState<Holiday[]>([]);
@@ -214,12 +210,14 @@ export default function HolidaysPage() {
 
   useEffect(() => {
     loadSuggestedHolidays();
-    if (!dbPath || !dbPath[0]) {
+    if (!dbPath) {
       console.error("Invalid dbPath:", dbPath);
       return; // Prevent further execution if dbPath is invalid
     }
+    console.log("Using dbPath:", dbPath);
+    console.log("Selected year:", storedYear, "month:", storedMonth);
     const holidayModel = createHolidayModel(
-      dbPath[0],
+      dbPath,
       parseInt(storedYear!, 10),
       parseInt(storedMonth!, 10) + 1
     );
@@ -233,7 +231,7 @@ export default function HolidaysPage() {
   function handleSaveHoliday(data: Holiday): void {
     // Implementation for saving holiday
     const holidayModel = createHolidayModel(
-      dbPath[0],
+      dbPath,
       parseInt(storedYear!, 10),
       parseInt(storedMonth!, 10) + 1
     );

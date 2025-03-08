@@ -46,7 +46,7 @@ export default function HomePage() {
           <div className="col-span-1">
             <ExcelUpload />
           </div>
-          <div className="col-span-1">
+          <div className="col-span-2">
             <HolidayCalendar />
           </div>
           {showMissingTimeLogs && (
