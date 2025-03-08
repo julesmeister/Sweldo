@@ -1,7 +1,10 @@
 import { Employee } from './employee';
 
 export interface Attendance {
+  employeeId: string;
   day: number;
+  month: number;
+  year: number;
   timeIn: string | null;
   timeOut: string | null;
 }
@@ -22,11 +25,6 @@ export interface DateRange {
 
 import Papa from "papaparse";
 import { useState } from 'react';
-
-export interface Attendance {
-  timeIn: string | null;
-  timeOut: string | null;
-}
 
 export class AttendanceModel {
   private folderPath: string;
@@ -69,13 +67,47 @@ export class AttendanceModel {
       }
       const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
       return results.data.map((row: any) => ({
-        day: row.day,
+        employeeId: id || '',
+        day: parseInt(row.day),
+        month: month || 0,
+        year: year || 0,
         timeIn: row.timeIn ? row.timeIn : null,
         timeOut: row.timeOut ? row.timeOut : null,
       })) as Attendance[];
     } catch (error) {
       console.error('Error reading attendance file:', error);
       return []; // Return empty array if there's an error
+    }
+  }
+
+  public async loadAttendanceByDay(day: number, month: number, year: number, employeeId: string): Promise<Attendance | null> {
+    try {
+      const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_attendance.csv`;
+      const fileContent = await window.electron.readFile(filePath);
+      if (!fileContent) {
+        return null;
+      }
+      type AttendanceRow = {
+        day: string;
+        timeIn: string;
+        timeOut: string;
+      };
+      
+      const results = Papa.parse<AttendanceRow>(fileContent, { header: true, skipEmptyLines: true });
+      const attendance = results.data.find(row => 
+        parseInt(row.day) === day
+      );
+      return attendance ? {
+        employeeId,
+        day: parseInt(attendance.day),
+        month,
+        year,
+        timeIn: attendance.timeIn ? attendance.timeIn : null,
+        timeOut: attendance.timeOut ? attendance.timeOut : null,
+      } : null;
+    } catch (error) {
+      console.error('Error reading attendance file:', error);
+      return null;
     }
   }
 
@@ -98,23 +130,23 @@ export class AttendanceModel {
 
   // Save or update attendances to CSV
   public async saveOrUpdateAttendances(
-    attendances: Attendance[],
+    attendances: (Omit<Attendance, 'timeIn' | 'timeOut'> & { timeIn?: string | null; timeOut?: string | null })[],
     month: number,
     year: number,
-    id: string,
+    employeeId: string,
   ): Promise<void> {
     try {
       // Construct the file path
-      const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
-      const directoryPath = `${this.folderPath}/${id}`;
+      const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_attendance.csv`;
+      const directoryPath = `${this.folderPath}/${employeeId}`;
 
       // Ensure directory exists
       await window.electron.ensureDir(directoryPath);
 
       // Load existing attendances
-      const existingAttendances = await this.loadAttendancesById(month, year, id) || []; // Use an empty array if not found
+      const existingAttendances = await this.loadAttendancesById(month, year, employeeId) || []; // Use an empty array if not found
       if(existingAttendances === null) {
-        console.log(`No existing attendances found for ${id} in ${year}-${month}`);
+        console.log(`No existing attendances found for ${employeeId} in ${year}-${month}`);
         return;
       }
 
@@ -126,10 +158,18 @@ export class AttendanceModel {
 
         if (attendanceIndex !== -1) {
           // Update existing attendance
-          existingAttendances[attendanceIndex] = newAttendance;
+          existingAttendances[attendanceIndex] = {
+            ...newAttendance,
+            timeIn: newAttendance.timeIn ?? null,
+            timeOut: newAttendance.timeOut ?? null
+          };
         } else {
           // Add new attendance
-          existingAttendances.push(newAttendance);
+          existingAttendances.push({
+            ...newAttendance,
+            timeIn: newAttendance.timeIn ?? null,
+            timeOut: newAttendance.timeOut ?? null
+          });
         }
       }
 
@@ -151,3 +191,7 @@ export const createAttendanceModel = (dbPath: string): AttendanceModel => {
   console.log(`Creating AttendanceModel instance with folder path: ${folderPath}`);
   return new AttendanceModel(folderPath);
 };
+
+function row(value: unknown, index: number, obj: unknown[]): value is unknown {
+  throw new Error('Function not implemented.');
+}

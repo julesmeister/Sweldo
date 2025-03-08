@@ -166,10 +166,11 @@ export class Payroll {
             id: crypto.randomUUID(),
             employeeId: this.processColumn(rows[i], "ID:"),
             employeeName: this.processColumn(rows[i], "Name:"),
-            day: j + 1,
+            day: (j + 1).toString(),
             month: this.dateRange.start.getMonth() + 1,
             year: this.dateRange.start.getFullYear(),
             missingType: 'timeOut',
+            employmentType: this.processColumn(rows[i], "Employment Type:"),
             createdAt: new Date().toISOString()
           });
         }

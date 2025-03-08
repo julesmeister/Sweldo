@@ -136,7 +136,7 @@ export default function DateSelector() {
                       key={index}
                       className={`block w-full text-left px-3 py-2 text-sm ${
                         selectedMonth === index
-                          ? "bg-gray-100 text-indigo-600"
+                          ? "bg-gray-100 text-blue-600"
                           : "text-gray-700 hover:bg-gray-50"
                       }`}
                       onClick={() => {
@@ -163,7 +163,7 @@ export default function DateSelector() {
                         key={year}
                         className={`block w-full text-left px-3 py-2 text-sm ${
                           selectedYear === year
-                            ? "bg-gray-100 text-indigo-600"
+                            ? "bg-gray-100 text-blue-600"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                         onClick={() => setSelectedYear(year)}

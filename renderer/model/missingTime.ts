@@ -6,10 +6,11 @@ export interface MissingTimeLog {
   id: string;
   employeeId: string;
   employeeName: string;
-  day: number;
+  day: string;
   month: number;
   year: number;
   missingType: 'timeIn' | 'timeOut';
+  employmentType: string;
   createdAt: string; // ISO string
 }
 
