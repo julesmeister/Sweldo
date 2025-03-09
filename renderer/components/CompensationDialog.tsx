@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Compensation } from '@/renderer/model/compensation';
+import { Compensation, DayType } from '@/renderer/model/compensation';
 import { AttendanceSettings, EmploymentType, createAttendanceSettingsModel } from '@/renderer/model/settings';
 import { Employee } from '@/renderer/model/employee';
 import { EmployeeModel } from '@/renderer/model/employee';
@@ -14,7 +14,9 @@ interface CompensationDialogProps {
   onSave: (compensation: Compensation) => Promise<void>;
   employee: Employee | null;
   compensation: Compensation;
-  date: Date;
+  month: number;
+  year: number;
+  day: number;
   position?: {
     top: number;
     left: number;
@@ -22,7 +24,6 @@ interface CompensationDialogProps {
   } | null;
   timeIn?: string;
   timeOut?: string;
-  day?: number;
 }
 
 export const CompensationDialog: React.FC<CompensationDialogProps> = ({
@@ -31,13 +32,20 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   onSave,
   employee,
   compensation,
-  date,
+  month,
+  year,
+  day,
   position,
   timeIn,
-  timeOut,
-  day
+  timeOut
 }) => {
-  const [formData, setFormData] = useState<Compensation>(compensation);
+  const [formData, setFormData] = useState<Compensation>({
+    ...compensation,
+    month,
+    year,
+    day,
+    dayType: compensation.dayType || 'Regular' as DayType
+  });
   const { dbPath } = useSettingsStore();
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);

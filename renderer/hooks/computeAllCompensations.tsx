@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useEffect } from "react";
-import { Compensation, CompensationModel } from "@/renderer/model/compensation";
+import { Compensation, CompensationModel, DayType } from "@/renderer/model/compensation";
 import { Attendance, AttendanceModel } from "@/renderer/model/attendance";
 import { AttendanceSettingsModel } from "@/renderer/model/settings";
 import { Employee } from "@/renderer/model/employee";
@@ -26,7 +26,7 @@ export const useComputeAllCompensations = (
 
       for (const entry of timesheetEntries) {
         const foundCompensation = updatedCompensations.find(
-          ({ date }) => new Date(date).getDate() === Number(entry.day)
+          (comp) => comp.year === year && comp.month === month && comp.day === Number(entry.day)
         );
 
         const shouldCompute = !foundCompensation || recompute;
@@ -37,6 +37,27 @@ export const useComputeAllCompensations = (
           );
 
           if (!employmentType?.requiresTimeTracking || !entry.timeIn || !entry.timeOut) {
+            // For non-time-tracking employees, create a basic compensation record
+            const dailyRate = parseFloat((employee.dailyRate || 0).toString());
+            const newCompensation: Compensation = {
+              employeeId: employee.id,
+              month,
+              year,
+              day: entry.day,
+              dayType: 'Regular' as DayType,
+              grossPay: dailyRate,
+              netPay: dailyRate,
+              manualOverride: true
+            };
+
+            if (foundCompensation && recompute) {
+              // Update existing compensation
+              const index = updatedCompensations.indexOf(foundCompensation);
+              updatedCompensations[index] = { ...foundCompensation, ...newCompensation };
+            } else {
+              // Add new compensation
+              updatedCompensations.push(newCompensation);
+            }
             continue;
           }
 
@@ -84,8 +105,10 @@ export const useComputeAllCompensations = (
 
           const newCompensation: Compensation = {
             employeeId: employee.id,
-            date: new Date(year, month - 1, entry.day),
-            dayType: "Regular",
+            month,
+            year,
+            day: entry.day,
+            dayType: 'Regular' as DayType,
             lateMinutes,
             undertimeMinutes,
             overtimeMinutes,
@@ -101,7 +124,7 @@ export const useComputeAllCompensations = (
           if (foundCompensation && recompute) {
             // Update existing compensation
             const index = updatedCompensations.indexOf(foundCompensation);
-            updatedCompensations[index] = newCompensation;
+            updatedCompensations[index] = { ...foundCompensation, ...newCompensation };
           } else {
             // Add new compensation
             updatedCompensations.push(newCompensation);

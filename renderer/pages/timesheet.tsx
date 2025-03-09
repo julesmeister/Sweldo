@@ -240,7 +240,8 @@ const TimesheetPage: React.FC = () => {
       dayType: 'Regular' as DayType,
       hoursWorked: 0,
       grossPay: 0,
-      netPay: 0
+      netPay: 0,
+      manualOverride: false
     };
     setSelectedEntry({ 
       entry, 
@@ -251,12 +252,18 @@ const TimesheetPage: React.FC = () => {
 
   const handleSaveCompensation = async (updatedCompensation: Compensation) => {
     try {
+      // First ensure we have all the required fields
+      if (!updatedCompensation.employeeId || !updatedCompensation.month || !updatedCompensation.year) {
+        throw new Error('Missing required fields in compensation');
+      }
+
       await compensationModel.saveOrUpdateCompensations(
         [updatedCompensation],
         updatedCompensation.month,
         updatedCompensation.year,
         updatedCompensation.employeeId
       );
+
       // Refresh the compensation entries
       const newCompensationEntries = await compensationModel.loadRecords(
         storedMonthInt,
@@ -264,8 +271,12 @@ const TimesheetPage: React.FC = () => {
         selectedEmployeeId!
       );
       setCompensationEntries(newCompensationEntries);
+
+      // Show success message
+      toast.success('Compensation saved successfully');
     } catch (error) {
       console.error('Failed to save compensation:', error);
+      toast.error('Failed to save compensation');
     }
   };
 
@@ -661,10 +672,11 @@ const TimesheetPage: React.FC = () => {
           }}
           onSave={handleSaveCompensation}
           compensation={selectedEntry.compensation}
-          date={new Date(year, storedMonthInt - 1, selectedEntry.entry.day)}
+          month={storedMonthInt}
+          year={year}
+          day={selectedEntry.entry.day}
           timeIn={selectedEntry.entry.timeIn || undefined}
           timeOut={selectedEntry.entry.timeOut || undefined}
-          day={selectedEntry.entry.day}
           position={clickPosition}
         />
       )}
