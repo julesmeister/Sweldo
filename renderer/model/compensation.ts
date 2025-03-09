@@ -1,9 +1,13 @@
 import Papa from "papaparse";
 
+export type DayType = 'Regular' | 'Holiday' | 'Rest Day';
+
 export interface Compensation {
   employeeId: string;
-  date: Date;
-  dayType: 'Regular' | 'Holiday' | 'Rest Day';
+  month: number;
+  year: number;
+  day: number;
+  dayType: DayType;
   hoursWorked?: number;
   overtimeMinutes?: number;
   overtimePay?: number;
@@ -45,8 +49,10 @@ export class CompensationModel {
       console.log(`Loaded ${results.data.length} compensation records`);
       return results.data.map((row: any) => ({
         employeeId: row.employeeId,
-        date: new Date(row.date),
-        dayType: row.dayType,
+        month: parseInt(row.month, 10),
+        year: parseInt(row.year, 10),
+        day: parseInt(row.day, 10),
+        dayType: (row.dayType || 'Regular') as DayType,
         hoursWorked: row.hoursWorked ? parseFloat(row.hoursWorked) : undefined,
         overtimeMinutes: row.overtimeMinutes ? parseFloat(row.overtimeMinutes) : undefined,
         overtimePay: row.overtimePay ? parseFloat(row.overtimePay) : undefined,
@@ -79,12 +85,41 @@ export class CompensationModel {
   public async saveOrUpdateRecords(employeeId: string, year: number, month: number, records: Compensation[]): Promise<void> {
     try {
       const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_compensation.csv`;
-
       const csv = Papa.unparse(records);
       await window.electron.saveFile(filePath, csv);
       console.log(`Compensation records saved successfully to ${filePath}`);
     } catch (error) {
       console.error(`Failed to save compensation records: ${error}`);
+      throw error;
+    }
+  }
+
+  // Save or update specific compensation records
+  public async saveOrUpdateCompensations(compensations: Compensation[], month: number, year: number, employeeId: string): Promise<void> {
+    try {
+      // Load existing records
+      const existingRecords = await this.loadRecords(month, year, employeeId);
+      
+      // Update or add new records
+      const updatedRecords = [...existingRecords];
+      for (const compensation of compensations) {
+        const index = updatedRecords.findIndex(r => 
+          r.month === compensation.month && 
+          r.year === compensation.year && 
+          r.day === compensation.day
+        );
+        
+        if (index >= 0) {
+          updatedRecords[index] = compensation;
+        } else {
+          updatedRecords.push(compensation);
+        }
+      }
+      
+      // Save all records
+      await this.saveOrUpdateRecords(employeeId, year, month, updatedRecords);
+    } catch (error) {
+      console.error(`Failed to save/update compensations: ${error}`);
       throw error;
     }
   }

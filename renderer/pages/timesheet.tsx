@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { AttendanceModel, createAttendanceModel } from "@/renderer/model/attendance";
 import { Attendance } from "@/renderer/model/attendance";
 import { CompensationModel, createCompensationModel } from "@/renderer/model/compensation";
-import { Compensation } from "@/renderer/model/compensation";
+import { Compensation, DayType } from "@/renderer/model/compensation";
 import { createAttendanceSettingsModel, EmploymentType } from "@/renderer/model/settings";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
@@ -233,9 +233,14 @@ const TimesheetPage: React.FC = () => {
     });
 
     const defaultCompensation: Compensation = {
-      employeeId: selectedEmployeeId!,
-      date: new Date(year, storedMonthInt - 1, entry.day),
-      dayType: 'Regular',
+      employeeId: entry.employeeId,
+      month: storedMonthInt,
+      year: year,
+      day: entry.day,
+      dayType: 'Regular' as DayType,
+      hoursWorked: 0,
+      grossPay: 0,
+      netPay: 0
     };
     setSelectedEntry({ 
       entry, 
@@ -246,11 +251,11 @@ const TimesheetPage: React.FC = () => {
 
   const handleSaveCompensation = async (updatedCompensation: Compensation) => {
     try {
-      await compensationModel.saveOrUpdateRecords(
-        updatedCompensation.employeeId,
-        updatedCompensation.date.getFullYear(),
-        updatedCompensation.date.getMonth() + 1,
-        [updatedCompensation]
+      await compensationModel.saveOrUpdateCompensations(
+        [updatedCompensation],
+        updatedCompensation.month,
+        updatedCompensation.year,
+        updatedCompensation.employeeId
       );
       // Refresh the compensation entries
       const newCompensationEntries = await compensationModel.loadRecords(
@@ -412,7 +417,7 @@ const TimesheetPage: React.FC = () => {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth="2"
+                            strokeWidth={1}
                             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                           />
                         </svg>
@@ -459,7 +464,11 @@ const TimesheetPage: React.FC = () => {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {Array.from(new Set(timesheetEntries.map(entry => entry.day))).map((day) => {
                           const foundEntry = timesheetEntries.find(entry => entry.day === day);
-                          const foundCompensation = compensationEntries.find(({ date }) => new Date(date).getDate() === Number(day));
+                          const foundCompensation = compensationEntries.find(comp => 
+                            comp.year === year && 
+                            comp.month === storedMonthInt && 
+                            comp.day === Number(day)
+                          );
                           const compensation = foundCompensation === undefined ? null : foundCompensation;
 
                           if (!foundEntry) {
@@ -507,15 +516,15 @@ const TimesheetPage: React.FC = () => {
                                             onChange={async (e) => {
                                               e.stopPropagation();
                                               const isPresent = e.target.checked;
-                                              const currentDate = new Date(year, storedMonthInt - 1, foundEntry.day);
-                                              const timeValue = isPresent ? currentDate.toLocaleTimeString() : '';
                                               
+                                              // For non-time-tracking employees, we only store a marker for presence
                                               const updatedEntry = { 
                                                 ...foundEntry, 
-                                                timeIn: timeValue,
-                                                timeOut: timeValue
+                                                timeIn: isPresent ? 'present' : '',
+                                                timeOut: isPresent ? 'present' : ''
                                               };
                                               
+                                              // Save the attendance record
                                               await attendanceModel.saveOrUpdateAttendances(
                                                 [updatedEntry],
                                                 storedMonthInt,
@@ -523,12 +532,43 @@ const TimesheetPage: React.FC = () => {
                                                 selectedEmployeeId!
                                               );
                                               
-                                              const updatedAttendanceData = await attendanceModel.loadAttendancesById(
+                                              // Create or update compensation record with manualOverride
+                                              const existingCompensation = compensationEntries.find(c => c.day === foundEntry.day);
+                                              const compensation: Compensation = {
+                                                ...(existingCompensation || {}),
+                                                employeeId: selectedEmployeeId!,
+                                                month: storedMonthInt,
+                                                year: year,
+                                                day: foundEntry.day,
+                                                manualOverride: true,
+                                                grossPay: isPresent ? (employee?.dailyRate || 0) : 0,
+                                                netPay: isPresent ? (employee?.dailyRate || 0) : 0,
+                                                dayType: 'Regular' as DayType
+                                              };
+                                              
+                                              await compensationModel.saveOrUpdateCompensations(
+                                                [compensation],
                                                 storedMonthInt,
                                                 year,
                                                 selectedEmployeeId!
                                               );
+                                              
+                                              // Reload data
+                                              const [updatedAttendanceData, updatedCompensationData] = await Promise.all([
+                                                attendanceModel.loadAttendancesById(
+                                                  storedMonthInt,
+                                                  year,
+                                                  selectedEmployeeId!
+                                                ),
+                                                compensationModel.loadRecords(
+                                                  storedMonthInt,
+                                                  year,
+                                                  selectedEmployeeId!
+                                                )
+                                              ]);
+                                              
                                               setTimesheetEntries(updatedAttendanceData);
+                                              setCompensationEntries(updatedCompensationData);
                                             }}
                                           />
                                           <span className="ml-2 text-sm font-medium text-gray-700" onClick={(e) => e.stopPropagation()}>
@@ -622,8 +662,8 @@ const TimesheetPage: React.FC = () => {
           onSave={handleSaveCompensation}
           compensation={selectedEntry.compensation}
           date={new Date(year, storedMonthInt - 1, selectedEntry.entry.day)}
-          timeIn={selectedEntry.entry.timeIn || ''}
-          timeOut={selectedEntry.entry.timeOut || ''}
+          timeIn={selectedEntry.entry.timeIn || undefined}
+          timeOut={selectedEntry.entry.timeOut || undefined}
           day={selectedEntry.entry.day}
           position={clickPosition}
         />

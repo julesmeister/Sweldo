@@ -63,7 +63,27 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   }, [compensation]);
 
  const computedValues = useMemo(() => {
-   if (!employmentType?.requiresTimeTracking || !timeIn || !timeOut || !attendanceSettings) {
+   const dailyRate: number = parseFloat((employee?.dailyRate || 0).toString());
+   
+   // For non-time-tracking employees, only check presence/absence
+   if (!employmentType?.requiresTimeTracking) {
+     const isPresent = !!(timeIn || timeOut); // If either timeIn or timeOut exists, employee was present
+     return {
+       lateMinutes: 0,
+       undertimeMinutes: 0,
+       overtimeMinutes: 0,
+       hoursWorked: isPresent ? 8 : 0, // Assume standard 8-hour day if present
+       grossPay: isPresent ? dailyRate : 0,
+       deductions: 0,
+       netPay: isPresent ? dailyRate : 0,
+       lateDeduction: 0,
+       undertimeDeduction: 0,
+       overtimeAddition: 0,
+       manualOverride: true // Always set manual override for non-time-tracking employees
+     };
+   }
+   
+   if (!timeIn || !timeOut || !attendanceSettings) {
      return {
        lateMinutes: 0,
        undertimeMinutes: 0,
@@ -72,6 +92,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
        grossPay: 0,
        deductions: 0,
        netPay: 0,
+       lateDeduction: 0,
+       undertimeDeduction: 0,
+       overtimeAddition: 0,
+       manualOverride: false
      };
    }
  
@@ -94,30 +118,25 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
    const overtimeMinutes = actualTimeOut > schedTimeOut
      ? Math.round((actualTimeOut.getTime() - schedTimeOut.getTime()) / (1000 * 60))
      : 0;
-
  
    // Calculate hours worked
    const hoursWorked = Math.round((actualTimeOut.getTime() - actualTimeIn.getTime()) / (1000 * 60 * 60));
-
   
    // Calculate deductions based on loaded attendance settings
    const lateDeduction = lateMinutes > attendanceSettings.lateGracePeriod
      ? (lateMinutes - attendanceSettings.lateGracePeriod) * attendanceSettings.lateDeductionPerMinute
-     : 0; // Apply grace period
+     : 0;
  
    const undertimeDeduction = undertimeMinutes > attendanceSettings.undertimeGracePeriod
      ? (undertimeMinutes - attendanceSettings.undertimeGracePeriod) * attendanceSettings.undertimeDeductionPerMinute
-     : 0; // Apply grace period
+     : 0;
  
    const overtimeAddition = overtimeMinutes > attendanceSettings.overtimeGracePeriod
      ? (overtimeMinutes - attendanceSettings.overtimeGracePeriod) * attendanceSettings.overtimeAdditionPerMinute
-     : 0; // Apply grace period
+     : 0;
  
    const deductions = lateDeduction + undertimeDeduction;
-   const dailyRate: number = parseFloat((employee?.dailyRate || 0).toString()); // Get daily rate from employee, default to 0 if not available, and make sure it's a float
-   // Calculate gross pay based on hours worked and daily rate
-   const grossPay = (dailyRate + overtimeAddition); // Assuming 8 hours in a workday
-   // Calculate net pay
+   const grossPay = dailyRate + overtimeAddition;
    const netPay = grossPay - deductions;
  
    return {
@@ -131,8 +150,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
      grossPay,
      deductions,
      netPay,
+     manualOverride: false
    };
- }, [employmentType, timeIn, timeOut, attendanceSettings]);
+ }, [employmentType, timeIn, timeOut, attendanceSettings, employee]);
 
   useEffect(() => {
     // Update formData whenever computedValues change
