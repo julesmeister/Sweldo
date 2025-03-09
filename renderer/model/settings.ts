@@ -100,24 +100,33 @@ export class AttendanceSettingsModel {
         }
     }
 
-public async loadTimeSettings(): Promise<EmploymentType[]> {
-    try {
-        const text = await window.electron.readFile(this.timeSettingsPath);
-        const results = Papa.parse<EmploymentType[]>(text, { header: true });
-        if (results.data.length === 0) {
-            console.log(`Time settings file ${this.timeSettingsPath} doesn't exist, using defaults`);
-            await this.saveTimeSettings(defaultTimeSettings);
-            return defaultTimeSettings;
-        } else {
-            // Ensure we return a flat array
-            return results.data.flat() as EmploymentType[]; // Use flat() to ensure it's a single-level array
+    public async loadTimeSettings(): Promise<EmploymentType[]> {
+        try {
+            const text = await window.electron.readFile(this.timeSettingsPath);
+            const results = Papa.parse<any>(text, { header: true });
+            if (results.data.length === 0) {
+                console.log(`Time settings file ${this.timeSettingsPath} doesn't exist, using defaults`);
+                await this.saveTimeSettings(defaultTimeSettings);
+                return defaultTimeSettings;
+            } else {
+                // Process the parsed data to ensure proper types
+                const processedData = results.data.map((item: any) => ({
+                    type: item.type?.toLowerCase() || '',
+                    timeIn: item.timeIn || '',
+                    timeOut: item.timeOut || '',
+                    // Convert string 'true'/'false' to boolean
+                    requiresTimeTracking: item.requiresTimeTracking === 'true' || item.requiresTimeTracking === true
+                })).filter((item: any) => item.type); // Filter out empty types
+
+                console.log('Loaded time settings:', processedData);
+                return processedData;
+            }
+        } catch (error) {
+            console.error(`Error loading time settings: ${error}`);
+            console.log(`Using default time settings`);
+            return defaultTimeSettings; // Return defaults on any error
         }
-    } catch (error) {
-        console.error(`Error loading time settings: ${error}`);
-        console.log(`Using default time settings`);
-        return defaultTimeSettings; // Return defaults on any error
     }
-}
 
     public async setRegularHolidayMultiplier(multiplier: number): Promise<void> {
         const settings = await this.loadAttendanceSettings();

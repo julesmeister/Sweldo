@@ -48,13 +48,21 @@ export default function LoansPage() {
   useEffect(() => {
     const loadEmployee = async () => {
       console.log("[LoansPage] Loading employee with ID", selectedEmployeeId);
-      if (!dbPath || !selectedEmployeeId || !employeeModel) {
+      if (!dbPath) {
+        console.error("[LoansPage] Error loading employee:", "database path is not set");
+        console.log("[LoansPage] dbPath:", dbPath);
+        return;
+      }
+      if (!selectedEmployeeId) {
+        console.error("[LoansPage] Error loading employee:", "no selectedEmployeeId provided");
+        console.log("[LoansPage] selectedEmployeeId:", selectedEmployeeId);
+        return;
+      }
+      if (!employeeModel) {
         console.error(
           "[LoansPage] Error loading employee:",
-          "database path is not set or no selectedEmployeeId provided or employeeModel is undefined."
+          "employeeModel is undefined."
         );
-        console.log("[LoansPage] dbPath:", dbPath);
-        console.log("[LoansPage] selectedEmployeeId:", selectedEmployeeId);
         console.log("[LoansPage] employeeModel:", employeeModel);
         return;
       }

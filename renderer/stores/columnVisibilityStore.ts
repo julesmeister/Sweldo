@@ -5,6 +5,8 @@ export interface ColumnVisibility {
   name: string;
   visible: boolean;
   key: string;
+  isTimeColumn?: boolean;
+  originalName?: string;
 }
 
 interface ColumnVisibilityState {
@@ -15,8 +17,8 @@ interface ColumnVisibilityState {
 
 const defaultColumns: ColumnVisibility[] = [
   { name: "Day", visible: true, key: "day" },
-  { name: "Time In", visible: true, key: "timeIn" },
-  { name: "Time Out", visible: true, key: "timeOut" },
+  { name: "Time In", visible: true, key: "timeIn", isTimeColumn: true, originalName: "Time In" },
+  { name: "Time Out", visible: true, key: "timeOut", isTimeColumn: true, originalName: "Time Out" },
   { name: "Day Type", visible: true, key: "dayType" },
   { name: "Hours Worked", visible: true, key: "hoursWorked" },
   { name: "Overtime Minutes", visible: true, key: "overtimeMinutes" },

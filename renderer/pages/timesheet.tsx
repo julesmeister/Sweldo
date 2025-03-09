@@ -31,6 +31,7 @@ const TimesheetPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [clickPosition, setClickPosition] = useState<{ top: number; left: number; showAbove: boolean } | null>(null);
   const [isRecomputing, setIsRecomputing] = useState(false);
+  const [timeSettings, setTimeSettings] = useState<EmploymentType[]>([]);
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
   const { columns, setColumns, resetToDefault } = useColumnVisibilityStore();
@@ -154,24 +155,65 @@ const TimesheetPage: React.FC = () => {
     loadData();
   }, [employee?.id, selectedEmployeeId, dbPath, year, storedMonthInt, setLoading]);
 
+  // Find the employee's time tracking setting
+  const employeeTimeSettings = useMemo(() => {
+    if (!employee || !timeSettings.length) return null;
+    const settings = timeSettings.find(type => type.type.toLowerCase() === employee.employmentType?.toLowerCase());
+    console.log('Employee:', employee);
+    console.log('Time settings:', timeSettings);
+    console.log('Matched settings:', settings);
+    return settings;
+  }, [employee, timeSettings]);
+
+  useEffect(() => {
+    const loadEmploymentTypes = async () => {
+      try {
+        const types = await attendanceSettingsModel.loadTimeSettings();
+        console.log('Loaded employment types:', types);
+        setTimeSettings(types);
+        setEmploymentTypes(types);
+
+        // Update column names and visibility based on time tracking requirement
+        if (employee) {
+          const employeeType = types.find(type => type.type.toLowerCase() === employee.employmentType?.toLowerCase());
+          console.log('Employee type:', employee.employmentType);
+          console.log('Found type:', employeeType);
+          
+          if (employeeType) {
+            const updatedColumns = columns.map(col => {
+              if (col.key === 'timeIn') {
+                return { 
+                  ...col, 
+                  name: employeeType.requiresTimeTracking ? 'Time In' : 'Attendance Status',
+                  visible: true 
+                };
+              }
+              if (col.key === 'timeOut') {
+                return { 
+                  ...col, 
+                  visible: employeeType.requiresTimeTracking 
+                };
+              }
+              return col;
+            });
+            
+            console.log('Updating columns:', updatedColumns);
+            setColumns(updatedColumns);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load employment types:', error);
+      }
+    };
+    loadEmploymentTypes();
+  }, [attendanceSettingsModel, employee, setColumns]);
+
   const handleColumnVisibilityChange = (columnKey: string) => {
     const newColumns = columns.map((col) =>
       col.key === columnKey ? { ...col, visible: !col.visible } : col
     );
     setColumns(newColumns);
   };
-
-  useEffect(() => {
-    const loadEmploymentTypes = async () => {
-      try {
-        const types = await attendanceSettingsModel.loadTimeSettings();
-        setEmploymentTypes(types);
-      } catch (error) {
-        console.error('Failed to load employment types:', error);
-      }
-    };
-    loadEmploymentTypes();
-  }, [attendanceSettingsModel]);
 
   const handleRowClick = (entry: Attendance, compensation: Compensation | undefined | null, event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -435,26 +477,66 @@ const TimesheetPage: React.FC = () => {
                               {columns.map((column) => 
                                 column.visible && (
                                   column.key === 'timeIn' || column.key === 'timeOut' ? (
-                                    <EditableCell
-                                      key={column.key}
-                                      value={column.key === 'timeIn' ? foundEntry.timeIn || '' : foundEntry.timeOut || ''}
-                                      column={column}
-                                      rowData={foundEntry}
-                                      onClick={(event) => event.stopPropagation()}
-                                      onSave={async (value, rowData) => {
-                                        const updatedEntry = { ...foundEntry, [column.key]: value };
-                                        await attendanceModel.saveOrUpdateAttendances(
-                                          [updatedEntry],
-                                          storedMonthInt,
-                                          year,
-                                          selectedEmployeeId!
-                                        );
-                                        // Refetch attendance data
-                                        const updatedAttendanceData = await attendanceModel.loadAttendancesById(storedMonthInt, year, selectedEmployeeId!);
-                                        setTimesheetEntries(updatedAttendanceData); 
-                                      }}
-                                      employmentTypes={employmentTypes}
-                                    />
+                                    employeeTimeSettings?.requiresTimeTracking ? (
+                                      <EditableCell
+                                        key={column.key}
+                                        value={column.key === 'timeIn' ? foundEntry.timeIn || '' : foundEntry.timeOut || ''}
+                                        column={column}
+                                        rowData={foundEntry}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onSave={async (value, rowData) => {
+                                          const updatedEntry = { ...foundEntry, [column.key]: value };
+                                          await attendanceModel.saveOrUpdateAttendances(
+                                            [updatedEntry],
+                                            storedMonthInt,
+                                            year,
+                                            selectedEmployeeId!
+                                          );
+                                          const updatedAttendanceData = await attendanceModel.loadAttendancesById(storedMonthInt, year, selectedEmployeeId!);
+                                          setTimesheetEntries(updatedAttendanceData); 
+                                        }}
+                                        employmentTypes={employmentTypes}
+                                      />
+                                    ) : column.key === 'timeIn' ? (
+                                      <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                                          <input
+                                            type="checkbox"
+                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                                            checked={!!(foundEntry.timeIn || foundEntry.timeOut)}
+                                            onChange={async (e) => {
+                                              e.stopPropagation();
+                                              const isPresent = e.target.checked;
+                                              const currentDate = new Date(year, storedMonthInt - 1, foundEntry.day);
+                                              const timeValue = isPresent ? currentDate.toLocaleTimeString() : '';
+                                              
+                                              const updatedEntry = { 
+                                                ...foundEntry, 
+                                                timeIn: timeValue,
+                                                timeOut: timeValue
+                                              };
+                                              
+                                              await attendanceModel.saveOrUpdateAttendances(
+                                                [updatedEntry],
+                                                storedMonthInt,
+                                                year,
+                                                selectedEmployeeId!
+                                              );
+                                              
+                                              const updatedAttendanceData = await attendanceModel.loadAttendancesById(
+                                                storedMonthInt,
+                                                year,
+                                                selectedEmployeeId!
+                                              );
+                                              setTimesheetEntries(updatedAttendanceData);
+                                            }}
+                                          />
+                                          <span className="ml-2 text-sm font-medium text-gray-700" onClick={(e) => e.stopPropagation()}>
+                                            {!!(foundEntry.timeIn || foundEntry.timeOut) ? 'Present' : 'Absent'}
+                                          </span>
+                                        </div>
+                                      </td>
+                                    ) : null
                                   ) : (
                                     <td
                                       key={column.key}
