@@ -97,6 +97,19 @@ export class CompensationModel {
   // Save or update specific compensation records
   public async saveOrUpdateCompensations(compensations: Compensation[], month: number, year: number, employeeId: string): Promise<void> {
     try {
+      // Validate input compensations
+      for (const compensation of compensations) {
+        if (!Number.isInteger(compensation.month) || compensation.month < 1 || compensation.month > 12) {
+          throw new Error(`Invalid month value: ${compensation.month}`);
+        }
+        if (!Number.isInteger(compensation.year) || compensation.year < 1) {
+          throw new Error(`Invalid year value: ${compensation.year}`);
+        }
+        if (!Number.isInteger(compensation.day) || compensation.day < 1 || compensation.day > 31) {
+          throw new Error(`Invalid day value: ${compensation.day}`);
+        }
+      }
+
       // Load existing records
       const existingRecords = await this.loadRecords(month, year, employeeId);
       
