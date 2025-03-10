@@ -1,4 +1,3 @@
-
 export interface CashAdvance {
   id: string;
   employeeId: string;
@@ -29,6 +28,17 @@ export class CashAdvanceModel {
     this.year = year || new Date().getFullYear();
   }
 
+  private async ensureDirectoryExists(): Promise<void> {
+    try {
+      const employeePath = `${this.filePath}`;
+      await window.electron.ensureDir(employeePath);
+      console.log(`Ensured directory exists: ${employeePath}`);
+    } catch (error) {
+      console.error(`Failed to ensure directory exists: ${error}`);
+      throw error;
+    }
+  }
+
   async createCashAdvance(cashAdvance: CashAdvance): Promise<void> {
     console.log('Creating new cash advance:', { employeeId: cashAdvance.employeeId, amount: cashAdvance.amount });
     try {
@@ -57,6 +67,9 @@ export class CashAdvanceModel {
         'status',
         'remainingUnpaid'
       ].join(',') + '\n';
+
+      // Ensure directory exists before saving
+      await this.ensureDirectoryExists();
 
       // Append to file if it exists, create if it doesn't
       let existingData = '';

@@ -28,9 +28,24 @@ export class LeaveModel {
     return `${this.basePath}/${year}_${month}_leaves.csv`;
   }
 
+  private async ensureDirectoryExists(): Promise<void> {
+    try {
+      const employeePath = this.basePath;
+      await window.electron.ensureDir(employeePath);
+      console.log(`Ensured directory exists: ${employeePath}`);
+    } catch (error) {
+      console.error(`Failed to ensure directory exists: ${error}`);
+      throw error;
+    }
+  }
+
   async createLeave(leave: Leave): Promise<void> {
     const filePath = this.getFilePath(leave);
     const csvData = `${leave.id},${leave.employeeId},${leave.startDate},${leave.endDate},${leave.type},${leave.status},${leave.reason}\n`;
+    
+    // Ensure directory exists before saving
+    await this.ensureDirectoryExists();
+    
     await window.electron.saveFile(filePath, csvData);
   }
 
@@ -45,6 +60,9 @@ export class LeaveModel {
       };
 
       try {
+        // Ensure directory exists before reading/writing
+        await this.ensureDirectoryExists();
+
         const data = await window.electron.readFile(filePath);
         console.log(`[LeaveModel] Existing file found, updating content`);
         const lines = data.split('\n').filter(line => line.trim().length > 0);

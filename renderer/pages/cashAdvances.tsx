@@ -202,7 +202,17 @@ export default function CashAdvancesPage() {
 
   async function handleSaveCashAdvance(data: CashAdvance): Promise<void> {
     if (!cashAdvanceModel) {
-      toast.error("System not properly initialized");
+      toast.error("System not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set");
+      return;
+    }
+
+    if (!selectedEmployeeId) {
+      toast.error("Please select an employee first");
+      return;
+    }
+
+    if (!dbPath) {
+      toast.error("Database path is not configured");
       return;
     }
 
