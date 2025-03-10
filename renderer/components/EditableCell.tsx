@@ -95,7 +95,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
   const formatTime = (time: string | null): string => {
     if (!time) return "-";
-    const [hours, minutes] = time.split(':').map(Number);
+    const parts = time.split(':');
+    if (parts.length !== 2) return "-";
+    
+    const hours = Number(parts[0]);
+    const minutes = Number(parts[1]);
+    
+    if (isNaN(hours) || isNaN(minutes)) return "-";
+    
     const period = hours >= 12 ? 'PM' : 'AM';
     const formattedHours = hours % 12 || 12; // Convert 0 to 12
     return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${period}`;
