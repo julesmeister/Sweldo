@@ -138,8 +138,6 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({ onClose, onSave, init
                   onChange={(e) => setAmount(e.target.value)}
                   className="pl-7 block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
                   required
-                  min="0"
-                  step="0.01"
                 />
               </div>
             </div>

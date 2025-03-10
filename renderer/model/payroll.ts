@@ -261,7 +261,7 @@ export class Payroll {
 
     // Filter records within the date range
     const filteredCompensations = allCompensations.filter(comp => {
-      const compDate = new Date(comp.date);
+      const compDate = new Date(comp.year, comp.month - 1, comp.day);
       return compDate >= start && compDate <= end;
     });
 
@@ -479,8 +479,7 @@ export class Payroll {
       const payPeriods = new Map<string, Compensation[]>();
       
       compensations.forEach(comp => {
-        const date = new Date(comp.date);
-        // Use the start of each week as the pay period key
+const date = new Date(comp.year, comp.month - 1, comp.day);        // Use the start of each week as the pay period key
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay());
         const key = weekStart.toISOString();
