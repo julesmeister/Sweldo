@@ -91,7 +91,8 @@ export class HolidayModel {
       throw error;
     }
   }
-
+  
+  // Already fetches holidays for the current month and year because of the constructor
   async loadHolidays(): Promise<Holiday[]> {
     try {
       const filePath = this.getFilePath();
@@ -133,6 +134,8 @@ export class HolidayModel {
       throw error;
     }
   }
+
+  
 
   async deleteHoliday(id: string): Promise<void> {
     try {

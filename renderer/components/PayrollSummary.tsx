@@ -69,7 +69,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({ data, onClose })
                 </div>
                 <div className="flex flex-col bg-slate-50/50 rounded-lg px-4 py-3">
                   <span className="text-xs uppercase tracking-wider font-medium text-slate-500 mb-1">Absences</span>
-                  <span className="text-xl font-semibold text-slate-800">{data.absences}</span>
+                  <span className="text-xl font-semibold text-slate-800">{Math.abs(data.absences)}</span>
                 </div>
                 <div className="flex flex-col bg-slate-50/50 rounded-lg px-4 py-3 col-span-2">
                   <div className="flex flex-col items-start space-y-1">
@@ -221,7 +221,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({ data, onClose })
                   <div className="flex flex-col items-end">
                     <span className="text-sm font-medium text-slate-500 mb-1">Total Deductions</span>
                     <div className="flex items-center bg-rose-50 px-4 py-2 rounded-lg hover:bg-rose-100 hover:scale-[1.02] hover:shadow-sm transition-all duration-200">
-                      <span className="text-2xl font-bold text-rose-600">₱{formatCurrency(
+                      <span className="text-2xl font-bold text-rose-600">₱-{formatCurrency(
                         Number(data.deductions.sss) + 
                         Number(data.deductions.philHealth) + 
                         Number(data.deductions.pagIbig) + 

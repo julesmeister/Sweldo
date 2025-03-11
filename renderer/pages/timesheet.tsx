@@ -83,6 +83,7 @@ const TimesheetPage: React.FC = () => {
     compensationModel,
     attendanceModel,
     attendanceSettingsModel,
+    dbPath,
     (newCompensations) => {
       setCompensationEntries(newCompensations);
     }
@@ -599,7 +600,14 @@ const TimesheetPage: React.FC = () => {
                                         column.key === 'day' ? 'font-medium text-gray-900' : 'text-gray-500'
                                       }`}
                                     >
-                                      {column.key === 'day' && day}
+                                      {column.key === 'day' && (
+                                        <div className="flex flex-col items-center">
+                                          <span>{day}</span>
+                                          <span className="text-sm text-gray-500">
+                                            {new Date(year, storedMonthInt - 1, day).toLocaleDateString('en-US', { weekday: 'short' })}
+                                          </span>
+                                        </div>
+                                      )}
                                       {column.key === 'dayType' && (compensation?.dayType || '-')}
                                       {column.key === 'hoursWorked' && (compensation?.hoursWorked || '-')}
                                       {column.key === 'overtimeMinutes' && (compensation?.overtimeMinutes || '-')}

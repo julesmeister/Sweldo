@@ -5,6 +5,7 @@ import { Compensation, CompensationModel, DayType } from "@/renderer/model/compe
 import { Attendance, AttendanceModel } from "@/renderer/model/attendance";
 import { AttendanceSettingsModel } from "@/renderer/model/settings";
 import { Employee } from "@/renderer/model/employee";
+import { HolidayModel, Holiday, createHolidayModel } from "@/renderer/model/holiday";
 
 export const useComputeAllCompensations = (
   employee: Employee | null,
@@ -14,6 +15,7 @@ export const useComputeAllCompensations = (
   compensationModel: CompensationModel,
   attendanceModel: AttendanceModel,
   attendanceSettingsModel: AttendanceSettingsModel,
+  dbPath: string,
   onCompensationsComputed?: (newCompensations: Compensation[]) => void
 ) => {
   const computeCompensations = async (timesheetEntries: Attendance[], compensationEntries: Compensation[], recompute: boolean = false) => {
@@ -23,6 +25,10 @@ export const useComputeAllCompensations = (
       const timeSettings = await attendanceSettingsModel.loadTimeSettings();
       const attendanceSettings = await attendanceSettingsModel.loadAttendanceSettings();
       const updatedCompensations = [...compensationEntries];
+      
+      // Create holiday model for the current month
+      const holidayModel = createHolidayModel(dbPath, year, month);
+      const holidays = await holidayModel.loadHolidays();
 
       for (const entry of timesheetEntries) {
         const foundCompensation = updatedCompensations.find(
@@ -36,17 +42,31 @@ export const useComputeAllCompensations = (
             (type) => type.type === employee?.employmentType
           );
 
+          // Check if this day is a holiday
+          const holiday = holidays.find(h => {
+            const entryDate = new Date(year, month - 1, entry.day);
+            return (
+              entryDate >= new Date(h.startDate.getFullYear(), h.startDate.getMonth(), h.startDate.getDate()) &&
+              entryDate <= new Date(h.endDate.getFullYear(), h.endDate.getMonth(), h.endDate.getDate(), 23, 59, 59)
+            );
+          });
+
           if (!employmentType?.requiresTimeTracking || !entry.timeIn || !entry.timeOut) {
             // For non-time-tracking employees, create a basic compensation record
             const dailyRate = parseFloat((employee.dailyRate || 0).toString());
+            const grossPay = dailyRate;
+            const netPay = grossPay;
+
+
             const newCompensation: Compensation = {
               employeeId: employee.id,
               month,
               year,
               day: entry.day,
-              dayType: 'Regular' as DayType,
-              grossPay: dailyRate,
-              netPay: dailyRate,
+              dayType: holiday ? (holiday.type === 'Regular' ? 'Holiday' : 'Special') : 'Regular',
+              grossPay,
+              netPay,
+              holidayBonus: 0, // No holiday bonus for non-time-tracking or no time entries
               manualOverride: true
             };
 
@@ -100,25 +120,43 @@ export const useComputeAllCompensations = (
             (overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute);
 
           const dailyRate = parseFloat((employee.dailyRate || 0).toString());
-          const grossPay = dailyRate + (overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute);
+          const baseGrossPay = dailyRate + (overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute);
+          
+          console.log(`[useComputeAllCompensations] Time tracking for day ${day}`);
+          console.log(`[useComputeAllCompensations] Daily rate: ${dailyRate}`);
+          console.log(`[useComputeAllCompensations] Base gross pay: ${baseGrossPay}`);
+
+          // Calculate holiday bonus only if there are valid time entries
+          const holidayBonus = holiday ? dailyRate * (holiday.multiplier) : 0;
+          console.log(`[useComputeAllCompensations] Holiday bonus: ${holidayBonus}`);
+
+          // Apply holiday multiplier to base gross pay
+          const grossPay = holiday ? baseGrossPay + holidayBonus : baseGrossPay;
           const netPay = grossPay - deductions;
+
+          console.log(`[useComputeAllCompensations] Final gross pay: ${grossPay}`);
+          console.log(`[useComputeAllCompensations] Net pay: ${netPay}`);
 
           const newCompensation: Compensation = {
             employeeId: employee.id,
             month,
             year,
             day: entry.day,
-            dayType: 'Regular' as DayType,
-            lateMinutes,
-            undertimeMinutes,
-            overtimeMinutes,
-            hoursWorked,
+            dayType: holiday ? (holiday.type === 'Regular' ? 'Holiday' : 'Special') : 'Regular',
             grossPay,
-            deductions,
             netPay,
-            overtimePay: overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute,
-            lateDeduction: lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
-            undertimeDeduction: undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute
+            holidayBonus,
+            manualOverride: true,
+            ...(employmentType?.requiresTimeTracking && entry.timeIn && entry.timeOut ? {
+              lateMinutes,
+              undertimeMinutes,
+              overtimeMinutes,
+              hoursWorked,
+              deductions,
+              overtimePay: overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute,
+              lateDeduction: lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
+              undertimeDeduction: undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute
+            } : {})
           };
 
           if (foundCompensation && recompute) {

@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/renderer/stores/settingsStore';
 import { IoClose } from 'react-icons/io5';
 import { Switch } from '@headlessui/react';
 import { useEmployeeStore } from '@/renderer/stores/employeeStore';
+import { HolidayModel, Holiday, createHolidayModel } from '@/renderer/model/holiday';
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -48,9 +49,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   });
   const { dbPath } = useSettingsStore();
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
+  const holidayModel = createHolidayModel(dbPath, year, month);
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [employmentType, setEmploymentType] = useState<EmploymentType | null>(null);
   const [attendanceSettings, setAttendanceSettings] = useState<AttendanceSettings | null>(null);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   
   useEffect(() => {
     attendanceSettingsModel.loadTimeSettings().then((timeSettings) => {
@@ -64,6 +67,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       console.log('Loaded attendance settings:', settings);
       setAttendanceSettings(settings);
     });
+    // Load holidays
+    holidayModel.loadHolidays().then((holidays) => {
+      setHolidays(holidays);
+    });
   }, [compensation.employeeId]);
 
   useEffect(() => {
@@ -72,21 +79,31 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
  const computedValues = useMemo(() => {
    const dailyRate: number = parseFloat((employee?.dailyRate || 0).toString());
+   const entryDate = new Date(year, month - 1, day);
+   const holiday = holidays.find(h => 
+     entryDate >= new Date(h.startDate.getFullYear(), h.startDate.getMonth(), h.startDate.getDate()) &&
+     entryDate <= new Date(h.endDate.getFullYear(), h.endDate.getMonth(), h.endDate.getDate(), 23, 59, 59)
+   );
    
    // For non-time-tracking employees, only check presence/absence
    if (!employmentType?.requiresTimeTracking) {
      const isPresent = !!(timeIn || timeOut); // If either timeIn or timeOut exists, employee was present
+     const grossPay = isPresent ? dailyRate : 0;
+     const netPay = grossPay;
+     const holidayBonus = holiday ? dailyRate * (holiday.multiplier) : 0;
+     
      return {
        lateMinutes: 0,
        undertimeMinutes: 0,
        overtimeMinutes: 0,
        hoursWorked: isPresent ? 8 : 0, // Assume standard 8-hour day if present
-       grossPay: isPresent ? dailyRate : 0,
+       grossPay: grossPay + holidayBonus,
        deductions: 0,
-       netPay: isPresent ? dailyRate : 0,
+       netPay: netPay + holidayBonus,
        lateDeduction: 0,
        undertimeDeduction: 0,
        overtimeAddition: 0,
+       holidayBonus,
        manualOverride: true // Always set manual override for non-time-tracking employees
      };
    }
@@ -103,6 +120,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
        lateDeduction: 0,
        undertimeDeduction: 0,
        overtimeAddition: 0,
+       holidayBonus: 0,
        manualOverride: false
      };
    }
@@ -144,7 +162,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
      : 0;
  
    const deductions = lateDeduction + undertimeDeduction;
-   const grossPay = dailyRate + overtimeAddition;
+   const baseGrossPay = dailyRate + overtimeAddition;
+   const holidayBonus = holiday ? dailyRate * (holiday.multiplier) : 0;
+   const grossPay = baseGrossPay + holidayBonus;
    const netPay = grossPay - deductions;
  
    return {
@@ -158,9 +178,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
      grossPay,
      deductions,
      netPay,
+     holidayBonus,
      manualOverride: false
    };
- }, [employmentType, timeIn, timeOut, attendanceSettings, employee]);
+ }, [employmentType, timeIn, timeOut, attendanceSettings, employee, holidays]);
 
   useEffect(() => {
     // Update formData whenever computedValues change
@@ -176,6 +197,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       overtimeAddition: computedValues.overtimeAddition,
       undertimeDeduction: computedValues.undertimeDeduction,
       lateDeduction: computedValues.lateDeduction,
+      holidayBonus: computedValues.holidayBonus,
     }));
   }, [computedValues]);
 

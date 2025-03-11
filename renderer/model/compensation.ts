@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 
-export type DayType = 'Regular' | 'Holiday' | 'Rest Day';
+export type DayType = 'Regular' | 'Holiday' | 'Rest Day' | 'Special';
 
 export interface Compensation {
   employeeId: string;

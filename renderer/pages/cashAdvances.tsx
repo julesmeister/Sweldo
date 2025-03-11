@@ -166,7 +166,7 @@ export default function CashAdvancesPage() {
     }
 
     // Keep dialog within window bounds
-    left = Math.max(spacing, Math.min(left, dialogWidth * 1.1));
+    left = Math.max(spacing, Math.min(left, dialogWidth * 1.2));
 
     // Calculate caret position relative to the dialog
     const caretLeft = isButton

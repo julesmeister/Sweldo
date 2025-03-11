@@ -258,7 +258,7 @@ export default function HolidayForm({
                   }}
                   className={`block w-full bg-gray-800 border ${
                     errors.dates ? 'border-red-500' : 'border-gray-700'
-                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600`}
+                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]`}
                   required
                 />
               </div>
@@ -278,7 +278,7 @@ export default function HolidayForm({
                   }}
                   className={`block w-full bg-gray-800 border ${
                     errors.dates ? 'border-red-500' : 'border-gray-700'
-                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600`}
+                  } rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]`}
                   required
                 />
               </div>
