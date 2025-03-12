@@ -8,6 +8,7 @@ export interface Compensation {
   year: number;
   day: number;
   dayType: DayType;
+  dailyRate: number;
   hoursWorked?: number;
   overtimeMinutes?: number;
   overtimePay?: number;

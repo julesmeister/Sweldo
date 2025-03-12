@@ -64,6 +64,7 @@ export const useComputeAllCompensations = (
               year,
               day: entry.day,
               dayType: holiday ? (holiday.type === 'Regular' ? 'Holiday' : 'Special') : 'Regular',
+              dailyRate,
               grossPay,
               netPay,
               holidayBonus: 0, // No holiday bonus for non-time-tracking or no time entries
@@ -143,6 +144,7 @@ export const useComputeAllCompensations = (
             year,
             day: entry.day,
             dayType: holiday ? (holiday.type === 'Regular' ? 'Holiday' : 'Special') : 'Regular',
+            dailyRate,
             grossPay,
             netPay,
             holidayBonus,

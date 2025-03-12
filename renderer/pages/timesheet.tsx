@@ -230,6 +230,7 @@ const TimesheetPage: React.FC = () => {
       year: year,
       day: entry.day,
       dayType: 'Regular' as DayType,
+      dailyRate: 0,
       hoursWorked: 0,
       grossPay: 0,
       netPay: 0,
@@ -541,6 +542,7 @@ const TimesheetPage: React.FC = () => {
                                                 year: year,
                                                 day: foundEntry.day,
                                                 manualOverride: true,
+                                                dailyRate: employee?.dailyRate || 0,
                                                 grossPay: isPresent ? (employee?.dailyRate || 0) : 0,
                                                 netPay: isPresent ? (employee?.dailyRate || 0) : 0,
                                                 dayType: 'Regular' as DayType
