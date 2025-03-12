@@ -79,7 +79,7 @@ export default function HolidayCalendar() {
                       key={holiday.id}
                       className="hover:bg-gray-50"
                       style={{
-                        backgroundColor: holiday.type === 'Special' ? '#f0f7ff' : 'transparent',
+                        backgroundColor: 'transparent',
                       }}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-b border-gray-200">

@@ -92,9 +92,7 @@ const TimesheetPage: React.FC = () => {
   // First effect: Load employee only
   useEffect(() => {
     const loadEmployee = async () => {
-      console.log("Current dbPath:", dbPath); // Debug log
       if (!dbPath || !selectedEmployeeId || employeeModel == undefined) {
-        console.error('Database path is not set or no selectedEmployeeId provided or employeeModel.');
         return;
       }
       if (selectedEmployeeId) {
@@ -103,7 +101,7 @@ const TimesheetPage: React.FC = () => {
           const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
           if (emp !== null) setEmployee(emp);
         } catch (error) {
-          console.error('Error loading employee:', error);
+          toast.error('Error loading employee');
         } finally {
           setLoading(false);
         }
@@ -144,7 +142,7 @@ const TimesheetPage: React.FC = () => {
         // Compute compensations only once after loading data
         await computeCompensations(attendanceData, compensationData);
       } catch (error) {
-        console.error('Error loading timesheet data:', error);
+        toast.error('Error loading timesheet data');
         setLoading(false);
         setIsLoading(false);
       } finally {
@@ -160,9 +158,6 @@ const TimesheetPage: React.FC = () => {
   const employeeTimeSettings = useMemo(() => {
     if (!employee || !timeSettings.length) return null;
     const settings = timeSettings.find(type => type.type.toLowerCase() === employee.employmentType?.toLowerCase());
-    console.log('Employee:', employee);
-    console.log('Time settings:', timeSettings);
-    console.log('Matched settings:', settings);
     return settings;
   }, [employee, timeSettings]);
 
@@ -170,15 +165,12 @@ const TimesheetPage: React.FC = () => {
     const loadEmploymentTypes = async () => {
       try {
         const types = await attendanceSettingsModel.loadTimeSettings();
-        console.log('Loaded employment types:', types);
         setTimeSettings(types);
         setEmploymentTypes(types);
 
         // Update column names and visibility based on time tracking requirement
         if (employee) {
           const employeeType = types.find(type => type.type.toLowerCase() === employee.employmentType?.toLowerCase());
-          console.log('Employee type:', employee.employmentType);
-          console.log('Found type:', employeeType);
           
           if (employeeType) {
             const updatedColumns = columns.map(col => {
@@ -198,12 +190,11 @@ const TimesheetPage: React.FC = () => {
               return col;
             });
             
-            console.log('Updating columns:', updatedColumns);
             setColumns(updatedColumns);
           }
         }
       } catch (error) {
-        console.error('Failed to load employment types:', error);
+        toast.error('Failed to load employment types');
       }
     };
     loadEmploymentTypes();
@@ -276,7 +267,6 @@ const TimesheetPage: React.FC = () => {
       // Show success message
       toast.success('Compensation saved successfully');
     } catch (error) {
-      console.error('Failed to save compensation:', error);
       toast.error('Failed to save compensation');
     }
   };
@@ -291,7 +281,6 @@ const TimesheetPage: React.FC = () => {
         toast.success('Compensations recomputed successfully!');
       });
     } catch (error) {
-      console.error('Error recomputing compensations:', error);
       toast.error('Failed to recompute compensations.');
     } finally {
       setLoading(false);
@@ -307,7 +296,6 @@ const TimesheetPage: React.FC = () => {
   const router = useRouter();
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    console.log('Setting loading state to true');
     setLoading(true);
     setActiveLink(path);
     router.push(path);
@@ -608,7 +596,7 @@ const TimesheetPage: React.FC = () => {
                                           </span>
                                         </div>
                                       )}
-                                      {column.key === 'dayType' && (compensation?.dayType || '-')}
+                                      {column.key === 'dayType' && (new Date(year, storedMonthInt - 1, day).toLocaleDateString('en-US', { weekday: 'short' }) === 'Sun' ? 'Sunday' : compensation?.dayType || '-')}
                                       {column.key === 'hoursWorked' && (compensation?.hoursWorked || '-')}
                                       {column.key === 'overtimeMinutes' && (compensation?.overtimeMinutes || '-')}
                                       {column.key === 'overtimePay' && (compensation?.overtimePay || '-')}
@@ -616,7 +604,7 @@ const TimesheetPage: React.FC = () => {
                                       {column.key === 'undertimeDeduction' && (compensation?.undertimeDeduction || '-')}
                                       {column.key === 'lateMinutes' && (compensation?.lateMinutes || '-')}
                                       {column.key === 'lateDeduction' && (compensation?.lateDeduction || '-')}
-                                      {column.key === 'holidayBonus' && (compensation?.holidayBonus || '-')}
+                                      {column.key === 'holidayBonus' && (Math.round((compensation?.holidayBonus || 0) * 100) / 100 || '-')}
                                       {column.key === 'leaveType' && (compensation?.leaveType || '-')}
                                       {column.key === 'leavePay' && (compensation?.leavePay || '-')}
                                       {column.key === 'grossPay' && (compensation?.grossPay || '-')}
