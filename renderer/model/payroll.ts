@@ -20,7 +20,7 @@ export interface PayrollSummaryModel {
   lateDeduction?: number;
   lateMinutes?: number;
   holidayBonus?: number;
-  dayType?: 'Regular' | 'Holiday' | 'Rest Day';
+  dayType?: 'Regular' | 'Holiday' | 'Rest Day' | 'Special';
   leaveType?: 'Vacation' | 'Sick' | 'Unpaid' | 'None';
   leavePay?: number;
   grossPay: number;
@@ -568,7 +568,7 @@ const date = new Date(comp.year, comp.month - 1, comp.day);        // Use the st
         lateDeduction: parseFloat(row.lateDeduction) || 0,
         lateMinutes: parseFloat(row.lateMinutes) || 0,
         holidayBonus: parseFloat(row.holidayBonus) || 0,
-        dayType: row.dayType as 'Regular' | 'Holiday' | 'Rest Day',
+        dayType: row.dayType as 'Regular' | 'Holiday' | 'Rest Day' | 'Special',
         leaveType: row.leaveType as 'Vacation' | 'Sick' | 'Unpaid' | 'None',
         leavePay: parseFloat(row.leavePay) || 0,
         grossPay: parseFloat(row.grossPay) || 0,

@@ -584,10 +584,14 @@ const TimesheetPage: React.FC = () => {
                                       key={column.key}
                                       className={`${
                                         column.key === 'day'
-                                          ? 'sticky left-0 z-10 bg-white'
+                                          ? 'sticky left-0 z-10'
                                           : ''
                                       } px-6 py-4 whitespace-nowrap text-sm ${
-                                        column.key === 'day' ? 'font-medium text-gray-900' : 'text-gray-500'
+                                        column.key === 'day'
+                                          ? new Date(year, storedMonthInt - 1, day).toLocaleDateString('en-US', { weekday: 'short' }) === 'Sun'
+                                            ? 'bg-yellow-100 font-medium text-gray-900'
+                                            : 'font-medium text-gray-900'
+                                          : 'text-gray-500'
                                       }`}
                                     >
                                       {column.key === 'day' && (

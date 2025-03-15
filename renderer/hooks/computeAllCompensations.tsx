@@ -123,20 +123,13 @@ export const useComputeAllCompensations = (
           const dailyRate = parseFloat((employee.dailyRate || 0).toString());
           const baseGrossPay = dailyRate + (overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute);
           
-          console.log(`[useComputeAllCompensations] Time tracking for day ${day}`);
-          console.log(`[useComputeAllCompensations] Daily rate: ${dailyRate}`);
-          console.log(`[useComputeAllCompensations] Base gross pay: ${baseGrossPay}`);
 
           // Calculate holiday bonus only if there are valid time entries
           const holidayBonus = holiday ? dailyRate * (holiday.multiplier) : 0;
-          console.log(`[useComputeAllCompensations] Holiday bonus: ${holidayBonus}`);
 
           // Apply holiday multiplier to base gross pay
           const grossPay = holiday ? baseGrossPay + holidayBonus : baseGrossPay;
           const netPay = grossPay - deductions;
-
-          console.log(`[useComputeAllCompensations] Final gross pay: ${grossPay}`);
-          console.log(`[useComputeAllCompensations] Net pay: ${netPay}`);
 
           const newCompensation: Compensation = {
             employeeId: employee.id,
