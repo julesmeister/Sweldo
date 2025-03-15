@@ -84,12 +84,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
         // Match the pattern from cash advances page
         const month = startDate.getMonth() + 1;
         const year = startDate.getFullYear();
-        console.log("Loading advances for:", {
-          month,
-          year,
-          employeeId,
-          dbPath,
-        });
 
         // Use the correct folder path structure
         const cashAdvanceModel = createCashAdvanceModel(
@@ -104,48 +98,14 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
         );
 
         const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
-        console.log(
-          "All advances:",
-          advances.map((adv) => ({
-            id: adv.id,
-            date: adv.date,
-            amount: adv.amount,
-            status: adv.status,
-            approvalStatus: adv.approvalStatus,
-            remainingUnpaid: adv.remainingUnpaid,
-            paymentSchedule: adv.paymentSchedule,
-          }))
-        );
+
 
         const unpaid = advances.filter((advance) => {
           const isApproved = advance.approvalStatus === "Approved";
           const hasRemaining = advance.remainingUnpaid > 0;
 
-          console.log("Checking advance:", {
-            id: advance.id,
-            date: advance.date,
-            status: advance.status,
-            approvalStatus: advance.approvalStatus,
-            remainingUnpaid: advance.remainingUnpaid,
-            meetsConditions: {
-              isApproved,
-              hasRemaining,
-            },
-          });
-
           return isApproved && hasRemaining;
         });
-
-        console.log(
-          "Filtered unpaid advances:",
-          unpaid.map((adv) => ({
-            id: adv.id,
-            date: adv.date,
-            amount: adv.amount,
-            remainingUnpaid: adv.remainingUnpaid,
-            paymentSchedule: adv.paymentSchedule,
-          }))
-        );
 
         const initialDeductions: Record<string, number> = {};
         unpaid.forEach((advance) => {
@@ -167,9 +127,35 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
     }
   }, [isOpen, employeeId, dbPath, startDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Create cash advance model
+    const month = startDate.getMonth() + 1;
+    const year = startDate.getFullYear();
+    const cashAdvanceModel = createCashAdvanceModel(dbPath, employeeId, month, year);
 
+    // Update each selected cash advance
+    for (const advanceId of selectedAdvances) {
+      const advance = unpaidAdvances.find(adv => adv.id === advanceId);
+      if (advance) {
+        const deductionAmount = deductionAmounts[advanceId] || 0;
+        const newRemainingUnpaid = advance.remainingUnpaid - deductionAmount;
+        
+        // Update the cash advance
+        await cashAdvanceModel.updateCashAdvance({
+          ...advance,
+          remainingUnpaid: newRemainingUnpaid,
+          status: newRemainingUnpaid <= 0 ? 'Paid' : 'Unpaid',
+          installmentDetails: advance.paymentSchedule === 'Installment' ? {
+            ...advance.installmentDetails!,
+            remainingPayments: Math.ceil(newRemainingUnpaid / advance.installmentDetails!.amountPerPayment)
+          } : undefined
+        });
+      }
+    }
+
+    // Calculate total deductions and call onConfirm
     const totalCashAdvanceDeductions = Array.from(selectedAdvances).reduce(
       (total, advanceId) => {
         return total + (deductionAmounts[advanceId] || 0);
