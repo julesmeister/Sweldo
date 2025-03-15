@@ -15,28 +15,22 @@ interface CashAdvanceFormProps {
 
 const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({ onClose, onSave, initialData, position }) => {
   const [amount, setAmount] = useState(initialData?.amount || '');
-  const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
-  const [reason, setReason] = useState(initialData?.reason || '');
+  const [date, setDate] = useState(() => {
+    if (initialData?.date) {
+      const d = new Date(initialData.date);
+      return d.toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+  const [reason, setReason] = useState(() => {
+    return initialData?.reason || '';
+  });
   const [paymentSchedule, setPaymentSchedule] = useState(initialData?.paymentSchedule || 'One-time');
   const [approvalStatus, setApprovalStatus] = useState(initialData?.approvalStatus || 'Pending');
   const [numberOfPayments, setNumberOfPayments] = useState(initialData?.installmentDetails?.numberOfPayments || 1);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    
-    // Log the form data before submission
-    console.log('Submitting form with data:', {
-      amount: parseFloat(amount),
-      date: new Date(date),
-      reason,
-      paymentSchedule,
-      approvalStatus,
-      installmentDetails: paymentSchedule === 'Installment' ? {
-        numberOfPayments: parseInt(numberOfPayments.toString()),
-        amountPerPayment: parseFloat(amount) / parseInt(numberOfPayments.toString()),
-        remainingPayments: parseInt(numberOfPayments.toString())
-      } : undefined
-    });
 
     const formData = {
       amount: parseFloat(amount),
@@ -60,53 +54,33 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({ onClose, onSave, init
     <div 
       className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700"
       style={{ 
+        position: 'absolute',
         top: position?.top,
-        left: `calc(${position?.left}px - 350px)`, 
+        left: position!.left - 350, // Fixed offset instead of calc
+        width: '850px',
         transform: position?.showAbove ? 'translateY(-100%)' : 'none',
         maxHeight: 'calc(100vh - 100px)',
-        width: '850px'
       }}
     >
-      {/* Caret - outer border */}
+      {/* Caret */}
       <div 
-        className="absolute"
         style={{
-          left: `calc(${position?.left}px - 200px)`,
+          position: 'absolute',
+          left: position?.caretLeft,
+          [position?.showAbove ? 'bottom' : 'top']: position?.showAbove ? '-8px' : '-8px',
           width: 0,
           height: 0,
           borderLeft: '8px solid transparent',
           borderRight: '8px solid transparent',
           ...(position?.showAbove 
-            ? {
-                bottom: '-8px',
-                borderTop: '8px solid rgb(55, 65, 81)'
-              }
-            : {
-                top: '-8px',
-                borderBottom: '8px solid rgb(55, 65, 81)'
-              })
+            ? { borderTop: '8px solid rgb(17, 24, 39)' }
+            : { borderBottom: '8px solid rgb(17, 24, 39)' })
         }}
-      />
-      {/* Caret - inner fill */}
-      <div 
         className="absolute"
-        style={{
-          left: `calc(${position?.left}px - 200px)`,
-          width: 0,
-          height: 0,
-          borderLeft: '7px solid transparent',
-          borderRight: '7px solid transparent',
-          ...(position?.showAbove 
-            ? {
-                bottom: '-6px',
-                borderTop: '7px solid rgb(17, 24, 39)'
-              }
-            : {
-                top: '-6px',
-                borderBottom: '7px solid rgb(17, 24, 39)'
-              })
-        }}
       />
+
+      {/* Remove the inner caret as LeaveForm uses only one */}
+     
       
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg">

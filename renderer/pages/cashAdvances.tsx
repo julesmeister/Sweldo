@@ -135,61 +135,59 @@ export default function CashAdvancesPage() {
     setSelectedCashAdvance(null);
   };
 
-  const setDialogPosition = (
-    event: React.MouseEvent,
-    advance?: CashAdvance,
-    isButton: boolean = false
-  ) => {
-    event.stopPropagation(); // Prevent event bubbling
+  const handleButtonClick = (event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const spaceBelow = windowHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const dialogHeight = 450;
+    const dialogWidth = 850;
+    const spacing = 8;
+
+    // If there's not enough space below and more space above, show above
+    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
+
+    setClickPosition({
+      top: showAbove
+        ? rect.top - dialogHeight - spacing
+        : rect.bottom + spacing,
+      left: Math.max(spacing, rect.left - dialogWidth + rect.width + 280), // Changed this line
+      showAbove,
+      caretLeft: dialogWidth - rect.width / 2, // Adjusted caret position
+    });
+
+    setSelectedCashAdvance(null);
+    setIsDialogOpen(true);
+  };
+
+  // Remove the setDialogPosition function and its calls since we're handling positioning directly in handleButtonClick
+  const handleRowClick = (event: React.MouseEvent, advance: CashAdvance) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
-    const dialogHeight = 400; // Approximate height of dialog
-    const dialogWidth = 850; // Width of the dialog
-    const spacing = 8; // Space between dialog and trigger
+    const dialogHeight = 450;
+    const dialogWidth = 850;
+    const spacing = 8;
 
-    // Calculate vertical position
     const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
+    const spaceAbove = rect.top;
+    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
+
     const top = showAbove
       ? rect.top - dialogHeight - spacing
       : rect.bottom + spacing;
 
-    // Calculate horizontal position
-    let left;
-    if (isButton) {
-      // For button clicks, align with the left edge of the button
-      left = rect.left;
-    } else {
-      // For row clicks, center the dialog relative to the clicked element
-      left = rect.left + rect.width / 2 - dialogWidth / 4;
-    }
-
-    // Keep dialog within window bounds
-    left = Math.max(spacing, Math.min(left, dialogWidth * 1.2));
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = isButton
-      ? rect.width / 4 // For button, caret at button center
-      : rect.left + rect.width / 2 - left; // For rows, caret at row center
+    const left = rect.left + rect.width / 2 - dialogWidth / 4;
 
     setClickPosition({
       top,
       left,
       showAbove,
-      caretLeft,
+      caretLeft: rect.left + rect.width / 2 - left,
     });
 
-    setSelectedCashAdvance(advance || null);
+    setSelectedCashAdvance(advance);
     setIsDialogOpen(true);
-  };
-
-  const handleButtonClick = (event: React.MouseEvent) => {
-    setDialogPosition(event, undefined, true);
-  };
-
-  const handleRowClick = (event: React.MouseEvent, advance: CashAdvance) => {
-    setDialogPosition(event, advance, false);
   };
   const router = useRouter();
   const handleLinkClick = (path: string) => {
@@ -202,7 +200,9 @@ export default function CashAdvancesPage() {
 
   async function handleSaveCashAdvance(data: CashAdvance): Promise<void> {
     if (!cashAdvanceModel) {
-      toast.error("System not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set");
+      toast.error(
+        "System not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set"
+      );
       return;
     }
 
@@ -224,7 +224,7 @@ export default function CashAdvancesPage() {
           ...data,
           id: selectedCashAdvance.id,
           employeeId: selectedEmployeeId!,
-          date: selectedCashAdvance.date,
+          date: data.date, // Use the new date from the form
         });
         toast.success("Cash advance updated successfully", {
           position: "bottom-right",
@@ -448,7 +448,6 @@ export default function CashAdvancesPage() {
                                       try {
                                         await cashAdvanceModel.deleteCashAdvance(
                                           advance.id,
-                                          advance.date
                                         );
                                         const advances =
                                           await cashAdvanceModel.loadCashAdvances(
