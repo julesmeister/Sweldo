@@ -36,6 +36,63 @@ interface CompensationDialogProps {
   timeOut?: string;
 }
 
+interface FormFieldProps {
+  label: string;
+  name: string;
+  value: string | number;
+  onChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => void;
+  readOnly?: boolean;
+  type?: "text" | "select";
+  options?: { value: string; label: string }[];
+  className?: string;
+}
+
+const FormField: React.FC<FormFieldProps> = ({
+  label,
+  name,
+  value,
+  onChange,
+  readOnly = false,
+  type = "text",
+  options,
+  className = "",
+}) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-300 mb-1">
+      {label}
+    </label>
+    {type === "select" ? (
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 ${className}`}
+      >
+        {options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <input
+        type="text"
+        name={name}
+        value={value}
+        onChange={onChange}
+        readOnly={readOnly}
+        className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 ${
+          readOnly
+            ? ""
+            : "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+        } ${className}`}
+      />
+    )}
+  </div>
+);
+
 export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   isOpen,
   onClose,
@@ -69,7 +126,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
   useEffect(() => {
     attendanceSettingsModel.loadTimeSettings().then((timeSettings) => {
-      console.log("Loaded time settings:", timeSettings);
       setEmploymentTypes(timeSettings);
       const foundType = timeSettings.find(
         (type) => type.type === employee?.employmentType
@@ -78,7 +134,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     });
     // Load attendance settings
     attendanceSettingsModel.loadAttendanceSettings().then((settings) => {
-      console.log("Loaded attendance settings:", settings);
       setAttendanceSettings(settings);
     });
     // Load holidays
@@ -113,44 +168,35 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
           )
     );
 
+    // Create base return object with zero values
+    const createBaseReturn = (grossPay = 0, manualOverride = false) => ({
+      lateMinutes: 0,
+      undertimeMinutes: 0,
+      overtimeMinutes: 0,
+      hoursWorked: 0,
+      grossPay,
+      deductions: 0,
+      netPay: grossPay,
+      lateDeduction: 0,
+      undertimeDeduction: 0,
+      overtimeAddition: 0,
+      holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
+      manualOverride,
+    });
+
     // For non-time-tracking employees, only check presence/absence
     if (!employmentType?.requiresTimeTracking) {
-      const isPresent = !!(timeIn || timeOut); // If either timeIn or timeOut exists, employee was present
+      const isPresent = !!(timeIn || timeOut);
       const grossPay = isPresent ? dailyRate : 0;
-      const netPay = grossPay;
       const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
-
       return {
-        lateMinutes: 0,
-        undertimeMinutes: 0,
-        overtimeMinutes: 0,
-        hoursWorked: isPresent ? 8 : 0, // Assume standard 8-hour day if present
-        grossPay: grossPay + holidayBonus,
-        deductions: 0,
-        netPay: netPay + holidayBonus,
-        lateDeduction: 0,
-        undertimeDeduction: 0,
-        overtimeAddition: 0,
-        holidayBonus,
-        manualOverride: true, // Always set manual override for non-time-tracking employees
+        ...createBaseReturn(grossPay + holidayBonus, true),
+        hoursWorked: isPresent ? 8 : 0,
       };
     }
 
     if (!timeIn || !timeOut || !attendanceSettings) {
-      return {
-        lateMinutes: 0,
-        undertimeMinutes: 0,
-        overtimeMinutes: 0,
-        hoursWorked: 0,
-        grossPay: 0,
-        deductions: 0,
-        netPay: 0,
-        lateDeduction: 0,
-        undertimeDeduction: 0,
-        overtimeAddition: 0,
-        holidayBonus: 0,
-        manualOverride: false,
-      };
+      return createBaseReturn();
     }
 
     // Format date components
@@ -171,44 +217,18 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const actualTimeIn = createLocalDate(timeIn);
     const actualTimeOut = createLocalDate(timeOut);
 
-
-    // Get the day of the week (0-6) from the date
-    const dayOfWeek = entryDate.getDay();
-
     // Get the schedule for the specific day of the week
-    const schedule = getScheduleForDay(employmentType, dayOfWeek);
+    const schedule = getScheduleForDay(employmentType, entryDate.getDay());
     if (!schedule) {
-      return {
-        lateMinutes: 0,
-        undertimeMinutes: 0,
-        overtimeMinutes: 0,
-        hoursWorked: 0,
-        grossPay: dailyRate,
-        deductions: 0,
-        netPay: dailyRate,
-        lateDeduction: 0,
-        undertimeDeduction: 0,
-        overtimeAddition: 0,
-        holidayBonus: 0,
-        manualOverride: false,
-      };
+      return createBaseReturn(dailyRate);
     }
 
     const scheduledTimeIn = createLocalDate(schedule.timeIn);
     const scheduledTimeOut = createLocalDate(schedule.timeOut);
 
-
     // Calculate time differences
     const calculateTimeDifference = (time1: Date, time2: Date) => {
-      const diff = Math.round(
-        (time1.getTime() - time2.getTime()) / (1000 * 60)
-      );
-      console.log("Time difference calculation:", {
-        time1: time1.toISOString(),
-        time2: time2.toISOString(),
-        diff,
-      });
-      return diff;
+      return Math.round((time1.getTime() - time2.getTime()) / (1000 * 60));
     };
 
     const lateMinutes =
@@ -225,12 +245,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       actualTimeOut > scheduledTimeOut
         ? calculateTimeDifference(actualTimeOut, scheduledTimeOut)
         : 0;
-
-    console.log("Calculated minutes:", {
-      lateMinutes,
-      undertimeMinutes,
-      overtimeMinutes,
-    });
 
     // Calculate deduction minutes
     const calculateDeductionMinutes = (
@@ -304,7 +318,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   useEffect(() => {
     // Update formData whenever computedValues change
     if (computedValues) {
-      console.log("Setting form data with computed values:", computedValues);
       setFormData((prev) => ({
         ...prev,
         lateMinutes: computedValues.lateMinutes,
@@ -416,194 +429,117 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             className="p-4 space-y-3 bg-gray-900 rounded-b-lg"
           >
             <div className="grid grid-cols-7 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Day Type
-                </label>
-                <select
-                  name="dayType"
-                  value={formData.dayType}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                >
-                  <option value="Regular">Regular</option>
-                  <option value="Holiday">Holiday</option>
-                  <option value="Rest Day">Rest Day</option>
-                </select>
-              </div>
+              <FormField
+                label="Day Type"
+                name="dayType"
+                value={formData.dayType}
+                onChange={handleInputChange}
+                type="select"
+                options={[
+                  { value: "Regular", label: "Regular" },
+                  { value: "Holiday", label: "Holiday" },
+                  { value: "Rest Day", label: "Rest Day" },
+                ]}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Hours Worked
-                </label>
-                <input
-                  type="text"
-                  name="hoursWorked"
-                  value={formData.hoursWorked || 0}
-                  readOnly
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100"
-                />
-              </div>
+              <FormField
+                label="Hours Worked"
+                name="hoursWorked"
+                value={formData.hoursWorked || 0}
+                onChange={handleInputChange}
+                readOnly
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Leave Type
-                </label>
-                <select
-                  name="leaveType"
-                  value={formData.leaveType || "None"}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                >
-                  <option value="None">None</option>
-                  <option value="Vacation">Vacation</option>
-                  <option value="Sick">Sick</option>
-                  <option value="Unpaid">Unpaid</option>
-                </select>
-              </div>
+              <FormField
+                label="Leave Type"
+                name="leaveType"
+                value={formData.leaveType || "None"}
+                onChange={handleInputChange}
+                type="select"
+                options={[
+                  { value: "None", label: "None" },
+                  { value: "Vacation", label: "Vacation" },
+                  { value: "Sick", label: "Sick" },
+                  { value: "Unpaid", label: "Unpaid" },
+                ]}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Overtime Minutes
-                </label>
-                <input
-                  type="text"
-                  name="overtimeMinutes"
-                  value={formData.overtimeMinutes || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Overtime Minutes"
+                name="overtimeMinutes"
+                value={formData.overtimeMinutes || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Overtime Pay
-                </label>
-                <input
-                  type="text"
-                  name="overtimePay"
-                  value={formData.overtimePay || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Overtime Pay"
+                name="overtimePay"
+                value={formData.overtimePay || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Undertime Minutes
-                </label>
-                <input
-                  type="text"
-                  name="undertimeMinutes"
-                  value={formData.undertimeMinutes || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Undertime Minutes"
+                name="undertimeMinutes"
+                value={formData.undertimeMinutes || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Undertime Deduction
-                </label>
-                <input
-                  type="text"
-                  name="undertimeDeduction"
-                  value={formData.undertimeDeduction || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Undertime Deduction"
+                name="undertimeDeduction"
+                value={formData.undertimeDeduction || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Late Minutes
-                </label>
-                <input
-                  type="text"
-                  name="lateMinutes"
-                  value={formData.lateMinutes || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Late Minutes"
+                name="lateMinutes"
+                value={formData.lateMinutes || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Late Deduction
-                </label>
-                <input
-                  type="text"
-                  name="lateDeduction"
-                  value={formData.lateDeduction || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Late Deduction"
+                name="lateDeduction"
+                value={formData.lateDeduction || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Holiday Bonus
-                </label>
-                <input
-                  type="text"
-                  name="holidayBonus"
-                  value={formData.holidayBonus || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Holiday Bonus"
+                name="holidayBonus"
+                value={formData.holidayBonus || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Leave Pay
-                </label>
-                <input
-                  type="text"
-                  name="leavePay"
-                  value={formData.leavePay || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Leave Pay"
+                name="leavePay"
+                value={formData.leavePay || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Gross Pay
-                </label>
-                <input
-                  type="text"
-                  name="grossPay"
-                  value={formData.grossPay || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Gross Pay"
+                name="grossPay"
+                value={formData.grossPay || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Deductions
-                </label>
-                <input
-                  type="text"
-                  name="deductions"
-                  value={formData.deductions || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Deductions"
+                name="deductions"
+                value={formData.deductions || 0}
+                onChange={handleInputChange}
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Net Pay
-                </label>
-                <input
-                  type="text"
-                  name="netPay"
-                  value={formData.netPay || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                />
-              </div>
+              <FormField
+                label="Net Pay"
+                name="netPay"
+                value={formData.netPay || 0}
+                onChange={handleInputChange}
+              />
 
               <div className="col-span-5">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-300">
