@@ -276,8 +276,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const deductions =
       lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute +
       undertimeDeductionMinutes *
-        attendanceSettings.undertimeDeductionPerMinute +
-      overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute;
+        attendanceSettings.undertimeDeductionPerMinute;
 
     const baseGrossPay =
       dailyRate +
