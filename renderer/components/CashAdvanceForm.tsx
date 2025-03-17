@@ -35,7 +35,7 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
     initialData?.paymentSchedule || "One-time"
   );
   const [approvalStatus, setApprovalStatus] = useState(
-    initialData?.approvalStatus || "Pending"
+    initialData?.approvalStatus || "Approved"
   );
   const [numberOfPayments, setNumberOfPayments] = useState(
     initialData?.installmentDetails?.numberOfPayments || 1
@@ -241,7 +241,7 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
                 Approval Status
               </label>
               <div className="grid grid-cols-3 gap-3">
-                {["Pending", "Approved", "Rejected"].map((option) => (
+                {["Approved", "Pending", "Rejected"].map((option) => (
                   <div
                     key={option}
                     onClick={() => setApprovalStatus(option)}

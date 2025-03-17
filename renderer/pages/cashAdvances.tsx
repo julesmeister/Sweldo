@@ -157,7 +157,7 @@ export default function CashAdvancesPage() {
     left = Math.max(
       spacing,
       Math.min(left, windowWidth - dialogWidth - spacing)
-    );
+    ) - 60;
 
     // Calculate caret position relative to the dialog
     const caretLeft = rect.left + rect.width / 2 - left;
