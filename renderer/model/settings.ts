@@ -10,7 +10,11 @@ export interface Settings {
 
 export interface EmploymentType {
   type: string; // Employee type (e.g., full-time, part-time)
-  schedules?: Schedule[]; // Optional schedule (if applicable)
+  schedules?: Array<{
+    dayOfWeek: number;
+    timeIn: string;
+    timeOut: string;
+  }>; // Optional schedule (if applicable)
   requiresTimeTracking: boolean; // Indicates if time tracking is required
 }
 
@@ -217,3 +221,14 @@ export const createAttendanceSettingsModel = (
   const timeSettingsPath = `${dbPath}/SweldoDB/timeSettings.csv`;
   return new AttendanceSettingsModel(filePath, timeSettingsPath);
 };
+
+// Helper function to get schedule for a specific day
+export function getScheduleForDay(
+  employmentType: EmploymentType,
+  dayOfWeek: number
+): { timeIn: string; timeOut: string } | undefined {
+  if (!employmentType.schedules) return undefined;
+  return employmentType.schedules.find(
+    (schedule) => schedule.dayOfWeek === dayOfWeek
+  );
+}

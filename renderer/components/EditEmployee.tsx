@@ -205,7 +205,7 @@ export default function EditEmployee() {
                   <option key={type.type} value={type.type} className="bg-gray-800">
                     {type.type.charAt(0).toUpperCase() + type.type.slice(1)}{" "}
                     {type.requiresTimeTracking
-                      ? `(${formatTime(type.timeIn)} - ${formatTime(type.timeOut)})`
+                      ? "(Scheduled)"
                       : "(No time tracking)"}
                   </option>
                 ))}

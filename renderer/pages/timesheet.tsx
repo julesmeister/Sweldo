@@ -603,7 +603,7 @@ const TimesheetPage: React.FC = () => {
                                         </div>
                                       )}
                                       {column.key === 'dayType' && (new Date(year, storedMonthInt - 1, day).toLocaleDateString('en-US', { weekday: 'short' }) === 'Sun' ? 'Sunday' : compensation?.dayType || '-')}
-                                      {column.key === 'hoursWorked' && (compensation?.hoursWorked || '-')}
+                                      {column.key === 'hoursWorked' && (compensation?.hoursWorked ? Math.round(compensation.hoursWorked) : '-')}
                                       {column.key === 'overtimeMinutes' && (compensation?.overtimeMinutes || '-')}
                                       {column.key === 'overtimePay' && (compensation?.overtimePay || '-')}
                                       {column.key === 'undertimeMinutes' && (compensation?.undertimeMinutes || '-')}
