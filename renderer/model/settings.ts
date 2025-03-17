@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-
+import { Schedule } from "./schedule";
 export interface Settings {
     theme: string;
     language: string;
@@ -10,8 +10,7 @@ export interface Settings {
 
 export interface EmploymentType {
     type: string; // Employee type (e.g., full-time, part-time)
-    timeIn?: string; // Optional time in (HH:mm format)
-    timeOut?: string; // Optional time out (HH:mm format)
+    schedules?: Schedule[]; // Optional schedule (if applicable)
     requiresTimeTracking: boolean; // Indicates if time tracking is required
 }
 
@@ -40,20 +39,38 @@ export const defaultAttendanceSettings: AttendanceSettings = {
 export const defaultTimeSettings: EmploymentType[] = [
     {
         type: 'regular',
-        timeIn: '08:00',
-        timeOut: '17:00',
+        schedules: [
+            { dayOfWeek: 1, timeIn: '08:00', timeOut: '17:00' }, // Monday
+            { dayOfWeek: 2, timeIn: '08:00', timeOut: '17:00' }, // Tuesday
+            { dayOfWeek: 3, timeIn: '08:00', timeOut: '17:00' }, // Wednesday
+            { dayOfWeek: 4, timeIn: '08:00', timeOut: '17:00' }, // Thursday
+            { dayOfWeek: 5, timeIn: '08:00', timeOut: '17:00' }, // Friday
+            { dayOfWeek: 6, timeIn: '08:00', timeOut: '17:00' }, // Saturday
+        ],
         requiresTimeTracking: true,
     },
     {
         type: 'merchandiser',
-        timeIn: '09:00',
-        timeOut: '14:00',
+        schedules: [
+            { dayOfWeek: 1, timeIn: '09:00', timeOut: '14:00' }, // Monday
+            { dayOfWeek: 2, timeIn: '09:00', timeOut: '14:00' }, // Tuesday
+            { dayOfWeek: 3, timeIn: '09:00', timeOut: '14:00' }, // Wednesday
+            { dayOfWeek: 4, timeIn: '09:00', timeOut: '14:00' }, // Thursday
+            { dayOfWeek: 5, timeIn: '09:00', timeOut: '14:00' }, // Friday
+            { dayOfWeek: 6, timeIn: '09:00', timeOut: '14:00' }, // Saturday
+        ],
         requiresTimeTracking: false,
     },
     {
         type: 'sales',
-        timeIn: '10:00',
-        timeOut: '18:00',   
+        schedules: [
+            { dayOfWeek: 1, timeIn: '10:00', timeOut: '18:00' }, // Monday
+            { dayOfWeek: 2, timeIn: '10:00', timeOut: '18:00' }, // Tuesday
+            { dayOfWeek: 3, timeIn: '10:00', timeOut: '18:00' }, // Wednesday
+            { dayOfWeek: 4, timeIn: '10:00', timeOut: '18:00' }, // Thursday
+            { dayOfWeek: 5, timeIn: '10:00', timeOut: '18:00' }, // Friday
+            { dayOfWeek: 6, timeIn: '09:00', timeOut: '15:00' }, // Saturday
+        ],
         requiresTimeTracking: true,
     },
     {
@@ -112,11 +129,10 @@ export class AttendanceSettingsModel {
                 // Process the parsed data to ensure proper types
                 const processedData = results.data.map((item: any) => ({
                     type: item.type?.toLowerCase() || '',
-                    timeIn: item.timeIn || '',
-                    timeOut: item.timeOut || '',
-                    // Convert string 'true'/'false' to boolean
+                    // Parse the JSON string back to array of schedules
+                    schedules: item.schedules ? JSON.parse(item.schedules) : undefined,
                     requiresTimeTracking: item.requiresTimeTracking === 'true' || item.requiresTimeTracking === true
-                })).filter((item: any) => item.type); // Filter out empty types
+                })).filter((item: any) => item.type);
 
                 console.log('Loaded time settings:', processedData);
                 return processedData;
@@ -124,8 +140,20 @@ export class AttendanceSettingsModel {
         } catch (error) {
             console.error(`Error loading time settings: ${error}`);
             console.log(`Using default time settings`);
-            return defaultTimeSettings; // Return defaults on any error
+            return defaultTimeSettings;
         }
+    }
+
+    public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
+        // Transform the timeSettings to match the expected CSV structure
+        const formattedSettings = settings.map(setting => ({
+            type: setting.type,
+            // Convert schedules array to JSON string
+            schedules: setting.schedules ? JSON.stringify(setting.schedules) : '',
+            requiresTimeTracking: setting.requiresTimeTracking,
+        }));
+        const csv = Papa.unparse(formattedSettings);
+        await window.electron.saveFile(this.timeSettingsPath, csv);
     }
 
     public async setRegularHolidayMultiplier(multiplier: number): Promise<void> {
@@ -145,23 +173,10 @@ export class AttendanceSettingsModel {
         const csv = Papa.unparse([settings]); // Wrap in array since unparse expects array
         await window.electron.saveFile(this.filePath, csv);
     }
-
-    public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
-        // Transform the timeSettings to match the expected CSV structure
-        const formattedSettings = settings.map(setting => ({
-            type: setting.type,
-            timeIn: setting.timeIn || '', // Ensure timeIn is a string
-            timeOut: setting.timeOut || '', // Ensure timeOut is a string
-            requiresTimeTracking: setting.requiresTimeTracking,
-        }));
-    
-        const csv = Papa.unparse(formattedSettings); // Wrap in array since unparse expects array
-        await window.electron.saveFile(this.timeSettingsPath, csv);
-    }
 }
 
 export const createAttendanceSettingsModel = (dbPath: string): AttendanceSettingsModel => {
-    const filePath = `${dbPath}/SweldoDB/settings.csv`; 
-    const timeSettingsPath = `${dbPath}/SweldoDB/timeSettings.csv`; 
+    const filePath = `${dbPath}/SweldoDB/settings.csv`;
+    const timeSettingsPath = `${dbPath}/SweldoDB/timeSettings.csv`;
     return new AttendanceSettingsModel(filePath, timeSettingsPath);
 };

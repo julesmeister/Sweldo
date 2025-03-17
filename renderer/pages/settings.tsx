@@ -26,6 +26,7 @@ import {
 } from "@/renderer/model/settings";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
+import ScheduleSettings from "../components/ScheduleSettings";
 
 interface SettingSection {
   key: string;
@@ -37,7 +38,7 @@ interface SettingSection {
 export default function SettingsPage() {
   const { dbPath, setDbPath, logoPath, setLogoPath } = useSettingsStore();
   const [logoExists, setLogoExists] = useState(false);
-  const [logoError, setLogoError] = useState('');
+  const [logoError, setLogoError] = useState("");
   const [isCheckingLogo, setIsCheckingLogo] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = React.useState<string>("attendance");
@@ -54,8 +55,8 @@ export default function SettingsPage() {
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings>();
   const [holidayMultipliers, setHolidayMultipliers] = useState({
-    regular: '',
-    special: ''
+    regular: "",
+    special: "",
   });
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [sssRate, setSssRate] = useState("");
@@ -68,14 +69,14 @@ export default function SettingsPage() {
           const exists = await window.electron.fileExists(logoPath);
           setLogoExists(exists);
           if (!exists) {
-            setLogoPath('');
-            setLogoError('The selected logo file no longer exists');
+            setLogoPath("");
+            setLogoError("The selected logo file no longer exists");
           } else {
-            setLogoError('');
+            setLogoError("");
           }
         } catch (error) {
-          console.error('Error checking logo file:', error);
-          setLogoError('Error checking logo file');
+          console.error("Error checking logo file:", error);
+          setLogoError("Error checking logo file");
         } finally {
           setIsCheckingLogo(false);
         }
@@ -97,7 +98,7 @@ export default function SettingsPage() {
         setAttendanceSettings(settings);
         setHolidayMultipliers({
           regular: settings.regularHolidayMultiplier.toString(),
-          special: settings.specialHolidayMultiplier.toString()
+          special: settings.specialHolidayMultiplier.toString(),
         });
       } catch (error) {
         console.error("Error loading attendance settings:", error);
@@ -226,28 +227,28 @@ export default function SettingsPage() {
     try {
       const regular = Number(holidayMultipliers.regular);
       const special = Number(holidayMultipliers.special);
-      
+
       if (isNaN(regular) || isNaN(special)) {
-        toast.error('Please enter valid numbers for multipliers');
+        toast.error("Please enter valid numbers for multipliers");
         return;
       }
-      
+
       if (regular <= 0 || special <= 0) {
-        toast.error('Multipliers must be greater than 0');
+        toast.error("Multipliers must be greater than 0");
         return;
       }
 
       await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
       await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
-      
+
       // Reload settings to confirm changes
       const settings = await attendanceSettingsModel.loadAttendanceSettings();
       setAttendanceSettings(settings);
-      
-      toast.success('Holiday multipliers updated successfully');
+
+      toast.success("Holiday multipliers updated successfully");
     } catch (error) {
-      console.error('Error saving holiday multipliers:', error);
-      toast.error('Failed to update holiday multipliers');
+      console.error("Error saving holiday multipliers:", error);
+      toast.error("Failed to update holiday multipliers");
     }
   };
 
@@ -314,33 +315,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAddEmploymentType = () => {
-    setEmploymentTypes([
-      ...employmentTypes,
-      {
-        type: "",
-        timeIn: "",
-        timeOut: "",
-        requiresTimeTracking: false,
-      },
-    ]);
-  };
 
-  const handleRemoveEmploymentType = (index: number) => {
-    setEmploymentTypes(employmentTypes.filter((_, i) => i !== index));
-  };
 
-  const handleEmploymentTypeChange = (
-    index: number,
-    field: keyof EmploymentType,
-    value: string | boolean
-  ) => {
-    setEmploymentTypes(
-      employmentTypes.map((type, i) =>
-        i === index ? { ...type, [field]: value } : type
-      )
-    );
-  };
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -528,10 +504,12 @@ export default function SettingsPage() {
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="2"
                       value={holidayMultipliers.regular}
-                      onChange={(e) => setHolidayMultipliers(prev => ({
-                        ...prev,
-                        regular: e.target.value
-                      }))}                      
+                      onChange={(e) =>
+                        setHolidayMultipliers((prev) => ({
+                          ...prev,
+                          regular: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div>
@@ -543,15 +521,17 @@ export default function SettingsPage() {
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="1.3"
                       value={holidayMultipliers.special}
-                      onChange={(e) => setHolidayMultipliers(prev => ({
-                        ...prev,
-                        special: e.target.value
-                      }))}                      
+                      onChange={(e) =>
+                        setHolidayMultipliers((prev) => ({
+                          ...prev,
+                          special: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={handleSaveHolidayMultipliers}
                     className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
@@ -569,127 +549,10 @@ export default function SettingsPage() {
       title: "Employment Types",
       icon: <IoWalletOutline className="w-5 h-5" />,
       content: (
-        <div className="space-y-8">
-          <div className="bg-white rounded-xl border border-gray-100">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <IoWalletOutline className="w-5 h-5 text-blue-600" />
-                Employment Types
-              </h3>
-              <div className="space-y-6">
-                <div className="col-span-2">
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      onClick={handleAddEmploymentType}
-                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
-                    >
-                      Add Type
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    {employmentTypes.map((type, index) => (
-                      <div
-                        key={index}
-                        className="p-4 border-2 border-gray-200 rounded-lg"
-                      >
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                              Type Name
-                            </label>
-                            <input
-                              type="text"
-                              name={`type-${index}`}
-                              value={type.type}
-                              onChange={(e) =>
-                                handleEmploymentTypeChange(
-                                  index,
-                                  "type",
-                                  e.target.value
-                                )
-                              }
-                              className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                            />
-                          </div>
-                          <div className="flex items-end justify-end">
-                            <button
-                              onClick={() => handleRemoveEmploymentType(index)}
-                              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-md hover:bg-red-100"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                              Time In
-                            </label>
-                            <input
-                              type="time"
-                              name={`timeIn-${index}`}
-                              value={type.timeIn || ""}
-                              onChange={(e) =>
-                                handleEmploymentTypeChange(
-                                  index,
-                                  "timeIn",
-                                  e.target.value
-                                )
-                              }
-                              className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                              Time Out
-                            </label>
-                            <input
-                              type="time"
-                              name={`timeOut-${index}`}
-                              value={type.timeOut || ""}
-                              onChange={(e) =>
-                                handleEmploymentTypeChange(
-                                  index,
-                                  "timeOut",
-                                  e.target.value
-                                )
-                              }
-                              className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                              <input
-                                type="checkbox"
-                                name={`requiresTimeTracking-${index}`}
-                                checked={Boolean(type.requiresTimeTracking)}
-                                onChange={(e) =>
-                                  handleEmploymentTypeChange(
-                                    index,
-                                    "requiresTimeTracking",
-                                    e.target.checked
-                                  )
-                                }
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              Requires Time Tracking
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="pt-4">
-                  <button
-                    onClick={handleSaveEmploymentTypes}
-                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ScheduleSettings
+          employmentTypes={employmentTypes}
+          onSave={handleSaveEmploymentTypes}
+        />
       ),
     },
     {
@@ -967,7 +830,8 @@ export default function SettingsPage() {
             <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
               <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
               <p className="text-sm text-gray-800 font-light">
-                Select your company logo image file (PNG, JPG, or JPEG). The logo will be used in reports and other company documents.
+                Select your company logo image file (PNG, JPG, or JPEG). The
+                logo will be used in reports and other company documents.
               </p>
             </div>
             {logoError && (
@@ -976,18 +840,22 @@ export default function SettingsPage() {
                 <p className="text-sm text-red-800 font-light">{logoError}</p>
               </div>
             )}
-            
+
             {/* Logo Preview */}
             {isCheckingLogo ? (
               <div className="mb-4 p-4 border rounded-lg bg-gray-50">
                 <div className="flex items-center justify-center h-24 gap-3">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-600"></div>
-                  <div className="text-sm text-gray-500">Checking logo file...</div>
+                  <div className="text-sm text-gray-500">
+                    Checking logo file...
+                  </div>
                 </div>
               </div>
             ) : !logoPath ? (
-              <div 
-                className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${isDragging ? 'border-blue-500 bg-blue-50' : ''}`}
+              <div
+                className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${
+                  isDragging ? "border-blue-500 bg-blue-50" : ""
+                }`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -996,14 +864,16 @@ export default function SettingsPage() {
                 onDrop={async (e) => {
                   e.preventDefault();
                   setIsDragging(false);
-                  setLogoError('');
+                  setLogoError("");
 
                   const file = e.dataTransfer.files[0];
                   if (!file) return;
 
-                  const ext = file.name.toLowerCase().split('.').pop();
-                  if (!['png', 'jpg', 'jpeg'].includes(ext || '')) {
-                    setLogoError('Please select a valid image file (PNG, JPG, or JPEG)');
+                  const ext = file.name.toLowerCase().split(".").pop();
+                  if (!["png", "jpg", "jpeg"].includes(ext || "")) {
+                    setLogoError(
+                      "Please select a valid image file (PNG, JPG, or JPEG)"
+                    );
                     return;
                   }
 
@@ -1011,27 +881,46 @@ export default function SettingsPage() {
                 }}
               >
                 <div className="flex flex-col items-center justify-center h-24 gap-2 text-gray-400">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <svg
+                    className="w-8 h-8"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
                   </svg>
-                  <div className="text-sm">{isDragging ? 'Drop image here' : 'No logo selected - Click browse or drag an image here'}</div>
+                  <div className="text-sm">
+                    {isDragging
+                      ? "Drop image here"
+                      : "No logo selected - Click browse or drag an image here"}
+                  </div>
                 </div>
               </div>
-            ) : logoPath && logoExists && (
-              <div className="mb-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Logo Preview</h3>
-                <div className="flex items-center justify-center bg-white border rounded-lg p-4">
-                  <img 
-                    src={logoPath ? `local-file://${logoPath}` : ''} 
-                    alt="Company Logo" 
-                    className="max-h-24 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.src = ''; // Clear the source on error
-                      console.error('Error loading logo:', logoPath);
-                    }} 
-                  />
+            ) : (
+              logoPath &&
+              logoExists && (
+                <div className="mb-4 p-4 border rounded-lg bg-gray-50">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">
+                    Logo Preview
+                  </h3>
+                  <div className="flex items-center justify-center bg-white border rounded-lg p-4">
+                    <img
+                      src={logoPath ? `local-file://${logoPath}` : ""}
+                      alt="Company Logo"
+                      className="max-h-24 object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = ""; // Clear the source on error
+                        console.error("Error loading logo:", logoPath);
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              )
             )}
 
             <div className="flex items-center space-x-4">
@@ -1045,21 +934,25 @@ export default function SettingsPage() {
               <button
                 onClick={async () => {
                   // Clear any existing error messages
-                  setLogoError('');
-                  
+                  setLogoError("");
+
                   const result = await window.electron.showOpenDialog({
-                    properties: ['openFile'],
-                    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }]
+                    properties: ["openFile"],
+                    filters: [
+                      { name: "Images", extensions: ["png", "jpg", "jpeg"] },
+                    ],
                   });
-                  
+
                   if (!result.canceled && result.filePaths.length > 0) {
                     const filePath = result.filePaths[0];
-                    const ext = filePath.toLowerCase().split('.').pop();
-                    if (!['png', 'jpg', 'jpeg'].includes(ext || '')) {
-                      setLogoError('Please select a valid image file (PNG, JPG, or JPEG)');
+                    const ext = filePath.toLowerCase().split(".").pop();
+                    if (!["png", "jpg", "jpeg"].includes(ext || "")) {
+                      setLogoError(
+                        "Please select a valid image file (PNG, JPG, or JPEG)"
+                      );
                       return;
                     }
-                    setLogoError('');
+                    setLogoError("");
                     setLogoPath(filePath);
                   }
                 }}
@@ -1070,9 +963,9 @@ export default function SettingsPage() {
               {logoPath && (
                 <button
                   onClick={() => {
-                  setLogoPath('');
-                  setLogoError('');
-                }}
+                    setLogoPath("");
+                    setLogoError("");
+                  }}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md border hover:bg-gray-200 transition-colors"
                 >
                   Clear
