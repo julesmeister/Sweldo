@@ -54,6 +54,7 @@ export class CompensationModel {
         year: parseInt(row.year, 10),
         day: parseInt(row.day, 10),
         dayType: (row.dayType || 'Regular') as DayType,
+        dailyRate: row.dailyRate ? parseFloat(row.dailyRate) : undefined,
         hoursWorked: row.hoursWorked ? parseFloat(row.hoursWorked) : undefined,
         overtimeMinutes: row.overtimeMinutes ? parseFloat(row.overtimeMinutes) : undefined,
         overtimePay: row.overtimePay ? parseFloat(row.overtimePay) : undefined,

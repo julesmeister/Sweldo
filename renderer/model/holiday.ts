@@ -45,8 +45,6 @@ export class HolidayModel {
   async saveOrUpdateHoliday(holiday: Holiday): Promise<void> {
     try {
       const filePath = this.getFilePath();
-      console.log(`[HolidayModel] Attempting to save/update holiday to:`, filePath);
-      console.log(`[HolidayModel] Holiday data to save:`, holiday);
 
       const formatHolidayToCSV = (h: Holiday) => {
         return `${h.id},${h.startDate.toISOString()},${h.endDate.toISOString()},${h.name},${h.type},${h.multiplier}`;
@@ -96,7 +94,6 @@ export class HolidayModel {
   async loadHolidays(): Promise<Holiday[]> {
     try {
       const filePath = this.getFilePath();
-      console.log(`[HolidayModel] Loading holidays from:`, filePath);
 
       try {
         const data = await window.electron.readFile(filePath);
@@ -124,7 +121,6 @@ export class HolidayModel {
         return holidays;
       } catch (error: any) {
         if (error.code === 'ENOENT' || (error instanceof Error && error.message.includes('ENOENT'))) {
-          console.log(`[HolidayModel] No holidays file found, returning empty array`);
           return [];
         }
         throw error;

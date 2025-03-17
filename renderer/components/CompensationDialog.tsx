@@ -175,6 +175,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       overtimeMinutes: 0,
       hoursWorked: 0,
       grossPay,
+      dailyRate: 0,
       deductions: 0,
       netPay: grossPay,
       lateDeduction: 0,
@@ -293,6 +294,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       grossPay,
       deductions,
       netPay,
+      dailyRate,
       lateDeduction:
         lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
       undertimeDeduction:
@@ -572,7 +574,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   placeholder="Notes"
                   value={formData.notes || ""}
                   onChange={handleInputChange}
-                  className="flex-1 px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+                  className="flex-1 px-3 py-2.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
                 />
                 <button
                   type="button"

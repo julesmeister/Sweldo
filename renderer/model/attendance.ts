@@ -31,12 +31,10 @@ export class AttendanceModel {
 
   constructor(folderPath: string) {
     this.folderPath = folderPath;
-    console.log('Initialized AttendanceModel with folder path:', this.folderPath); // Log the folder path
   }
 
   // Load attendances from CSV
   public async loadAttendances(): Promise<Attendance[]> {
-    console.log('Loading attendances from file path:', this.folderPath);
     try {
       const fileContent = await window.electron.readFile(this.folderPath);
       if (!fileContent) {
@@ -44,7 +42,6 @@ export class AttendanceModel {
         return []; // Return empty array if file is empty or doesn't exist
       }
       const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
-      console.log('Loaded attendances:', results.data);
       return results.data.map((row: any) => ({
         day: row.day,
         timeIn: row.timeIn ? row.timeIn : null,
@@ -58,9 +55,7 @@ export class AttendanceModel {
   // Load attendances from CSV based on month, year, and employee ID
   public async loadAttendancesById(month?: number, year?: number, id?: string): Promise<Attendance[]> {
     try {
-      console.log('this.folderPath:', this.folderPath);
       const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
-      console.log('Loading attendances with params:', { month, year, id, filePath });
       const fileContent = await window.electron.readFile(filePath);
       if (!fileContent) {
         return []; // Return empty array if file is empty or doesn't exist
@@ -176,7 +171,6 @@ export class AttendanceModel {
       // Save updated attendances to CSV
       const csv = Papa.unparse(existingAttendances);
       await window.electron.saveFile(filePath, csv);
-      console.log(`Attendances saved successfully to ${filePath}`);
     } catch (error) {
       console.error(`Failed to save attendances: ${error}`);
       throw error;
@@ -188,7 +182,6 @@ export class AttendanceModel {
 // Factory function to create AttendanceModel instance
 export const createAttendanceModel = (dbPath: string): AttendanceModel => {
   const folderPath = `${dbPath}/SweldoDB/attendances`; // Adjust the path as needed
-  console.log(`Creating AttendanceModel instance with folder path: ${folderPath}`);
   return new AttendanceModel(folderPath);
 };
 
