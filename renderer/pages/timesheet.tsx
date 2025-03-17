@@ -307,7 +307,6 @@ const TimesheetPage: React.FC = () => {
       
     <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
     <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
-
       <div className="px-4 sm:px-0">
         <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
           <div className="col-span-1 md:col-span-1">
@@ -451,6 +450,7 @@ const TimesheetPage: React.FC = () => {
                                   <Tooltip 
                                     content={tooltipContent[column.key as 'grossPay' | 'deductions']}
                                     position="left"
+                                    width="500px"	
                                   >
                                     {column.name}
                                   </Tooltip>

@@ -427,7 +427,7 @@ export default function ScheduleSettings({
                                         <Tooltip
                                           content="Copy Schedule"
                                           position="top"
-                                          width="120px"
+                                          width="130px"
                                         >
                                           <button
                                             onClick={(e) => {
@@ -455,7 +455,7 @@ export default function ScheduleSettings({
                                           <Tooltip
                                             content="Paste Schedule"
                                             position="top"
-                                            width="120px"
+                                            width="130px"
                                           >
                                             <button
                                               onClick={(e) => {

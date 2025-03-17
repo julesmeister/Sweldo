@@ -223,7 +223,6 @@ export default function EditEmployee() {
           </div>
 
           {/* Benefits Section */}
-          <div className="pt-4 border-t border-gray-700">
             <h3 className="text-lg font-medium text-gray-200 mb-3">Benefits</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* SSS */}
@@ -287,11 +286,10 @@ export default function EditEmployee() {
               </div>
             </div>
           </div>
-        </div>
       </form>
 
       {/* Footer */}
-      <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
+      <div className="mt-3 px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
         <div className="flex flex-row space-x-3 w-full">
           <button
             type="button"
