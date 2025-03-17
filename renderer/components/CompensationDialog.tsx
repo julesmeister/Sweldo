@@ -17,6 +17,12 @@ import {
   Holiday,
   createHolidayModel,
 } from "@/renderer/model/holiday";
+import {
+  createTimeObjects,
+  calculateTimeMetrics,
+  calculatePayMetrics,
+  isHolidayDate,
+} from "@/renderer/hooks/utils/compensationUtils";
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -149,24 +155,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   const computedValues = useMemo(() => {
     const dailyRate: number = parseFloat((employee?.dailyRate || 0).toString());
     const entryDate = new Date(year, month - 1, day);
-    const holiday = holidays.find(
-      (h) =>
-        entryDate >=
-          new Date(
-            h.startDate.getFullYear(),
-            h.startDate.getMonth(),
-            h.startDate.getDate()
-          ) &&
-        entryDate <=
-          new Date(
-            h.endDate.getFullYear(),
-            h.endDate.getMonth(),
-            h.endDate.getDate(),
-            23,
-            59,
-            59
-          )
-    );
+    const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
 
     // Create base return object with zero values
     const createBaseReturn = (grossPay = 0, manualOverride = false) => ({
@@ -200,108 +189,47 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return createBaseReturn();
     }
 
-    // Format date components
-    const formatDateComponent = (value: number) =>
-      value.toString().padStart(2, "0");
-    const formattedMonth = formatDateComponent(month);
-    const formattedDay = formatDateComponent(day);
-    const createDateString = (time: string) =>
-      `${year}-${formattedMonth}-${formattedDay}T${time}`;
-
-    // Create time objects with local timezone
-    const createLocalDate = (time: string) => {
-      const dateString = createDateString(time);
-      const [datePart, timePart] = dateString.split("T");
-      return new Date(`${datePart}T${timePart}`);
-    };
-
-    const actualTimeIn = createLocalDate(timeIn);
-    const actualTimeOut = createLocalDate(timeOut);
-
     // Get the schedule for the specific day of the week
     const schedule = getScheduleForDay(employmentType, entryDate.getDay());
     if (!schedule) {
       return createBaseReturn(dailyRate);
     }
 
-    const scheduledTimeIn = createLocalDate(schedule.timeIn);
-    const scheduledTimeOut = createLocalDate(schedule.timeOut);
-
-    // Calculate time differences
-    const calculateTimeDifference = (time1: Date, time2: Date) => {
-      return Math.round((time1.getTime() - time2.getTime()) / (1000 * 60));
-    };
-
-    const lateMinutes =
-      actualTimeIn > scheduledTimeIn
-        ? calculateTimeDifference(actualTimeIn, scheduledTimeIn)
-        : 0;
-
-    const undertimeMinutes =
-      actualTimeOut < scheduledTimeOut
-        ? calculateTimeDifference(scheduledTimeOut, actualTimeOut)
-        : 0;
-
-    const overtimeMinutes =
-      actualTimeOut > scheduledTimeOut
-        ? calculateTimeDifference(actualTimeOut, scheduledTimeOut)
-        : 0;
-
-    // Calculate deduction minutes
-    const calculateDeductionMinutes = (
-      minutes: number,
-      gracePeriod: number
-    ) => {
-      return minutes > gracePeriod ? minutes - gracePeriod : 0;
-    };
-
-    const lateDeductionMinutes = calculateDeductionMinutes(
-      lateMinutes,
-      attendanceSettings.lateGracePeriod
-    );
-    const undertimeDeductionMinutes = calculateDeductionMinutes(
-      undertimeMinutes,
-      attendanceSettings.undertimeGracePeriod
-    );
-    const overtimeDeductionMinutes = calculateDeductionMinutes(
-      overtimeMinutes,
-      attendanceSettings.overtimeGracePeriod
+    // Use shared utility functions for calculations
+    const { actual, scheduled } = createTimeObjects(
+      year,
+      month,
+      day,
+      timeIn,
+      timeOut,
+      schedule
     );
 
-    // Calculate hours worked
-    const hoursWorked =
-      calculateTimeDifference(actualTimeOut, actualTimeIn) / 60;
-
-    // Calculate deductions and pay
-    const deductions =
-      lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute +
-      undertimeDeductionMinutes *
-        attendanceSettings.undertimeDeductionPerMinute;
-
-    const baseGrossPay =
-      dailyRate +
-      overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute;
-    const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
-    const grossPay = holiday ? baseGrossPay + holidayBonus : baseGrossPay;
-    const netPay = grossPay - deductions;
+    const timeMetrics = calculateTimeMetrics(
+      actual,
+      scheduled,
+      attendanceSettings
+    );
+    const payMetrics = calculatePayMetrics(
+      timeMetrics,
+      attendanceSettings,
+      dailyRate,
+      holiday
+    );
 
     return {
-      lateMinutes,
-      undertimeMinutes,
-      overtimeMinutes,
-      hoursWorked,
-      grossPay,
-      deductions,
-      netPay,
+      lateMinutes: timeMetrics.lateMinutes,
+      undertimeMinutes: timeMetrics.undertimeMinutes,
+      overtimeMinutes: timeMetrics.overtimeMinutes,
+      hoursWorked: timeMetrics.hoursWorked,
+      grossPay: payMetrics.grossPay,
       dailyRate,
-      lateDeduction:
-        lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
-      undertimeDeduction:
-        undertimeDeductionMinutes *
-        attendanceSettings.undertimeDeductionPerMinute,
-      overtimeAddition:
-        overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute,
-      holidayBonus,
+      deductions: payMetrics.deductions,
+      netPay: payMetrics.netPay,
+      lateDeduction: payMetrics.lateDeduction,
+      undertimeDeduction: payMetrics.undertimeDeduction,
+      overtimeAddition: payMetrics.overtimePay,
+      holidayBonus: payMetrics.holidayBonus,
       manualOverride: false,
     };
   }, [
