@@ -138,29 +138,41 @@ export default function CashAdvancesPage() {
   const handleButtonClick = (event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
-    const spaceBelow = windowHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const windowWidth = window.innerWidth;
     const dialogHeight = 450;
     const dialogWidth = 850;
     const spacing = 8;
 
-    // If there's not enough space below and more space above, show above
-    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
+    // Calculate vertical position
+    const spaceBelow = windowHeight - rect.bottom;
+    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
+    const top = showAbove
+      ? rect.top - dialogHeight - spacing
+      : rect.bottom + spacing;
+
+    // Calculate horizontal position
+    let left = rect.left + rect.width / 2 - dialogWidth / 2;
+
+    // Keep dialog within window bounds
+    left = Math.max(
+      spacing,
+      Math.min(left, windowWidth - dialogWidth - spacing)
+    );
+
+    // Calculate caret position relative to the dialog
+    const caretLeft = rect.left + rect.width / 2 - left;
 
     setClickPosition({
-      top: showAbove
-        ? rect.top - dialogHeight - spacing
-        : rect.bottom + spacing,
-      left: Math.max(spacing, rect.left - dialogWidth + rect.width + 280), // Changed this line
+      top,
+      left,
       showAbove,
-      caretLeft: dialogWidth - rect.width / 2, // Adjusted caret position
+      caretLeft,
     });
 
     setSelectedCashAdvance(null);
     setIsDialogOpen(true);
   };
 
-  // Remove the setDialogPosition function and its calls since we're handling positioning directly in handleButtonClick
   const handleRowClick = (event: React.MouseEvent, advance: CashAdvance) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
@@ -169,21 +181,30 @@ export default function CashAdvancesPage() {
     const dialogWidth = 850;
     const spacing = 8;
 
+    // Calculate vertical position
     const spaceBelow = windowHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
-
+    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
     const top = showAbove
       ? rect.top - dialogHeight - spacing
       : rect.bottom + spacing;
 
-    const left = rect.left + rect.width / 2 - dialogWidth / 4;
+    // Calculate horizontal position
+    let left = rect.left + rect.width / 2 - dialogWidth / 2;
+
+    // Keep dialog within window bounds
+    left = Math.max(
+      spacing,
+      Math.min(left, windowWidth - dialogWidth - spacing)
+    );
+
+    // Calculate caret position relative to the dialog
+    const caretLeft = rect.left + rect.width / 2 - left;
 
     setClickPosition({
       top,
       left,
       showAbove,
-      caretLeft: rect.left + rect.width / 2 - left,
+      caretLeft,
     });
 
     setSelectedCashAdvance(advance);
@@ -447,7 +468,7 @@ export default function CashAdvancesPage() {
                                       setLoading(true);
                                       try {
                                         await cashAdvanceModel.deleteCashAdvance(
-                                          advance.id,
+                                          advance.id
                                         );
                                         const advances =
                                           await cashAdvanceModel.loadCashAdvances(

@@ -237,10 +237,8 @@ export class CashAdvanceModel {
       const lines = data.split("\n").filter((line) => line.trim());
       console.log("Found lines:", lines);
 
-      // Skip header row if present
-      const dataLines = lines[0]?.toLowerCase().includes("id,employeeid,date")
-        ? lines.slice(1)
-        : lines;
+      // Skip header row
+      const dataLines = lines.slice(1);
 
       const advances = dataLines
         .map((line, index) => {
@@ -248,38 +246,31 @@ export class CashAdvanceModel {
           console.log(`Processing line ${index + 1}:`, fields);
 
           try {
-            // Parse fields with fallbacks for older CSV format
+            // Parse fields matching the CSV format
             const [
+              id,
+              employeeId,
               date,
               amount,
               reason,
               approvalStatus,
               paymentSchedule,
-              status = "Unpaid",
+              status,
               remainingUnpaid,
             ] = fields;
-            const parsedAmount = parseFloat(amount);
 
+            const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount)) {
               console.warn(`Invalid amount on line ${index + 1}:`, amount);
               return null;
             }
 
-            // For older records, calculate remaining unpaid based on status
-            let parsedRemainingUnpaid: number;
-            if (remainingUnpaid) {
-              parsedRemainingUnpaid = parseFloat(remainingUnpaid);
-            } else {
-              // If no remainingUnpaid field, use full amount for Unpaid status
-              parsedRemainingUnpaid = status === "Unpaid" ? parsedAmount : 0;
-            }
+            const parsedRemainingUnpaid = parseFloat(remainingUnpaid || amount);
 
-            // Generate a unique ID if not present
-            const id = crypto.randomUUID();
-
+            // Create the cash advance object
             const advance = {
               id,
-              employeeId: this.employeeId,
+              employeeId,
               date: new Date(date),
               amount: parsedAmount,
               remainingUnpaid: parsedRemainingUnpaid,
@@ -288,12 +279,13 @@ export class CashAdvanceModel {
                 | "Pending"
                 | "Approved"
                 | "Rejected",
-              status: status as "Paid" | "Unpaid",
+              status: (status || "Unpaid") as "Paid" | "Unpaid",
               paymentSchedule: paymentSchedule as "One-time" | "Installment",
+              // Add installment details if it's an installment payment
               installmentDetails:
                 paymentSchedule === "Installment"
                   ? {
-                      numberOfPayments: 3,
+                      numberOfPayments: 3, // Default to 3 payments
                       amountPerPayment: Math.ceil(parsedAmount / 3),
                       remainingPayments: Math.ceil(
                         parsedRemainingUnpaid / (parsedAmount / 3)
