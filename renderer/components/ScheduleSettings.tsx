@@ -276,29 +276,36 @@ export default function ScheduleSettings({
               </div>
               <div className="space-y-4">
                 <div className="border-b border-gray-200">
-                  <nav
-                    className="-mb-px flex space-x-4"
-                    aria-label="Employment Types"
-                  >
-                    {employmentTypes.map((type, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedTypeTab(index)}
-                        className={`whitespace-nowrap py-2 px-4 border-b-2 font-medium text-sm ${
-                          selectedTypeTab === index
-                            ? "border-blue-500 text-blue-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        }`}
+                  <div className="relative">
+                    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                      <nav
+                        className="flex space-x-1 min-w-full pl-2"
+                        aria-label="Employment Types"
                       >
-                        {type.type || `Type ${index + 1}`}
-                      </button>
-                    ))}
-                  </nav>
+                        {employmentTypes.map((type, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedTypeTab(index)}
+                            className={`whitespace-nowrap py-2 px-3 border-b-2 font-medium text-sm flex-shrink-0 ${
+                              selectedTypeTab === index
+                                ? "border-blue-500 text-blue-600"
+                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                            }`}
+                          >
+                            {type.type || `Type ${index + 1}`}
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
+                    {/* Optional: Add scroll indicators */}
+                    <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
+                    <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none" />
+                  </div>
                 </div>
                 {employmentTypes.map((type, index) => (
                   <div
                     key={index}
-                    className={`p-4 border-2 border-gray-200 rounded-lg ${
+                    className={`${
                       selectedTypeTab === index ? "block" : "hidden"
                     }`}
                   >
