@@ -46,7 +46,10 @@ export default function ScheduleSettings({
 
     // Initialize schedules for types that require time tracking
     const updatedTypes = employmentTypes.map((type) => {
-      if (type.requiresTimeTracking && !type.schedules) {
+      if (
+        type.requiresTimeTracking &&
+        (!type.schedules || type.schedules.length === 0)
+      ) {
         return {
           ...type,
           schedules: [
@@ -62,10 +65,23 @@ export default function ScheduleSettings({
       }
       return type;
     });
+
+    // Only update if there are actual changes
     if (JSON.stringify(updatedTypes) !== JSON.stringify(employmentTypes)) {
+      console.log("Updating employment types with schedules:", updatedTypes);
       setEmploymentTypes(updatedTypes);
     }
-  }, []);
+  }, [employmentTypes]);
+
+  // Add effect to sync with parent component
+  React.useEffect(() => {
+    if (
+      JSON.stringify(employmentTypes) !== JSON.stringify(initialEmploymentTypes)
+    ) {
+      setEmploymentTypes(initialEmploymentTypes);
+    }
+  }, [initialEmploymentTypes]);
+
   const [timeOff, setTimeOff] = React.useState<{
     [key: string]: { [key: number]: boolean };
   }>({});
@@ -124,10 +140,17 @@ export default function ScheduleSettings({
     value: string | boolean,
     additionalUpdates?: { field: string; value: string }[]
   ) => {
+    console.log("Employment type change:", {
+      index,
+      field,
+      value,
+      additionalUpdates,
+    });
     let updatedTypes = employmentTypes.map((type, i) => {
       if (i === index) {
         if (field.startsWith("schedules.")) {
           const [, dayIndex, timeField] = field.split(".");
+          console.log("Updating schedule:", { dayIndex, timeField, value });
           const schedules = type.schedules || [
             { dayOfWeek: 1, timeIn: "", timeOut: "" },
             { dayOfWeek: 2, timeIn: "", timeOut: "" },
@@ -156,14 +179,16 @@ export default function ScheduleSettings({
               [timeField]: value,
             };
           }
+          console.log("Updated schedules:", updatedSchedules);
           return { ...type, schedules: updatedSchedules };
         }
 
         if (field === "requiresTimeTracking") {
-          return {
+          const requiresTimeTracking = value as boolean;
+          const updatedType = {
             ...type,
-            requiresTimeTracking: value,
-            schedules: value
+            requiresTimeTracking,
+            schedules: requiresTimeTracking
               ? [
                   { dayOfWeek: 1, timeIn: "", timeOut: "" },
                   { dayOfWeek: 2, timeIn: "", timeOut: "" },
@@ -175,6 +200,8 @@ export default function ScheduleSettings({
                 ]
               : undefined,
           };
+          console.log("Updated type with time tracking:", updatedType);
+          return updatedType;
         }
 
         const formattedValue =
@@ -192,7 +219,17 @@ export default function ScheduleSettings({
         updatedTypes = updatedTypes.map((type, i) => {
           if (i === index && update.field.startsWith("schedules.")) {
             const [, dayIndex, timeField] = update.field.split(".");
-            const schedules = type.schedules ? [...type.schedules] : [];
+            const schedules = type.schedules
+              ? [...type.schedules]
+              : [
+                  { dayOfWeek: 1, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 2, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 3, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 4, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 5, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 6, timeIn: "", timeOut: "" },
+                  { dayOfWeek: 7, timeIn: "", timeOut: "" },
+                ];
             schedules[Number(dayIndex)] = {
               ...schedules[Number(dayIndex)],
               [timeField]: update.value,
@@ -204,11 +241,13 @@ export default function ScheduleSettings({
       });
     }
 
+    console.log("Final updated types:", updatedTypes);
     setEmploymentTypes(updatedTypes as EmploymentType[]);
   };
 
   const handleSaveEmploymentTypes = async () => {
     try {
+      console.log("ScheduleSettings saving employment types:", employmentTypes);
       await onSave(employmentTypes);
       toast.success("Employment types saved successfully");
     } catch (error) {

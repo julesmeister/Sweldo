@@ -315,9 +315,6 @@ export default function SettingsPage() {
     }
   };
 
-
-
-
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -337,9 +334,10 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveEmploymentTypes = async () => {
+  const handleSaveEmploymentTypes = async (types: EmploymentType[]) => {
     try {
-      await attendanceSettingsModel?.saveTimeSettings(employmentTypes);
+      console.log("SettingsPage received employment types:", types);
+      await attendanceSettingsModel?.saveTimeSettings(types);
       toast.success("Employment types saved successfully");
     } catch (error) {
       console.error("Error saving employment types:", error);
