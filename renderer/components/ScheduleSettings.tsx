@@ -1,5 +1,11 @@
 import React from "react";
-import { IoWalletOutline } from "react-icons/io5";
+import {
+  IoWalletOutline,
+  IoAddOutline,
+  IoTrashOutline,
+  IoTimeOutline,
+  IoCalendarOutline,
+} from "react-icons/io5";
 import { toast } from "sonner";
 import { EmploymentType } from "../model/settings";
 import { Tooltip } from "./Tooltip";
@@ -258,23 +264,25 @@ export default function ScheduleSettings({
 
   return (
     <div className="space-y-8">
-      <div className="bg-white rounded-xl border border-gray-100">
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-            <IoWalletOutline className="w-5 h-5 text-blue-600" />
+      <div className="bg-gradient-to-b from-gray-50 to-white rounded-2xl border border-gray-200/50 shadow-lg shadow-gray-200/20">
+        <div className="p-8">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <IoWalletOutline className="w-6 h-6 text-blue-600" />
+            </div>
             Employment Types
           </h3>
-          <div className="space-y-6">
+          <button
+            onClick={handleAddEmploymentType}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
+          >
+            <IoAddOutline className="w-5 h-5" />
+            Add Employment Type
+          </button></div>
+          <div className="space-y-8">
             <div className="col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <button
-                  onClick={handleAddEmploymentType}
-                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
-                >
-                  Add Type
-                </button>
-              </div>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="border-b border-gray-200">
                   <div className="relative">
                     <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
@@ -286,20 +294,17 @@ export default function ScheduleSettings({
                           <button
                             key={index}
                             onClick={() => setSelectedTypeTab(index)}
-                            className={`whitespace-nowrap py-2 px-3 border-b-2 font-medium text-sm flex-shrink-0 ${
+                            className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm flex-shrink-0 transition-all duration-200 ${
                               selectedTypeTab === index
-                                ? "border-blue-500 text-blue-600"
-                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                            }`}
+                                ? "border-blue-500 text-blue-600 bg-blue-50/50"
+                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
+                            } rounded-t-lg`}
                           >
                             {type.type || `Type ${index + 1}`}
                           </button>
                         ))}
                       </nav>
                     </div>
-                    {/* Optional: Add scroll indicators */}
-                    <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
-                    <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none" />
                   </div>
                 </div>
                 {employmentTypes.map((type, index) => (
@@ -309,8 +314,8 @@ export default function ScheduleSettings({
                       selectedTypeTab === index ? "block" : "hidden"
                     }`}
                   >
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2 flex items-center justify-between gap-4">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="col-span-2 flex items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/50 shadow-sm">
                         <div className="flex-1 flex items-center gap-4">
                           <label className="block text-sm font-medium text-gray-700 whitespace-nowrap">
                             Type Name
@@ -326,13 +331,15 @@ export default function ScheduleSettings({
                                 e.target.value
                               )
                             }
-                            className="block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-10 px-3"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 sm:text-sm h-10 px-3"
+                            placeholder="Enter type name..."
                           />
                         </div>
-                        <div className="flex flex-row gap-4 items-center min-w-[200px]">
+                        <div className="flex flex-row gap-6 items-center min-w-[200px]">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-700 pr-5">
-                              Requires Time Tracking
+                            <span className="text-sm font-medium text-gray-700 pr-5 flex items-center gap-2">
+                              <IoTimeOutline className="w-4 h-4 text-gray-500" />
+                              Time Tracking
                             </span>
                             <button
                               onClick={() =>
@@ -342,14 +349,14 @@ export default function ScheduleSettings({
                                   !type.requiresTimeTracking
                                 )
                               }
-                              className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none ${
+                              className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                                 type.requiresTimeTracking
                                   ? "bg-blue-500"
-                                  : "bg-gray-700"
+                                  : "bg-gray-200"
                               }`}
                             >
                               <span
-                                className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white ${
+                                className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${
                                   type.requiresTimeTracking
                                     ? "translate-x-6"
                                     : "translate-x-1"
@@ -359,8 +366,9 @@ export default function ScheduleSettings({
                           </div>
                           {type.requiresTimeTracking && (
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700 pr-5">
-                                Fixed Time Schedule
+                              <span className="text-sm font-medium text-gray-700 pr-5 flex items-center gap-2">
+                                <IoCalendarOutline className="w-4 h-4 text-gray-500" />
+                                Fixed Time
                               </span>
                               <button
                                 onClick={() =>
@@ -369,14 +377,14 @@ export default function ScheduleSettings({
                                     !fixedTimeSchedule[index]
                                   )
                                 }
-                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none ${
+                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                                   fixedTimeSchedule[index]
                                     ? "bg-blue-500"
-                                    : "bg-gray-700"
+                                    : "bg-gray-200"
                                 }`}
                               >
                                 <span
-                                  className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white ${
+                                  className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${
                                     fixedTimeSchedule[index]
                                       ? "translate-x-6"
                                       : "translate-x-1"
@@ -388,8 +396,9 @@ export default function ScheduleSettings({
                         </div>
                         <button
                           onClick={() => handleRemoveEmploymentType(index)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-md hover:bg-red-100"
+                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all duration-200 border border-red-100 hover:border-red-200"
                         >
+                          <IoTrashOutline className="w-4 h-4" />
                           Remove
                         </button>
                       </div>
@@ -400,15 +409,14 @@ export default function ScheduleSettings({
                               (schedule, dayIndex) => (
                                 <div
                                   key={dayIndex}
-                                  className={`p-4 rounded-lg border-2 ${
+                                  className={`p-6 rounded-xl border-2 transition-all duration-200 hover:shadow-md ${
                                     selectedDayTab === dayIndex
-                                      ? "border-blue-500 bg-blue-50"
-                                      : "border-gray-200 hover:border-blue-300"
-                                  }
-                                cursor-pointer transition-all duration-200`}
+                                      ? "border-blue-500 bg-blue-50/30 shadow-lg shadow-blue-100"
+                                      : "border-gray-200 hover:border-blue-300 bg-white"
+                                  }`}
                                   onClick={() => setSelectedDayTab(dayIndex)}
                                 >
-                                  <div className="flex flex-col space-y-3">
+                                  <div className="flex flex-col space-y-4">
                                     <h3 className="text-lg font-semibold text-gray-900 flex justify-between items-center">
                                       <span>
                                         {
@@ -438,7 +446,7 @@ export default function ScheduleSettings({
                                               });
                                               toast.success("Schedule copied");
                                             }}
-                                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                           >
                                             <svg
                                               xmlns="http://www.w3.org/2000/svg"
@@ -476,7 +484,7 @@ export default function ScheduleSettings({
                                                   "Schedule pasted"
                                                 );
                                               }}
-                                              className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                                              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                             >
                                               <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -528,14 +536,14 @@ export default function ScheduleSettings({
                                                 );
                                               }
                                             }}
-                                            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none ${
+                                            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                                               timeOff[type.type]?.[dayIndex]
                                                 ? "bg-blue-500"
-                                                : "bg-gray-700"
+                                                : "bg-gray-200"
                                             }`}
                                           >
                                             <span
-                                              className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white ${
+                                              className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${
                                                 timeOff[type.type]?.[dayIndex]
                                                   ? "translate-x-6"
                                                   : "translate-x-1"
@@ -545,7 +553,7 @@ export default function ScheduleSettings({
                                         </Tooltip>
                                       </div>
                                     </h3>
-                                    <div className="space-y-2">
+                                    <div className="space-y-4">
                                       <div>
                                         <label className="text-sm font-medium text-gray-600">
                                           Time In
@@ -564,11 +572,11 @@ export default function ScheduleSettings({
                                           disabled={
                                             timeOff[type.type]?.[dayIndex]
                                           }
-                                          className={`mt-1 block w-full rounded-md border-2 ${
+                                          className={`mt-1 block w-full rounded-lg border-2 ${
                                             timeOff[type.type]?.[dayIndex]
-                                              ? "bg-gray-100"
-                                              : ""
-                                          } border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-10 px-3`}
+                                              ? "bg-gray-50 cursor-not-allowed"
+                                              : "hover:border-blue-400"
+                                          } border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 sm:text-sm h-10 px-3`}
                                         />
                                       </div>
                                       <div>
@@ -589,11 +597,11 @@ export default function ScheduleSettings({
                                           disabled={
                                             timeOff[type.type]?.[dayIndex]
                                           }
-                                          className={`mt-1 block w-full rounded-md border-2 ${
+                                          className={`mt-1 block w-full rounded-lg border-2 ${
                                             timeOff[type.type]?.[dayIndex]
-                                              ? "bg-gray-100"
-                                              : ""
-                                          } border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-10 px-3`}
+                                              ? "bg-gray-50 cursor-not-allowed"
+                                              : "hover:border-blue-400"
+                                          } border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 sm:text-sm h-10 px-3`}
                                         />
                                       </div>
                                     </div>
@@ -612,7 +620,7 @@ export default function ScheduleSettings({
             <div className="pt-4">
               <button
                 onClick={handleSaveEmploymentTypes}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
               >
                 Save Changes
               </button>

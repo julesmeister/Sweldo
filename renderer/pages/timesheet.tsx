@@ -433,7 +433,7 @@ const TimesheetPage: React.FC = () => {
                       </button> */}
                           <button
                             type="button"
-                            className="mr-3 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             onClick={handleRecompute}
                           >
                             <span className="sr-only">
