@@ -49,6 +49,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           month.getMonth() + 1,
           0
         );
+
         const payrollData = await Payroll.loadPayrollSummaries(
           dbPath,
           selectedEmployeeId,
@@ -161,11 +162,39 @@ export const PayrollList: React.FC<PayrollListProps> = ({
       window.confirm("Are you sure you want to delete this payroll record?")
     ) {
       try {
-        // Delete payroll logic here
+        const payroll = payrolls.find(
+          (p) =>
+            new Date(p.startDate).getTime() === new Date(payrollId).getTime()
+        );
+
+        if (!payroll) {
+          toast.error("Payroll record not found");
+          return;
+        }
+
+        console.log("Deleting payroll:", {
+          dbPath,
+          employeeId: selectedEmployeeId,
+          startDate: payroll.startDate,
+          endDate: payroll.endDate,
+        });
+
+        await Payroll.deletePayrollSummary(
+          dbPath,
+          selectedEmployeeId,
+          new Date(payroll.startDate),
+          new Date(payroll.endDate)
+        );
+
         onPayrollDeleted();
         toast.success("Payroll record deleted successfully");
       } catch (error) {
-        toast.error("Failed to delete payroll record");
+        console.error("Error deleting payroll:", error);
+        toast.error(
+          `Failed to delete payroll record: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
       }
     }
   };
@@ -305,7 +334,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      await handleDeletePayroll(payroll.employeeId);
+                      await handleDeletePayroll(payroll.startDate.toString());
                     }}
                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
                   >

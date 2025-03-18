@@ -442,9 +442,7 @@ export default function CashAdvancesPage() {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {advance.paymentSchedule === "Installment"
-                                    ? `${advance.installmentDetails?.remainingPayments} of ${advance.installmentDetails?.numberOfPayments}`
-                                    : "N/A"}
+                                  ₱{advance.remainingUnpaid.toLocaleString()}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <button

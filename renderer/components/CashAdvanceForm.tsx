@@ -21,6 +21,9 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
   position,
 }) => {
   const [amount, setAmount] = useState(initialData?.amount || "");
+  const [remainingUnpaid, setRemainingUnpaid] = useState(
+    initialData?.remainingUnpaid || "0"
+  );
   const [date, setDate] = useState(() => {
     if (initialData?.date) {
       const d = new Date(initialData.date);
@@ -51,12 +54,19 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
       return;
     }
 
+    // Validate amount
+    const parsedRemainingUnpaid = parseFloat(remainingUnpaid);
+    if (isNaN(parsedRemainingUnpaid) || parsedRemainingUnpaid <= 0) {
+      toast.error("Please enter a valid amount greater than 0");
+      return;
+    }
+
     const formData = {
       id: initialData?.id || crypto.randomUUID(),
       employeeId: initialData?.employeeId || "", // This will be set by the parent component
       date: new Date(date),
       amount: parsedAmount,
-      remainingUnpaid: parsedAmount, // For new cash advances, remaining unpaid equals the amount
+      remainingUnpaid: parsedRemainingUnpaid, // For new cash advances, remaining unpaid equals the amount
       reason,
       approvalStatus,
       status: "Unpaid", // New cash advances start as unpaid
@@ -175,6 +185,23 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
                 />
               </div>
             )}
+
+            {/* Remaining Unpaid */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Remaining Unpaid
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-400">₱</span>
+                <input
+                  type="text"
+                  value={remainingUnpaid}
+                  onChange={(e) => setRemainingUnpaid(e.target.value)}
+                  className="pl-7 block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+                  required
+                />
+              </div>
+            </div>
           </div>
 
           {/* Reason */}

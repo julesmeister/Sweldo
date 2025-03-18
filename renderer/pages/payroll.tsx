@@ -108,7 +108,11 @@ export default function PayrollPage() {
 
       setLoading(true);
       try {
+        // Get current month (0-11) and add 1 to match calendar months (1-12)
+        // This is used to load the current month's payroll by default
         const month = new Date().getMonth() + 1;
+        
+        // Get current year for loading payroll data
         const year = new Date().getFullYear();
 
         // Load employee first
@@ -119,7 +123,7 @@ export default function PayrollPage() {
         console.log("Loaded employee:", loadedEmployee);
         setEmployee(loadedEmployee);
 
-        // Then load payrolls
+        // Then load payrolls for the current month and year
         const employeePayrolls = await Payroll.loadPayrollSummaries(
           dbPath,
           selectedEmployeeId,
