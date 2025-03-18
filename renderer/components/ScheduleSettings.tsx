@@ -270,41 +270,119 @@ export default function ScheduleSettings({
             <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-3">
               <div className="p-2 bg-blue-50 rounded-lg">
                 <IoWalletOutline className="w-6 h-6 text-blue-600" />
-            </div>
-            Employment Types
-          </h3>
-          <button
-            onClick={handleAddEmploymentType}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
-          >
-            <IoAddOutline className="w-5 h-5" />
-            Add Employment Type
-          </button></div>
+              </div>
+              Employment Types
+            </h3>
+            <button
+              onClick={handleAddEmploymentType}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
+            >
+              <IoAddOutline className="w-5 h-5" />
+              Add Employment Type
+            </button>
+          </div>
           <div className="space-y-8">
             <div className="col-span-2">
               <div className="space-y-6">
-                <div className="border-b border-gray-200">
+                <div className="relative bg-gradient-to-b from-white to-gray-50/80 rounded-xl border border-gray-200/50 p-2 shadow-sm">
                   <div className="relative">
-                    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                    {/* Scroll shadows */}
+                    <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white via-white to-transparent z-10 pointer-events-none" />
+                    <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white via-white to-transparent z-10 pointer-events-none" />
+
+                    {/* Scrollable container */}
+                    <div className="overflow-x-auto scrollbar-none">
                       <nav
-                        className="flex space-x-1 min-w-full pl-2"
+                        className="flex gap-2 min-w-full px-12 py-1"
                         aria-label="Employment Types"
                       >
                         {employmentTypes.map((type, index) => (
                           <button
                             key={index}
                             onClick={() => setSelectedTypeTab(index)}
-                            className={`whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm flex-shrink-0 transition-all duration-200 ${
+                            className={`group relative min-w-[140px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm transition-all duration-200 ${
                               selectedTypeTab === index
-                                ? "border-blue-500 text-blue-600 bg-blue-50/50"
-                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
-                            } rounded-t-lg`}
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                                : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+                            }`}
                           >
-                            {type.type || `Type ${index + 1}`}
+                            <div className="relative">
+                              <span className="relative z-10 flex items-center gap-2">
+                                {type.type || `Type ${index + 1}`}
+                                <span
+                                  className={`px-2 py-0.5 text-xs rounded-full transition-all duration-200 ${
+                                    selectedTypeTab === index
+                                      ? "bg-white/20 text-white"
+                                      : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                                  }`}
+                                >
+                                  {type.schedules?.filter(
+                                    (s) => s.timeIn && s.timeOut
+                                  ).length || 0}
+                                  /{type.schedules?.length || 0}
+                                </span>
+                              </span>
+                              {selectedTypeTab === index && (
+                                <div className="absolute inset-0 bg-blue-500 rounded-lg transition-all duration-200 animate-pulse opacity-50 blur-xl" />
+                              )}
+                            </div>
                           </button>
                         ))}
                       </nav>
                     </div>
+
+                    {/* Scroll buttons */}
+                    <button
+                      onClick={() => {
+                        const container =
+                          document.querySelector(".overflow-x-auto");
+                        if (container) {
+                          container.scrollBy({
+                            left: -200,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-lg border border-gray-200/50 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200 z-20"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const container =
+                          document.querySelector(".overflow-x-auto");
+                        if (container) {
+                          container.scrollBy({ left: 200, behavior: "smooth" });
+                        }
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-lg border border-gray-200/50 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200 z-20"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </button>
                   </div>
                 </div>
                 {employmentTypes.map((type, index) => (
@@ -402,7 +480,7 @@ export default function ScheduleSettings({
                           Remove
                         </button>
                       </div>
-                      {type.requiresTimeTracking && (
+                      {type.requiresTimeTracking ? (
                         <div className="col-span-2 mt-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {(type.schedules || []).map(
@@ -609,6 +687,54 @@ export default function ScheduleSettings({
                                 </div>
                               )
                             )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="col-span-2 mt-4">
+                          <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-dashed border-gray-200 p-8">
+                            <div className="max-w-2xl mx-auto text-center">
+                              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 mb-4">
+                                <svg
+                                  className="w-6 h-6 text-blue-500"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                                  />
+                                </svg>
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                Simplified Attendance Tracking
+                              </h3>
+                              <p className="text-gray-600 mb-6">
+                                Time tracking is disabled for this employment
+                                type. Instead of recording specific time-in and
+                                time-out, employees can be marked as present or
+                                absent with a simple checkbox.
+                              </p>
+                              <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg text-blue-700 text-sm">
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                                  />
+                                </svg>
+                                Perfect for roles with flexible hours or
+                                project-based work
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
