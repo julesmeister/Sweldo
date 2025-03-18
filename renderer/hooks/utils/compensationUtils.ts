@@ -5,11 +5,11 @@ import { Employee } from "@/renderer/model/employee";
 import { AttendanceSettings, EmploymentType } from "@/renderer/model/settings";
 import { Schedule } from "@/renderer/model/schedule";
 
-// Helper function to format date components
+// Helper function to format date components (e.g., "01" for January)
 export const formatDateComponent = (value: number) =>
   value.toString().padStart(2, "0");
 
-// Helper function to create date string
+// Helper function to create a complete date string in YYYY-MM-DD format
 export const createDateString = (
   year: number,
   month: number,
@@ -22,6 +22,7 @@ export const createDateString = (
 };
 
 // Helper function to calculate time difference in minutes
+// Returns positive value if time1 is after time2
 export const calculateTimeDifference = (time1: Date, time2: Date) => {
   return Math.round((time1.getTime() - time2.getTime()) / (1000 * 60));
 };
@@ -34,7 +35,8 @@ export const calculateDeductionMinutes = (
   return minutes > gracePeriod ? minutes - gracePeriod : 0;
 };
 
-// Helper function to create base compensation record
+// Helper function to calculate deduction minutes after applying grace period
+// Returns 0 if minutes are less than or equal to grace period
 export const createBaseCompensation = (
   entry: Attendance,
   employee: Employee | null,
@@ -72,6 +74,7 @@ export const createBaseCompensation = (
 };
 
 // Helper function to check if a date falls within a holiday period
+// Returns true if the date is within the holiday's start and end dates
 export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
   return (
     date >=
@@ -93,6 +96,7 @@ export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
 };
 
 // Helper function to create time objects for a day
+// Converts string times to Date objects for both actual and scheduled times
 export const createTimeObjects = (
   year: number,
   month: number,
@@ -115,6 +119,7 @@ export const createTimeObjects = (
 };
 
 // Helper function to calculate all time-based metrics
+// Computes late, undertime, overtime, and hours worked based on actual vs scheduled times
 export const calculateTimeMetrics = (
   actual: { timeIn: Date; timeOut: Date },
   scheduled: { timeIn: Date; timeOut: Date },
@@ -165,6 +170,7 @@ export const calculateTimeMetrics = (
 };
 
 // Helper function to calculate all pay-related values
+// Computes deductions, overtime pay, and final pay amounts based on time metrics
 export const calculatePayMetrics = (
   timeMetrics: ReturnType<typeof calculateTimeMetrics>,
   attendanceSettings: AttendanceSettings,
@@ -204,6 +210,7 @@ export const calculatePayMetrics = (
 };
 
 // Helper function to create a complete compensation record
+// Combines all calculated metrics into a final Compensation object
 export const createCompensationRecord = (
   entry: Attendance,
   employee: Employee | null,

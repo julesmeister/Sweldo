@@ -23,6 +23,7 @@ import {
   calculatePayMetrics,
   isHolidayDate,
 } from "@/renderer/hooks/utils/compensationUtils";
+import { toast } from "sonner";
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -53,6 +54,8 @@ interface FormFieldProps {
   type?: "text" | "select";
   options?: { value: string; label: string }[];
   className?: string;
+  manualOverride?: boolean;
+  isComputedField?: boolean;
 }
 
 const FormField: React.FC<FormFieldProps> = ({
@@ -64,40 +67,48 @@ const FormField: React.FC<FormFieldProps> = ({
   type = "text",
   options,
   className = "",
-}) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-300 mb-1">
-      {label}
-    </label>
-    {type === "select" ? (
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 ${className}`}
-      >
-        {options?.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    ) : (
-      <input
-        type="text"
-        name={name}
-        value={value}
-        onChange={onChange}
-        readOnly={readOnly}
-        className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 ${
-          readOnly
-            ? ""
-            : "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-        } ${className}`}
-      />
-    )}
-  </div>
-);
+  manualOverride = false,
+  isComputedField = false,
+}) => {
+  const isFieldReadOnly = readOnly || (isComputedField && !manualOverride);
+  const fieldClassName = `w-full px-3 py-1.5 text-sm ${
+    isFieldReadOnly
+      ? "bg-gray-800/50 text-gray-400 cursor-not-allowed"
+      : "bg-gray-800 text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+  } border border-gray-700 rounded-md ${className}`;
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-300 mb-1">
+        {label}
+      </label>
+      {type === "select" ? (
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          disabled={isFieldReadOnly}
+          className={fieldClassName}
+        >
+          {options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={onChange}
+          readOnly={isFieldReadOnly}
+          className={fieldClassName}
+        />
+      )}
+    </div>
+  );
+};
 
 export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   isOpen,
@@ -182,6 +193,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return {
         ...createBaseReturn(grossPay + holidayBonus, true),
         hoursWorked: isPresent ? 8 : 0,
+        manualOverride: true,
       };
     }
 
@@ -275,6 +287,27 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+
+    // Check if trying to change computed fields without manual override
+    const isComputedField = [
+      "lateMinutes",
+      "undertimeMinutes",
+      "overtimeMinutes",
+      "hoursWorked",
+      "grossPay",
+      "deductions",
+      "netPay",
+      "overtimePay",
+      "undertimeDeduction",
+      "lateDeduction",
+      "holidayBonus",
+    ].includes(name);
+
+    if (isComputedField && !formData.manualOverride) {
+      toast.error("Enable manual override to edit computed fields");
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]:
@@ -369,6 +402,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   { value: "Holiday", label: "Holiday" },
                   { value: "Rest Day", label: "Rest Day" },
                 ]}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -376,7 +411,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="hoursWorked"
                 value={formData.hoursWorked || 0}
                 onChange={handleInputChange}
-                readOnly
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -398,6 +434,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="overtimeMinutes"
                 value={formData.overtimeMinutes || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -405,6 +443,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="overtimePay"
                 value={formData.overtimePay || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -412,6 +452,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="undertimeMinutes"
                 value={formData.undertimeMinutes || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -419,6 +461,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="undertimeDeduction"
                 value={formData.undertimeDeduction || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -426,6 +470,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="lateMinutes"
                 value={formData.lateMinutes || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -433,6 +479,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="lateDeduction"
                 value={formData.lateDeduction || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -440,6 +488,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="holidayBonus"
                 value={formData.holidayBonus || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -454,6 +504,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="grossPay"
                 value={formData.grossPay || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -461,6 +513,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="deductions"
                 value={formData.deductions || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -468,6 +522,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="netPay"
                 value={formData.netPay || 0}
                 onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <div className="col-span-5">
