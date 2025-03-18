@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { IoLockClosed, IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
-import { useAuthStore } from "../stores/authStore";
+import { useAuthStore } from "@/renderer/stores/authStore";
+import { useSettingsStore } from "@/renderer/stores/settingsStore";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 interface LoginDialogProps {
@@ -12,6 +14,12 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   const [showPin, setShowPin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
+  const setDbPath = useAuthStore((state) => state.setDbPath);
+  const { dbPath } = useSettingsStore();
+  useEffect(() => {
+    console.log("LoginDialog mounted, dbPath:", dbPath);
+  }, []);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,10 +28,18 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
       return;
     }
 
+    if (!dbPath) {
+      toast.error("Database path not set");
+      return;
+    }
+
     setIsLoading(true);
     console.log("Attempting login with PIN...");
 
     try {
+      // Set dbPath in auth store before login
+      setDbPath(dbPath);
+
       console.log("Raw PIN length:", pinCode.length);
       const success = await login(pinCode);
       console.log("Login result:", success);

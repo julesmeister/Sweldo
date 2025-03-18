@@ -20,11 +20,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   dbPath: null,
 
   setDbPath: (path: string) => {
-    const { dbPath } = get();
-    if (!dbPath || dbPath !== path) {
-      console.log("Setting dbPath in auth store:", path);
-      set({ dbPath: path });
-    }
+    console.log("Setting dbPath in auth store:", path);
+    set({ dbPath: path });
   },
 
   login: async (pinToMatch: string) => {
