@@ -19,7 +19,11 @@ import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useColumnVisibilityStore } from "@/renderer/stores/columnVisibilityStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
-import { IoSettingsOutline, IoRefreshOutline } from "react-icons/io5";
+import {
+  IoSettingsOutline,
+  IoRefreshOutline,
+  IoShieldOutline,
+} from "react-icons/io5";
 import { EditableCell } from "@/renderer/components/EditableCell";
 import { CompensationDialog } from "@/renderer/components/CompensationDialog";
 import {
@@ -36,7 +40,7 @@ import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useTimesheetCheckbox } from "@/renderer/hooks/useTimesheetCheckbox";
 import { useTimesheetEdit } from "@/renderer/hooks/useTimesheetEdit";
-
+import { useAuthStore } from "@/renderer/stores/authStore";
 const TimesheetPage: React.FC = () => {
   const [timesheetEntries, setTimesheetEntries] = useState<Attendance[]>([]);
   const [compensationEntries, setCompensationEntries] = useState<
@@ -64,7 +68,7 @@ const TimesheetPage: React.FC = () => {
   const [storedYear, setStoredYear] = useState<string | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [validEntriesCount, setValidEntriesCount] = useState<number>(0);
-
+  const { accessCodes, hasAccess } = useAuthStore();
   useEffect(() => {
     if (typeof window !== "undefined") {
       const month = localStorage.getItem("selectedMonth");
@@ -129,6 +133,10 @@ const TimesheetPage: React.FC = () => {
     year,
     dbPath,
     onDataUpdate: (newAttendance, newCompensations) => {
+      if (!hasAccess("MANAGE_ATTENDANCE")) {
+        toast.error("You don't have permission to modify attendance records");
+        return;
+      }
       setTimesheetEntries(newAttendance);
       setCompensationEntries(newCompensations);
     },
@@ -145,6 +153,10 @@ const TimesheetPage: React.FC = () => {
     year,
     dbPath,
     onDataUpdate: (newAttendance, newCompensations) => {
+      if (!hasAccess("MANAGE_ATTENDANCE")) {
+        toast.error("You don't have permission to modify attendance records");
+        return;
+      }
       setTimesheetEntries(newAttendance);
       setCompensationEntries(newCompensations);
     },
@@ -328,6 +340,10 @@ const TimesheetPage: React.FC = () => {
   };
 
   const handleSaveCompensation = async (updatedCompensation: Compensation) => {
+    if (!hasAccess("MANAGE_PAYROLL")) {
+      toast.error("You don't have permission to modify compensation records");
+      return;
+    }
     try {
       // First ensure we have all the required fields
       if (
@@ -361,6 +377,10 @@ const TimesheetPage: React.FC = () => {
   };
 
   const handleRecompute = async () => {
+    if (!hasAccess("MANAGE_PAYROLL")) {
+      toast.error("You don't have permission to recompute compensations");
+      return;
+    }
     if (!timesheetEntries || !compensationEntries) return;
 
     setIsRecomputing(true);
@@ -394,6 +414,88 @@ const TimesheetPage: React.FC = () => {
     router.push(path);
   };
 
+  // Check if user has basic access to view timesheets
+  if (!hasAccess("VIEW_TIMESHEETS")) {
+    return (
+      <RootLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+              Access Restricted
+            </h2>
+            <p className="text-gray-500">
+              You don't have permission to view timesheets.
+            </p>
+          </div>
+        </div>
+      </RootLayout>
+    );
+  }
+
+  // Move the helper function inside the component
+  const renderColumnContent = (
+    columnKey: string,
+    entry: Attendance,
+    compensation: Compensation | null
+  ) => {
+    switch (columnKey) {
+      case "day":
+        return (
+          <div className="flex flex-col items-center">
+            <span>{entry.day}</span>
+            <span className="text-sm text-gray-500">
+              {new Date(year, storedMonthInt - 1, entry.day).toLocaleDateString(
+                "en-US",
+                {
+                  weekday: "short",
+                }
+              )}
+            </span>
+          </div>
+        );
+      case "dayType":
+        return new Date(year, storedMonthInt - 1, entry.day).toLocaleDateString(
+          "en-US",
+          {
+            weekday: "short",
+          }
+        ) === "Sun"
+          ? "Sunday"
+          : compensation?.dayType || "-";
+      case "hoursWorked":
+        return compensation?.hoursWorked
+          ? Math.round(compensation.hoursWorked)
+          : "-";
+      case "overtimeMinutes":
+        return compensation?.overtimeMinutes || "-";
+      case "overtimePay":
+        return compensation?.overtimePay || "-";
+      case "undertimeMinutes":
+        return compensation?.undertimeMinutes || "-";
+      case "undertimeDeduction":
+        return compensation?.undertimeDeduction || "-";
+      case "lateMinutes":
+        return compensation?.lateMinutes || "-";
+      case "lateDeduction":
+        return compensation?.lateDeduction || "-";
+      case "holidayBonus":
+        return Math.round((compensation?.holidayBonus || 0) * 100) / 100 || "-";
+      case "leaveType":
+        return compensation?.leaveType || "-";
+      case "leavePay":
+        return compensation?.leavePay || "-";
+      case "grossPay":
+        return compensation?.grossPay || "-";
+      case "deductions":
+        return compensation?.deductions || "-";
+      case "netPay":
+        return compensation?.netPay || "-";
+      default:
+        return "-";
+    }
+  };
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -424,36 +526,31 @@ const TimesheetPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {/* <button
-                        onClick={resetToDefault}
-                        className="p-2 hover:bg-gray-100 rounded-full"
-                        title="Reset Column Visibility"
-                      >
-                        <IoRefreshOutline className="w-5 h-5" />
-                      </button> */}
-                          <button
-                            type="button"
-                            className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={handleRecompute}
-                          >
-                            <span className="sr-only">
-                              Recompute Compensations
-                            </span>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className={`h-5 w-5 transition-transform duration-300 ${
-                                isRecomputing ? "rotate-180" : ""
-                              }`}
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
+                          {hasAccess("MANAGE_PAYROLL") && (
+                            <button
+                              type="button"
+                              className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              onClick={handleRecompute}
                             >
-                              <path
-                                fillRule="evenodd"
-                                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
+                              <span className="sr-only">
+                                Recompute Compensations
+                              </span>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className={`h-5 w-5 transition-transform duration-300 ${
+                                  isRecomputing ? "rotate-180" : ""
+                                }`}
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -652,27 +749,38 @@ const TimesheetPage: React.FC = () => {
                                       (column.key === "timeIn" ||
                                       column.key === "timeOut" ? (
                                         employeeTimeSettings?.requiresTimeTracking ? (
-                                          <EditableCell
-                                            key={column.key}
-                                            value={
-                                              column.key === "timeIn"
+                                          hasAccess("MANAGE_ATTENDANCE") ? (
+                                            <EditableCell
+                                              key={column.key}
+                                              value={
+                                                column.key === "timeIn"
+                                                  ? foundEntry.timeIn || ""
+                                                  : foundEntry.timeOut || ""
+                                              }
+                                              column={column}
+                                              rowData={foundEntry}
+                                              onClick={(event) =>
+                                                event.stopPropagation()
+                                              }
+                                              onSave={async (value, rowData) =>
+                                                handleTimesheetEdit(
+                                                  value.toString(),
+                                                  rowData,
+                                                  column.key
+                                                )
+                                              }
+                                              employmentTypes={employmentTypes}
+                                            />
+                                          ) : (
+                                            <td
+                                              key={column.key}
+                                              className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                            >
+                                              {column.key === "timeIn"
                                                 ? foundEntry.timeIn || ""
-                                                : foundEntry.timeOut || ""
-                                            }
-                                            column={column}
-                                            rowData={foundEntry}
-                                            onClick={(event) =>
-                                              event.stopPropagation()
-                                            }
-                                            onSave={async (value, rowData) =>
-                                              handleTimesheetEdit(
-                                                value.toString(),
-                                                rowData,
-                                                column.key
-                                              )
-                                            }
-                                            employmentTypes={employmentTypes}
-                                          />
+                                                : foundEntry.timeOut || ""}
+                                            </td>
+                                          )
                                         ) : column.key === "timeIn" ? (
                                           <td
                                             key={column.key}
@@ -684,35 +792,50 @@ const TimesheetPage: React.FC = () => {
                                                 e.stopPropagation()
                                               }
                                             >
-                                              <input
-                                                type="checkbox"
-                                                checked={
-                                                  foundEntry?.timeIn ===
-                                                    "present" &&
-                                                  foundEntry?.timeOut ===
-                                                    "present"
-                                                }
-                                                onChange={(e) =>
-                                                  handleCheckboxChange(
-                                                    e,
-                                                    foundEntry
+                                              {hasAccess(
+                                                "MANAGE_ATTENDANCE"
+                                              ) ? (
+                                                <>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={
+                                                      foundEntry?.timeIn ===
+                                                        "present" &&
+                                                      foundEntry?.timeOut ===
+                                                        "present"
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleCheckboxChange(
+                                                        e,
+                                                        foundEntry
+                                                      )
+                                                    }
+                                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                                                  />
+                                                  <span
+                                                    className="ml-2 text-sm font-medium text-gray-700"
+                                                    onClick={(e) =>
+                                                      e.stopPropagation()
+                                                    }
+                                                  >
+                                                    {!!(
+                                                      foundEntry.timeIn ||
+                                                      foundEntry.timeOut
+                                                    )
+                                                      ? "Present"
+                                                      : "Absent"}
+                                                  </span>
+                                                </>
+                                              ) : (
+                                                <span className="text-sm font-medium text-gray-700">
+                                                  {!!(
+                                                    foundEntry.timeIn ||
+                                                    foundEntry.timeOut
                                                   )
-                                                }
-                                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                                              />
-                                              <span
-                                                className="ml-2 text-sm font-medium text-gray-700"
-                                                onClick={(e) =>
-                                                  e.stopPropagation()
-                                                }
-                                              >
-                                                {!!(
-                                                  foundEntry.timeIn ||
-                                                  foundEntry.timeOut
-                                                )
-                                                  ? "Present"
-                                                  : "Absent"}
-                                              </span>
+                                                    ? "Present"
+                                                    : "Absent"}
+                                                </span>
+                                              )}
                                             </div>
                                           </td>
                                         ) : null
@@ -737,69 +860,11 @@ const TimesheetPage: React.FC = () => {
                                               : "text-gray-500"
                                           }`}
                                         >
-                                          {column.key === "day" && (
-                                            <div className="flex flex-col items-center">
-                                              <span>{day}</span>
-                                              <span className="text-sm text-gray-500">
-                                                {new Date(
-                                                  year,
-                                                  storedMonthInt - 1,
-                                                  day
-                                                ).toLocaleDateString("en-US", {
-                                                  weekday: "short",
-                                                })}
-                                              </span>
-                                            </div>
+                                          {renderColumnContent(
+                                            column.key,
+                                            foundEntry,
+                                            compensation
                                           )}
-                                          {column.key === "dayType" &&
-                                            (new Date(
-                                              year,
-                                              storedMonthInt - 1,
-                                              day
-                                            ).toLocaleDateString("en-US", {
-                                              weekday: "short",
-                                            }) === "Sun"
-                                              ? "Sunday"
-                                              : compensation?.dayType || "-")}
-                                          {column.key === "hoursWorked" &&
-                                            (compensation?.hoursWorked
-                                              ? Math.round(
-                                                  compensation.hoursWorked
-                                                )
-                                              : "-")}
-                                          {column.key === "overtimeMinutes" &&
-                                            (compensation?.overtimeMinutes ||
-                                              "-")}
-                                          {column.key === "overtimePay" &&
-                                            (compensation?.overtimePay || "-")}
-                                          {column.key === "undertimeMinutes" &&
-                                            (compensation?.undertimeMinutes ||
-                                              "-")}
-                                          {column.key ===
-                                            "undertimeDeduction" &&
-                                            (compensation?.undertimeDeduction ||
-                                              "-")}
-                                          {column.key === "lateMinutes" &&
-                                            (compensation?.lateMinutes || "-")}
-                                          {column.key === "lateDeduction" &&
-                                            (compensation?.lateDeduction ||
-                                              "-")}
-                                          {column.key === "holidayBonus" &&
-                                            (Math.round(
-                                              (compensation?.holidayBonus ||
-                                                0) * 100
-                                            ) / 100 ||
-                                              "-")}
-                                          {column.key === "leaveType" &&
-                                            (compensation?.leaveType || "-")}
-                                          {column.key === "leavePay" &&
-                                            (compensation?.leavePay || "-")}
-                                          {column.key === "grossPay" &&
-                                            (compensation?.grossPay || "-")}
-                                          {column.key === "deductions" &&
-                                            (compensation?.deductions || "-")}
-                                          {column.key === "netPay" &&
-                                            (compensation?.netPay || "-")}
                                         </td>
                                       ))
                                   )}
@@ -851,7 +916,7 @@ const TimesheetPage: React.FC = () => {
         {isDialogOpen && (
           <div className="fixed inset-0 bg-black opacity-50 z-40" />
         )}
-        {selectedEntry && (
+        {selectedEntry && hasAccess("MANAGE_PAYROLL") && (
           <CompensationDialog
             employee={employee}
             isOpen={isDialogOpen}
@@ -868,6 +933,7 @@ const TimesheetPage: React.FC = () => {
             timeIn={selectedEntry.entry.timeIn || undefined}
             timeOut={selectedEntry.entry.timeOut || undefined}
             position={clickPosition}
+            accessCodes={accessCodes}
           />
         )}
       </main>

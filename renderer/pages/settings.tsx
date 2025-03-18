@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
+import { useAuthStore } from "@/renderer/stores/authStore";
 import {
   IoTimeOutline,
   IoCalendarOutline,
@@ -11,6 +12,9 @@ import {
   IoPeopleOutline,
   IoArrowForward,
   IoArrowBack,
+  IoShieldOutline,
+  IoFolderOutline,
+  IoImageOutline,
 } from "react-icons/io5";
 import { MdOutlineDataset } from "react-icons/md";
 import {
@@ -27,16 +31,20 @@ import {
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import ScheduleSettings from "../components/ScheduleSettings";
+import RoleManagement from "../components/RoleManagement";
+import { RoleModelImpl } from "../model/role";
 
 interface SettingSection {
   key: string;
   title: string;
   icon: React.ReactNode;
+  requiredAccess: string;
   content: React.ReactNode;
 }
 
 export default function SettingsPage() {
   const { dbPath, setDbPath, logoPath, setLogoPath } = useSettingsStore();
+  const { hasAccess } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
   const [logoError, setLogoError] = useState("");
   const [isCheckingLogo, setIsCheckingLogo] = useState(false);
@@ -49,6 +57,7 @@ export default function SettingsPage() {
   const [employeeModel, setEmployeeModel] = useState<EmployeeModel | null>(
     null
   );
+  const [hasRoles, setHasRoles] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
@@ -61,295 +70,13 @@ export default function SettingsPage() {
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [sssRate, setSssRate] = useState("");
 
-  useEffect(() => {
-    async function checkLogoExists() {
-      if (logoPath) {
-        setIsCheckingLogo(true);
-        try {
-          const exists = await window.electron.fileExists(logoPath);
-          setLogoExists(exists);
-          if (!exists) {
-            setLogoPath("");
-            setLogoError("The selected logo file no longer exists");
-          } else {
-            setLogoError("");
-          }
-        } catch (error) {
-          console.error("Error checking logo file:", error);
-          setLogoError("Error checking logo file");
-        } finally {
-          setIsCheckingLogo(false);
-        }
-      } else {
-        setLogoExists(false);
-        setIsCheckingLogo(false);
-      }
-    }
-    checkLogoExists();
-  }, [logoPath, setLogoPath]);
-
-  useEffect(() => {
-    const loadAttendanceSettings = async () => {
-      try {
-        const settings = await attendanceSettingsModel.loadAttendanceSettings();
-        const timeSettings = await attendanceSettingsModel.loadTimeSettings();
-        setEmploymentTypes(timeSettings);
-        console.log("Attendance settings loaded:", settings);
-        setAttendanceSettings(settings);
-        setHolidayMultipliers({
-          regular: settings.regularHolidayMultiplier.toString(),
-          special: settings.specialHolidayMultiplier.toString(),
-        });
-      } catch (error) {
-        console.error("Error loading attendance settings:", error);
-      }
-    };
-    loadAttendanceSettings();
-  }, []);
-
-  useEffect(() => {
-    if (!currentPath) return;
-
-    const model = createEmployeeModel(currentPath);
-    setEmployeeModel(model);
-
-    const loadAndFilterEmployees = async () => {
-      try {
-        const allEmployees = await model.loadEmployees();
-        // Ensure each employee is only in one list
-        const activeList = allEmployees.filter(
-          (emp) => emp.status === "active"
-        );
-        const inactiveList = allEmployees.filter(
-          (emp) => emp.status === "inactive"
-        );
-
-        // Reset selected employees when loading new data
-        setSelectedEmployees([]);
-        setActiveEmployees(activeList);
-        setInactiveEmployees(inactiveList);
-      } catch (error) {
-        console.error("Error loading employees:", error);
-      }
-    };
-
-    loadAndFilterEmployees();
-  }, [currentPath]);
-
-  // Function to move selected employee to inactive
-  const moveToInactive = async (employee: Employee) => {
-    try {
-      if (!employeeModel) {
-        console.error("Employee model is not initialized");
-        return;
-      }
-
-      const updatedEmployee = { ...employee, status: "inactive" as const };
-
-      // Update the employee status in the database
-      await employeeModel.updateEmployeeStatus(updatedEmployee);
-
-      // Update the UI state using functional updates to ensure we have the latest state
-      setActiveEmployees((currentActive) =>
-        currentActive.filter((emp) => emp.id !== employee.id)
-      );
-      setInactiveEmployees((currentInactive) => {
-        // Ensure we don't add duplicates
-        const withoutCurrent = currentInactive.filter(
-          (emp) => emp.id !== employee.id
-        );
-        return [...withoutCurrent, updatedEmployee];
-      });
-
-      // Clear selection after moving
-      setSelectedEmployees((current) =>
-        current.filter((emp) => emp.id !== employee.id)
-      );
-    } catch (error) {
-      console.error("Error moving employee to inactive:", error);
-    }
-  };
-
-  // Function to move selected employee back to active
-  const moveToActive = async (employee: Employee) => {
-    try {
-      if (!employeeModel) {
-        console.error("Employee model is not initialized");
-        return;
-      }
-
-      const updatedEmployee = { ...employee, status: "active" as const };
-
-      // Update the employee status in the database
-      await employeeModel.updateEmployeeStatus(updatedEmployee);
-
-      // Update the UI state using functional updates to ensure we have the latest state
-      setInactiveEmployees((currentInactive) =>
-        currentInactive.filter((emp) => emp.id !== employee.id)
-      );
-      setActiveEmployees((currentActive) => {
-        // Ensure we don't add duplicates
-        const withoutCurrent = currentActive.filter(
-          (emp) => emp.id !== employee.id
-        );
-        return [...withoutCurrent, updatedEmployee];
-      });
-
-      // Clear selection after moving
-      setSelectedEmployees((current) =>
-        current.filter((emp) => emp.id !== employee.id)
-      );
-    } catch (error) {
-      console.error("Error moving employee to active:", error);
-    }
-  };
-
-  // Function to toggle employee selection
-  const toggleEmployeeSelection = (employee: Employee) => {
-    setSelectedEmployees((current) => {
-      const isSelected = current.some(
-        (selected) => selected.id === employee.id
-      );
-      if (isSelected) {
-        return current.filter((selected) => selected.id !== employee.id);
-      } else {
-        return [...current, employee];
-      }
-    });
-  };
-
-  // Function to check if an employee is selected
-  const isEmployeeSelected = (employee: Employee) => {
-    return selectedEmployees.some((selected) => selected.id === employee.id);
-  };
-
-  const handleSaveHolidayMultipliers = async () => {
-    try {
-      const regular = Number(holidayMultipliers.regular);
-      const special = Number(holidayMultipliers.special);
-
-      if (isNaN(regular) || isNaN(special)) {
-        toast.error("Please enter valid numbers for multipliers");
-        return;
-      }
-
-      if (regular <= 0 || special <= 0) {
-        toast.error("Multipliers must be greater than 0");
-        return;
-      }
-
-      await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
-      await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
-
-      // Reload settings to confirm changes
-      const settings = await attendanceSettingsModel.loadAttendanceSettings();
-      setAttendanceSettings(settings);
-
-      toast.success("Holiday multipliers updated successfully");
-    } catch (error) {
-      console.error("Error saving holiday multipliers:", error);
-      toast.error("Failed to update holiday multipliers");
-    }
-  };
-
-  const handleSelectionChange = (key: string | number) => {
-    setSelected(key.toString());
-  };
-
-  const handleSelectDirectory = async () => {
-    try {
-      const folderPath = await window.electron.openFolderDialog();
-      console.log("Selected Folder Path: ", folderPath);
-      if (folderPath) {
-        const path = folderPath as string;
-        setDbPath(path);
-        setCurrentPath(path);
-      }
-    } catch (error) {
-      console.error("Failed to select directory:", error);
-    }
-  };
-
-  const [formData, setFormData] = useState({
-    lateGracePeriod: Number(attendanceSettings?.lateGracePeriod) || 0,
-    lateDeductionPerMinute:
-      Number(attendanceSettings?.lateDeductionPerMinute) || 0,
-    undertimeGracePeriod: Number(attendanceSettings?.undertimeGracePeriod) || 0,
-    undertimeDeductionPerMinute:
-      Number(attendanceSettings?.undertimeDeductionPerMinute) || 0,
-    overtimeGracePeriod: Number(attendanceSettings?.overtimeGracePeriod) || 0,
-    overtimeAdditionPerMinute:
-      Number(attendanceSettings?.overtimeAdditionPerMinute) || 0,
-    regularHolidayMultiplier: attendanceSettings?.regularHolidayMultiplier || 0,
-    specialHolidayMultiplier: attendanceSettings?.specialHolidayMultiplier || 0,
-  });
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  useEffect(() => {
-    if (attendanceSettings) {
-      setFormData({
-        lateGracePeriod: attendanceSettings.lateGracePeriod,
-        lateDeductionPerMinute: attendanceSettings.lateDeductionPerMinute,
-        undertimeGracePeriod: attendanceSettings.undertimeGracePeriod,
-        undertimeDeductionPerMinute:
-          attendanceSettings.undertimeDeductionPerMinute,
-        overtimeGracePeriod: attendanceSettings.overtimeGracePeriod,
-        overtimeAdditionPerMinute: attendanceSettings.overtimeAdditionPerMinute,
-        regularHolidayMultiplier: attendanceSettings.regularHolidayMultiplier,
-        specialHolidayMultiplier: attendanceSettings.specialHolidayMultiplier,
-      });
-    }
-  }, [attendanceSettings]);
-
-  const handleSaveChanges = async () => {
-    try {
-      await attendanceSettingsModel?.saveAttendanceSettings(formData);
-      toast.success("Attendance settings saved successfully!");
-    } catch (error) {
-      console.error("Error saving attendance settings:", error);
-      toast.error("Failed to save attendance settings. Please try again.");
-    }
-  };
-
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      const relativePath = file.webkitRelativePath;
-
-      try {
-        const fullPath = await window.electron.getFullPath(relativePath);
-        setDbPath(fullPath);
-        setCurrentPath(fullPath);
-      } catch (error) {
-        console.error("Failed to get full directory path:", error);
-        toast.error("Failed to get directory path");
-      }
-    }
-  };
-
-  const handleSaveEmploymentTypes = async (types: EmploymentType[]) => {
-    try {
-      console.log("SettingsPage received employment types:", types);
-      await attendanceSettingsModel?.saveTimeSettings(types);
-      toast.success("Employment types saved successfully");
-    } catch (error) {
-      console.error("Error saving employment types:", error);
-      toast.error("Failed to save employment types");
-    }
-  };
-
+  // Define sections first
   const sections: SettingSection[] = [
     {
       key: "attendance",
       title: "Attendance & Time",
       icon: <IoTimeOutline className="w-5 h-5" />,
+      requiredAccess: "MANAGE_ATTENDANCE",
       content: (
         <div className="space-y-8">
           <div className="bg-white rounded-xl border border-gray-100">
@@ -380,8 +107,8 @@ export default function SettingsPage() {
                       name="lateGracePeriod"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="5"
-                      value={formData.lateGracePeriod}
-                      onChange={handleInputChange}
+                      value={attendanceSettings?.lateGracePeriod ?? ""}
+                      onChange={(e) => handleInputChange(e, "lateGracePeriod")}
                     />
                   </div>
                   <div>
@@ -397,8 +124,10 @@ export default function SettingsPage() {
                         name="lateDeductionPerMinute"
                         className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
                         placeholder="1"
-                        value={formData.lateDeductionPerMinute}
-                        onChange={handleInputChange}
+                        value={attendanceSettings?.lateDeductionPerMinute ?? ""}
+                        onChange={(e) =>
+                          handleInputChange(e, "lateDeductionPerMinute")
+                        }
                       />
                     </div>
                   </div>
@@ -411,8 +140,10 @@ export default function SettingsPage() {
                       name="undertimeGracePeriod"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="5"
-                      value={formData.undertimeGracePeriod}
-                      onChange={handleInputChange}
+                      value={attendanceSettings?.undertimeGracePeriod ?? ""}
+                      onChange={(e) =>
+                        handleInputChange(e, "undertimeGracePeriod")
+                      }
                     />
                   </div>
                   <div>
@@ -428,8 +159,12 @@ export default function SettingsPage() {
                         name="undertimeDeductionPerMinute"
                         className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
                         placeholder="1"
-                        value={formData.undertimeDeductionPerMinute}
-                        onChange={handleInputChange}
+                        value={
+                          attendanceSettings?.undertimeDeductionPerMinute ?? ""
+                        }
+                        onChange={(e) =>
+                          handleInputChange(e, "undertimeDeductionPerMinute")
+                        }
                       />
                     </div>
                   </div>
@@ -442,8 +177,10 @@ export default function SettingsPage() {
                       name="overtimeGracePeriod"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="5"
-                      value={formData.overtimeGracePeriod}
-                      onChange={handleInputChange}
+                      value={attendanceSettings?.overtimeGracePeriod ?? ""}
+                      onChange={(e) =>
+                        handleInputChange(e, "overtimeGracePeriod")
+                      }
                     />
                   </div>
                   <div>
@@ -459,19 +196,15 @@ export default function SettingsPage() {
                         name="overtimeAdditionPerMinute"
                         className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
                         placeholder="2"
-                        value={formData.overtimeAdditionPerMinute}
-                        onChange={handleInputChange}
+                        value={
+                          attendanceSettings?.overtimeAdditionPerMinute ?? ""
+                        }
+                        onChange={(e) =>
+                          handleInputChange(e, "overtimeAdditionPerMinute")
+                        }
                       />
                     </div>
                   </div>
-                </div>
-                <div className="pt-4">
-                  <button
-                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    onClick={handleSaveChanges}
-                  >
-                    Save Changes
-                  </button>
                 </div>
               </div>
             </div>
@@ -483,6 +216,7 @@ export default function SettingsPage() {
       key: "holidays",
       title: "Holidays",
       icon: <IoCalendarOutline className="w-5 h-5" />,
+      requiredAccess: "MANAGE_ATTENDANCE",
       content: (
         <div className="space-y-8">
           <div className="bg-white rounded-xl border border-gray-100">
@@ -528,14 +262,6 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                <div className="pt-4">
-                  <button
-                    onClick={handleSaveHolidayMultipliers}
-                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Save Changes
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -546,75 +272,33 @@ export default function SettingsPage() {
       key: "types",
       title: "Employment Types",
       icon: <IoWalletOutline className="w-5 h-5" />,
+      requiredAccess: "MANAGE_SETTINGS",
       content: (
         <ScheduleSettings
           employmentTypes={employmentTypes}
-          onSave={handleSaveEmploymentTypes}
+          onSave={async (types) => {
+            try {
+              setEmploymentTypes(types);
+              await attendanceSettingsModel.saveTimeSettings(types);
+            } catch (error) {
+              console.error("Error saving employment types:", error);
+            }
+          }}
         />
       ),
     },
     {
-      key: "deductions",
-      title: "Gov't Deductions",
-      icon: <IoShieldCheckmarkOutline className="w-5 h-5" />,
-      content: (
-        <div className="space-y-8">
-          <div className="bg-white rounded-xl border border-gray-100">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <IoShieldCheckmarkOutline className="w-5 h-5 text-blue-600" />
-                Government Deductions
-              </h3>
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      SSS Rate (%)
-                    </label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="4.5"
-                      value={sssRate ?? ""}
-                      onChange={(e) => setSssRate(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      PhilHealth Rate (%)
-                    </label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="3"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Pag-IBIG Rate (%)
-                    </label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="2"
-                    />
-                  </div>
-                </div>
-                <div className="pt-4">
-                  <button className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Save Changes
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ),
+      key: "roles",
+      title: "Role Management",
+      icon: <IoShieldOutline className="w-5 h-5" />,
+      requiredAccess: hasRoles ? "MANAGE_SETTINGS" : "",
+      content: <RoleManagement roleModel={new RoleModelImpl(dbPath)} />,
     },
     {
       key: "employeeManagement",
       title: "Employee",
       icon: <IoPeopleOutline className="w-5 h-5" />,
+      requiredAccess: "MANAGE_EMPLOYEES",
       content: (
         <div className="space-y-8">
           <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -639,11 +323,27 @@ export default function SettingsPage() {
                     <li
                       key={`active-${employee.id}`}
                       className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${
-                        isEmployeeSelected(employee)
+                        selectedEmployees.some(
+                          (selected) => selected.id === employee.id
+                        )
                           ? "bg-blue-100"
                           : "bg-white"
                       } hover:border-blue-200 hover:shadow-sm`}
-                      onClick={() => toggleEmployeeSelection(employee)}
+                      onClick={() => {
+                        setSelectedEmployees((current) => {
+                          if (
+                            current.some(
+                              (selected) => selected.id === employee.id
+                            )
+                          ) {
+                            return current.filter(
+                              (selected) => selected.id !== employee.id
+                            );
+                          } else {
+                            return [...current, employee];
+                          }
+                        });
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold">
@@ -735,11 +435,13 @@ export default function SettingsPage() {
                           );
 
                           // Update UI state after each successful update
-                          setActiveEmployees((current) =>
-                            current.filter((emp) => emp.id !== employee.id)
+                          setActiveEmployees((currentActive) =>
+                            currentActive.filter(
+                              (emp) => emp.id !== employee.id
+                            )
                           );
-                          setInactiveEmployees((current) => {
-                            const withoutCurrent = current.filter(
+                          setInactiveEmployees((currentInactive) => {
+                            const withoutCurrent = currentInactive.filter(
                               (emp) => emp.id !== employee.id
                             );
                             return [...withoutCurrent, updatedEmployee];
@@ -780,11 +482,27 @@ export default function SettingsPage() {
                     <li
                       key={`inactive-${employee.id}`}
                       className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${
-                        isEmployeeSelected(employee)
+                        selectedEmployees.some(
+                          (selected) => selected.id === employee.id
+                        )
                           ? "bg-blue-100"
                           : "bg-white"
                       } hover:border-green-200 hover:shadow-sm`}
-                      onClick={() => toggleEmployeeSelection(employee)}
+                      onClick={() => {
+                        setSelectedEmployees((current) => {
+                          if (
+                            current.some(
+                              (selected) => selected.id === employee.id
+                            )
+                          ) {
+                            return current.filter(
+                              (selected) => selected.id !== employee.id
+                            );
+                          } else {
+                            return [...current, employee];
+                          }
+                        });
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-semibold">
@@ -821,6 +539,7 @@ export default function SettingsPage() {
       key: "logo",
       title: "Company Logo",
       icon: <MdOutlineDataset className="h-5 w-5" />,
+      requiredAccess: "MANAGE_SETTINGS",
       content: (
         <div className="">
           <div className="bg-white rounded-lg shadow p-6">
@@ -978,6 +697,7 @@ export default function SettingsPage() {
       key: "database",
       title: "Database Management",
       icon: <MdOutlineDataset className="h-5 w-5" />,
+      requiredAccess: "MANAGE_SETTINGS",
       content: (
         <div className="">
           <div className="bg-white rounded-lg shadow p-6">
@@ -1002,14 +722,28 @@ export default function SettingsPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                // @ts-ignore
-                webkitdirectory="true"
-                directory="true"
+                {...({ webkitdirectory: "true" } as any)}
                 style={{ display: "none" }}
-                onChange={handleFileChange}
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files && files.length > 0) {
+                    const file = files[0];
+                    const relativePath = file.webkitRelativePath;
+                    if (relativePath) {
+                      setDbPath(relativePath);
+                      setCurrentPath(relativePath);
+                    }
+                  }
+                }}
               />
               <button
-                onClick={handleSelectDirectory}
+                onClick={async () => {
+                  const folderPath = await window.electron.openFolderDialog();
+                  if (folderPath) {
+                    setDbPath(folderPath);
+                    setCurrentPath(folderPath);
+                  }
+                }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 Browse
@@ -1020,6 +754,272 @@ export default function SettingsPage() {
       ),
     },
   ];
+
+  // Filter accessible sections
+  const accessibleSections = sections.filter((section) =>
+    section.key === "roles" && !hasRoles
+      ? true
+      : hasAccess(section.requiredAccess)
+  );
+
+  // Effects
+  useEffect(() => {
+    if (!accessibleSections.find((section) => section.key === selected)) {
+      setSelected(accessibleSections[0]?.key || "");
+    }
+  }, [selected, accessibleSections]);
+
+  useEffect(() => {
+    const checkRoles = async () => {
+      try {
+        const roleModel = new RoleModelImpl(dbPath);
+        const roles = await roleModel.getRoles();
+        setHasRoles(roles.length > 0);
+      } catch (error) {
+        console.error("Error checking roles:", error);
+      }
+    };
+    checkRoles();
+  }, [dbPath]);
+
+  useEffect(() => {
+    const loadAttendanceSettings = async () => {
+      try {
+        const settings = await attendanceSettingsModel.loadAttendanceSettings();
+        const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+        setEmploymentTypes(timeSettings);
+        console.log("Attendance settings loaded:", settings);
+        setAttendanceSettings(settings);
+        setHolidayMultipliers({
+          regular: settings.regularHolidayMultiplier.toString(),
+          special: settings.specialHolidayMultiplier.toString(),
+        });
+      } catch (error) {
+        console.error("Error loading attendance settings:", error);
+      }
+    };
+    loadAttendanceSettings();
+  }, []);
+
+  useEffect(() => {
+    if (!currentPath) return;
+
+    const model = createEmployeeModel(currentPath);
+    setEmployeeModel(model);
+
+    const loadAndFilterEmployees = async () => {
+      try {
+        const allEmployees = await model.loadEmployees();
+        // Ensure each employee is only in one list
+        const activeList = allEmployees.filter(
+          (emp) => emp.status === "active"
+        );
+        const inactiveList = allEmployees.filter(
+          (emp) => emp.status === "inactive"
+        );
+
+        // Reset selected employees when loading new data
+        setSelectedEmployees([]);
+        setActiveEmployees(activeList);
+        setInactiveEmployees(inactiveList);
+      } catch (error) {
+        console.error("Error loading employees:", error);
+      }
+    };
+
+    loadAndFilterEmployees();
+  }, [currentPath]);
+
+  // Function to move selected employee to inactive
+  const moveToInactive = async (employee: Employee) => {
+    try {
+      if (!employeeModel) {
+        console.error("Employee model is not initialized");
+        return;
+      }
+
+      const updatedEmployee = { ...employee, status: "inactive" as const };
+
+      // Update the employee status in the database
+      await employeeModel.updateEmployeeStatus(updatedEmployee);
+
+      // Update the UI state using functional updates to ensure we have the latest state
+      setActiveEmployees((currentActive) =>
+        currentActive.filter((emp) => emp.id !== employee.id)
+      );
+      setInactiveEmployees((currentInactive) => {
+        // Ensure we don't add duplicates
+        const withoutCurrent = currentInactive.filter(
+          (emp) => emp.id !== employee.id
+        );
+        return [...withoutCurrent, updatedEmployee];
+      });
+
+      // Clear selection after moving
+      setSelectedEmployees((current) =>
+        current.filter((emp) => emp.id !== employee.id)
+      );
+    } catch (error) {
+      console.error("Error moving employee to inactive:", error);
+    }
+  };
+
+  // Function to move selected employee back to active
+  const moveToActive = async (employee: Employee) => {
+    try {
+      if (!employeeModel) {
+        console.error("Employee model is not initialized");
+        return;
+      }
+
+      const updatedEmployee = { ...employee, status: "active" as const };
+
+      // Update the employee status in the database
+      await employeeModel.updateEmployeeStatus(updatedEmployee);
+
+      // Update the UI state using functional updates to ensure we have the latest state
+      setInactiveEmployees((currentInactive) =>
+        currentInactive.filter((emp) => emp.id !== employee.id)
+      );
+      setActiveEmployees((currentActive) => {
+        // Ensure we don't add duplicates
+        const withoutCurrent = currentActive.filter(
+          (emp) => emp.id !== employee.id
+        );
+        return [...withoutCurrent, updatedEmployee];
+      });
+
+      // Clear selection after moving
+      setSelectedEmployees((current) =>
+        current.filter((emp) => emp.id !== employee.id)
+      );
+    } catch (error) {
+      console.error("Error moving employee to active:", error);
+    }
+  };
+
+  // Function to check if an employee is selected
+  const isEmployeeSelected = (employee: Employee) => {
+    return selectedEmployees.some((selected) => selected.id === employee.id);
+  };
+
+  const handleSaveHolidayMultipliers = async () => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You do not have permission to modify holiday settings");
+      return;
+    }
+    try {
+      const regular = Number(holidayMultipliers.regular);
+      const special = Number(holidayMultipliers.special);
+
+      if (isNaN(regular) || isNaN(special)) {
+        toast.error("Please enter valid numbers for multipliers");
+        return;
+      }
+
+      if (regular <= 0 || special <= 0) {
+        toast.error("Multipliers must be greater than 0");
+        return;
+      }
+
+      await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
+      await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
+
+      const settings = await attendanceSettingsModel.loadAttendanceSettings();
+      setAttendanceSettings(settings);
+
+      toast.success("Holiday multipliers updated successfully");
+    } catch (error) {
+      console.error("Error saving holiday multipliers:", error);
+      toast.error("Failed to update holiday multipliers");
+    }
+  };
+
+  const handleSelectionChange = (key: string | number) => {
+    setSelected(key.toString());
+  };
+
+  const handleSaveChanges = async () => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You do not have permission to modify attendance settings");
+      return;
+    }
+    if (!attendanceSettings) {
+      toast.error("No attendance settings to save");
+      return;
+    }
+    try {
+      await attendanceSettingsModel?.saveAttendanceSettings(attendanceSettings);
+      toast.success("Attendance settings saved successfully!");
+    } catch (error) {
+      console.error("Error saving attendance settings:", error);
+      toast.error("Failed to save attendance settings. Please try again.");
+    }
+  };
+
+  const handleSaveEmploymentTypes = async (types: EmploymentType[]) => {
+    if (!hasAccess("MANAGE_SETTINGS")) {
+      toast.error("You do not have permission to modify employment types");
+      return;
+    }
+    try {
+      console.log("SettingsPage received employment types:", types);
+      await attendanceSettingsModel?.saveTimeSettings(types);
+      toast.success("Employment types saved successfully");
+    } catch (error) {
+      console.error("Error saving employment types:", error);
+      toast.error("Failed to save employment types");
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: keyof AttendanceSettings
+  ) => {
+    if (!attendanceSettings) return;
+    setAttendanceSettings({
+      ...attendanceSettings,
+      [field]: Number(e.target.value),
+    });
+  };
+
+  // Early return for access restriction
+  if (!hasAccess("MANAGE_SETTINGS") && hasRoles) {
+    return (
+      <RootLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+              Access Restricted
+            </h2>
+            <p className="text-gray-500">
+              You don't have permission to access settings.
+            </p>
+          </div>
+        </div>
+      </RootLayout>
+    );
+  }
+
+  // Early return for no accessible sections
+  if (accessibleSections.length === 0) {
+    return (
+      <RootLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+              No Available Settings
+            </h2>
+            <p className="text-gray-500">
+              You don't have access to any settings sections.
+            </p>
+          </div>
+        </div>
+      </RootLayout>
+    );
+  }
 
   return (
     <RootLayout>
@@ -1036,7 +1036,7 @@ export default function SettingsPage() {
             <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
               <div className="border-b border-gray-100">
                 <div className="flex items-center gap-1 px-6 bg-gray-50">
-                  {sections.map((section) => (
+                  {accessibleSections.map((section) => (
                     <button
                       key={section.key}
                       onClick={() => handleSelectionChange(section.key)}
@@ -1061,7 +1061,10 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="p-6">
-                {sections.find((section) => section.key === selected)?.content}
+                {
+                  accessibleSections.find((section) => section.key === selected)
+                    ?.content
+                }
               </div>
             </div>
           </div>

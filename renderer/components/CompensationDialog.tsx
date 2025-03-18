@@ -41,6 +41,7 @@ interface CompensationDialogProps {
   } | null;
   timeIn?: string;
   timeOut?: string;
+  accessCodes?: string[];
 }
 
 interface FormFieldProps {
@@ -56,6 +57,7 @@ interface FormFieldProps {
   className?: string;
   manualOverride?: boolean;
   isComputedField?: boolean;
+  hasEditAccess?: boolean;
 }
 
 const FormField: React.FC<FormFieldProps> = ({
@@ -69,8 +71,10 @@ const FormField: React.FC<FormFieldProps> = ({
   className = "",
   manualOverride = false,
   isComputedField = false,
+  hasEditAccess = true,
 }) => {
-  const isFieldReadOnly = readOnly || (isComputedField && !manualOverride);
+  const isFieldReadOnly =
+    readOnly || (isComputedField && !manualOverride) || !hasEditAccess;
   const fieldClassName = `w-full px-3 py-1.5 text-sm ${
     isFieldReadOnly
       ? "bg-gray-800/50 text-gray-400 cursor-not-allowed"
@@ -122,6 +126,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   position,
   timeIn,
   timeOut,
+  accessCodes = [],
 }) => {
   const [formData, setFormData] = useState<Compensation>({
     ...compensation,
@@ -142,6 +147,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+
+  const hasEditAccess =
+    accessCodes.includes("MANAGE_PAYROLL") ||
+    accessCodes.includes("MANAGE_ATTENDANCE");
 
   useEffect(() => {
     attendanceSettingsModel.loadTimeSettings().then((timeSettings) => {
@@ -281,6 +290,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!hasEditAccess) {
+      toast.error("You do not have permission to edit compensation records");
+      return;
+    }
+
     await onSave(formData);
     onClose();
   };
@@ -289,6 +304,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+
+    if (!hasEditAccess) {
+      toast.error("You do not have permission to edit compensation records");
+      return;
+    }
 
     // Check if trying to change computed fields without manual override
     const isComputedField = [
@@ -378,7 +398,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         <div className="relative">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 rounded-t-lg">
             <h3 className="text-lg font-medium text-gray-100">
-              Edit Compensation Details
+              {hasEditAccess
+                ? "Edit Compensation Details"
+                : "View Compensation Details"}
             </h3>
             <button
               onClick={onClose}
@@ -406,6 +428,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 ]}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -415,6 +438,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -429,6 +453,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   { value: "Sick", label: "Sick" },
                   { value: "Unpaid", label: "Unpaid" },
                 ]}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -438,6 +463,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -447,6 +473,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -456,6 +483,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -465,6 +493,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -474,6 +503,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -483,6 +513,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -492,6 +523,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -499,6 +531,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="leavePay"
                 value={formData.leavePay || 0}
                 onChange={handleInputChange}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -508,6 +541,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -517,6 +551,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <FormField
@@ -526,18 +561,30 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
+                hasEditAccess={hasEditAccess}
               />
 
               <div className="col-span-5">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-300">
                   <Switch
                     checked={formData.manualOverride || false}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, manualOverride: e }))
-                    }
+                    onChange={(e) => {
+                      if (!hasEditAccess) {
+                        toast.error(
+                          "You do not have permission to edit compensation records"
+                        );
+                        return;
+                      }
+                      setFormData((prev) => ({ ...prev, manualOverride: e }));
+                    }}
+                    disabled={!hasEditAccess}
                     className={`${
                       formData.manualOverride ? "bg-blue-600" : "bg-gray-700"
-                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                    } relative inline-flex h-6 w-11 flex-shrink-0 ${
+                      hasEditAccess
+                        ? "cursor-pointer"
+                        : "cursor-not-allowed opacity-50"
+                    } rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                   >
                     <span className="sr-only">Manual Override</span>
                     <span
@@ -559,21 +606,28 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   placeholder="Notes"
                   value={formData.notes || ""}
                   onChange={handleInputChange}
-                  className="flex-1 px-3 py-2.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+                  disabled={!hasEditAccess}
+                  className={`flex-1 px-3 py-2.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 ${
+                    hasEditAccess
+                      ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+                      : "opacity-50 cursor-not-allowed"
+                  }`}
                 />
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
                 >
-                  Cancel
+                  {hasEditAccess ? "Cancel" : "Close"}
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                >
-                  Save Changes
-                </button>
+                {hasEditAccess && (
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+                  >
+                    Save Changes
+                  </button>
+                )}
               </div>
             </div>
           </form>

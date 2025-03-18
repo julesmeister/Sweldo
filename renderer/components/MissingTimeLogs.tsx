@@ -14,6 +14,7 @@ import { MagicCard } from "./magicui/magic-card";
 import { TimeEditDialog } from "./TimeEditDialog";
 import { useMissingTimeEdit } from "@/renderer/hooks/useMissingTimeEdit";
 import { Employee } from "@/renderer/model/employee";
+import { useAuthStore } from "../stores/authStore";
 
 export default function MissingTimeLogs() {
   const [missingLogs, setMissingLogs] = useState<MissingTimeLog[]>([]);
@@ -30,6 +31,7 @@ export default function MissingTimeLogs() {
   const { dbPath } = useSettingsStore();
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
+  const { accessCodes, hasAccess } = useAuthStore();
 
   const loadMissingLogs = async () => {
     if (!dbPath || !storedMonth || !storedYear) {
@@ -305,6 +307,7 @@ export default function MissingTimeLogs() {
         }
         position={dialogPosition}
         attendance={attendance}
+        accessCodes={accessCodes}
       />
     </>
   );
