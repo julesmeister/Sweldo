@@ -916,7 +916,7 @@ const TimesheetPage: React.FC = () => {
         {isDialogOpen && (
           <div className="fixed inset-0 bg-black opacity-50 z-40" />
         )}
-        {selectedEntry && hasAccess("MANAGE_PAYROLL") && (
+        {selectedEntry && (
           <CompensationDialog
             employee={employee}
             isOpen={isDialogOpen}

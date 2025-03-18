@@ -29,27 +29,35 @@ export default function RootLayout({
 
   // Initialize auth store with dbPath and check for roles
   useEffect(() => {
-    if (dbPath) {
+    const initializeAuth = async () => {
+      if (!dbPath) {
+        setIsCheckingRoles(false);
+        return;
+      }
+
+      if (isAuthenticated) {
+        setIsCheckingRoles(false);
+        return;
+      }
+
       console.log("Setting dbPath in auth store:", dbPath);
       setDbPath(dbPath);
 
       // Check if any roles exist
-      const checkRoles = async () => {
-        try {
-          const roleModel = new RoleModelImpl(dbPath);
-          const roles = await roleModel.getRoles();
-          setShowLogin(roles.length > 0 && !isAuthenticated);
-        } catch (error) {
-          console.error("Error checking roles:", error);
-          toast.error("Error checking roles");
-        } finally {
-          setIsCheckingRoles(false);
-        }
-      };
+      try {
+        const roleModel = new RoleModelImpl(dbPath);
+        const roles = await roleModel.getRoles();
+        setShowLogin(roles.length > 0 && !isAuthenticated);
+      } catch (error) {
+        console.error("Error checking roles:", error);
+        toast.error("Error checking roles");
+      } finally {
+        setIsCheckingRoles(false);
+      }
+    };
 
-      checkRoles();
-    }
-  }, [dbPath, setDbPath, isAuthenticated]);
+    initializeAuth();
+  }, [dbPath, isAuthenticated]); // Add isAuthenticated to dependencies to properly handle auth state changes
 
   const [lastActivity, setLastActivity] = useState(Date.now());
 
