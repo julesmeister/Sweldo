@@ -129,7 +129,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     year,
     day,
     dayType: compensation.dayType || ("Regular" as DayType),
+    manualOverride: compensation.manualOverride,
   });
+  console.log("Initial formData", formData);
   const { dbPath } = useSettingsStore();
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
   const holidayModel = createHolidayModel(dbPath, year, month);
@@ -272,7 +274,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         undertimeDeduction: computedValues.undertimeDeduction,
         lateDeduction: computedValues.lateDeduction,
         holidayBonus: computedValues.holidayBonus,
-        manualOverride: computedValues.manualOverride,
+        // manualOverride: computedValues.manualOverride,
       }));
     }
   }, [computedValues]);
