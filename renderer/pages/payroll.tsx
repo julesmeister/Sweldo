@@ -97,65 +97,72 @@ export default function PayrollPage() {
     }
   }, [storedMonth, storedYear, dateRange.startDate, setDateRange]);
 
-  useEffect(() => {
-    const loadPayrolls = async () => {
-      console.log("Selected Employee ID:", selectedEmployeeId);
-      if (!selectedEmployeeId) {
-        // Expected state - no employee selected yet
-        return;
-      } else if (!dbPath) {
-        console.error("[PayrollPage] Database path is not set");
-        return;
-      }
-
+  const loadPayrolls = async () => {
+    try {
       setLoading(true);
-      try {
-        // Convert string dates to Date objects if needed
-        const startDate = dateRange.startDate
-          ? new Date(dateRange.startDate)
-          : new Date();
-        const endDate = dateRange.endDate
-          ? new Date(dateRange.endDate)
-          : new Date();
 
-        // Get month and year from the date range
-        const month = startDate.getMonth() + 1;
-        const year = startDate.getFullYear();
-
-        console.log("[PayrollPage] Loading payrolls for:", {
-          employeeId: selectedEmployeeId,
-          year,
-          month,
-          dateRange: {
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-          },
-        });
-
-        // Load employee first
-        const employeeModel = createEmployeeModel(dbPath);
-        const loadedEmployee = await employeeModel.loadEmployeeById(
-          selectedEmployeeId
-        );
-        console.log("[PayrollPage] Loaded employee:", loadedEmployee);
-        setEmployee(loadedEmployee);
-
-        // Then load payrolls for the current month and year
-        const employeePayrolls = await Payroll.loadPayrollSummaries(
-          dbPath,
-          selectedEmployeeId,
-          year,
-          month
-        );
-        console.log("[PayrollPage] Loaded payrolls:", employeePayrolls);
-        setPayrolls(employeePayrolls);
-      } catch (error: any) {
-        console.error("[PayrollPage] Error loading payrolls:", error);
-      } finally {
-        setLoading(false);
+      if (!dateRange.startDate || !dateRange.endDate || !dbPath) {
+        console.log("Missing date range or database path");
+        return;
       }
-    };
 
+      if (!selectedEmployeeId) {
+        console.log("No employee selected");
+        setPayrolls([]);
+        return;
+      }
+
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+
+      console.log("Loading payrolls for employee:", {
+        employeeId: selectedEmployeeId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
+
+      // Load employee details
+      const employeeModel = createEmployeeModel(dbPath);
+      const loadedEmployee = await employeeModel.loadEmployeeById(
+        selectedEmployeeId
+      );
+      setEmployee(loadedEmployee);
+
+      // Load payroll data for selected employee
+      const employeePayrolls = await Payroll.loadPayrollSummaries(
+        dbPath,
+        selectedEmployeeId,
+        startDate.getFullYear(),
+        startDate.getMonth() + 1
+      );
+
+      // Filter payrolls within date range
+      const filteredPayrolls = employeePayrolls.filter(
+        (summary: PayrollSummaryModel) => {
+          const summaryDate = new Date(summary.startDate);
+          return summaryDate >= startDate && summaryDate <= endDate;
+        }
+      );
+
+      // Add employee name to payroll data
+      const formattedPayrolls = filteredPayrolls.map(
+        (summary: PayrollSummaryModel) => ({
+          ...summary,
+          employeeName: loadedEmployee?.name || "Unknown Employee",
+        })
+      );
+
+      console.log("Loaded payroll data:", formattedPayrolls);
+      setPayrolls(formattedPayrolls);
+    } catch (error) {
+      console.error("Error loading payrolls:", error);
+      toast.error("Failed to load payroll data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadPayrolls();
   }, [dbPath, selectedEmployeeId, setLoading, refreshPayrolls, dateRange]);
 
@@ -285,6 +292,93 @@ export default function PayrollPage() {
     try {
       setIsGeneratingPDF(true);
 
+      // Load all active employees
+      const employeeModel = createEmployeeModel(dbPath);
+      const allEmployees = await employeeModel.loadEmployees();
+      const activeEmployees = allEmployees.filter((e) => e.status === "active");
+
+      if (activeEmployees.length === 0) {
+        toast.error("No active employees found");
+        return;
+      }
+
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+
+      // Load and collect payroll data for each active employee
+      const payrollPromises = activeEmployees.map(async (employee) => {
+        try {
+          const employeePayrolls = await Payroll.loadPayrollSummaries(
+            dbPath,
+            employee.id,
+            startDate.getFullYear(),
+            startDate.getMonth() + 1
+          );
+
+          // Filter payrolls within date range
+          return employeePayrolls
+            .filter((summary) => {
+              const summaryDate = new Date(summary.startDate);
+              return summaryDate >= startDate && summaryDate <= endDate;
+            })
+            .map((summary, index) => ({
+              ...summary,
+              startDate: summary.startDate.toISOString(),
+              endDate: summary.endDate.toISOString(),
+              employeeName: employee.name,
+              daysWorked: Number(summary.daysWorked) || 15,
+              basicPay: Number(summary.basicPay) || 0,
+              undertimeDeduction: Number(summary.undertimeDeduction) || 0,
+              holidayBonus: Number(summary.holidayBonus) || 0,
+              overtime: Number(summary.overtime) || 0,
+              grossPay: Number(summary.grossPay) || 0,
+              netPay: Number(summary.netPay) || 0,
+              dailyRate: Number(summary.dailyRate) || 0,
+              legalHoliday: 0,
+              specialHoliday: 0,
+              otPay: Number(summary.overtime) || 0,
+              deductions: {
+                sss: Number(summary.deductions.sss) || 0,
+                philHealth: Number(summary.deductions.philHealth) || 0,
+                pagIbig: Number(summary.deductions.pagIbig) || 0,
+                cashAdvanceDeductions:
+                  Number(summary.deductions.cashAdvanceDeductions) || 0,
+                others: Number(summary.deductions.others) || 0,
+                sssLoan: 0,
+                pagibigLoan: 0,
+                ca: Number(summary.deductions.cashAdvanceDeductions) || 0,
+                partial: 0,
+                totalDeduction:
+                  Number(summary.deductions.sss || 0) +
+                  Number(summary.deductions.philHealth || 0) +
+                  Number(summary.deductions.pagIbig || 0) +
+                  Number(summary.deductions.cashAdvanceDeductions || 0) +
+                  Number(summary.deductions.others || 0),
+              },
+              preparedBy: "Penelope Sarah Tan",
+              approvedBy: "Ruth Sy Lee",
+              payslipNumber: index + 1,
+            }));
+        } catch (error) {
+          console.log(
+            `No payroll found for employee ${employee.name} (${employee.id})`
+          );
+          return [];
+        }
+      });
+
+      // Wait for all payroll data to be collected
+      const payrollResults = await Promise.all(payrollPromises);
+      const formattedPayrolls = payrollResults
+        .flat()
+        .filter((payroll) => payroll !== null);
+
+      // Check if there's any data to generate PDF
+      if (formattedPayrolls.length === 0) {
+        toast.error("No payroll data found for the selected date range");
+        return;
+      }
+
       // Get the output directory path
       const outputPath = await window.electron.getPath("documents");
       const pdfOutputPath = path.join(outputPath, "payroll_summaries.pdf");
@@ -293,46 +387,6 @@ export default function PayrollPage() {
       if (!logoPath) {
         console.warn("Logo path not set in settings");
       }
-
-      // Format payroll data to match PayrollSummary type
-      const formattedPayrolls = payrolls.map((summary, index) => ({
-        ...summary,
-        startDate: summary.startDate.toISOString(),
-        endDate: summary.endDate.toISOString(),
-        employeeName: summary.employeeName,
-        daysWorked: Number(summary.daysWorked) || 15,
-        basicPay: Number(summary.basicPay) || 0,
-        undertimeDeduction: Number(summary.undertimeDeduction) || 0,
-        holidayBonus: Number(summary.holidayBonus) || 0,
-        overtime: Number(summary.overtime) || 0,
-        grossPay: Number(summary.grossPay) || 0,
-        netPay: Number(summary.netPay) || 0,
-        rates: Number(summary.basicPay / 15) || 0,
-        legalHoliday: 0,
-        specialHoliday: 0,
-        otPay: Number(summary.overtime) || 0,
-        deductions: {
-          sss: Number(summary.deductions.sss) || 0,
-          philHealth: Number(summary.deductions.philHealth) || 0,
-          pagIbig: Number(summary.deductions.pagIbig) || 0,
-          cashAdvanceDeductions:
-            Number(summary.deductions.cashAdvanceDeductions) || 0,
-          others: Number(summary.deductions.others) || 0,
-          sssLoan: 0,
-          pagibigLoan: 0,
-          ca: Number(summary.deductions.cashAdvanceDeductions) || 0,
-          partial: 0,
-          totalDeduction:
-            Number(summary.deductions.sss || 0) +
-            Number(summary.deductions.philHealth || 0) +
-            Number(summary.deductions.pagIbig || 0) +
-            Number(summary.deductions.cashAdvanceDeductions || 0) +
-            Number(summary.deductions.others || 0),
-        },
-        preparedBy: "Penelope Sarah Tan",
-        approvedBy: "Ruth Sy Lee",
-        payslipNumber: index + 1,
-      }));
 
       // Generate PDF with formatted payroll summaries
       const pdfPath = await window.electron.generatePDF(formattedPayrolls, {

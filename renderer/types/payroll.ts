@@ -17,6 +17,7 @@ export interface PayrollSummary {
   endDate: string;
   daysWorked: number;
   basicPay: number;
+  dailyRate: number;
   undertimeDeduction?: number;
   holidayBonus?: number;
   overtime: number;

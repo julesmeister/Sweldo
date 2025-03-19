@@ -1,10 +1,9 @@
-import { PayrollSummary } from "@/renderer/types/payroll";
-import { PDFOptions as PDFGeneratorOptions } from "@/renderer/utils/pdfGenerator";
+import { PayrollSummary, PDFGeneratorOptions } from "./payroll";
 
-export interface IElectronAPI {
+export interface ElectronAPI {
   readFile(filePath: string): Promise<string>;
   writeFile(filePath: string, content: string): Promise<void>;
-  saveFile(filePath: string, content: string): Promise<void>;
+  saveFile(filePath: string, content: string): Promise<string>;
   ensureDir(dirPath: string): Promise<void>;
   fileExists(filePath: string): Promise<boolean>;
   openFolderDialog(options?: { defaultPath?: string }): Promise<string | null>;
@@ -13,7 +12,10 @@ export interface IElectronAPI {
     properties: string[];
     filters?: { name: string; extensions: string[] }[];
   }): Promise<{ canceled: boolean; filePaths: string[] }>;
-  openFile(filePath: string): Promise<void>;
+  openFile(options: {
+    properties: string[];
+    filters?: { name: string; extensions: string[] }[];
+  }): Promise<{ canceled: boolean; filePaths: string[] }>;
   getPath(name: string): Promise<string>;
   openPath(path: string): Promise<void>;
   generatePDF(
@@ -24,7 +26,7 @@ export interface IElectronAPI {
 
 declare global {
   interface Window {
-    electron: IElectronAPI;
+    electron: ElectronAPI;
     ipc: {
       send(channel: string, ...args: any[]): void;
       on(channel: string, func: (...args: any[]) => void): void;
