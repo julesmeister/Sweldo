@@ -17,6 +17,7 @@ import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { IoShieldOutline } from "react-icons/io5";
 import { toast } from "sonner";
+import { generatePayrollPDF } from "@/renderer/utils/pdfGenerator";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -111,7 +112,7 @@ export default function PayrollPage() {
         // Get current month (0-11) and add 1 to match calendar months (1-12)
         // This is used to load the current month's payroll by default
         const month = new Date().getMonth() + 1;
-        
+
         // Get current year for loading payroll data
         const year = new Date().getFullYear();
 
@@ -253,6 +254,73 @@ export default function PayrollPage() {
     router.push(path);
   };
 
+  const handleGeneratePDFForAll = async () => {
+    if (!hasAccess("GENERATE_REPORTS")) {
+      toast.error("You don't have permission to generate reports");
+      return;
+    }
+
+    if (!dateRange.startDate || !dateRange.endDate) {
+      toast.error("Please select a date range");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const employeeModel = createEmployeeModel(dbPath);
+      const allEmployees = await employeeModel.loadEmployees();
+      const payroll = new Payroll([], "xlsx", dbPath);
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+
+      // Generate payroll summaries for all employees
+      const allPayrollSummaries = await Promise.all(
+        allEmployees.map(async (employee) => {
+          try {
+            return await payroll.generatePayrollSummary(
+              employee.id,
+              startDate,
+              endDate
+            );
+          } catch (error) {
+            console.error(
+              `Error generating payroll for ${employee.name}:`,
+              error
+            );
+            return null;
+          }
+        })
+      );
+
+      // Filter out any failed generations
+      const validPayrollSummaries = allPayrollSummaries.filter(
+        (summary): summary is PayrollSummaryModel => summary !== null
+      );
+
+      if (validPayrollSummaries.length === 0) {
+        throw new Error("No valid payroll summaries generated");
+      }
+
+      // Generate PDF
+      const outputPath = await window.electron.getPath("downloads");
+      const pdfPath = await generatePayrollPDF(validPayrollSummaries, {
+        logoPath: useSettingsStore.getState().logoPath || "",
+        outputPath,
+        companyName: "Pure Care Marketing, Inc.",
+      });
+
+      toast.success(`PDF generated successfully at ${pdfPath}`);
+
+      // Open the generated PDF
+      await window.electron.openPath(pdfPath);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Check if user has basic access to view payroll
   if (!hasAccess("VIEW_REPORTS")) {
     return (
@@ -285,13 +353,21 @@ export default function PayrollPage() {
                 }
               />
             </div>
-            {hasAccess("MANAGE_PAYROLL") && (
+            {hasAccess("MANAGE_PAYROLL") && employee && (
               <button
                 onClick={handleDeductionsClick}
                 disabled={!selectedEmployeeId || isLoading}
                 className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Generate Payroll
+                Generate Payroll For {employee?.name}
+              </button>
+            )}
+            {hasAccess("GENERATE_REPORTS") && (
+              <button
+                onClick={handleGeneratePDFForAll}
+                className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Generate PDF For All Employees
               </button>
             )}
           </div>

@@ -103,7 +103,7 @@ export class CashAdvanceModel {
       const newData = existingData
         ? existingData.trim() + "\n" + csvData
         : headers + csvData;
-      await window.electron.saveFile(filePath, newData);
+      await window.electron.writeFile(filePath, newData);
       console.log("Cash advance created successfully");
     } catch (error) {
       console.error("Error creating cash advance:", error as any);
@@ -200,7 +200,7 @@ export class CashAdvanceModel {
       ].join(",");
 
       console.log("Saving updated cash advance");
-      await window.electron.saveFile(filePath, lines.join("\n") + "\n");
+      await window.electron.writeFile(filePath, lines.join("\n") + "\n");
       console.log("Cash advance updated successfully");
     } catch (error) {
       console.error("Error updating cash advance:", error);
@@ -366,7 +366,7 @@ export class CashAdvanceModel {
       }
 
       console.log("Saving updated file");
-      await window.electron.saveFile(filePath, updatedLines.join("\n") + "\n");
+      await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
       console.log("Cash advance deleted successfully");
     } catch (error) {
       console.error("Error deleting cash advance:", error);

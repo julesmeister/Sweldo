@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import path from "path";
 import { Schedule } from "./schedule";
 export interface Settings {
   theme: string;
@@ -92,105 +93,155 @@ export const defaultSettings: Settings = {
 };
 
 export class AttendanceSettingsModel {
-  private filePath: string;
+  private settingsPath: string;
   private timeSettingsPath: string;
 
-  constructor(filePath: string, timeSettingsPath?: string) {
-    this.filePath = filePath;
-    this.timeSettingsPath = timeSettingsPath || "";
+  constructor(public dbPath: string) {
+    // Ensure the path includes SweldoDB
+    const basePath = path.join(dbPath, "SweldoDB");
+    this.settingsPath = path.join(basePath, "settings.csv");
+    this.timeSettingsPath = path.join(basePath, "timeSettings.csv");
   }
 
-  // Load attendance settings from CSV or return defaults if file doesn't exist
+  private async ensureSettingsFile(): Promise<void> {
+    try {
+      const exists = await window.electron.fileExists(this.settingsPath);
+      if (!exists) {
+        // Create directory if it doesn't exist
+        await window.electron.ensureDir(path.dirname(this.settingsPath));
+        // Create file with default settings
+        const csv = Papa.unparse([defaultAttendanceSettings]);
+        await window.electron.writeFile(this.settingsPath, csv);
+      }
+    } catch (error) {
+      console.error("[SettingsModel] Error ensuring settings file:", error);
+      throw error;
+    }
+  }
+
+  private async ensureTimeSettingsFile(): Promise<void> {
+    try {
+      const exists = await window.electron.fileExists(this.timeSettingsPath);
+      if (!exists) {
+        // Create directory if it doesn't exist
+        await window.electron.ensureDir(path.dirname(this.timeSettingsPath));
+        // Create file with default time settings
+        const csv = Papa.unparse(
+          defaultTimeSettings.map((setting) => ({
+            type: setting.type,
+            schedules: setting.schedules
+              ? JSON.stringify(setting.schedules)
+              : "",
+            requiresTimeTracking: setting.requiresTimeTracking,
+          }))
+        );
+        await window.electron.writeFile(this.timeSettingsPath, csv);
+      }
+    } catch (error) {
+      console.error(
+        "[SettingsModel] Error ensuring time settings file:",
+        error
+      );
+      throw error;
+    }
+  }
+
   public async loadAttendanceSettings(): Promise<AttendanceSettings> {
     try {
-      const text = await window.electron.readFile(this.filePath);
-      const results = Papa.parse<AttendanceSettings>(text, { header: true });
-      if (results.data.length === 0) {
-        console.log(
-          `Attendance settings file ${this.filePath} doesn't exist, using defaults`
-        );
-        // File doesn't exist, save defaults and return them
-        await this.saveAttendanceSettings(defaultAttendanceSettings);
-      }
-      const settings = results.data[0] || defaultAttendanceSettings;
+      await this.ensureSettingsFile();
+      const content = await window.electron.readFile(this.settingsPath);
+      const results = Papa.parse<AttendanceSettings>(content, { header: true });
 
-      return settings;
+      if (results.data.length === 0) {
+        console.log("[SettingsModel] No settings found, using defaults");
+        await this.saveAttendanceSettings(defaultAttendanceSettings);
+        return defaultAttendanceSettings;
+      }
+
+      // Convert string values to numbers
+      const settings = results.data[0];
+      return {
+        lateGracePeriod: Number(settings.lateGracePeriod),
+        lateDeductionPerMinute: Number(settings.lateDeductionPerMinute),
+        undertimeGracePeriod: Number(settings.undertimeGracePeriod),
+        undertimeDeductionPerMinute: Number(
+          settings.undertimeDeductionPerMinute
+        ),
+        overtimeGracePeriod: Number(settings.overtimeGracePeriod),
+        overtimeAdditionPerMinute: Number(settings.overtimeAdditionPerMinute),
+        regularHolidayMultiplier: Number(settings.regularHolidayMultiplier),
+        specialHolidayMultiplier: Number(settings.specialHolidayMultiplier),
+      };
     } catch (error) {
-      console.error(`Error loading attendance settings: ${error}`);
-      console.log(`Using default attendance settings`);
-      return defaultAttendanceSettings; // Return defaults on any error
+      console.error("[SettingsModel] Error loading settings:", error);
+      return defaultAttendanceSettings;
     }
   }
 
   public async loadTimeSettings(): Promise<EmploymentType[]> {
     try {
-      const text = await window.electron.readFile(this.timeSettingsPath);
-      const results = Papa.parse<any>(text, { header: true });
+      await this.ensureTimeSettingsFile();
+      const content = await window.electron.readFile(this.timeSettingsPath);
+      const results = Papa.parse(content, { header: true });
+
       if (results.data.length === 0) {
         await this.saveTimeSettings(defaultTimeSettings);
         return defaultTimeSettings;
-      } else {
-        // Process the parsed data to ensure proper types
-        const processedData = results.data
-          .map((item: any) => {
-            try {
-              let schedules = undefined;
-              if (item.schedules) {
-                try {
-                  schedules = JSON.parse(item.schedules);
-                } catch (error) {
-                  // Error handling without console.log
-                }
-              }
-
-              const processedItem = {
-                type: item.type?.toLowerCase() || "",
-                schedules,
-                requiresTimeTracking:
-                  item.requiresTimeTracking === "true" ||
-                  item.requiresTimeTracking === true,
-              };
-              return processedItem;
-            } catch (error) {
-              return {
-                type: item.type?.toLowerCase() || "",
-                schedules: undefined,
-                requiresTimeTracking: false,
-              };
-            }
-          })
-          .filter((item: any) => item.type);
-
-        return processedData;
       }
+
+      return results.data
+        .map((item: any) => {
+          let schedules;
+          try {
+            schedules = item.schedules ? JSON.parse(item.schedules) : undefined;
+          } catch (error) {
+            console.error("[SettingsModel] Error parsing schedules:", error);
+            schedules = undefined;
+          }
+
+          return {
+            type: item.type?.toLowerCase() || "",
+            schedules,
+            requiresTimeTracking:
+              item.requiresTimeTracking === "true" ||
+              item.requiresTimeTracking === true,
+          };
+        })
+        .filter((item: any) => item.type);
     } catch (error) {
+      console.error("[SettingsModel] Error loading time settings:", error);
       return defaultTimeSettings;
     }
   }
 
   public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
-    // Transform the timeSettings to match the expected CSV structure
-    const formattedSettings = settings.map((setting) => {
-      // Ensure schedules is properly handled
-      let schedulesValue = "";
-      if (setting.schedules) {
-        try {
-          schedulesValue = JSON.stringify(setting.schedules);
-        } catch (error) {
-          schedulesValue = "";
-        }
-      }
-
-      const formattedSetting = {
+    try {
+      await this.ensureTimeSettingsFile();
+      const formattedSettings = settings.map((setting) => ({
         type: setting.type,
-        schedules: schedulesValue,
+        schedules: setting.schedules ? JSON.stringify(setting.schedules) : "",
         requiresTimeTracking: setting.requiresTimeTracking,
-      };
-      return formattedSetting;
-    });
+      }));
 
-    const csv = Papa.unparse(formattedSettings);
-    await window.electron.saveFile(this.timeSettingsPath, csv);
+      const csv = Papa.unparse(formattedSettings);
+      await window.electron.writeFile(this.timeSettingsPath, csv);
+    } catch (error) {
+      console.error("[SettingsModel] Error saving time settings:", error);
+      throw error;
+    }
+  }
+
+  public async saveAttendanceSettings(
+    settings: AttendanceSettings
+  ): Promise<void> {
+    try {
+      await this.ensureSettingsFile();
+      const csv = Papa.unparse([settings]);
+      await window.electron.writeFile(this.settingsPath, csv);
+    } catch (error) {
+      console.error("[SettingsModel] Error saving settings:", error);
+      throw error;
+    }
   }
 
   public async setRegularHolidayMultiplier(multiplier: number): Promise<void> {
@@ -204,22 +255,12 @@ export class AttendanceSettingsModel {
     settings.specialHolidayMultiplier = multiplier;
     await this.saveAttendanceSettings(settings);
   }
-
-  // Save attendance settings to CSV
-  public async saveAttendanceSettings(
-    settings: AttendanceSettings
-  ): Promise<void> {
-    const csv = Papa.unparse([settings]); // Wrap in array since unparse expects array
-    await window.electron.saveFile(this.filePath, csv);
-  }
 }
 
 export const createAttendanceSettingsModel = (
   dbPath: string
 ): AttendanceSettingsModel => {
-  const filePath = `${dbPath}/SweldoDB/settings.csv`;
-  const timeSettingsPath = `${dbPath}/SweldoDB/timeSettings.csv`;
-  return new AttendanceSettingsModel(filePath, timeSettingsPath);
+  return new AttendanceSettingsModel(dbPath);
 };
 
 // Helper function to get schedule for a specific day

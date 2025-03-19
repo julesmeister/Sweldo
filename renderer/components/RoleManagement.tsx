@@ -55,15 +55,21 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
   React.useEffect(() => {
     const checkRoles = async () => {
       try {
+        console.log(
+          "[RoleManagement] Checking roles with roleModel:",
+          roleModel
+        );
         const loadedRoles = await roleModel.getRoles();
+        console.log("[RoleManagement] Initial roles check:", loadedRoles);
         setHasRoles(loadedRoles.length > 0);
         if (loadedRoles.length === 0) {
+          console.log("[RoleManagement] No roles found, auto-authenticating");
           setIsAuthenticated(true); // Auto-authenticate if no roles exist
           setIsEditing(true); // Start in editing mode
         }
         setIsInitialLoad(false);
       } catch (error) {
-        console.error("Error checking roles:", error);
+        console.error("[RoleManagement] Error checking roles:", error);
         setIsInitialLoad(false);
       }
     };
@@ -118,44 +124,57 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
 
   const handleAuthenticate = async () => {
     try {
+      console.log(
+        "[RoleManagement] Attempting authentication with PIN:",
+        authPinCode
+      );
       const roles = await roleModel.getRoles();
+      console.log("[RoleManagement] Found roles for auth:", roles);
       // Try to find a role with matching PIN
       const role = roles.find((r) => {
         try {
           const decryptedPin = decryptPinCode(r.pinCode);
           return decryptedPin === authPinCode;
         } catch (error) {
-          console.error("Error decrypting PIN:", error);
+          console.error("[RoleManagement] Error decrypting PIN:", error);
           return false;
         }
       });
 
       if (role) {
+        console.log("[RoleManagement] Authentication successful");
         setIsAuthenticated(true);
         toast.success("Successfully authenticated");
         loadRoles();
       } else {
+        console.log("[RoleManagement] Authentication failed: Invalid PIN");
         toast.error("Invalid pin code");
       }
       setAuthPinCode("");
     } catch (error) {
-      console.error("Error authenticating:", error);
+      console.error("[RoleManagement] Authentication error:", error);
       toast.error("Authentication failed");
     }
   };
 
   const loadRoles = React.useCallback(async () => {
     try {
+      console.log("[RoleManagement] Loading roles...");
       const loadedRoles = await roleModel.getRoles();
+      console.log("[RoleManagement] Loaded roles:", loadedRoles);
       setRoles(loadedRoles);
       setHasRoles(loadedRoles.length > 0);
     } catch (error) {
-      console.error("Error loading roles:", error);
+      console.error("[RoleManagement] Error loading roles:", error);
       toast.error("Failed to load roles");
     }
   }, [roleModel]);
 
   React.useEffect(() => {
+    console.log(
+      "[RoleManagement] Authentication state changed:",
+      isAuthenticated
+    );
     if (isAuthenticated) {
       loadRoles();
     }
@@ -173,6 +192,7 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
         return;
       }
 
+      console.log("[RoleManagement] Creating new role:", formData.name);
       await roleModel.createRole({
         name: formData.name,
         pinCode: formData.pinCode,
@@ -181,10 +201,10 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
       });
 
       toast.success("Role created successfully");
-      loadRoles();
+      await loadRoles(); // Make sure to await the loadRoles call
       setFormData({ name: "", pinCode: "", description: "", accessCodes: [] });
     } catch (error) {
-      console.error("Error creating role:", error);
+      console.error("[RoleManagement] Error creating role:", error);
       toast.error("Failed to create role");
     }
   };

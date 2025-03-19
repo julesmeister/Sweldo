@@ -1,13 +1,13 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 export interface Loan {
   id: string;
   employeeId: string;
   date: Date;
   amount: number;
-  type: 'Personal' | 'Housing' | 'Emergency' | 'Other';
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+  type: "Personal" | "Housing" | "Emergency" | "Other";
+  status: "Pending" | "Approved" | "Rejected" | "Completed";
   interestRate: number;
   term: number; // in months
   monthlyPayment: number;
@@ -21,12 +21,14 @@ export class LoanModel {
   private employeeId: string;
 
   constructor(dbPath: string, employeeId: string) {
-    this.basePath = path.join(dbPath, 'SweldoDB/loans', employeeId);
+    this.basePath = path.join(dbPath, "SweldoDB/loans", employeeId);
     this.employeeId = employeeId;
   }
 
   private getFilePath(loan: Loan): string {
-    return `${this.basePath}/${loan.date.getFullYear()}_${loan.date.getMonth() + 1}_loans.csv`;
+    return `${this.basePath}/${loan.date.getFullYear()}_${
+      loan.date.getMonth() + 1
+    }_loans.csv`;
   }
 
   private getFilePathByMonth(year: number, month: number): string {
@@ -40,29 +42,35 @@ export class LoanModel {
       console.log(`[LoanModel] Loan data to save:`, loan);
 
       const formatLoanToCSV = (l: Loan) => {
-        return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${l.type},${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${l.remainingBalance},${l.nextPaymentDate.toISOString()},${l.reason}`;
+        return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${
+          l.type
+        },${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${
+          l.remainingBalance
+        },${l.nextPaymentDate.toISOString()},${l.reason}`;
       };
 
       try {
         const data = await window.electron.readFile(filePath);
         console.log(`[LoanModel] Existing file found, updating content`);
-        const lines = data.split('\n').filter(line => line.trim().length > 0);
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
         lines.push(formatLoanToCSV(loan));
-        await window.electron.saveFile(filePath, lines.join('\n') + '\n');
+        await window.electron.writeFile(filePath, lines.join("\n") + "\n");
         console.log(`[LoanModel] Successfully saved loan`);
       } catch (error: any) {
-        if (error.code === 'ENOENT') {
+        if (error.code === "ENOENT") {
           console.log(`[LoanModel] Creating new file for loan entry`);
-          const csvData = formatLoanToCSV(loan) + '\n';
-          await window.electron.saveFile(filePath, csvData);
-          console.log(`[LoanModel] Successfully created new file and saved loan`);
+          const csvData = formatLoanToCSV(loan) + "\n";
+          await window.electron.writeFile(filePath, csvData);
+          console.log(
+            `[LoanModel] Successfully created new file and saved loan`
+          );
         } else {
-          console.error('[LoanModel] Error saving loan:', error);
+          console.error("[LoanModel] Error saving loan:", error);
           throw error;
         }
       }
     } catch (error) {
-      console.error('[LoanModel] Error in createLoan:', error);
+      console.error("[LoanModel] Error in createLoan:", error);
       throw error;
     }
   }
@@ -73,22 +81,26 @@ export class LoanModel {
       console.log(`[LoanModel] Attempting to update loan in:`, filePath);
 
       const formatLoanToCSV = (l: Loan) => {
-        return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${l.type},${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${l.remainingBalance},${l.nextPaymentDate.toISOString()},${l.reason}`;
+        return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${
+          l.type
+        },${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${
+          l.remainingBalance
+        },${l.nextPaymentDate.toISOString()},${l.reason}`;
       };
 
       const data = await window.electron.readFile(filePath);
-      const lines = data.split('\n').filter(line => line.trim().length > 0);
-      const updatedLines = lines.map(line => {
-        const fields = line.split(',');
+      const lines = data.split("\n").filter((line) => line.trim().length > 0);
+      const updatedLines = lines.map((line) => {
+        const fields = line.split(",");
         if (fields[0] === loan.id) {
           return formatLoanToCSV(loan);
         }
         return line;
       });
-      await window.electron.saveFile(filePath, updatedLines.join('\n') + '\n');
+      await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
       console.log(`[LoanModel] Successfully updated loan`);
     } catch (error) {
-      console.error('[LoanModel] Error updating loan:', error);
+      console.error("[LoanModel] Error updating loan:", error);
       throw error;
     }
   }
@@ -100,20 +112,24 @@ export class LoanModel {
 
       try {
         const data = await window.electron.readFile(filePath);
-        const lines = data.split('\n').filter(line => line.trim().length > 0);
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
 
-        return lines.map(line => {
-          const fields = line.split(',');
-          
+        return lines.map((line) => {
+          const fields = line.split(",");
+
           // Parse the dates from ISO format
           const date = new Date(fields[2]);
           const nextPaymentDate = new Date(fields[10]);
 
           // Validate loan type
-          let loanType = fields[4] as Loan['type'];
-          if (!['Personal', 'Housing', 'Emergency', 'Other'].includes(loanType)) {
-            console.warn(`[LoanModel] Invalid loan type "${loanType}" found, defaulting to "Other"`);
-            loanType = 'Other';
+          let loanType = fields[4] as Loan["type"];
+          if (
+            !["Personal", "Housing", "Emergency", "Other"].includes(loanType)
+          ) {
+            console.warn(
+              `[LoanModel] Invalid loan type "${loanType}" found, defaulting to "Other"`
+            );
+            loanType = "Other";
           }
 
           return {
@@ -122,24 +138,29 @@ export class LoanModel {
             date,
             amount: parseFloat(fields[3]),
             type: loanType,
-            status: fields[5] as Loan['status'],
+            status: fields[5] as Loan["status"],
             interestRate: parseFloat(fields[6]),
             term: parseInt(fields[7]),
             monthlyPayment: parseFloat(fields[8]),
             remainingBalance: parseFloat(fields[9]),
             nextPaymentDate,
-            reason: fields[11]
+            reason: fields[11],
           };
         });
       } catch (error: any) {
-        if (error.code === 'ENOENT' || (error instanceof Error && error.message.includes('ENOENT'))) {
-          console.log(`[LoanModel] No loans file found for ${year}-${month}, returning empty array`);
+        if (
+          error.code === "ENOENT" ||
+          (error instanceof Error && error.message.includes("ENOENT"))
+        ) {
+          console.log(
+            `[LoanModel] No loans file found for ${year}-${month}, returning empty array`
+          );
           return [];
         }
         throw error;
       }
     } catch (error) {
-      console.error('[LoanModel] Error loading loans:', error);
+      console.error("[LoanModel] Error loading loans:", error);
       return [];
     }
   }
@@ -148,19 +169,22 @@ export class LoanModel {
     try {
       const filePath = this.getFilePath(loan);
       console.log(`[LoanModel] Attempting to delete loan from:`, filePath);
-      
+
       const data = await window.electron.readFile(filePath);
-      const lines = data.split('\n').filter(line => line.trim().length > 0);
-      const updatedLines = lines.filter(line => line.split(',')[0] !== id);
-      await window.electron.saveFile(filePath, updatedLines.join('\n') + '\n');
+      const lines = data.split("\n").filter((line) => line.trim().length > 0);
+      const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
+      await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
       console.log(`[LoanModel] Successfully deleted loan`);
     } catch (error) {
-      console.error('[LoanModel] Error deleting loan:', error);
+      console.error("[LoanModel] Error deleting loan:", error);
       throw error;
     }
   }
 }
 
-export const createLoanModel = (dbPath: string, employeeId: string): LoanModel => {
+export const createLoanModel = (
+  dbPath: string,
+  employeeId: string
+): LoanModel => {
   return new LoanModel(dbPath, employeeId);
 };

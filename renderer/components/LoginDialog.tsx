@@ -10,53 +10,34 @@ interface LoginDialogProps {
 }
 
 export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
-  const [pinCode, setPinCode] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const login = useAuthStore((state) => state.login);
-  const setDbPath = useAuthStore((state) => state.setDbPath);
   const { dbPath } = useSettingsStore();
-  useEffect(() => {
-    console.log("LoginDialog mounted, dbPath:", dbPath);
-  }, []);
+  const login = useAuthStore((state) => state.login);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pinCode) {
-      toast.error("Please enter a PIN code");
-      return;
-    }
+    if (!pin) return;
 
-    if (!dbPath) {
-      toast.error("Database path not set");
-      return;
-    }
-
+    setError(null);
     setIsLoading(true);
-    console.log("Attempting login with PIN...");
 
     try {
-      // Set dbPath in auth store before login
-      setDbPath(dbPath);
-
-      console.log("Raw PIN length:", pinCode.length);
-      const success = await login(pinCode);
-      console.log("Login result:", success);
-
+      const success = await login(pin);
       if (success) {
-        console.log("Login successful, calling onSuccess callback");
         toast.success("Login successful");
-        onSuccess?.();
+        if (onSuccess) onSuccess();
       } else {
-        console.log("Login failed: Invalid PIN");
-        toast.error("Invalid PIN code");
-        setPinCode(""); // Clear the input on failed attempt
+        setError("Invalid PIN code");
+        setPin("");
       }
     } catch (error) {
       console.error("Login error:", error);
-      toast.error("Login failed. Please try again.");
-      setPinCode(""); // Clear the input on error
+      setError("Invalid PIN code");
+      setPin("");
     } finally {
       setIsLoading(false);
     }
@@ -79,8 +60,8 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
           <div className="relative">
             <input
               type={showPin ? "text" : "password"}
-              value={pinCode}
-              onChange={(e) => setPinCode(e.target.value)}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
               className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200"
               placeholder="Enter PIN"
               required

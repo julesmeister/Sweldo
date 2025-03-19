@@ -1,4 +1,4 @@
-import { Employee } from './employee';
+import { Employee } from "./employee";
 
 export interface Attendance {
   employeeId: string;
@@ -24,7 +24,7 @@ export interface DateRange {
 }
 
 import Papa from "papaparse";
-import { useState } from 'react';
+import { useState } from "react";
 
 export class AttendanceModel {
   private folderPath: string;
@@ -37,32 +37,58 @@ export class AttendanceModel {
   public async loadAttendances(): Promise<Attendance[]> {
     try {
       const fileContent = await window.electron.readFile(this.folderPath);
-      if (!fileContent) {
-        console.log('Attendance file is empty or doesn\'t exist, returning empty array');
+      if (!fileContent || fileContent.trim().length === 0) {
+        console.log(
+          "Attendance file is empty or doesn't exist, returning empty array"
+        );
         return []; // Return empty array if file is empty or doesn't exist
       }
-      const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
+      const results = Papa.parse(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
       return results.data.map((row: any) => ({
-        day: row.day,
+        day: parseInt(row.day),
         timeIn: row.timeIn ? row.timeIn : null,
         timeOut: row.timeOut ? row.timeOut : null,
       })) as Attendance[];
     } catch (error) {
-      console.error('Error reading attendance file:', error);
+      console.error("Error reading attendance file:", error);
       return []; // Return empty array if there's an error
     }
   }
+
   // Load attendances from CSV based on month, year, and employee ID
-  public async loadAttendancesById(month?: number, year?: number, id?: string): Promise<Attendance[]> {
+  public async loadAttendancesById(
+    month?: number,
+    year?: number,
+    id?: string
+  ): Promise<Attendance[]> {
     try {
       const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
+      console.log("[AttendanceModel] Loading attendances from:", filePath);
+
       const fileContent = await window.electron.readFile(filePath);
-      if (!fileContent) {
+      if (!fileContent || fileContent.trim().length === 0) {
+        console.log(
+          "[AttendanceModel] No content found in file, returning empty array"
+        );
         return []; // Return empty array if file is empty or doesn't exist
       }
-      const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
+
+      console.log("[AttendanceModel] File content:", fileContent);
+
+      const results = Papa.parse(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      console.log("[AttendanceModel] Parsed results:", results);
+
       return results.data.map((row: any) => ({
-        employeeId: id || '',
+        employeeId: id || "",
         day: parseInt(row.day),
         month: month || 0,
         year: year || 0,
@@ -70,38 +96,50 @@ export class AttendanceModel {
         timeOut: row.timeOut ? row.timeOut : null,
       })) as Attendance[];
     } catch (error) {
-      console.error('Error reading attendance file:', error);
+      console.error("[AttendanceModel] Error reading attendance file:", error);
       return []; // Return empty array if there's an error
     }
   }
 
-  public async loadAttendanceByDay(day: number, month: number, year: number, employeeId: string): Promise<Attendance | null> {
+  public async loadAttendanceByDay(
+    day: number,
+    month: number,
+    year: number,
+    employeeId: string
+  ): Promise<Attendance | null> {
     try {
       const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_attendance.csv`;
       const fileContent = await window.electron.readFile(filePath);
-      if (!fileContent) {
+      if (!fileContent || fileContent.trim().length === 0) {
         return null;
       }
+
       type AttendanceRow = {
         day: string;
         timeIn: string;
         timeOut: string;
       };
-      
-      const results = Papa.parse<AttendanceRow>(fileContent, { header: true, skipEmptyLines: true });
-      const attendance = results.data.find(row => 
-        parseInt(row.day) === day
-      );
-      return attendance ? {
-        employeeId,
-        day: parseInt(attendance.day),
-        month,
-        year,
-        timeIn: attendance.timeIn ? attendance.timeIn : null,
-        timeOut: attendance.timeOut ? attendance.timeOut : null,
-      } : null;
+
+      const results = Papa.parse<AttendanceRow>(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      const attendance = results.data.find((row) => parseInt(row.day) === day);
+
+      return attendance
+        ? {
+            employeeId,
+            day: parseInt(attendance.day),
+            month,
+            year,
+            timeIn: attendance.timeIn ? attendance.timeIn : null,
+            timeOut: attendance.timeOut ? attendance.timeOut : null,
+          }
+        : null;
     } catch (error) {
-      console.error('Error reading attendance file:', error);
+      console.error("[AttendanceModel] Error reading attendance file:", error);
       return null;
     }
   }
@@ -111,24 +149,30 @@ export class AttendanceModel {
     attendances: Attendance[],
     month?: number,
     year?: number,
-    id?: string,
+    id?: string
   ): Promise<void> {
     try {
+      const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
       const csv = Papa.unparse(attendances);
-      await window.electron.saveFile(this.folderPath + '/' + id + '/' + year + '_' + month + '_' + 'attendance', csv);
-      console.log(`Attendances saved successfully to ${this.folderPath}`);
+      await window.electron.writeFile(filePath, csv);
+      console.log(
+        `[AttendanceModel] Attendances saved successfully to ${filePath}`
+      );
     } catch (error) {
-      console.error(`Failed to save attendances: ${error}`);
+      console.error(`[AttendanceModel] Failed to save attendances:`, error);
       throw error;
     }
   }
 
   // Save or update attendances to CSV
   public async saveOrUpdateAttendances(
-    attendances: (Omit<Attendance, 'timeIn' | 'timeOut'> & { timeIn?: string | null; timeOut?: string | null })[],
+    attendances: (Omit<Attendance, "timeIn" | "timeOut"> & {
+      timeIn?: string | null;
+      timeOut?: string | null;
+    })[],
     month: number,
     year: number,
-    employeeId: string,
+    employeeId: string
   ): Promise<void> {
     try {
       // Construct the file path
@@ -139,16 +183,19 @@ export class AttendanceModel {
       await window.electron.ensureDir(directoryPath);
 
       // Load existing attendances
-      const existingAttendances = await this.loadAttendancesById(month, year, employeeId) || []; // Use an empty array if not found
-      if(existingAttendances === null) {
-        console.log(`No existing attendances found for ${employeeId} in ${year}-${month}`);
+      const existingAttendances =
+        (await this.loadAttendancesById(month, year, employeeId)) || []; // Use an empty array if not found
+      if (existingAttendances === null) {
+        console.log(
+          `[AttendanceModel] No existing attendances found for ${employeeId} in ${year}-${month}`
+        );
         return;
       }
 
       // Iterate through the new attendances
       for (const newAttendance of attendances) {
-        const attendanceIndex = existingAttendances.findIndex(att => 
-          att.day === newAttendance.day
+        const attendanceIndex = existingAttendances.findIndex(
+          (att) => att.day === newAttendance.day
         );
 
         if (attendanceIndex !== -1) {
@@ -156,27 +203,29 @@ export class AttendanceModel {
           existingAttendances[attendanceIndex] = {
             ...newAttendance,
             timeIn: newAttendance.timeIn ?? null,
-            timeOut: newAttendance.timeOut ?? null
+            timeOut: newAttendance.timeOut ?? null,
           };
         } else {
           // Add new attendance
           existingAttendances.push({
             ...newAttendance,
             timeIn: newAttendance.timeIn ?? null,
-            timeOut: newAttendance.timeOut ?? null
+            timeOut: newAttendance.timeOut ?? null,
           });
         }
       }
 
       // Save updated attendances to CSV
       const csv = Papa.unparse(existingAttendances);
-      await window.electron.saveFile(filePath, csv);
+      await window.electron.writeFile(filePath, csv);
+      console.log(
+        `[AttendanceModel] Successfully saved/updated attendances to ${filePath}`
+      );
     } catch (error) {
-      console.error(`Failed to save attendances: ${error}`);
+      console.error(`[AttendanceModel] Failed to save attendances:`, error);
       throw error;
     }
   }
-
 }
 
 // Factory function to create AttendanceModel instance
@@ -186,5 +235,5 @@ export const createAttendanceModel = (dbPath: string): AttendanceModel => {
 };
 
 function row(value: unknown, index: number, obj: unknown[]): value is unknown {
-  throw new Error('Function not implemented.');
+  throw new Error("Function not implemented.");
 }

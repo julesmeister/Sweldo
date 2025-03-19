@@ -28,7 +28,6 @@ import {
   AttendanceSettings,
   EmploymentType,
 } from "@/renderer/model/settings";
-import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import ScheduleSettings from "../components/ScheduleSettings";
 import RoleManagement from "../components/RoleManagement";
@@ -60,7 +59,7 @@ export default function SettingsPage() {
   const [hasRoles, setHasRoles] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
+  const attendanceSettingsModel = createAttendanceSettingsModel(dbPath || "");
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings>();
   const [holidayMultipliers, setHolidayMultipliers] = useState({
@@ -69,6 +68,58 @@ export default function SettingsPage() {
   });
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [sssRate, setSssRate] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSaveChanges = async () => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You do not have permission to modify attendance settings");
+      return;
+    }
+    if (!attendanceSettings) {
+      toast.error("No attendance settings to save");
+      return;
+    }
+    try {
+      await attendanceSettingsModel?.saveAttendanceSettings(attendanceSettings);
+      toast.success("Attendance settings saved successfully!");
+    } catch (error) {
+      console.error("Error saving attendance settings:", error);
+      toast.error("Failed to save attendance settings. Please try again.");
+    }
+  };
+
+  const handleSaveHolidayMultipliers = async () => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You do not have permission to modify holiday settings");
+      return;
+    }
+    try {
+      const regular = Number(holidayMultipliers.regular);
+      const special = Number(holidayMultipliers.special);
+
+      if (isNaN(regular) || isNaN(special)) {
+        toast.error("Please enter valid numbers for multipliers");
+        return;
+      }
+
+      if (regular <= 0 || special <= 0) {
+        toast.error("Multipliers must be greater than 0");
+        return;
+      }
+
+      await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
+      await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
+
+      const settings = await attendanceSettingsModel.loadAttendanceSettings();
+      setAttendanceSettings(settings);
+
+      toast.success("Holiday multipliers updated successfully");
+    } catch (error) {
+      console.error("Error saving holiday multipliers:", error);
+      toast.error("Failed to update holiday multipliers");
+    }
+  };
 
   // Define sections first
   const sections: SettingSection[] = [
@@ -209,6 +260,14 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleSaveChanges}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+            >
+              Save Changes
+            </button>
+          </div>
         </div>
       ),
     },
@@ -262,6 +321,14 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={handleSaveHolidayMultipliers}
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                  >
+                    Save Holiday Multipliers
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -292,7 +359,35 @@ export default function SettingsPage() {
       title: "Role Management",
       icon: <IoShieldOutline className="w-5 h-5" />,
       requiredAccess: hasRoles ? "MANAGE_SETTINGS" : "",
-      content: <RoleManagement roleModel={new RoleModelImpl(dbPath)} />,
+      content: !dbPath ? (
+        <MagicCard>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-yellow-50 rounded-lg">
+                <IoFolderOutline className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Database Path Not Set
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Please configure the database path in the Database Management
+                  section before managing roles.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelected("database")}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
+            >
+              <IoFolderOutline className="w-5 h-5" />
+              Configure Database Path
+            </button>
+          </div>
+        </MagicCard>
+      ) : (
+        <RoleManagement roleModel={new RoleModelImpl(dbPath)} />
+      ),
     },
     {
       key: "employeeManagement",
@@ -784,22 +879,26 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const loadAttendanceSettings = async () => {
+      if (!dbPath) return;
+
       try {
         const settings = await attendanceSettingsModel.loadAttendanceSettings();
         const timeSettings = await attendanceSettingsModel.loadTimeSettings();
         setEmploymentTypes(timeSettings);
-        console.log("Attendance settings loaded:", settings);
+        console.log("[Settings] Attendance settings loaded:", settings);
         setAttendanceSettings(settings);
         setHolidayMultipliers({
           regular: settings.regularHolidayMultiplier.toString(),
           special: settings.specialHolidayMultiplier.toString(),
         });
       } catch (error) {
-        console.error("Error loading attendance settings:", error);
+        console.error("[Settings] Error loading attendance settings:", error);
+        toast.error("Failed to load attendance settings");
       }
     };
+
     loadAttendanceSettings();
-  }, []);
+  }, [dbPath]);
 
   useEffect(() => {
     if (!currentPath) return;
@@ -903,58 +1002,8 @@ export default function SettingsPage() {
     return selectedEmployees.some((selected) => selected.id === employee.id);
   };
 
-  const handleSaveHolidayMultipliers = async () => {
-    if (!hasAccess("MANAGE_ATTENDANCE")) {
-      toast.error("You do not have permission to modify holiday settings");
-      return;
-    }
-    try {
-      const regular = Number(holidayMultipliers.regular);
-      const special = Number(holidayMultipliers.special);
-
-      if (isNaN(regular) || isNaN(special)) {
-        toast.error("Please enter valid numbers for multipliers");
-        return;
-      }
-
-      if (regular <= 0 || special <= 0) {
-        toast.error("Multipliers must be greater than 0");
-        return;
-      }
-
-      await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
-      await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
-
-      const settings = await attendanceSettingsModel.loadAttendanceSettings();
-      setAttendanceSettings(settings);
-
-      toast.success("Holiday multipliers updated successfully");
-    } catch (error) {
-      console.error("Error saving holiday multipliers:", error);
-      toast.error("Failed to update holiday multipliers");
-    }
-  };
-
   const handleSelectionChange = (key: string | number) => {
     setSelected(key.toString());
-  };
-
-  const handleSaveChanges = async () => {
-    if (!hasAccess("MANAGE_ATTENDANCE")) {
-      toast.error("You do not have permission to modify attendance settings");
-      return;
-    }
-    if (!attendanceSettings) {
-      toast.error("No attendance settings to save");
-      return;
-    }
-    try {
-      await attendanceSettingsModel?.saveAttendanceSettings(attendanceSettings);
-      toast.success("Attendance settings saved successfully!");
-    } catch (error) {
-      console.error("Error saving attendance settings:", error);
-      toast.error("Failed to save attendance settings. Please try again.");
-    }
   };
 
   const handleSaveEmploymentTypes = async (types: EmploymentType[]) => {
@@ -983,46 +1032,112 @@ export default function SettingsPage() {
     });
   };
 
+  // Initialize models and data
+  const initializeData = React.useCallback(async () => {
+    if (!dbPath) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Initialize models
+      const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
+      const model = createEmployeeModel(dbPath);
+      setEmployeeModel(model);
+
+      // Load attendance settings
+      const settings = await attendanceSettingsModel.loadAttendanceSettings();
+      const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+      setEmploymentTypes(timeSettings);
+      console.log("[Settings] Attendance settings loaded:", settings);
+      setAttendanceSettings(settings);
+      setHolidayMultipliers({
+        regular: settings.regularHolidayMultiplier.toString(),
+        special: settings.specialHolidayMultiplier.toString(),
+      });
+
+      // Load employees
+      const allEmployees = await model.loadEmployees();
+      const activeList = allEmployees.filter((emp) => emp.status === "active");
+      const inactiveList = allEmployees.filter(
+        (emp) => emp.status === "inactive"
+      );
+      setSelectedEmployees([]);
+      setActiveEmployees(activeList);
+      setInactiveEmployees(inactiveList);
+
+      // Check roles
+      const roleModel = new RoleModelImpl(dbPath);
+      const roles = await roleModel.getRoles();
+      setHasRoles(roles.length > 0);
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error("[Settings] Error initializing data:", error);
+      setError("Failed to load settings data. Please try again.");
+      setIsLoading(false);
+    }
+  }, [dbPath]);
+
+  // Effect for initialization
+  useEffect(() => {
+    console.log("[Settings] Initializing with dbPath:", dbPath);
+    initializeData();
+  }, [dbPath, initializeData]);
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 mx-auto"></div>
+          <div className="text-gray-600">Loading settings...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="text-red-600 text-xl">⚠️</div>
+          <div className="text-gray-800 font-medium">{error}</div>
+          <button
+            onClick={initializeData}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Early return for access restriction
-  if (!hasAccess("MANAGE_SETTINGS") && hasRoles) {
+  if (!hasAccess("MANAGE_SETTINGS") && hasRoles && dbPath) {
     return (
-      <RootLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-              Access Restricted
-            </h2>
-            <p className="text-gray-500">
-              You don't have permission to access settings.
-            </p>
-          </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+            Access Restricted
+          </h2>
+          <p className="text-gray-500">
+            You don't have permission to access settings.
+          </p>
         </div>
-      </RootLayout>
+      </div>
     );
   }
 
-  // Early return for no accessible sections
-  if (accessibleSections.length === 0) {
+  // If no dbPath, only show database configuration section
+  if (!dbPath) {
     return (
-      <RootLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-              No Available Settings
-            </h2>
-            <p className="text-gray-500">
-              You don't have access to any settings sections.
-            </p>
-          </div>
-        </div>
-      </RootLayout>
-    );
-  }
-
-  return (
-    <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
         <MagicCard
           className="p-0.5 rounded-2xl col-span-2"
@@ -1036,40 +1151,123 @@ export default function SettingsPage() {
             <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
               <div className="border-b border-gray-100">
                 <div className="flex items-center gap-1 px-6 bg-gray-50">
-                  {accessibleSections.map((section) => (
-                    <button
-                      key={section.key}
-                      onClick={() => handleSelectionChange(section.key)}
-                      className={`flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all ${
-                        selected === section.key
-                          ? "text-blue-600"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                    >
-                      <div
-                        className={`transition-colors ${
-                          selected === section.key
-                            ? "text-blue-600"
-                            : "text-gray-400"
-                        }`}
-                      >
-                        {section.icon}
-                      </div>
-                      <span>{section.title}</span>
-                    </button>
-                  ))}
+                  <div className="flex items-center gap-2 px-4 py-4 text-sm font-medium text-blue-600">
+                    <MdOutlineDataset className="h-5 w-5" />
+                    <span>Database Management</span>
+                  </div>
                 </div>
               </div>
               <div className="p-6">
-                {
-                  accessibleSections.find((section) => section.key === selected)
-                    ?.content
-                }
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-lg font-semibold mb-2">
+                    Initial Database Setup
+                  </h2>
+                  <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
+                    <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
+                    <p className="text-sm text-gray-800 font-light">
+                      Welcome to Sweldo! Before you can start using the
+                      application, please select a directory where your database
+                      files will be stored. A folder named 'SweldoDB' will be
+                      created in this location.
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <input
+                      type="text"
+                      value={currentPath}
+                      readOnly
+                      className="flex-1 p-2 border rounded-md bg-gray-50"
+                      placeholder="Select database directory..."
+                    />
+                    <button
+                      onClick={async () => {
+                        const folderPath =
+                          await window.electron.openFolderDialog();
+                        if (folderPath) {
+                          setDbPath(folderPath);
+                          setCurrentPath(folderPath);
+                          // Reload the page after setting the path
+                          window.location.reload();
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Browse
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </MagicCard>
       </main>
-    </RootLayout>
+    );
+  }
+
+  // Early return for no accessible sections
+  if (accessibleSections.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+            No Available Settings
+          </h2>
+          <p className="text-gray-500">
+            You don't have access to any settings sections.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+      <MagicCard
+        className="p-0.5 rounded-2xl col-span-2"
+        gradientSize={400}
+        gradientColor="#9E7AFF"
+        gradientOpacity={0.8}
+        gradientFrom="#9E7AFF"
+        gradientTo="#FE8BBB"
+      >
+        <div className="px-4 sm:px-0">
+          <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
+            <div className="border-b border-gray-100">
+              <div className="flex items-center gap-1 px-6 bg-gray-50">
+                {accessibleSections.map((section) => (
+                  <button
+                    key={section.key}
+                    onClick={() => handleSelectionChange(section.key)}
+                    className={`flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all ${
+                      selected === section.key
+                        ? "text-blue-600"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <div
+                      className={`transition-colors ${
+                        selected === section.key
+                          ? "text-blue-600"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {section.icon}
+                    </div>
+                    <span>{section.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-6">
+              {
+                accessibleSections.find((section) => section.key === selected)
+                  ?.content
+              }
+            </div>
+          </div>
+        </div>
+      </MagicCard>
+    </main>
   );
 }

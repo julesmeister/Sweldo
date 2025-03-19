@@ -593,7 +593,7 @@ export class Payroll {
 
       // Convert back to CSV
       const updatedContent = Papa.unparse(filteredData);
-      await window.electron.saveFile(filePath, updatedContent);
+      await window.electron.writeFile(filePath, updatedContent);
       console.log(
         `Deleted payroll summary rows for employee ${employeeId} between ${startDate.toDateString()} and ${endDate.toDateString()}`
       );

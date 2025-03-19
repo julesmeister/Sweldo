@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import { toast } from 'sonner';
+import { toast } from "sonner";
 
 export interface Employee {
   id: string;
@@ -9,7 +9,7 @@ export interface Employee {
   sss?: number;
   philHealth?: number;
   pagIbig?: number;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   employmentType?: string;
   lastPaymentPeriod?: {
     start: Date;
@@ -18,7 +18,7 @@ export interface Employee {
 }
 
 // Add a delay utility function
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Add a retry utility function
 async function retryOperation<T>(
@@ -27,27 +27,31 @@ async function retryOperation<T>(
   delayMs: number = 500
 ): Promise<T> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error: any) {
       lastError = error as Error;
-      if (error.message.includes('EBUSY')) {
-        console.log(`File busy, retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`);
+      if (error.message.includes("EBUSY")) {
+        console.log(
+          `File busy, retrying in ${delayMs}ms... (attempt ${
+            attempt + 1
+          }/${maxRetries})`
+        );
         await delay(delayMs);
         continue;
       }
       throw error;
     }
   }
-  
+
   throw lastError;
 }
 
 export class EmployeeModel {
   private filePath: string;
-  
+
   constructor(filePath: string) {
     this.filePath = filePath;
   }
@@ -61,7 +65,10 @@ export class EmployeeModel {
       if (!fileContent) {
         return []; // Return empty array if file is empty or doesn't exist
       }
-      const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
+      const results = Papa.parse(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+      });
       return results.data as Employee[];
     } catch (error) {
       return []; // Return empty array if there's an error
@@ -71,7 +78,7 @@ export class EmployeeModel {
   // Load active employees from CSV
   public async loadActiveEmployees(): Promise<Employee[]> {
     const allEmployees = await this.loadEmployees();
-    return allEmployees.filter(employee => employee.status === 'active');
+    return allEmployees.filter((employee) => employee.status === "active");
   }
 
   // Load a specific employee from CSV by ID
@@ -83,7 +90,10 @@ export class EmployeeModel {
       if (!fileContent) {
         return null; // Return null if file is empty or doesn't exist
       }
-      const results = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
+      const results = Papa.parse(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+      });
       const employees = results.data as Employee[];
       const employee = employees.find((emp) => emp.id === id) || null; // Return the employee or null if not found
       return employee;
@@ -96,11 +106,16 @@ export class EmployeeModel {
   public async saveOnlyNewEmployees(employees: Employee[]): Promise<void> {
     try {
       const currentEmployees = await this.loadEmployees();
-      const newEmployees = employees.filter(newEmployee => !currentEmployees.some(existingEmployee => existingEmployee.id === newEmployee.id));
+      const newEmployees = employees.filter(
+        (newEmployee) =>
+          !currentEmployees.some(
+            (existingEmployee) => existingEmployee.id === newEmployee.id
+          )
+      );
       const allEmployees = [...currentEmployees, ...newEmployees];
       const csv = Papa.unparse(allEmployees);
       await retryOperation(async () => {
-        await window.electron.saveFile(this.filePath, csv);
+        await window.electron.writeFile(this.filePath, csv);
       });
     } catch (error) {
       throw error;
@@ -113,7 +128,9 @@ export class EmployeeModel {
       // Load current employees
       const currentEmployees = await this.loadEmployees();
       // Find the index of the employee to update
-      const index = currentEmployees.findIndex(existingEmployee => existingEmployee.id === employee.id);
+      const index = currentEmployees.findIndex(
+        (existingEmployee) => existingEmployee.id === employee.id
+      );
       if (index === -1) {
         const error = `Employee with id ${employee.id} not found.`;
         console.error(error);
@@ -125,7 +142,7 @@ export class EmployeeModel {
       // Save the updated employee list back to the CSV
       const csv = Papa.unparse(currentEmployees);
       await retryOperation(async () => {
-        await window.electron.saveFile(this.filePath, csv);
+        await window.electron.writeFile(this.filePath, csv);
       });
       toast.success(`Employee status updated to ${employee.status}.`);
     } catch (error) {
@@ -142,7 +159,9 @@ export class EmployeeModel {
       // Load current employees
       const currentEmployees = await this.loadEmployees();
       // Find the index of the employee to update
-      const index = currentEmployees.findIndex(existingEmployee => existingEmployee.id === employee.id);
+      const index = currentEmployees.findIndex(
+        (existingEmployee) => existingEmployee.id === employee.id
+      );
       if (index === -1) {
         const error = `Employee with id ${employee.id} not found.`;
         console.error(error);
@@ -154,7 +173,7 @@ export class EmployeeModel {
       // Save the updated employee list back to the CSV
       const csv = Papa.unparse(currentEmployees);
       await retryOperation(async () => {
-        await window.electron.saveFile(this.filePath, csv);
+        await window.electron.writeFile(this.filePath, csv);
       });
       toast.success(`Employee details updated.`);
     } catch (error) {

@@ -6,11 +6,12 @@ import { Toaster, toast } from "sonner";
 import { LoadingBar } from "./LoadingBar";
 import { useEffect, useRef, useState } from "react";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { LoginDialog } from "./LoginDialog";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { RoleModelImpl } from "../model/role";
+import { IoFolderOutline } from "react-icons/io5";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
@@ -19,29 +20,57 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const { setLoading } = useLoadingStore();
+  const { setLoading, setActiveLink } = useLoadingStore();
   const initialRender = useRef(true);
-  const { isAuthenticated, logout, setDbPath } = useAuthStore();
-  const { dbPath } = useSettingsStore();
+  const { isAuthenticated, logout } = useAuthStore();
+  const { dbPath, isInitialized, initialize } = useSettingsStore();
   const [showLogin, setShowLogin] = useState(false);
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
+
+  // Initialize settings store
+  useEffect(() => {
+    console.log("Initializing settings...");
+    initialize().catch((error) => {
+      console.error("Failed to initialize settings:", error);
+      toast.error("Failed to initialize settings");
+    });
+  }, [initialize]);
+
+  const handleSettingsRedirect = async () => {
+    try {
+      setLoading(true);
+      setActiveLink("/settings");
+      await router.push("/settings");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Initialize auth store with dbPath and check for roles
   useEffect(() => {
     const initializeAuth = async () => {
+      // Wait for settings to be initialized
+      if (!isInitialized) {
+        console.log("Waiting for settings to initialize...");
+        return;
+      }
+
+      console.log("Checking auth with dbPath:", dbPath);
+
       if (!dbPath) {
         setIsCheckingRoles(false);
-        return;
+        // If no dbPath, we need to allow access to settings
+        if (pathname === "/settings") {
+          return; // Don't show login for settings page when no dbPath
+        }
       }
 
       if (isAuthenticated) {
         setIsCheckingRoles(false);
         return;
       }
-
-      console.log("Setting dbPath in auth store:", dbPath);
-      setDbPath(dbPath);
 
       // Check if any roles exist
       try {
@@ -57,7 +86,7 @@ export default function RootLayout({
     };
 
     initializeAuth();
-  }, [dbPath, isAuthenticated]); // Add isAuthenticated to dependencies to properly handle auth state changes
+  }, [dbPath, isAuthenticated, pathname, isInitialized]);
 
   const [lastActivity, setLastActivity] = useState(Date.now());
 
@@ -125,7 +154,7 @@ export default function RootLayout({
   }
 
   // Show login dialog when authentication is required
-  if (showLogin) {
+  if (showLogin && (!dbPath || pathname !== "/settings")) {
     return (
       <div className="min-h-screen bg-background font-sans">
         <Toaster position="top-right" richColors />
@@ -135,6 +164,30 @@ export default function RootLayout({
             setShowLogin(false);
           }}
         />
+      </div>
+    );
+  }
+
+  // If no dbPath and not on settings page, show redirect message
+  if (!dbPath && !pathname?.startsWith("/settings")) {
+    return (
+      <div className="min-h-screen bg-background font-sans flex items-center justify-center">
+        <div className="text-center p-8 max-w-md">
+          <IoFolderOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+            Database Path Not Set
+          </h2>
+          <p className="text-gray-500 mb-4">
+            Please configure your database path in settings before continuing.
+          </p>
+          <button
+            onClick={handleSettingsRedirect}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Go to Settings
+          </button>
+        </div>
+        <Toaster position="top-right" richColors />
       </div>
     );
   }

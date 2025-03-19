@@ -56,15 +56,25 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           year,
           month.getMonth() + 1
         );
-        filteredPayrolls = payrollData
-          .map((payroll) => ({
-            ...payroll,
-            employeeName: employee?.name || "Unknown Employee",
-          }))
-          .filter((payroll) => {
+
+        // Use a Map to track unique payrolls by start date
+        const uniquePayrolls = new Map();
+        payrollData.forEach((payroll) => {
+          const key = new Date(payroll.startDate).getTime();
+          if (!uniquePayrolls.has(key)) {
+            uniquePayrolls.set(key, {
+              ...payroll,
+              employeeName: employee?.name || "Unknown Employee",
+            });
+          }
+        });
+
+        filteredPayrolls = Array.from(uniquePayrolls.values()).filter(
+          (payroll) => {
             const payrollDate = new Date(payroll.startDate);
             return payrollDate >= startOfMonth && payrollDate <= endOfMonth;
-          });
+          }
+        );
       } else {
         const monthsMap: Record<
           Exclude<typeof filterType, "custom">,
@@ -82,15 +92,25 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           year,
           month ? month.getMonth() + 1 : 1
         );
-        filteredPayrolls = payrollData
-          .map((payroll) => ({
-            ...payroll,
-            employeeName: employee?.name || "Unknown Employee",
-          }))
-          .filter((payroll) => {
+
+        // Use a Map to track unique payrolls by start date
+        const uniquePayrolls = new Map();
+        payrollData.forEach((payroll) => {
+          const key = new Date(payroll.startDate).getTime();
+          if (!uniquePayrolls.has(key)) {
+            uniquePayrolls.set(key, {
+              ...payroll,
+              employeeName: employee?.name || "Unknown Employee",
+            });
+          }
+        });
+
+        filteredPayrolls = Array.from(uniquePayrolls.values()).filter(
+          (payroll) => {
             const payrollDate = new Date(payroll.startDate);
             return payrollDate >= cutoffDate;
-          });
+          }
+        );
       }
 
       setPayrolls(filteredPayrolls);
