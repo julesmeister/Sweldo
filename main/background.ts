@@ -1,11 +1,12 @@
 import path from "path";
-import { app, ipcMain, dialog, protocol } from "electron";
+import { app, ipcMain, dialog, protocol, shell } from "electron";
 import serve from "electron-serve";
 import { createWindow } from "./helpers";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import { ensureDir } from "fs-extra";
 import PDFDocument from "pdfkit";
+import { generatePayrollPDF } from "./services/pdfGenerator";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -161,6 +162,11 @@ interface PayrollDeductions {
   pagIbig: number;
   cashAdvanceDeductions: number;
   others: number;
+  sssLoan?: number;
+  pagibigLoan?: number;
+  ca?: number;
+  partial?: number;
+  totalDeduction: number;
 }
 
 interface PayrollSummary {
@@ -180,133 +186,28 @@ interface PayrollSummary {
 interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
+  companyName: string;
 }
 
 // PDF Generation
 ipcMain.handle(
   "pdf:generate",
-  async (
-    _event,
-    {
-      payrollSummaries,
-      options,
-    }: { payrollSummaries: PayrollSummary[]; options: PDFGeneratorOptions }
-  ) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const outputFileName = `payroll_summaries_${
-      new Date().toISOString().split("T")[0]
-    }.pdf`;
-    const outputFilePath = path.join(options.outputPath, outputFileName);
-
-    // Helper functions
-    const formatCurrency = (amount: number) => `Php ${amount.toFixed(2)}`;
-    const formatDate = (date: string) => {
-      return new Date(date).toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    };
-
-    // Create write stream
-    await ensureDir(options.outputPath);
-    const writeStream = createWriteStream(outputFilePath);
-
-    return new Promise<string>((resolve, reject) => {
-      // Pipe the PDF to the write stream
-      doc.pipe(writeStream);
-
-      // Process each payroll summary
-      payrollSummaries.forEach((summary: PayrollSummary, i: number) => {
-        // Add a new page for each payroll except the first one
-        if (i > 0) {
-          doc.addPage();
-        }
-
-        // Add logo if provided
-        if (options.logoPath) {
-          try {
-            doc.image(options.logoPath, 50, 45, { width: 50 });
-          } catch (error) {
-            console.error("Error loading logo:", error);
-          }
-        }
-
-        // Company header
-        doc
-          .fontSize(16)
-          .text("Pure Care Marketing, Inc.", 110, 50, { align: "left" })
-          .fontSize(12)
-          .text("Pay Slip", 110, 70)
-          .text(
-            `${formatDate(summary.startDate)} - ${formatDate(summary.endDate)}`,
-            110,
-            90
-          );
-
-        // Employee information
-        doc
-          .fontSize(10)
-          .text("Name Employee:", 50, 120)
-          .text(summary.employeeName, 150, 120)
-          .text("SSS:", 50, 140);
-
-        // Deductions section
-        doc
-          .text("Ultime/Tar", 50, 160)
-          .text(
-            `Php ${summary.undertimeDeduction?.toFixed(2) || "0.00"}`,
-            120,
-            160
-          )
-          .text("No. of Days", 200, 160)
-          .text(`${summary.daysWorked}`, 270, 160);
-
-        doc
-          .text("SSS", 50, 180)
-          .text(`Php ${summary.deductions.sss.toFixed(2)}`, 120, 180)
-          .text("Rates", 200, 180)
-          .text(formatCurrency(summary.basicPay), 270, 180);
-
-        // ... Rest of the PDF generation code ...
-
-        // Total section
-        const totalDeductions =
-          summary.deductions.sss +
-          summary.deductions.philHealth +
-          summary.deductions.pagIbig +
-          summary.deductions.cashAdvanceDeductions +
-          summary.deductions.others;
-
-        doc
-          .text("Total Deduction", 50, 340)
-          .text(formatCurrency(totalDeductions), 120, 340)
-          .text("Gross Amount", 200, 340)
-          .text(formatCurrency(summary.grossPay), 270, 340);
-
-        doc
-          .text("Net Pay", 200, 360)
-          .text(formatCurrency(summary.netPay), 270, 360);
-
-        // Signature section
-        doc
-          .text("Prepared by:", 50, 400)
-          .text("Penelope Sarah Tan", 50, 420)
-          .text("Approved by:", 270, 400)
-          .text("Ruth Sy Lee", 270, 420);
-      });
-
-      // Handle events
-      writeStream.on("finish", () => {
-        resolve(outputFilePath);
-      });
-
-      writeStream.on("error", (error) => {
-        reject(error);
-      });
-
-      // Finalize the PDF
-      doc.end();
-    });
+  async (_, payrolls: PayrollSummary[], options: PDFGeneratorOptions) => {
+    try {
+      const outputPath = await generatePayrollPDF(payrolls, options);
+      return outputPath;
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      throw error;
+    }
   }
 );
+
+// App path handlers
+ipcMain.handle("app:getPath", (_, name) => {
+  return app.getPath(name);
+});
+
+ipcMain.handle("app:openPath", async (_, path) => {
+  return shell.openPath(path);
+});

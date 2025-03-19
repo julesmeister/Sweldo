@@ -6,7 +6,11 @@ import type {
 export interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
+  companyName: string;
 }
+
+// Re-export the type to ensure it's recognized
+export type { PDFGeneratorOptions as PDFOptions };
 
 export async function generatePayrollPDF(
   payrollSummaries: PayrollSummary[],

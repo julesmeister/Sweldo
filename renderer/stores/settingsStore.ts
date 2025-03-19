@@ -102,6 +102,7 @@ export const useSettingsStore = create<SettingsState>()(
         dbPath: state.dbPath,
         logoPath: state.logoPath,
       }),
+      getStorage: () => localStorage,
     }
   )
 );

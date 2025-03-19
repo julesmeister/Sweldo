@@ -48,18 +48,38 @@ const fileSystem = {
   },
   async generatePDF(
     payrollSummaries: any[],
-    options: { outputPath: string; logoPath?: string }
+    options: { outputPath: string; logoPath?: string; companyName: string }
   ): Promise<string> {
-    return await ipcRenderer.invoke("pdf:generate", {
-      payrollSummaries,
-      options,
-    });
+    return await ipcRenderer.invoke("pdf:generate", payrollSummaries, options);
   },
+  getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
+  openPath: (path: string) => ipcRenderer.invoke("app:openPath", path),
 };
 
 // Expose the APIs to renderer process
-contextBridge.exposeInMainWorld("ipc", handler);
-contextBridge.exposeInMainWorld("electron", fileSystem);
+contextBridge.exposeInMainWorld("electron", {
+  readFile: (filePath: string) => ipcRenderer.invoke("fs:readFile", filePath),
+  writeFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke("fs:writeFile", filePath, content),
+  saveFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke("fs:saveFile", filePath, content),
+  ensureDir: (dirPath: string) => ipcRenderer.invoke("fs:ensureDir", dirPath),
+  fileExists: (filePath: string) =>
+    ipcRenderer.invoke("fs:fileExists", filePath),
+  openFolderDialog: (options?: { defaultPath?: string }) =>
+    ipcRenderer.invoke("dialog:openFolder", options),
+  getFullPath: (relativePath: string) =>
+    ipcRenderer.invoke("fs:getFullPath", { relativePath }),
+  showOpenDialog: (options: {
+    properties: string[];
+    filters?: { name: string; extensions: string[] }[];
+  }) => ipcRenderer.invoke("dialog:showOpenDialog", options),
+  openFile: (filePath: string) => ipcRenderer.invoke("fs:openFile", filePath),
+  getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
+  openPath: (path: string) => ipcRenderer.invoke("app:openPath", path),
+  generatePDF: (payrollSummaries: any[], options: any) =>
+    ipcRenderer.invoke("pdf:generate", payrollSummaries, options),
+});
 
 export type IpcHandler = typeof handler;
 export type FileSystem = typeof fileSystem;

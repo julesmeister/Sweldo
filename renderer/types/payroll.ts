@@ -4,6 +4,11 @@ export interface PayrollDeductions {
   pagIbig: number;
   cashAdvanceDeductions: number;
   others: number;
+  sssLoan?: number;
+  pagibigLoan?: number;
+  ca?: number;
+  partial?: number;
+  totalDeduction: number;
 }
 
 export interface PayrollSummary {
@@ -18,4 +23,13 @@ export interface PayrollSummary {
   grossPay: number;
   netPay: number;
   deductions: PayrollDeductions;
+  preparedBy?: string;
+  approvedBy?: string;
+  payslipNumber?: number;
+}
+
+export interface PDFGeneratorOptions {
+  outputPath: string;
+  logoPath?: string;
+  companyName: string;
 }

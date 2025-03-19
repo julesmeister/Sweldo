@@ -17,7 +17,7 @@ import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { IoShieldOutline } from "react-icons/io5";
 import { toast } from "sonner";
-import { generatePayrollPDF } from "@/renderer/utils/pdfGenerator";
+import path from "path";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -59,13 +59,14 @@ export default function PayrollPage() {
     showAbove?: boolean;
   } | null>(null);
   const { isLoading, setLoading, setActiveLink } = useLoadingStore();
-  const { dbPath } = useSettingsStore();
+  const { dbPath, logoPath } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
   const { dateRange, setDateRange } = useDateRangeStore();
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Initialize date range from storage
   useEffect(() => {
@@ -109,19 +110,34 @@ export default function PayrollPage() {
 
       setLoading(true);
       try {
-        // Get current month (0-11) and add 1 to match calendar months (1-12)
-        // This is used to load the current month's payroll by default
-        const month = new Date().getMonth() + 1;
+        // Convert string dates to Date objects if needed
+        const startDate = dateRange.startDate
+          ? new Date(dateRange.startDate)
+          : new Date();
+        const endDate = dateRange.endDate
+          ? new Date(dateRange.endDate)
+          : new Date();
 
-        // Get current year for loading payroll data
-        const year = new Date().getFullYear();
+        // Get month and year from the date range
+        const month = startDate.getMonth() + 1;
+        const year = startDate.getFullYear();
+
+        console.log("[PayrollPage] Loading payrolls for:", {
+          employeeId: selectedEmployeeId,
+          year,
+          month,
+          dateRange: {
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+          },
+        });
 
         // Load employee first
         const employeeModel = createEmployeeModel(dbPath);
         const loadedEmployee = await employeeModel.loadEmployeeById(
           selectedEmployeeId
         );
-        console.log("Loaded employee:", loadedEmployee);
+        console.log("[PayrollPage] Loaded employee:", loadedEmployee);
         setEmployee(loadedEmployee);
 
         // Then load payrolls for the current month and year
@@ -131,6 +147,7 @@ export default function PayrollPage() {
           year,
           month
         );
+        console.log("[PayrollPage] Loaded payrolls:", employeePayrolls);
         setPayrolls(employeePayrolls);
       } catch (error: any) {
         console.error("[PayrollPage] Error loading payrolls:", error);
@@ -140,7 +157,7 @@ export default function PayrollPage() {
     };
 
     loadPayrolls();
-  }, [dbPath, selectedEmployeeId, setLoading, refreshPayrolls]);
+  }, [dbPath, selectedEmployeeId, setLoading, refreshPayrolls, dateRange]);
 
   const handleDeductionsClick = (
     event: React.MouseEvent<HTMLButtonElement>
@@ -265,59 +282,73 @@ export default function PayrollPage() {
       return;
     }
 
-    setLoading(true);
     try {
-      const employeeModel = createEmployeeModel(dbPath);
-      const allEmployees = await employeeModel.loadEmployees();
-      const payroll = new Payroll([], "xlsx", dbPath);
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
+      setIsGeneratingPDF(true);
 
-      // Generate payroll summaries for all employees
-      const allPayrollSummaries = await Promise.all(
-        allEmployees.map(async (employee) => {
-          try {
-            return await payroll.generatePayrollSummary(
-              employee.id,
-              startDate,
-              endDate
-            );
-          } catch (error) {
-            console.error(
-              `Error generating payroll for ${employee.name}:`,
-              error
-            );
-            return null;
-          }
-        })
-      );
+      // Get the output directory path
+      const outputPath = await window.electron.getPath("documents");
+      const pdfOutputPath = path.join(outputPath, "payroll_summaries.pdf");
 
-      // Filter out any failed generations
-      const validPayrollSummaries = allPayrollSummaries.filter(
-        (summary): summary is PayrollSummaryModel => summary !== null
-      );
-
-      if (validPayrollSummaries.length === 0) {
-        throw new Error("No valid payroll summaries generated");
+      // Use logo from settings store
+      if (!logoPath) {
+        console.warn("Logo path not set in settings");
       }
 
-      // Generate PDF
-      const outputPath = await window.electron.getPath("downloads");
-      const pdfPath = await generatePayrollPDF(validPayrollSummaries, {
-        logoPath: useSettingsStore.getState().logoPath || "",
-        outputPath,
+      // Format payroll data to match PayrollSummary type
+      const formattedPayrolls = payrolls.map((summary, index) => ({
+        ...summary,
+        startDate: summary.startDate.toISOString(),
+        endDate: summary.endDate.toISOString(),
+        employeeName: summary.employeeName,
+        daysWorked: Number(summary.daysWorked) || 15,
+        basicPay: Number(summary.basicPay) || 0,
+        undertimeDeduction: Number(summary.undertimeDeduction) || 0,
+        holidayBonus: Number(summary.holidayBonus) || 0,
+        overtime: Number(summary.overtime) || 0,
+        grossPay: Number(summary.grossPay) || 0,
+        netPay: Number(summary.netPay) || 0,
+        rates: Number(summary.basicPay / 15) || 0,
+        legalHoliday: 0,
+        specialHoliday: 0,
+        otPay: Number(summary.overtime) || 0,
+        deductions: {
+          sss: Number(summary.deductions.sss) || 0,
+          philHealth: Number(summary.deductions.philHealth) || 0,
+          pagIbig: Number(summary.deductions.pagIbig) || 0,
+          cashAdvanceDeductions:
+            Number(summary.deductions.cashAdvanceDeductions) || 0,
+          others: Number(summary.deductions.others) || 0,
+          sssLoan: 0,
+          pagibigLoan: 0,
+          ca: Number(summary.deductions.cashAdvanceDeductions) || 0,
+          partial: 0,
+          totalDeduction:
+            Number(summary.deductions.sss || 0) +
+            Number(summary.deductions.philHealth || 0) +
+            Number(summary.deductions.pagIbig || 0) +
+            Number(summary.deductions.cashAdvanceDeductions || 0) +
+            Number(summary.deductions.others || 0),
+        },
+        preparedBy: "Penelope Sarah Tan",
+        approvedBy: "Ruth Sy Lee",
+        payslipNumber: index + 1,
+      }));
+
+      // Generate PDF with formatted payroll summaries
+      const pdfPath = await window.electron.generatePDF(formattedPayrolls, {
+        outputPath: pdfOutputPath,
+        logoPath: logoPath || "",
         companyName: "Pure Care Marketing, Inc.",
       });
 
-      toast.success(`PDF generated successfully at ${pdfPath}`);
-
       // Open the generated PDF
       await window.electron.openPath(pdfPath);
+      toast.success("PDF generated successfully!");
     } catch (error) {
       console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF. Please try again.");
+      toast.error("Failed to generate PDF");
     } finally {
-      setLoading(false);
+      setIsGeneratingPDF(false);
     }
   };
 
