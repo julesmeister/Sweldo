@@ -180,6 +180,7 @@ interface PayrollSummary {
   overtime: number;
   grossPay: number;
   netPay: number;
+  dailyRate: number;
   deductions: PayrollDeductions;
 }
 

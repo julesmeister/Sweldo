@@ -392,7 +392,6 @@ export default function PayrollPage() {
       const pdfPath = await window.electron.generatePDF(formattedPayrolls, {
         outputPath: pdfOutputPath,
         logoPath: logoPath || "",
-        companyName: "Pure Care Marketing, Inc.",
       });
 
       // Open the generated PDF
@@ -427,7 +426,7 @@ export default function PayrollPage() {
 
   return (
     <RootLayout>
-      <div className="space-y-4 p-4 mt-4">
+      <div className="space-y-4 py-12 p-4 mt-4">
         <div className="bg-white/40 backdrop-blur-sm rounded-lg shadow-sm border border-blue-100 p-3 mb-4 relative z-20">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1">

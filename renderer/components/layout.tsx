@@ -196,7 +196,7 @@ export default function RootLayout({
     <div className="min-h-screen bg-background font-sans">
       <LoadingBar />
       <Navbar />
-      <main className="max-w-12xl mx-auto pt-14 px-4">
+      <main className="max-w-12xl mx-auto pt-4 px-4">
         {children}
         <Toaster position="top-right" richColors />
       </main>

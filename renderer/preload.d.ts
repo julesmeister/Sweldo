@@ -35,6 +35,7 @@ interface IpcRenderer {
 declare global {
   interface Window {
     electron: {
+      [x: string]: any;
       readFile(filePath: string): Promise<string>;
       writeFile(filePath: string, content: string): Promise<void>;
       saveFile(filePath: string, content: string): Promise<void>;

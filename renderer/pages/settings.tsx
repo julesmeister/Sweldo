@@ -1222,7 +1222,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+    <main className="max-w-12xl mx-auto py-20 sm:px-6 lg:px-8">
       <MagicCard
         className="p-0.5 rounded-2xl col-span-2"
         gradientSize={400}
