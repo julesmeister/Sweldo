@@ -44,8 +44,26 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-md p-6">
+    <div className="fixed inset-0 flex items-center justify-center z-50 overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black">
+        <div className="absolute inset-0">
+          {/* Radial gradient overlay */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,0.4),rgba(0,0,0,0.8))] animate-pulse"></div>
+
+          {/* Animated blobs with enhanced colors */}
+          <div className="absolute top-0 left-0 w-[40rem] h-[40rem] bg-blue-500/30 rounded-full mix-blend-screen filter blur-3xl animate-blob"></div>
+          <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-purple-500/30 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-2000"></div>
+          <div className="absolute -bottom-32 left-1/2 w-[40rem] h-[40rem] bg-pink-500/30 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-4000"></div>
+
+          {/* Additional subtle blobs for more depth */}
+          <div className="absolute top-1/2 left-1/4 w-[30rem] h-[30rem] bg-indigo-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-1000"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[25rem] h-[25rem] bg-cyan-500/20 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-3000"></div>
+        </div>
+      </div>
+
+      {/* Login Dialog */}
+      <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700/50 w-full max-w-md p-6 relative z-10">
         <div className="flex items-center justify-center mb-6">
           <div className="bg-blue-600/20 p-3 rounded-full">
             <IoLockClosed className="h-6 w-6 text-blue-500" />
@@ -62,7 +80,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
               type={showPin ? "text" : "password"}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200"
+              className="w-full px-4 py-2 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200"
               placeholder="Enter PIN"
               required
               minLength={4}

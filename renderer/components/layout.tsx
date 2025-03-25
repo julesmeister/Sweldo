@@ -12,6 +12,7 @@ import { LoginDialog } from "./LoginDialog";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { RoleModelImpl } from "../model/role";
 import { IoFolderOutline } from "react-icons/io5";
+import path from "path";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
@@ -28,13 +29,15 @@ export default function RootLayout({
   const { dbPath, isInitialized, initialize } = useSettingsStore();
   const [showLogin, setShowLogin] = useState(false);
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
+  const hasCheckedRoles = useRef(false);
 
   // Initialize settings store
   useEffect(() => {
     console.log("Initializing settings...");
     initialize().catch((error) => {
       console.error("Failed to initialize settings:", error);
-      toast.error("Failed to initialize settings");
+      setInitError("Failed to initialize settings. Please try again.");
     });
   }, [initialize]);
 
@@ -57,6 +60,12 @@ export default function RootLayout({
         return;
       }
 
+      // Skip if we've already checked roles and user is authenticated
+      if (hasCheckedRoles.current && isAuthenticated) {
+        setIsCheckingRoles(false);
+        return;
+      }
+
       console.log("Checking auth with dbPath:", dbPath);
 
       if (!dbPath) {
@@ -67,19 +76,28 @@ export default function RootLayout({
         }
       }
 
-      if (isAuthenticated) {
-        setIsCheckingRoles(false);
-        return;
-      }
-
       // Check if any roles exist
       try {
         const roleModel = new RoleModelImpl(dbPath);
+
+        // Ensure SweldoDB directory exists
+        const sweldoPath = path.join(dbPath, "SweldoDB");
+        await window.electron.ensureDir(sweldoPath);
+
         const roles = await roleModel.getRoles();
-        setShowLogin(roles.length > 0 && !isAuthenticated);
+        console.log("Found roles:", roles.length);
+
+        // Only show login if there are roles and user is not authenticated
+        if (roles.length > 0 && !isAuthenticated) {
+          setShowLogin(true);
+        }
+
+        hasCheckedRoles.current = true;
       } catch (error) {
         console.error("Error checking roles:", error);
-        toast.error("Error checking roles");
+        setInitError(
+          "Error checking roles. Please check your database path and try again."
+        );
       } finally {
         setIsCheckingRoles(false);
       }
@@ -100,6 +118,7 @@ export default function RootLayout({
         toast.info("Session expired due to inactivity");
         logout();
         setShowLogin(true);
+        hasCheckedRoles.current = false; // Reset roles check on session timeout
       }
     };
 
@@ -129,11 +148,6 @@ export default function RootLayout({
     };
   }, [isAuthenticated]);
 
-  // Update authentication state when isAuthenticated changes
-  useEffect(() => {
-    setShowLogin(!isAuthenticated);
-  }, [isAuthenticated]);
-
   useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
@@ -147,7 +161,32 @@ export default function RootLayout({
   if (isCheckingRoles) {
     return (
       <div className="min-h-screen bg-background font-sans flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 mx-auto"></div>
+          <div className="text-gray-600">Initializing application...</div>
+        </div>
+        <Toaster position="top-right" richColors />
+      </div>
+    );
+  }
+
+  // Show error state if initialization failed
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-background font-sans flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md mx-auto px-4">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Initialization Error
+          </h2>
+          <p className="text-gray-600 mb-4">{initError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
         <Toaster position="top-right" richColors />
       </div>
     );

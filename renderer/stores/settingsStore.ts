@@ -45,13 +45,16 @@ export const useSettingsStore = create<SettingsState>()(
               }
             } else {
               console.warn("Attempted to set non-existent dbPath:", path);
-              set({ dbPath: "" });
+              // Don't clear the path if verification fails - let the user fix it
+              // set({ dbPath: "" });
             }
           } catch (error) {
             console.error("Error verifying dbPath:", error);
-            set({ dbPath: "" });
+            // Don't clear the path on verification error
+            // set({ dbPath: "" });
           }
         } else {
+          // Only clear the path if explicitly set to empty
           set({ dbPath: "" });
         }
       },
@@ -69,16 +72,24 @@ export const useSettingsStore = create<SettingsState>()(
           if (persistedState) {
             const { state } = JSON.parse(persistedState);
 
-            // Verify dbPath if it exists
+            // Set paths from persisted state
             if (state.dbPath) {
-              console.log("Verifying stored dbPath:", state.dbPath);
-              const exists = await window.electron.fileExists(state.dbPath);
-              if (exists) {
-                console.log("Stored dbPath verified, setting:", state.dbPath);
-                set({ dbPath: state.dbPath });
-              } else {
-                console.warn("Stored dbPath no longer exists:", state.dbPath);
-                set({ dbPath: "" });
+              console.log("Found persisted dbPath:", state.dbPath);
+              set({ dbPath: state.dbPath });
+
+              // Verify path exists but don't clear it if verification fails
+              try {
+                const exists = await window.electron.fileExists(state.dbPath);
+                if (!exists) {
+                  console.warn(
+                    "Stored dbPath may no longer exist:",
+                    state.dbPath
+                  );
+                  // Keep the path but log a warning - user can update if needed
+                }
+              } catch (error) {
+                console.error("Error verifying dbPath:", error);
+                // Keep the path even if verification fails
               }
             }
 
@@ -89,7 +100,8 @@ export const useSettingsStore = create<SettingsState>()(
           }
         } catch (error) {
           console.error("Error initializing settings:", error);
-          set({ dbPath: "", logoPath: "" });
+          // Don't clear paths on initialization error
+          // set({ dbPath: "", logoPath: "" });
         } finally {
           console.log("Settings store initialization complete");
           set({ isInitialized: true, isInitializing: false });

@@ -835,8 +835,37 @@ export default function SettingsPage() {
                 onClick={async () => {
                   const folderPath = await window.electron.openFolderDialog();
                   if (folderPath) {
-                    setDbPath(folderPath);
-                    setCurrentPath(folderPath);
+                    try {
+                      await setDbPath(folderPath);
+                      setCurrentPath(folderPath);
+                      // Ensure the path is properly persisted in localStorage
+                      const persistedState =
+                        localStorage.getItem("settings-storage");
+                      if (persistedState) {
+                        const parsed = JSON.parse(persistedState);
+                        parsed.state.dbPath = folderPath;
+                        localStorage.setItem(
+                          "settings-storage",
+                          JSON.stringify(parsed)
+                        );
+                      } else {
+                        // Initialize storage if it doesn't exist
+                        localStorage.setItem(
+                          "settings-storage",
+                          JSON.stringify({
+                            state: { dbPath: folderPath, logoPath: "" },
+                            version: 0,
+                          })
+                        );
+                      }
+                      // Reload only after ensuring persistence
+                      window.location.reload();
+                    } catch (error) {
+                      console.error("Error setting database path:", error);
+                      toast.error(
+                        "Failed to set database path. Please try again."
+                      );
+                    }
                   }
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
