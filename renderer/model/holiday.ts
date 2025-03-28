@@ -54,45 +54,52 @@ export class HolidayModel {
         },${h.multiplier}`;
       };
 
+      let data;
       try {
-        const data = await window.electron.readFile(filePath);
-        console.log(`[HolidayModel] Existing file found, updating content`);
-        const lines = data.split("\n").filter((line) => line.trim().length > 0);
-        let holidayExists = false;
-
-        const updatedLines = lines.map((line) => {
-          const fields = line.split(",");
-          if (fields[0] === holiday.id) {
-            holidayExists = true;
-            console.log(`[HolidayModel] Updating existing holiday entry`);
-            return formatHolidayToCSV(holiday);
-          }
-          return line;
-        });
-
-        if (!holidayExists) {
-          console.log(`[HolidayModel] Adding new holiday entry`);
-          updatedLines.push(formatHolidayToCSV(holiday));
-        }
-
-        await window.electron.writeFile(
-          filePath,
-          updatedLines.join("\n") + "\n"
+        console.log(
+          `[HolidayModel] Ensuring directory exists at: ${path.dirname(
+            filePath
+          )}`
         );
-        console.log(`[HolidayModel] Successfully saved/updated holiday`);
-      } catch (error: any) {
-        if (error.code === "ENOENT") {
-          console.log(`[HolidayModel] Creating new file for holiday entry`);
+        await window.electron.ensureDir(path.dirname(filePath));
+        data = await window.electron.readFile(filePath);
+        console.log(`[HolidayModel] Existing file found, updating content`);
+      } catch (readError: any) {
+        // If file doesn't exist, create it
+        if (readError.message.includes("ENOENT")) {
+          console.log(`[HolidayModel] File doesn't exist, creating new file`);
           const csvData = formatHolidayToCSV(holiday) + "\n";
           await window.electron.writeFile(filePath, csvData);
           console.log(
             `[HolidayModel] Successfully created new file and saved holiday`
           );
-        } else {
-          console.error("[HolidayModel] Error saving/updating holiday:", error);
-          throw error;
+          return; // Exit after creating new file
         }
+        // If it's a different error, rethrow it
+        throw readError;
       }
+
+      // If we get here, we successfully read the existing file
+      const lines = data.split("\n").filter((line) => line.trim().length > 0);
+      let holidayExists = false;
+
+      const updatedLines = lines.map((line) => {
+        const fields = line.split(",");
+        if (fields[0] === holiday.id) {
+          holidayExists = true;
+          console.log(`[HolidayModel] Updating existing holiday entry`);
+          return formatHolidayToCSV(holiday);
+        }
+        return line;
+      });
+
+      if (!holidayExists) {
+        console.log(`[HolidayModel] Adding new holiday entry`);
+        updatedLines.push(formatHolidayToCSV(holiday));
+      }
+
+      await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
+      console.log(`[HolidayModel] Successfully saved/updated holiday`);
     } catch (error) {
       console.error("[HolidayModel] Error in saveOrUpdateHoliday:", error);
       throw error;
@@ -105,6 +112,8 @@ export class HolidayModel {
       const filePath = this.getFilePath();
 
       try {
+        // Ensure directory exists before trying to read file
+        await window.electron.ensureDir(path.dirname(filePath));
         const data = await window.electron.readFile(filePath);
         const lines = data.split("\n");
 
