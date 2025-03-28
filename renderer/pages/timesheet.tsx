@@ -498,421 +498,374 @@ const TimesheetPage: React.FC = () => {
 
   return (
     <RootLayout>
-      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
-        <MagicCard
-          className="p-0.5 rounded-lg"
-          gradientSize={200}
-          gradientColor="#9E7AFF"
-          gradientOpacity={0.8}
-          gradientFrom="#9E7AFF"
-          gradientTo="#FE8BBB"
-        >
-          <div className="px-4 sm:px-0">
-            <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
-              <div className="col-span-1 md:col-span-1">
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                      {selectedEmployeeId
-                        ? employee?.name + "'s Timesheet"
-                        : "Timesheet"}
-                    </h2>
-                    {selectedEmployeeId && (
-                      <div className="relative flex items-center space-x-4">
-                        <div className="flex items-center px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-600">
-                          <span>Absences:</span>
-                          <span className="ml-1.5 font-semibold text-gray-900">
-                            {validEntriesCount}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {hasAccess("MANAGE_PAYROLL") && (
-                            <button
-                              type="button"
-                              className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                              onClick={handleRecompute}
-                            >
-                              <span className="sr-only">
-                                Recompute Compensations
-                              </span>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className={`h-5 w-5 transition-transform duration-300 ${
-                                  isRecomputing ? "rotate-180" : ""
-                                }`}
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onMouseEnter={() => setShowColumnMenu(true)}
-                          >
-                            <span className="sr-only">Column Settings</span>
-                            <IoSettingsOutline
-                              className="h-5 w-5"
-                              aria-hidden="true"
-                            />
-                          </button>
+      <main className="w-full h-screen pt-16">
+        <div className="w-full h-full">
+          <div className="bg-white flex flex-col h-full">
+            {/* Title header - always visible */}
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
+              <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                {selectedEmployeeId
+                  ? employee?.name + "'s Timesheet"
+                  : "Timesheet"}
+              </h2>
+              {selectedEmployeeId && (
+                <div className="relative flex items-center space-x-4">
+                  <div className="flex items-center px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-600">
+                    <span>Absences:</span>
+                    <span className="ml-1.5 font-semibold text-gray-900">
+                      {validEntriesCount}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasAccess("MANAGE_PAYROLL") && (
+                      <button
+                        type="button"
+                        className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        onClick={handleRecompute}
+                      >
+                        <span className="sr-only">Recompute Compensations</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className={`h-5 w-5 transition-transform duration-300 ${
+                            isRecomputing ? "rotate-180" : ""
+                          }`}
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      onMouseEnter={() => setShowColumnMenu(true)}
+                    >
+                      <span className="sr-only">Column Settings</span>
+                      <IoSettingsOutline
+                        className="h-5 w-5"
+                        aria-hidden="true"
+                      />
+                    </button>
 
-                          {showColumnMenu && (
-                            <div
-                              className="absolute right-0 top-full mt-2 w-80 rounded-lg bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 z-50"
-                              onMouseLeave={() => setShowColumnMenu(false)}
+                    {showColumnMenu && (
+                      <div
+                        className="absolute right-0 top-full mt-2 w-80 rounded-lg bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+                        onMouseLeave={() => setShowColumnMenu(false)}
+                      >
+                        <div className="p-4">
+                          <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
+                            <h3 className="text-sm font-medium text-gray-200">
+                              Visible Columns
+                            </h3>
+                            <button
+                              onClick={() =>
+                                setColumns((cols) =>
+                                  cols.map((col) => ({
+                                    ...col,
+                                    visible: true,
+                                  }))
+                                )
+                              }
+                              className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors duration-150"
                             >
-                              <div className="p-4">
-                                <div className="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
-                                  <h3 className="text-sm font-medium text-gray-200">
-                                    Visible Columns
-                                  </h3>
+                              Show All
+                            </button>
+                          </div>
+                          <div className="space-y-1 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                            {columns.map((column) => (
+                              <div
+                                key={column.key}
+                                className="flex items-center justify-between p-2 hover:bg-gray-800/50 rounded-lg group transition-colors duration-150"
+                              >
+                                <span className="text-sm text-gray-300">
+                                  {column.name}
+                                </span>
+                                <div className="relative">
                                   <button
-                                    onClick={() =>
-                                      setColumns((cols) =>
-                                        cols.map((col) => ({
-                                          ...col,
-                                          visible: true,
-                                        }))
-                                      )
-                                    }
-                                    className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors duration-150"
+                                    onClick={() => {
+                                      if (column.key === "day") return;
+                                      handleColumnVisibilityChange(column.key);
+                                    }}
+                                    className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none ${
+                                      column.key === "day"
+                                        ? "bg-gray-600 cursor-not-allowed"
+                                        : column.visible
+                                        ? "bg-blue-500"
+                                        : "bg-gray-700"
+                                    }`}
+                                    disabled={column.key === "day"}
                                   >
-                                    Show All
+                                    <span
+                                      className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white ${
+                                        column.visible
+                                          ? "translate-x-6"
+                                          : "translate-x-1"
+                                      }`}
+                                    />
                                   </button>
                                 </div>
-                                <div className="space-y-1 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                                  {columns.map((column) => (
-                                    <div
-                                      key={column.key}
-                                      className="flex items-center justify-between p-2 hover:bg-gray-800/50 rounded-lg group transition-colors duration-150"
-                                    >
-                                      <span className="text-sm text-gray-300">
-                                        {column.name}
-                                      </span>
-                                      <div className="relative">
-                                        <button
-                                          onClick={() => {
-                                            if (column.key === "day") return;
-                                            handleColumnVisibilityChange(
-                                              column.key
-                                            );
-                                          }}
-                                          className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none ${
-                                            column.key === "day"
-                                              ? "bg-gray-600 cursor-not-allowed"
-                                              : column.visible
-                                              ? "bg-blue-500"
-                                              : "bg-gray-700"
-                                          }`}
-                                          disabled={column.key === "day"}
-                                        >
-                                          <span
-                                            className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white ${
-                                              column.visible
-                                                ? "translate-x-6"
-                                                : "translate-x-1"
-                                            }`}
-                                          />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
                               </div>
-                            </div>
-                          )}
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
-                  {selectedEmployeeId ? (
-                    <div className="overflow-x-auto relative">
-                      {timesheetEntries.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 px-4">
-                          <div className="text-center">
-                            <svg
-                              className="mx-auto h-12 w-12 text-gray-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
+                </div>
+              )}
+            </div>
+
+            {selectedEmployeeId ? (
+              <div className="flex-1 overflow-x-auto scrollbar-y-none">
+                <table className="min-w-full divide-y divide-gray-200">
+                  {/* Sticky column headers */}
+                  <thead className="bg-gray-50 sticky top-0 z-20">
+                    <tr>
+                      {columns.map(
+                        (column) =>
+                          column.visible && (
+                            <th
+                              key={column.key}
+                              scope="col"
+                              className={`${
+                                column.key === "day"
+                                  ? "sticky left-0 z-30 bg-gray-50 shadow-sm"
+                                  : "bg-gray-50"
+                              } px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                                column.key === "day" ? "w-20" : ""
+                              }`}
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1}
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                              />
-                            </svg>
-                            <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                              No timesheet entries found
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                              You have to upload the excel file from the
-                              biometrics for this month to see records here.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              {columns.map(
-                                (column) =>
-                                  column.visible && (
-                                    <th
-                                      key={column.key}
-                                      scope="col"
-                                      className={`${
-                                        column.key === "day"
-                                          ? "sticky left-0 z-10 bg-gray-50"
-                                          : ""
-                                      } px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                                        column.key === "day" ? "w-20" : ""
-                                      }`}
-                                    >
-                                      {tooltipContent[
-                                        column.key as "grossPay" | "deductions"
-                                      ] ? (
-                                        <Tooltip
-                                          content={
-                                            tooltipContent[
-                                              column.key as
-                                                | "grossPay"
-                                                | "deductions"
-                                            ]
-                                          }
-                                          position="left"
-                                          width="500px"
-                                        >
-                                          {column.name}
-                                        </Tooltip>
-                                      ) : (
-                                        column.name
-                                      )}
-                                    </th>
-                                  )
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {Array.from(
-                              new Set(
-                                timesheetEntries.map((entry) => entry.day)
-                              )
-                            ).map((day) => {
-                              const foundEntry = timesheetEntries.find(
-                                (entry) => entry.day === day
-                              );
-                              const foundCompensation =
-                                compensationEntries.find(
-                                  (comp) =>
-                                    comp.year === year &&
-                                    comp.month === storedMonthInt &&
-                                    comp.day === Number(day)
-                                );
-                              const compensation =
-                                foundCompensation === undefined
-                                  ? null
-                                  : foundCompensation;
-
-                              if (!foundEntry) {
-                                return;
-                              }
-
-                              return (
-                                <tr
-                                  key={day}
-                                  onClick={(event) =>
-                                    handleRowClick(
-                                      foundEntry,
-                                      compensation,
-                                      event
-                                    )
+                              {tooltipContent[
+                                column.key as "grossPay" | "deductions"
+                              ] ? (
+                                <Tooltip
+                                  content={
+                                    tooltipContent[
+                                      column.key as "grossPay" | "deductions"
+                                    ]
                                   }
-                                  className={`cursor-pointer hover:bg-gray-50 ${
-                                    selectedEntry?.entry.day === day
-                                      ? "bg-indigo-50"
-                                      : ""
-                                  }`}
+                                  position="left"
+                                  width="500px"
                                 >
-                                  {columns.map(
-                                    (column) =>
-                                      column.visible &&
-                                      (column.key === "timeIn" ||
-                                      column.key === "timeOut" ? (
-                                        employeeTimeSettings?.requiresTimeTracking ? (
-                                          hasAccess("MANAGE_ATTENDANCE") ? (
-                                            <EditableCell
-                                              key={column.key}
-                                              value={
-                                                column.key === "timeIn"
-                                                  ? foundEntry.timeIn || ""
-                                                  : foundEntry.timeOut || ""
+                                  {column.name}
+                                </Tooltip>
+                              ) : (
+                                column.name
+                              )}
+                            </th>
+                          )
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {timesheetEntries.length === 0 ? (
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          No timesheet entries found
+                        </td>
+                      </tr>
+                    ) : (
+                      Array.from(
+                        new Set(timesheetEntries.map((entry) => entry.day))
+                      ).map((day) => {
+                        const foundEntry = timesheetEntries.find(
+                          (entry) => entry.day === day
+                        );
+                        const foundCompensation = compensationEntries.find(
+                          (comp) =>
+                            comp.year === year &&
+                            comp.month === storedMonthInt &&
+                            comp.day === Number(day)
+                        );
+                        const compensation =
+                          foundCompensation === undefined
+                            ? null
+                            : foundCompensation;
+
+                        if (!foundEntry) {
+                          return;
+                        }
+
+                        return (
+                          <tr
+                            key={day}
+                            onClick={(event) =>
+                              handleRowClick(foundEntry, compensation, event)
+                            }
+                            className={`cursor-pointer hover:bg-gray-50 ${
+                              selectedEntry?.entry.day === day
+                                ? "bg-indigo-50"
+                                : ""
+                            }`}
+                          >
+                            {columns.map(
+                              (column) =>
+                                column.visible &&
+                                (column.key === "timeIn" ||
+                                column.key === "timeOut" ? (
+                                  employeeTimeSettings?.requiresTimeTracking ? (
+                                    hasAccess("MANAGE_ATTENDANCE") ? (
+                                      <EditableCell
+                                        key={column.key}
+                                        value={
+                                          column.key === "timeIn"
+                                            ? foundEntry.timeIn || ""
+                                            : foundEntry.timeOut || ""
+                                        }
+                                        column={column}
+                                        rowData={foundEntry}
+                                        onClick={(event) =>
+                                          event.stopPropagation()
+                                        }
+                                        onSave={async (value, rowData) =>
+                                          handleTimesheetEdit(
+                                            value.toString(),
+                                            rowData,
+                                            column.key
+                                          )
+                                        }
+                                        employmentTypes={employmentTypes}
+                                      />
+                                    ) : (
+                                      <td
+                                        key={column.key}
+                                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                      >
+                                        {column.key === "timeIn"
+                                          ? foundEntry.timeIn || ""
+                                          : foundEntry.timeOut || ""}
+                                      </td>
+                                    )
+                                  ) : column.key === "timeIn" ? (
+                                    <td
+                                      key={column.key}
+                                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                    >
+                                      <div
+                                        className="flex items-center justify-center"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {hasAccess("MANAGE_ATTENDANCE") ? (
+                                          <>
+                                            <input
+                                              type="checkbox"
+                                              checked={
+                                                foundEntry?.timeIn ===
+                                                  "present" &&
+                                                foundEntry?.timeOut ===
+                                                  "present"
                                               }
-                                              column={column}
-                                              rowData={foundEntry}
-                                              onClick={(event) =>
-                                                event.stopPropagation()
-                                              }
-                                              onSave={async (value, rowData) =>
-                                                handleTimesheetEdit(
-                                                  value.toString(),
-                                                  rowData,
-                                                  column.key
+                                              onChange={(e) =>
+                                                handleCheckboxChange(
+                                                  e,
+                                                  foundEntry
                                                 )
                                               }
-                                              employmentTypes={employmentTypes}
+                                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                                             />
-                                          ) : (
-                                            <td
-                                              key={column.key}
-                                              className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                            >
-                                              {column.key === "timeIn"
-                                                ? foundEntry.timeIn || ""
-                                                : foundEntry.timeOut || ""}
-                                            </td>
-                                          )
-                                        ) : column.key === "timeIn" ? (
-                                          <td
-                                            key={column.key}
-                                            className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                          >
-                                            <div
-                                              className="flex items-center justify-center"
+                                            <span
+                                              className="ml-2 text-sm font-medium text-gray-700"
                                               onClick={(e) =>
                                                 e.stopPropagation()
                                               }
                                             >
-                                              {hasAccess(
-                                                "MANAGE_ATTENDANCE"
-                                              ) ? (
-                                                <>
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={
-                                                      foundEntry?.timeIn ===
-                                                        "present" &&
-                                                      foundEntry?.timeOut ===
-                                                        "present"
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleCheckboxChange(
-                                                        e,
-                                                        foundEntry
-                                                      )
-                                                    }
-                                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                                                  />
-                                                  <span
-                                                    className="ml-2 text-sm font-medium text-gray-700"
-                                                    onClick={(e) =>
-                                                      e.stopPropagation()
-                                                    }
-                                                  >
-                                                    {!!(
-                                                      foundEntry.timeIn ||
-                                                      foundEntry.timeOut
-                                                    )
-                                                      ? "Present"
-                                                      : "Absent"}
-                                                  </span>
-                                                </>
-                                              ) : (
-                                                <span className="text-sm font-medium text-gray-700">
-                                                  {!!(
-                                                    foundEntry.timeIn ||
-                                                    foundEntry.timeOut
-                                                  )
-                                                    ? "Present"
-                                                    : "Absent"}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </td>
-                                        ) : null
-                                      ) : (
-                                        <td
-                                          key={column.key}
-                                          className={`${
-                                            column.key === "day"
-                                              ? "sticky left-0 z-10"
-                                              : ""
-                                          } px-6 py-4 whitespace-nowrap text-sm ${
-                                            column.key === "day"
-                                              ? new Date(
-                                                  year,
-                                                  storedMonthInt - 1,
-                                                  day
-                                                ).toLocaleDateString("en-US", {
-                                                  weekday: "short",
-                                                }) === "Sun"
-                                                ? "bg-yellow-100 font-medium text-gray-900"
-                                                : "bg-white font-medium text-gray-900"
-                                              : "text-gray-500"
-                                          }`}
-                                        >
-                                          {renderColumnContent(
-                                            column.key,
-                                            foundEntry,
-                                            compensation
-                                          )}
-                                        </td>
-                                      ))
-                                  )}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <div className="mb-6">
-                        <svg
-                          className="mx-auto h-24 w-24 text-gray-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                          />
-                        </svg>
-                      </div>
-                      <h3 className="mt-2 text-xl font-semibold text-gray-900">
-                        No Employee Selected
-                      </h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Please select an employee from the dropdown menu to view
-                        their timesheet.
-                      </p>
-                      <div className="mt-6">
-                        <AddButton
-                          text="Select Employee"
-                          onClick={() => handleLinkClick("/")}
-                        />
-                      </div>
-                    </div>
-                  )}
+                                              {!!(
+                                                foundEntry.timeIn ||
+                                                foundEntry.timeOut
+                                              )
+                                                ? "Present"
+                                                : "Absent"}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span className="text-sm font-medium text-gray-700">
+                                            {!!(
+                                              foundEntry.timeIn ||
+                                              foundEntry.timeOut
+                                            )
+                                              ? "Present"
+                                              : "Absent"}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  ) : null
+                                ) : (
+                                  <td
+                                    key={column.key}
+                                    className={`${
+                                      column.key === "day"
+                                        ? "sticky left-0 z-10"
+                                        : ""
+                                    } px-6 py-4 whitespace-nowrap text-sm ${
+                                      column.key === "day"
+                                        ? new Date(
+                                            year,
+                                            storedMonthInt - 1,
+                                            day
+                                          ).toLocaleDateString("en-US", {
+                                            weekday: "short",
+                                          }) === "Sun"
+                                          ? "bg-yellow-100 font-medium text-gray-900"
+                                          : "bg-white font-medium text-gray-900"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    {renderColumnContent(
+                                      column.key,
+                                      foundEntry,
+                                      compensation
+                                    )}
+                                  </td>
+                                ))
+                            )}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="mb-6">
+                  <svg
+                    className="mx-auto h-24 w-24 text-gray-300"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="mt-2 text-xl font-semibold text-gray-900">
+                  No Employee Selected
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  Please select an employee from the dropdown menu to view their
+                  timesheet.
+                </p>
+                <div className="mt-6">
+                  <AddButton
+                    text="Select Employee"
+                    onClick={() => handleLinkClick("/")}
+                  />
                 </div>
               </div>
-            </div>
+            )}
           </div>
-        </MagicCard>
+        </div>
         {isDialogOpen && (
           <div className="fixed inset-0 bg-black opacity-50 z-40" />
         )}
@@ -955,6 +908,42 @@ const TimesheetPage: React.FC = () => {
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(75, 85, 99, 0.7);
+  }
+
+  /* Modern minimal scrollbar styling */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: 9999px;
+    transition: all 0.2s ease;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5);
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera when not hovering */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  /* Show scrollbar on hover */
+  .scrollbar-thin:hover {
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  /* Firefox */
+  .scrollbar-thin {
+    scrollbar-width: thin;
   }
 `}</style>;
 

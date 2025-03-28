@@ -157,37 +157,88 @@ export class Payroll {
           return;
         }
 
+        // Initialize time variables
         let timeIn: string | null = null;
         let timeOut: string | null = null;
 
-        // Parse time formats
+        // RULES FOR TIME PARSING:
+        // 1. Time format can be either "HH:mm" (24-hour) or "hh:mm AM/PM" (12-hour)
+        // 2. Time in and out must be at least 5 minutes apart
+        // 3. If times are less than 5 minutes apart:
+        //    - Only the first time will be considered as time in
+        //    - Second time will be ignored and added to missingTimeLogs
+        // 4. For multiple time entries:
+        //    - First valid time is always time in
+        //    - Last valid time (if > 5 mins from time in) is time out
+
+        // Parse time formats using regex for "HH:mm" format
         const newFormatRegex = /(\d{2}:\d{1,2})/g; // Global flag to match all occurrences
         const allTimes = timeString.match(newFormatRegex);
 
         if (allTimes && allTimes.length > 0) {
-          // Get unique times only
+          // Get unique times only to avoid duplicates
           const uniqueTimes = [...new Set(allTimes)] as string[];
 
-          timeIn = uniqueTimes[0]; // First time is always time in
+          // First time is always considered as time in
+          timeIn = uniqueTimes[0];
 
-          // Only set time out if there's a different time
+          // Only set time out if there's a different time and it's > 5 mins apart
           if (uniqueTimes.length > 1) {
-            timeOut = uniqueTimes[uniqueTimes.length - 1];
+            const lastTime = uniqueTimes[uniqueTimes.length - 1];
+
+            // Convert times to minutes for comparison
+            const timeInMinutes = timeIn
+              .split(":")
+              .reduce((acc, time) => acc * 60 + parseInt(time), 0);
+            const timeOutMinutes = lastTime
+              .split(":")
+              .reduce((acc, time) => acc * 60 + parseInt(time), 0);
+
+            // Check if times are at least 5 minutes apart
+            if (Math.abs(timeOutMinutes - timeInMinutes) >= 5) {
+              timeOut = lastTime;
+            } else {
+              // If times are too close, add to missingTimeLogs
+              console.warn(
+                `Time out (${lastTime}) is too close to time in (${timeIn}). Must be at least 5 minutes apart.`
+              );
+              // Note: missingTimeLogs should be handled by the calling code
+            }
           }
         } else {
-          // Keep existing fallback for other format
+          // Fallback for legacy format "hh:mm AM/PM"
           const timeParts = timeString.split(" ");
           const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9](\s?[APMapm]{2})?$/;
+
           if (timeParts.length) {
+            // Set time in if first part matches format
             if (timeRegex.test(timeParts[0])) {
               timeIn = timeParts[0];
             }
-            if (
-              timeParts.length > 1 &&
-              timeRegex.test(timeParts[timeParts.length - 1]) &&
-              timeParts[timeParts.length - 1] !== timeParts[0] // Only if different from timeIn
-            ) {
-              timeOut = timeParts[timeParts.length - 1];
+
+            // Check for time out in remaining parts
+            if (timeParts.length > 1) {
+              const lastTime = timeParts[timeParts.length - 1];
+              if (timeRegex.test(lastTime) && lastTime !== timeParts[0]) {
+                // Convert 12-hour format to 24-hour for comparison
+                const timeInDate = new Date(`1970/01/01 ${timeIn}`);
+                const timeOutDate = new Date(`1970/01/01 ${lastTime}`);
+
+                // Check if times are at least 5 minutes apart
+                const diffMinutes = Math.abs(
+                  (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60)
+                );
+
+                if (diffMinutes >= 5) {
+                  timeOut = lastTime;
+                } else {
+                  // If times are too close, add to missingTimeLogs
+                  console.warn(
+                    `Time out (${lastTime}) is too close to time in (${timeIn}). Must be at least 5 minutes apart.`
+                  );
+                  // Note: missingTimeLogs should be handled by the calling code
+                }
+              }
             }
           }
         }
