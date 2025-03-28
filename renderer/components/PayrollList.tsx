@@ -39,60 +39,56 @@ export const PayrollList: React.FC<PayrollListProps> = ({
       if (!employee) return;
 
       const now = new Date();
-      const year = now.getFullYear();
       let filteredPayrolls: PayrollSummaryModel[] = [];
 
       if (filterType === "custom" && month) {
-        const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-        const endOfMonth = new Date(
-          month.getFullYear(),
-          month.getMonth() + 1,
-          0
-        );
-
         const payrollData = await Payroll.loadPayrollSummaries(
           dbPath,
           selectedEmployeeId,
           month.getFullYear(),
-          month.getMonth() + 1 // Convert to 1-based month for the backend
+          month.getMonth() + 1
         );
-
-        filteredPayrolls = payrollData
-          .map((payroll) => ({
-            ...payroll,
-            employeeName: employee?.name || "Unknown Employee",
-          }))
-          .filter((payroll) => {
-            const payrollDate = new Date(payroll.startDate);
-            return payrollDate >= startOfMonth && payrollDate <= endOfMonth;
-          });
+        filteredPayrolls = payrollData.map((payroll) => ({
+          ...payroll,
+          employeeName: employee?.name || "Unknown Employee",
+        }));
       } else {
-        const monthsMap: Record<
-          Exclude<typeof filterType, "custom">,
-          number
-        > = {
-          "3months": 3,
-          "6months": 6,
-          year: 12,
-        };
-        const months = filterType === "custom" ? 3 : monthsMap[filterType];
-        const cutoffDate = new Date(now.setMonth(now.getMonth() - months));
-        const payrollData = await Payroll.loadPayrollSummaries(
-          dbPath,
-          selectedEmployeeId,
-          year,
-          month ? month.getMonth() + 1 : 1
-        );
+        const monthsToLoad =
+          filterType === "3months" ? 3 : filterType === "6months" ? 6 : 12;
+        const currentDate = new Date();
 
-        filteredPayrolls = payrollData
+        const payrollPromises = [];
+        for (let i = 0; i < monthsToLoad; i++) {
+          const targetDate = new Date(currentDate);
+          targetDate.setMonth(currentDate.getMonth() - i);
+
+          console.log(
+            `Loading payrolls for: Year=${targetDate.getFullYear()}, Month=${
+              targetDate.getMonth() + 1
+            }`
+          );
+
+          payrollPromises.push(
+            Payroll.loadPayrollSummaries(
+              dbPath,
+              selectedEmployeeId,
+              targetDate.getFullYear(),
+              targetDate.getMonth() + 1
+            )
+          );
+        }
+
+        const allPayrollData = await Promise.all(payrollPromises);
+        filteredPayrolls = allPayrollData
+          .flat()
           .map((payroll) => ({
             ...payroll,
             employeeName: employee?.name || "Unknown Employee",
           }))
-          .filter((payroll) => {
-            const payrollDate = new Date(payroll.startDate);
-            return payrollDate >= cutoffDate;
-          });
+          .sort(
+            (a, b) =>
+              new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+          );
       }
 
       setPayrolls(filteredPayrolls);

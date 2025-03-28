@@ -1,6 +1,6 @@
-import React from 'react';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import React from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 interface DateRangePickerProps {
   dateRange: {
@@ -17,32 +17,33 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const { startDate, endDate } = dateRange;
 
   const formatDateDisplay = (date: Date | null) => {
-    if (!date) return '';
-    
+    if (!date) return "";
+
     try {
       // Ensure we have a valid Date object
       const dateObj = new Date(date);
       if (isNaN(dateObj.getTime())) {
-        console.error('Invalid date provided to formatDateDisplay');
-        return '';
+        console.error("Invalid date provided to formatDateDisplay");
+        return "";
       }
-      
-      return dateObj.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
+
+      return dateObj.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
       });
     } catch (error) {
-      console.error('Error formatting date:', error);
-      return '';
+      console.error("Error formatting date:", error);
+      return "";
     }
   };
 
   const buttonClass = (date: Date | null) => `
     relative group flex items-center px-4 py-2.5 rounded-lg
-    ${date 
-      ? 'text-blue-400 font-medium hover:text-blue-500' 
-      : 'text-blue-300 hover:text-blue-400'
+    ${
+      date
+        ? "text-blue-400 font-medium hover:text-blue-500"
+        : "text-blue-300 hover:text-blue-400"
     }
   `;
 
@@ -60,22 +61,33 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 } else if (date === null) {
                   onDateRangeChange(null, endDate);
                 } else {
-                  console.error('Invalid start date selected');
+                  console.error("Invalid start date selected");
                 }
               } catch (error) {
-                console.error('Error handling start date change:', error);
+                console.error("Error handling start date change:", error);
               }
             }}
             startDate={startDate}
             endDate={endDate}
-            minDate={new Date()}
+            selectsStart
+            showPopperArrow
             className="w-full bg-transparent focus:outline-none"
             placeholderText="Start date"
             dateFormat="MMM d, yyyy"
             customInput={
               <button type="button" className={buttonClass(startDate)}>
-                <svg className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg
+                  className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
                 </svg>
                 {startDate ? formatDateDisplay(startDate) : "Start date"}
               </button>
@@ -83,8 +95,18 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           />
         </div>
         <div className="flex items-center px-3">
-          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          <svg
+            className="w-5 h-5 text-blue-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M17 8l4 4m0 0l-4 4m4-4H3"
+            />
           </svg>
         </div>
         <div className="relative z-50 flex-1">
@@ -98,10 +120,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 } else if (date === null) {
                   onDateRangeChange(startDate, null);
                 } else {
-                  console.error('Invalid end date selected');
+                  console.error("Invalid end date selected");
                 }
               } catch (error) {
-                console.error('Error handling end date change:', error);
+                console.error("Error handling end date change:", error);
               }
             }}
             startDate={startDate}
@@ -112,8 +134,18 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             dateFormat="MMM d, yyyy"
             customInput={
               <button type="button" className={buttonClass(endDate)}>
-                <svg className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg
+                  className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
                 </svg>
                 {endDate ? formatDateDisplay(endDate) : "End date"}
               </button>

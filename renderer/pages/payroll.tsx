@@ -112,13 +112,16 @@ export default function PayrollPage() {
         return;
       }
 
+      // Create dates and adjust for timezone
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
 
-      console.log("Loading payrolls for employee:", {
-        employeeId: selectedEmployeeId,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+      // Log the actual dates we're using
+      console.log("Date debugging:", {
+        rawStartDate: dateRange.startDate,
+        parsedStartDate: startDate,
+        month: startDate.getMonth() + 1, // Add 1 because getMonth() returns 0-11
+        year: startDate.getFullYear(),
       });
 
       // Load employee details
@@ -128,12 +131,16 @@ export default function PayrollPage() {
       );
       setEmployee(loadedEmployee);
 
-      // Load payroll data for selected employee
+      // Use the correct month from the startDate
+      const month = startDate.getMonth() + 1; // Add 1 because getMonth() returns 0-11
+      const year = startDate.getFullYear();
+
+      // Load payroll data with the correct month
       const employeePayrolls = await Payroll.loadPayrollSummaries(
         dbPath,
         selectedEmployeeId,
-        startDate.getFullYear(),
-        startDate.getMonth() + 1
+        year,
+        month
       );
 
       // Filter payrolls within date range

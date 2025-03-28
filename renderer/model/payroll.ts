@@ -161,25 +161,33 @@ export class Payroll {
         let timeOut: string | null = null;
 
         // Parse time formats
-        const newFormatRegex = /(\d{2}:\d{1,2})(\d{2}:\d{2})?/; // Regex to validate time format
-        const newFormatMatch = timeString.match(newFormatRegex);
-        if (newFormatMatch) {
-          timeIn = newFormatMatch[1]; // Assign first matched time to timeIn
-          if (newFormatMatch[2]) {
-            timeOut = newFormatMatch[2]; // Assign second matched time to timeOut
+        const newFormatRegex = /(\d{2}:\d{1,2})/g; // Global flag to match all occurrences
+        const allTimes = timeString.match(newFormatRegex);
+
+        if (allTimes && allTimes.length > 0) {
+          // Get unique times only
+          const uniqueTimes = [...new Set(allTimes)] as string[];
+
+          timeIn = uniqueTimes[0]; // First time is always time in
+
+          // Only set time out if there's a different time
+          if (uniqueTimes.length > 1) {
+            timeOut = uniqueTimes[uniqueTimes.length - 1];
           }
         } else {
+          // Keep existing fallback for other format
           const timeParts = timeString.split(" ");
-          const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9](\s?[APMapm]{2})?$/; // Updated regex to validate time format
+          const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9](\s?[APMapm]{2})?$/;
           if (timeParts.length) {
             if (timeRegex.test(timeParts[0])) {
-              timeIn = timeParts[0]; // Assign timeIn directly as text if valid
+              timeIn = timeParts[0];
             }
             if (
               timeParts.length > 1 &&
-              timeRegex.test(timeParts[timeParts.length - 1])
+              timeRegex.test(timeParts[timeParts.length - 1]) &&
+              timeParts[timeParts.length - 1] !== timeParts[0] // Only if different from timeIn
             ) {
-              timeOut = timeParts[timeParts.length - 1]; // Assign timeOut directly as text if valid
+              timeOut = timeParts[timeParts.length - 1];
             }
           }
         }
