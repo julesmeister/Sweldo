@@ -70,6 +70,7 @@ export const createBaseCompensation = (
     leaveType: "None",
     leavePay: 0,
     notes: "",
+    absence: false,
   };
 };
 
@@ -219,7 +220,8 @@ export const createCompensationRecord = (
   month: number,
   year: number,
   holiday?: Holiday,
-  existingCompensation?: Partial<Compensation>
+  existingCompensation?: Partial<Compensation>,
+  schedule?: Schedule | null
 ): Compensation => {
   const { lateMinutes, undertimeMinutes, overtimeMinutes, hoursWorked } =
     timeMetrics;
@@ -234,6 +236,12 @@ export const createCompensationRecord = (
     undertimeDeduction,
   } = payMetrics;
 
+  // Determine absence based on schedule and time entries
+  const isWorkday = !!schedule;
+  const isHoliday = !!holiday;
+  const hasTimeEntries = !!(entry.timeIn && entry.timeOut);
+  const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
   return {
     ...(existingCompensation || {}),
     employeeId: employee?.id || "",
@@ -246,14 +254,14 @@ export const createCompensationRecord = (
         : "Special"
       : "Regular",
     dailyRate: parseFloat((employee?.dailyRate || 0).toString()),
-    grossPay,
-    netPay,
+    grossPay: isAbsent ? 0 : grossPay,
+    netPay: isAbsent ? 0 : netPay,
     holidayBonus,
     manualOverride: false,
     lateMinutes,
     undertimeMinutes,
     overtimeMinutes,
-    hoursWorked,
+    hoursWorked: isAbsent ? 0 : hoursWorked,
     deductions,
     overtimePay,
     lateDeduction,
@@ -261,5 +269,6 @@ export const createCompensationRecord = (
     leaveType: "None",
     leavePay: 0,
     notes: "",
+    absence: isAbsent,
   } as Compensation;
 };

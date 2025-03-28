@@ -72,18 +72,20 @@ export const useComputeAllCompensations = (
           (type) => type.type === employee?.employmentType
         );
 
-        // Check if this day is a holiday
-        const holiday = holidays.find((h) => {
-          const entryDate = new Date(year, month - 1, entry.day);
-          return isHolidayDate(entryDate, h);
-        });
+        const entryDate = new Date(year, month - 1, entry.day);
+        const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
+        const schedule = employmentType
+          ? getScheduleForDay(employmentType, entryDate.getDay())
+          : null;
 
-        // For non-time-tracking employees or missing time entries
-        if (
-          !employmentType?.requiresTimeTracking ||
-          !entry.timeIn ||
-          !entry.timeOut
-        ) {
+        // Determine absence status
+        const isWorkday = !!schedule;
+        const isHoliday = !!holiday;
+        const hasTimeEntries = !!(entry.timeIn && entry.timeOut);
+        const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
+        // For non-time-tracking employees, holidays, or missing time entries
+        if (!employmentType?.requiresTimeTracking || !hasTimeEntries) {
           const newCompensation = createBaseCompensation(
             entry,
             employee,
@@ -91,6 +93,21 @@ export const useComputeAllCompensations = (
             year,
             holiday
           );
+
+          // Set absence and pay based on conditions
+          const isPresent =
+            !employmentType?.requiresTimeTracking &&
+            (entry.timeIn === "present" || entry.timeOut === "present");
+          const dailyRate = parseFloat((employee.dailyRate || 0).toString());
+
+          newCompensation.absence = !isPresent && isAbsent;
+          newCompensation.grossPay = isHoliday
+            ? dailyRate * (holiday?.multiplier || 1)
+            : isPresent
+            ? dailyRate
+            : 0;
+          newCompensation.netPay = newCompensation.grossPay;
+
           if (foundCompensation && recompute) {
             const index = updatedCompensations.indexOf(foundCompensation);
             updatedCompensations[index] = {
@@ -103,20 +120,18 @@ export const useComputeAllCompensations = (
           continue;
         }
 
-        // Get schedule and create time objects
-        const schedule = getScheduleForDay(employmentType, day);
+        // Regular time-tracking computation
         if (!schedule) continue;
 
         const { actual, scheduled } = createTimeObjects(
           year,
           month,
           entry.day,
-          entry.timeIn,
-          entry.timeOut,
+          entry.timeIn || "",
+          entry.timeOut || "",
           schedule
         );
 
-        // Calculate all metrics
         const timeMetrics = calculateTimeMetrics(
           actual,
           scheduled,
@@ -130,7 +145,6 @@ export const useComputeAllCompensations = (
           holiday
         );
 
-        // Create compensation record
         const newCompensation = createCompensationRecord(
           entry,
           employee,
@@ -138,7 +152,9 @@ export const useComputeAllCompensations = (
           payMetrics,
           month,
           year,
-          holiday
+          holiday,
+          undefined,
+          { ...schedule, dayOfWeek: entry.day } // Pass schedule with dayOfWeek to help determine absence
         );
 
         if (foundCompensation && recompute) {

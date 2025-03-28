@@ -211,9 +211,7 @@ const TimesheetPage: React.FC = () => {
         setTimesheetEntries(attendanceData);
         setCompensationEntries(compensationData);
         setValidEntriesCount(
-          attendanceData.length -
-            attendanceData.filter((entry) => entry.timeIn && entry.timeOut)
-              .length
+          compensationData.filter((comp) => comp.absence).length
         );
 
         // Compute compensations only once after loading data

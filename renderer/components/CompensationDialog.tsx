@@ -180,7 +180,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
 
     // Create base return object with zero values
-    const createBaseReturn = (grossPay = 0, manualOverride = false) => ({
+    const createBaseReturn = (
+      grossPay = 0,
+      manualOverride = false,
+      absence = false
+    ) => ({
       lateMinutes: 0,
       undertimeMinutes: 0,
       overtimeMinutes: 0,
@@ -194,28 +198,36 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       overtimeAddition: 0,
       holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
       manualOverride,
+      absence,
     });
-
-    // For non-time-tracking employees, only check presence/absence
-    if (!employmentType?.requiresTimeTracking) {
-      const isPresent = !!(timeIn || timeOut);
-      const grossPay = isPresent ? dailyRate : 0;
-      const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
-      return {
-        ...createBaseReturn(grossPay + holidayBonus, true),
-        hoursWorked: isPresent ? 8 : 0,
-        manualOverride: true,
-      };
-    }
-
-    if (!timeIn || !timeOut || !attendanceSettings) {
-      return createBaseReturn();
-    }
-
     // Get the schedule for the specific day of the week
-    const schedule = getScheduleForDay(employmentType, entryDate.getDay());
-    if (!schedule) {
-      return createBaseReturn(dailyRate);
+    const schedule = employmentType
+      ? getScheduleForDay(employmentType, entryDate.getDay())
+      : null;
+
+    // Separate checks for workday and holiday
+    const isWorkday = !!schedule;
+    const isHoliday = !!holiday;
+
+    // If it's a workday (not a holiday) and no time entries, mark as absent
+    if (isWorkday && !isHoliday && (!timeIn || !timeOut)) {
+      return createBaseReturn(0, false, true);
+    }
+
+    // If it's a holiday, they should get holiday pay regardless of attendance
+    if (isHoliday) {
+      const holidayPay = dailyRate * (holiday?.multiplier || 1);
+      return createBaseReturn(holidayPay, false, false);
+    }
+
+    // If no schedule (rest day) and no holiday, return base values without marking absent
+    if (!isWorkday && !isHoliday) {
+      return createBaseReturn(0, false, false);
+    }
+
+    // Continue with time tracking logic for regular workdays with time entries
+    if (!timeIn || !timeOut || !attendanceSettings || !schedule) {
+      return createBaseReturn();
     }
 
     // Use shared utility functions for calculations
@@ -254,6 +266,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       overtimeAddition: payMetrics.overtimePay,
       holidayBonus: payMetrics.holidayBonus,
       manualOverride: false,
+      absence: false,
     };
   }, [
     employmentType,
@@ -283,6 +296,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         undertimeDeduction: computedValues.undertimeDeduction,
         lateDeduction: computedValues.lateDeduction,
         holidayBonus: computedValues.holidayBonus,
+        absence: computedValues.absence,
         // manualOverride: computedValues.manualOverride,
       }));
     }

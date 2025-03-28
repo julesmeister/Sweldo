@@ -24,6 +24,7 @@ export interface Compensation {
   netPay?: number;
   manualOverride?: boolean;
   notes?: string;
+  absence?: boolean;
 }
 
 export class CompensationModel {
@@ -92,6 +93,7 @@ export class CompensationModel {
         netPay: row.netPay ? parseFloat(row.netPay) : undefined,
         manualOverride: row.manualOverride === "true",
         notes: row.notes,
+        absence: row.absence === "true",
       })) as Compensation[];
     } catch (error) {
       console.error("Error reading compensation records:", error);
