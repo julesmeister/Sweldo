@@ -87,6 +87,13 @@ export default function RootLayout({
         const roles = await roleModel.getRoles();
         console.log("Found roles:", roles.length);
 
+        // If no roles exist, redirect to role creation page
+        if (roles.length === 0) {
+          toast.error("No roles found. Please create an admin role first.");
+          router.push("/settings"); // Assuming this is your roles management page
+          return;
+        }
+
         // Only show login if there are roles and user is not authenticated
         if (roles.length > 0 && !isAuthenticated) {
           setShowLogin(true);

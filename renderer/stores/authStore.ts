@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { Role, RoleModelImpl } from "../model/role";
 import { decryptPinCode } from "../lib/encryption";
 import { useSettingsStore } from "./settingsStore";
+import { toast } from "sonner";
 
 interface AuthState {
   currentRole: Role | null;
@@ -22,32 +23,30 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (pinToMatch: string) => {
         const dbPath = useSettingsStore.getState().dbPath;
-        console.log("Login attempt with dbPath:", dbPath);
 
         if (!dbPath) {
-          console.error("No dbPath set in settings store");
+          toast.error("No database path set in settings");
           return false;
         }
 
         if (!pinToMatch) {
-          console.error("No PIN code provided");
+          toast.error("No PIN code provided");
           return false;
         }
 
         try {
-          console.log("Initializing RoleModel with dbPath:", dbPath);
           const roleModel = new RoleModelImpl(dbPath);
           const roles = await roleModel.getRoles();
-          console.log("Found roles:", roles.length);
+
+          if (roles.length === 0) {
+            toast.error("No roles found. Please create an admin role first.");
+            return false;
+          }
 
           // Try to find a role with matching PIN
           const matchedRole = roles.find((role) => {
             try {
               const decryptedPin = decryptPinCode(role.pinCode);
-              console.log("Comparing PINs:", {
-                storedPinLength: decryptedPin.length,
-                enteredPinLength: pinToMatch.length,
-              });
               return decryptedPin === pinToMatch;
             } catch (error) {
               console.error("Error decrypting PIN:", error);
@@ -55,9 +54,8 @@ export const useAuthStore = create<AuthState>()(
             }
           });
 
-          console.log("Matched role:", matchedRole ? "found" : "not found");
-
           if (matchedRole) {
+            toast.success("Login successful!");
             set({
               currentRole: matchedRole,
               isAuthenticated: true,
@@ -66,15 +64,19 @@ export const useAuthStore = create<AuthState>()(
             return true;
           }
 
+          toast.error("Invalid PIN code");
           return false;
         } catch (error) {
-          console.error("[AuthStore] Login error:", error);
+          toast.error("Login error", {
+            description:
+              error instanceof Error ? error.message : "Unknown error occurred",
+          });
           return false;
         }
       },
 
       logout: () => {
-        console.log("Logging out...");
+        toast.success("Logged out successfully");
         set({
           currentRole: null,
           isAuthenticated: false,
@@ -84,7 +86,11 @@ export const useAuthStore = create<AuthState>()(
 
       hasAccess: (requiredCode: string) => {
         const { accessCodes } = get();
-        return accessCodes.includes(requiredCode);
+        const hasAccess = accessCodes.includes(requiredCode);
+        if (!hasAccess) {
+          toast.error("Access denied");
+        }
+        return hasAccess;
       },
     }),
     {
