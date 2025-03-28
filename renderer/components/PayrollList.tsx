@@ -87,7 +87,8 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           }))
           .sort(
             (a, b) =>
-              new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+              new Date(b.paymentDate).getTime() -
+              new Date(a.paymentDate).getTime()
           );
       }
 

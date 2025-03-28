@@ -271,7 +271,9 @@ export class Payroll {
     const employee = await employeeModel.loadEmployeeById(employeeId);
     const attendance = await createAttendanceModel(this.dbPath);
 
-    // Get all months between start and end date
+    // Get all months between start and end date to handle cross-month payroll periods
+    // Example: Jan 15 to Feb 15 will include both January and February
+    // Example: Feb 1 to Feb 15 will only include February
     const months: { month: number; year: number }[] = [];
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate instanceof Date ? endDate : new Date(endDate);
@@ -283,30 +285,66 @@ export class Payroll {
       });
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
+    console.log(`Processing payroll for months:`, months);
 
-    // Fetch all compensations for the date range
+    // Fetch all compensations for the date range from all relevant months
+    // This ensures we get data from both months when period spans across months
     const allCompensations = await Promise.all(
       months.map(({ month, year }) =>
         compensationModel.loadRecords(month, year, employeeId)
       )
     ).then((results) => results.flat());
+    console.log(
+      `Loaded ${allCompensations.length} total compensation records from ${months.length} months`
+    );
 
-    // Filter records within the date range
+    // Filter records to only include those within the exact date range
+    // This is crucial for cross-month periods to ensure we only count days within the specified range
     const filteredCompensations = allCompensations.filter((comp) => {
       const compDate = new Date(comp.year, comp.month - 1, comp.day);
-      return compDate >= start && compDate <= end;
+      const isInRange = compDate >= start && compDate <= end;
+      console.log(
+        `Compensation for ${compDate.toISOString()}: ${
+          isInRange ? "included" : "excluded"
+        }`
+      );
+      return isInRange;
     });
+    console.log(
+      `Filtered to ${filteredCompensations.length} compensation records within date range`
+    );
 
     // Count the number of days with compensation records
     const daysWorked = filteredCompensations.length;
+    console.log(`Total days worked: ${daysWorked}`);
 
-    // Get actual working days based on employment type schedule
-    // Load attendance records for the period
-    const attendanceRecords = await attendance.loadAttendancesById(
-      startDate.getMonth() + 1,
-      startDate.getFullYear(),
-      employeeId
+    // Load attendance records from all months in the period
+    // This is important for cross-month periods to get complete attendance data
+    const allAttendanceRecords = await Promise.all(
+      months.map(({ month, year }) =>
+        attendance.loadAttendancesById(month, year, employeeId)
+      )
+    ).then((results) => results.flat());
+    console.log(
+      `Loaded ${allAttendanceRecords.length} total attendance records from ${months.length} months`
     );
+
+    // Filter attendance records to only include those within the exact date range
+    // This ensures we only count attendance from the specified period, even if it spans months
+    const filteredAttendanceRecords = allAttendanceRecords.filter((record) => {
+      const recordDate = new Date(record.year, record.month - 1, record.day);
+      const isInRange = recordDate >= start && recordDate <= end;
+      console.log(
+        `Attendance for ${recordDate.toISOString()}: ${
+          isInRange ? "included" : "excluded"
+        }`
+      );
+      return isInRange;
+    });
+    console.log(
+      `Filtered to ${filteredAttendanceRecords.length} attendance records within date range`
+    );
+
     if (!employee) {
       throw new Error("Employee not found");
     }
@@ -316,7 +354,7 @@ export class Payroll {
       start,
       end,
       employee.employmentType || "regular",
-      attendanceRecords,
+      filteredAttendanceRecords,
       allCompensations
     );
 
@@ -484,12 +522,21 @@ export class Payroll {
         absences: summary.absences || 0,
       };
 
-      // Save the payroll data as CSV
-      const filePath = `${
-        this.dbPath
-      }/SweldoDB/payrolls/${employeeId}/${startDate.getFullYear()}_${
-        startDate.getMonth() + 1
-      }_payroll.csv`;
+      // Get all months between start and end date
+      const months = [];
+      let currentDate = new Date(start);
+      while (currentDate <= end) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+
+      // Save payroll data only to the file corresponding to the end date's month
+      const endMonth = end.getMonth() + 1;
+      const endYear = end.getFullYear();
+      const filePath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
       // Ensure directory exists
       await window.electron.ensureDir(
@@ -512,12 +559,12 @@ export class Payroll {
 
       try {
         await window.electron.writeFile(filePath, csvContent);
+        console.log(`Payroll data saved to ${filePath}`);
       } catch (error) {
-        console.error("Error writing to file:", error);
+        console.error(`Error writing to file ${filePath}:`, error);
         throw error;
       }
 
-      console.log(`Payroll data saved to ${filePath}`);
       return {
         ...summary,
         deductions: finalDeductions,

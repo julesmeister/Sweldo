@@ -81,31 +81,46 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
           return;
         }
 
-        // Match the pattern from cash advances page
-        const month = startDate.getMonth() + 1;
-        const year = startDate.getFullYear();
+        // Get all months between start and end date
+        const months = [];
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          months.push({
+            month: currentDate.getMonth() + 1,
+            year: currentDate.getFullYear(),
+          });
+          currentDate.setMonth(currentDate.getMonth() + 1);
+        }
 
-        // Use the correct folder path structure
-        const cashAdvanceModel = createCashAdvanceModel(
-          dbPath,
-          employeeId,
-          month,
-          year
-        );
-        console.log(
-          "Created cash advance model with path:",
-          cashAdvanceModel.filePath
-        );
+        // Load cash advances from all relevant months
+        const allAdvances: CashAdvance[] = [];
+        for (const { month, year } of months) {
+          const cashAdvanceModel = createCashAdvanceModel(
+            dbPath,
+            employeeId,
+            month,
+            year
+          );
+          console.log(
+            `Loading cash advances for ${month}/${year}:`,
+            cashAdvanceModel.filePath
+          );
 
-        const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+          const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+          allAdvances.push(...advances);
+        }
 
-
-        const unpaid = advances.filter((advance) => {
+        // Filter unpaid advances
+        const unpaid = allAdvances.filter((advance) => {
           const isApproved = advance.approvalStatus === "Approved";
           const hasRemaining = advance.remainingUnpaid > 0;
-
           return isApproved && hasRemaining;
         });
+
+        // Sort by date (oldest first)
+        unpaid.sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
 
         const initialDeductions: Record<string, number> = {};
         unpaid.forEach((advance) => {
@@ -125,32 +140,55 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
     if (isOpen) {
       loadUnpaidAdvances();
     }
-  }, [isOpen, employeeId, dbPath, startDate]);
+  }, [isOpen, employeeId, dbPath, startDate, endDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Create cash advance model
-    const month = startDate.getMonth() + 1;
-    const year = startDate.getFullYear();
-    const cashAdvanceModel = createCashAdvanceModel(dbPath, employeeId, month, year);
 
-    // Update each selected cash advance
+    // Get all months between start and end date
+    const months = [];
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      months.push({
+        month: currentDate.getMonth() + 1,
+        year: currentDate.getFullYear(),
+      });
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    // Update each selected cash advance in its respective month
     for (const advanceId of selectedAdvances) {
-      const advance = unpaidAdvances.find(adv => adv.id === advanceId);
+      const advance = unpaidAdvances.find((adv) => adv.id === advanceId);
       if (advance) {
         const deductionAmount = deductionAmounts[advanceId] || 0;
         const newRemainingUnpaid = advance.remainingUnpaid - deductionAmount;
-        
-        // Update the cash advance
+
+        // Find the correct month for this advance
+        const advanceDate = new Date(advance.date);
+        const month = advanceDate.getMonth() + 1;
+        const year = advanceDate.getFullYear();
+
+        // Update the cash advance in its correct month
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          employeeId,
+          month,
+          year
+        );
         await cashAdvanceModel.updateCashAdvance({
           ...advance,
           remainingUnpaid: newRemainingUnpaid,
-          status: newRemainingUnpaid <= 0 ? 'Paid' : 'Unpaid',
-          installmentDetails: advance.paymentSchedule === 'Installment' ? {
-            ...advance.installmentDetails!,
-            remainingPayments: Math.ceil(newRemainingUnpaid / advance.installmentDetails!.amountPerPayment)
-          } : undefined
+          status: newRemainingUnpaid <= 0 ? "Paid" : "Unpaid",
+          installmentDetails:
+            advance.paymentSchedule === "Installment"
+              ? {
+                  ...advance.installmentDetails!,
+                  remainingPayments: Math.ceil(
+                    newRemainingUnpaid /
+                      advance.installmentDetails!.amountPerPayment
+                  ),
+                }
+              : undefined,
         });
       }
     }
@@ -424,7 +462,10 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
                               id={`advance-${advance.id}`}
                               checked={selectedAdvances.has(advance.id)}
                               onChange={(e) =>
-                                handleAdvanceSelect(advance.id, e.target.checked)
+                                handleAdvanceSelect(
+                                  advance.id,
+                                  e.target.checked
+                                )
                               }
                               className="sr-only peer"
                             />
@@ -449,8 +490,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = ({
                             )}
                           </span>
                           <span className="text-xs font-medium text-blue-400/90 group-hover:text-blue-400 mt-1 transition-colors duration-200">
-                            Remaining:{" "}
-                            {formatCurrency(advance.remainingUnpaid)}
+                            Remaining: {formatCurrency(advance.remainingUnpaid)}
                           </span>
                         </div>
                       </div>
