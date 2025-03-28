@@ -16,6 +16,7 @@ import {
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
+import * as fs from "fs";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -350,24 +351,34 @@ export class Payroll {
     );
 
     // Filter records to only include those within the exact date range
-    // This is crucial for cross-month periods to ensure we only count days within the specified range
     const filteredCompensations = allCompensations.filter((comp) => {
+      // Create date at start of day to avoid timezone issues
       const compDate = new Date(comp.year, comp.month - 1, comp.day);
-      const isInRange = compDate >= start && compDate <= end;
+      compDate.setHours(0, 0, 0, 0);
+
+      const startOfRange = new Date(start);
+      startOfRange.setHours(0, 0, 0, 0);
+
+      const endOfRange = new Date(end);
+      endOfRange.setHours(23, 59, 59, 999);
+
+      const isInRange = compDate >= startOfRange && compDate <= endOfRange;
+
       console.log(
         `Compensation for ${compDate.toISOString()}: ${
           isInRange ? "included" : "excluded"
-        }`
+        } (absence: ${comp.absence ? "yes" : "no"}, date comparison:`,
+        {
+          compDate,
+          startOfRange,
+          endOfRange,
+          isAfterStart: compDate >= startOfRange,
+          isBeforeEnd: compDate <= endOfRange,
+        }
       );
+
       return isInRange;
     });
-    console.log(
-      `Filtered to ${filteredCompensations.length} compensation records within date range`
-    );
-
-    // Count the number of days with compensation records
-    const daysWorked = filteredCompensations.length;
-    console.log(`Total days worked: ${daysWorked}`);
 
     // Load attendance records from all months in the period
     // This is important for cross-month periods to get complete attendance data
@@ -400,14 +411,37 @@ export class Payroll {
       throw new Error("Employee not found");
     }
 
-    // Calculate absences based on schedule vs actual attendance
-    const absences = await this.getActualWorkingDays(
-      start,
-      end,
-      employee.employmentType || "regular",
-      filteredAttendanceRecords,
-      allCompensations
+    // Count absences by checking empty time entries in attendance records
+    const absences = filteredAttendanceRecords.filter((record) => {
+      // Skip Sundays
+      const recordDate = new Date(record.year, record.month - 1, record.day);
+      if (recordDate.getDay() === 0) return false;
+
+      // Count as absence if both timeIn and timeOut are empty
+      return !record.timeIn || !record.timeOut;
+    });
+
+    console.log(
+      "Found absences:",
+      absences.map((record) => ({
+        date: `${record.year}-${record.month}-${record.day}`,
+        timeIn: record.timeIn,
+        timeOut: record.timeOut,
+      }))
     );
+
+    const totalAbsences = absences.length;
+    console.log(`Total absences in period: ${totalAbsences}`);
+
+    // Count the number of days worked (days with both timeIn and timeOut)
+    const daysWorked = filteredAttendanceRecords.filter((record) => {
+      const recordDate = new Date(record.year, record.month - 1, record.day);
+      // Don't count Sundays
+      if (recordDate.getDay() === 0) return false;
+      return record.timeIn && record.timeOut;
+    }).length;
+
+    console.log(`Total days worked: ${daysWorked}`);
 
     // Calculate totals from pre-computed compensation records
     let totalBasicPay = 0;
@@ -485,7 +519,7 @@ export class Payroll {
         .toISOString()
         .split("T")[0],
       daysWorked,
-      absences,
+      absences: totalAbsences,
     };
 
     return summary;
@@ -640,79 +674,57 @@ export class Payroll {
     endDate: Date
   ): Promise<void> {
     try {
-      const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${startDate.getFullYear()}_${
-        startDate.getMonth() + 1
-      }_payroll.csv`;
+      // Get the file path based on the end date's month and year
+      const endMonth = endDate.getMonth() + 1;
+      const endYear = endDate.getFullYear();
+      const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
-      console.log(`Reading payroll file: ${filePath}`);
+      console.log(`Attempting to delete payroll from file: ${filePath}`);
+      console.log(
+        `Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
+
+      // Check if file exists
+      const fileExists = await window.electron.fileExists(filePath);
+      if (!fileExists) {
+        throw new Error(`Payroll file not found: ${filePath}`);
+      }
+
+      // Read the file content
       const content = await window.electron.readFile(filePath);
       const parsedData = Papa.parse(content, { header: true });
 
-      // Find the rows that are being deleted to process their cash advance deductions
-      const rowsToDelete = (parsedData.data as any[]).filter((row) => {
-        const rowDate = new Date(row.startDate);
-        return rowDate >= startDate && rowDate <= endDate;
+      console.log(`Found ${parsedData.data.length} records in file`);
+
+      // Find the exact record to delete using the ID
+      const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
+      console.log(`Looking for payroll with ID: ${payrollId}`);
+
+      // Filter out the matching record
+      const filteredData = parsedData.data.filter((row: any) => {
+        const rowId = row.id?.toString();
+        const shouldKeep = rowId !== payrollId;
+        console.log(`Row ID: ${rowId}, Keep: ${shouldKeep}`);
+        return shouldKeep;
       });
 
-      console.log("Found payroll rows to delete:", rowsToDelete);
+      console.log(`Remaining records after filter: ${filteredData.length}`);
 
-      // Process cash advance deductions for deleted rows
-      for (const row of rowsToDelete) {
-        // Check both possible field names for cash advance deductions
-        const cashAdvanceDeductions =
-          parseFloat(row.cashAdvanceDeductions) ||
-          parseFloat(row.cashAdvanceDeduction) ||
-          0;
-
-        console.log("Processing row for cash advance:", {
-          rowData: row,
-          foundDeduction: cashAdvanceDeductions,
-        });
-
-        if (cashAdvanceDeductions > 0) {
-          console.log(
-            `Found cash advance deduction to reverse: ${cashAdvanceDeductions}`
-          );
-          try {
-            await Payroll.reverseCashAdvanceDeduction(
-              dbPath,
-              employeeId,
-              cashAdvanceDeductions,
-              new Date(row.startDate)
-            );
-          } catch (error) {
-            console.error("Error reversing cash advance:", error);
-            throw new Error(
-              `Failed to reverse cash advance: ${
-                error instanceof Error ? error.message : "Unknown error"
-              }`
-            );
-          }
-        }
+      if (filteredData.length === parsedData.data.length) {
+        console.warn("No matching record found to delete");
+        throw new Error("Payroll record not found");
       }
-
-      // Filter out the rows that match the date range
-      const filteredData = (parsedData.data as any[]).filter((row) => {
-        const rowDate = new Date(row.startDate);
-        return rowDate < startDate || rowDate > endDate;
-      });
 
       // Convert back to CSV
       const updatedContent = Papa.unparse(filteredData);
+
+      // Write the updated content back to the file
       await window.electron.writeFile(filePath, updatedContent);
-      console.log(
-        `Deleted payroll summary rows for employee ${employeeId} between ${startDate.toDateString()} and ${endDate.toDateString()}`
-      );
+
+      console.log(`Successfully deleted payroll record with ID: ${payrollId}`);
     } catch (error) {
-      console.error(
-        `Error deleting payroll summary for employee ${employeeId}:`,
-        error
-      );
-      throw new Error(
-        `Could not delete payroll summary: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error(`Error deleting payroll summary:`, error);
+      throw error;
     }
   }
 
@@ -854,58 +866,71 @@ export class Payroll {
     month: number
   ): Promise<PayrollSummaryModel[]> {
     try {
+      console.log(
+        `Loading payroll summaries for ${year}-${month}, employee: ${employeeId}`
+      );
       const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${year}_${month}_payroll.csv`;
+
+      // Check if file exists using electron
+      const fileExists = await window.electron.fileExists(filePath);
+      if (!fileExists) {
+        console.log(`No payroll file found for ${year}-${month}`);
+        return [];
+      }
+
       const fileContent = await window.electron.readFile(filePath);
-      if (!fileContent) {
-        console.log(
-          `Payroll summary file ${filePath} doesn't exist, returning empty array`
-        );
-        return []; // Return empty array if file is empty or doesn't exist
+      const rows = fileContent.split("\n").filter((row) => row.trim());
+
+      // Skip header row
+      const payrolls: PayrollSummaryModel[] = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row.trim()) continue;
+
+        const columns = row.split(",");
+        console.log(`Processing row: ${row}`);
+
+        const payroll: PayrollSummaryModel = {
+          id: columns[0],
+          employeeId: columns[1],
+          employeeName: columns[2],
+          startDate: new Date(columns[3]),
+          endDate: new Date(columns[4]),
+          dailyRate: parseFloat(columns[5]),
+          basicPay: parseFloat(columns[6]),
+          overtime: parseFloat(columns[7]),
+          overtimeMinutes: parseInt(columns[8]),
+          undertimeDeduction: parseFloat(columns[9]),
+          undertimeMinutes: parseInt(columns[10]),
+          lateDeduction: parseFloat(columns[11]),
+          lateMinutes: parseInt(columns[12]),
+          holidayBonus: parseFloat(columns[13]),
+          grossPay: parseFloat(columns[14]),
+          allowances: parseFloat(columns[15]),
+          deductions: {
+            sss: parseFloat(columns[16]),
+            philHealth: parseFloat(columns[17]),
+            pagIbig: parseFloat(columns[18]),
+            cashAdvanceDeductions: parseFloat(columns[19]),
+            others: parseFloat(columns[20]),
+          },
+          netPay: parseFloat(columns[21]),
+          paymentDate: columns[22], // Fix the type issue by using the string directly
+          daysWorked: parseInt(columns[23]),
+          absences: parseInt(columns[24]),
+        };
+
+        payrolls.push(payroll);
       }
-      const results = Papa.parse(fileContent, {
-        header: true,
-        skipEmptyLines: true,
-      });
-      console.log(`Loaded ${results.data.length} payroll summaries`);
-      return results.data.map((row: any) => ({
-        id: row.id,
-        employeeName: row.employeeName,
-        employeeId: row.employeeId,
-        startDate: new Date(row.startDate),
-        endDate: new Date(row.endDate),
-        dailyRate: parseFloat(row.dailyRate) || 0,
-        basicPay: parseFloat(row.basicPay) || 0,
-        overtime: parseFloat(row.overtimePay) || 0,
-        overtimeMinutes: parseFloat(row.overtimeMinutes) || 0,
-        undertimeDeduction: parseFloat(row.undertimeDeduction) || 0,
-        undertimeMinutes: parseFloat(row.undertimeMinutes) || 0,
-        lateDeduction: parseFloat(row.lateDeduction) || 0,
-        lateMinutes: parseFloat(row.lateMinutes) || 0,
-        holidayBonus: parseFloat(row.holidayBonus) || 0,
-        dayType: row.dayType as "Regular" | "Holiday" | "Rest Day" | "Special",
-        leaveType: row.leaveType as "Vacation" | "Sick" | "Unpaid" | "None",
-        leavePay: parseFloat(row.leavePay) || 0,
-        grossPay: parseFloat(row.grossPay) || 0,
-        allowances: parseFloat(row.allowances) || 0,
-        deductions: {
-          sss: parseFloat(row.sssDeduction) || 0,
-          philHealth: parseFloat(row.philHealthDeduction) || 0,
-          pagIbig: parseFloat(row.pagIbigDeduction) || 0,
-          cashAdvanceDeductions: parseFloat(row.cashAdvanceDeductions) || 0,
-          others: parseFloat(row.otherDeductions) || 0,
-        },
-        netPay: parseFloat(row.netPay) || 0,
-        paymentDate: row.paymentDate,
-        daysWorked: parseFloat(row.daysWorked) || 0,
-        absences: parseFloat(row.absences) || 0,
-      })) as PayrollSummaryModel[];
+
+      console.log(`Loaded ${payrolls.length} payroll records from ${filePath}`);
+      return payrolls;
     } catch (error) {
-      if (error instanceof Error && error.message.includes("ENOENT")) {
-        console.log(`Payroll summary file not found: ${error.message}`);
-        return []; // Return empty array if file doesn't exist
-      }
-      console.error("[Payroll.loadPayrollSummaries] Error:", error);
-      throw error;
+      console.error(
+        `[Payroll.loadPayrollSummaries] Error loading payrolls for ${year}-${month}:`,
+        error
+      );
+      return [];
     }
   }
 

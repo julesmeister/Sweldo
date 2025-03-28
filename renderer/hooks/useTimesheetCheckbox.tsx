@@ -94,6 +94,11 @@ export const useTimesheetCheckbox = ({
 
       const dailyRate = hasCompleteAttendance ? employee?.dailyRate || 0 : 0;
 
+      const isWorkday = true; // Since we're handling checkbox for workdays
+      const isHoliday = !!holiday;
+      const hasTimeEntries = isPresent; // Using the checkbox state
+      const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
       const compensation: Compensation = {
         ...(existingCompensation || {}),
         employeeId: selectedEmployeeId,
@@ -102,8 +107,17 @@ export const useTimesheetCheckbox = ({
         day: foundEntry.day,
         manualOverride: true,
         dailyRate,
-        grossPay: dailyRate,
-        netPay: dailyRate,
+        absence: isAbsent,
+        grossPay: isHoliday
+          ? dailyRate * (holiday?.multiplier || 1)
+          : hasTimeEntries
+          ? dailyRate
+          : 0,
+        netPay: isHoliday
+          ? dailyRate * (holiday?.multiplier || 1)
+          : hasTimeEntries
+          ? dailyRate
+          : 0,
         dayType: "Regular" as DayType,
       };
 

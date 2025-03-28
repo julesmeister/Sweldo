@@ -663,8 +663,31 @@ const TimesheetPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {timesheetEntries.length === 0 ? (
                       <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          No timesheet entries found
+                        <td
+                          colSpan={columns.filter((col) => col.visible).length}
+                          className="px-6 py-12 text-center"
+                        >
+                          <div className="flex flex-col items-center justify-center">
+                            <svg
+                              className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={1}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            <h3 className="text-lg font-medium text-gray-900 mb-1">
+                              No Timesheet Entries
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              No attendance records found for this period.
+                            </p>
+                          </div>
                         </td>
                       </tr>
                     ) : (

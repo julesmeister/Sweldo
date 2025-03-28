@@ -36,63 +36,73 @@ export const PayrollList: React.FC<PayrollListProps> = ({
 
   useEffect(() => {
     const loadPayrolls = async () => {
-      if (!employee) return;
+      if (!employee) {
+        console.log("No employee data, skipping payroll load");
+        return;
+      }
 
       const now = new Date();
-      let filteredPayrolls: PayrollSummaryModel[] = [];
+      let allPayrolls: PayrollSummaryModel[] = [];
 
       if (filterType === "custom" && month) {
+        console.log(
+          `Loading payrolls for custom month: ${month.toISOString()}`
+        );
         const payrollData = await Payroll.loadPayrollSummaries(
           dbPath,
           selectedEmployeeId,
           month.getFullYear(),
           month.getMonth() + 1
         );
-        filteredPayrolls = payrollData.map((payroll) => ({
-          ...payroll,
-          employeeName: employee?.name || "Unknown Employee",
-        }));
+        allPayrolls = payrollData;
       } else {
         const monthsToLoad =
           filterType === "3months" ? 3 : filterType === "6months" ? 6 : 12;
-        const currentDate = new Date();
+        console.log(`Loading payrolls for last ${monthsToLoad} months`);
 
         const payrollPromises = [];
-        for (let i = 0; i < monthsToLoad; i++) {
-          const targetDate = new Date(currentDate);
-          targetDate.setMonth(currentDate.getMonth() - i);
+        const monthsToProcess = [];
 
-          console.log(
-            `Loading payrolls for: Year=${targetDate.getFullYear()}, Month=${
-              targetDate.getMonth() + 1
-            }`
-          );
+        // Load current month and previous months
+        for (let i = 0; i < monthsToLoad; i++) {
+          const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const year = targetDate.getFullYear();
+          const month = targetDate.getMonth() + 1;
+
+          monthsToProcess.push({ year, month });
+          console.log(`Queuing payroll load for: Year=${year}, Month=${month}`);
 
           payrollPromises.push(
             Payroll.loadPayrollSummaries(
               dbPath,
               selectedEmployeeId,
-              targetDate.getFullYear(),
-              targetDate.getMonth() + 1
+              year,
+              month
             )
           );
         }
 
-        const allPayrollData = await Promise.all(payrollPromises);
-        filteredPayrolls = allPayrollData
-          .flat()
-          .map((payroll) => ({
-            ...payroll,
-            employeeName: employee?.name || "Unknown Employee",
-          }))
-          .sort(
-            (a, b) =>
-              new Date(b.paymentDate).getTime() -
-              new Date(a.paymentDate).getTime()
-          );
+        console.log("Processing months:", monthsToProcess);
+
+        const results = await Promise.all(payrollPromises);
+        allPayrolls = results.flat();
+
+        console.log(`Loaded total of ${allPayrolls.length} payroll records`);
       }
 
-      setPayrolls(filteredPayrolls);
+      // Remove duplicates based on ID
+      const uniquePayrolls = Array.from(
+        new Map(allPayrolls.map((item) => [item.id, item])).values()
+      );
+
+      // Sort by payment date in descending order
+      const sortedPayrolls = uniquePayrolls.sort(
+        (a, b) =>
+          new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
+      );
+
+      console.log(`Final unique sorted payrolls: ${sortedPayrolls.length}`);
+      setPayrolls(sortedPayrolls);
     };
 
     loadPayrolls();
@@ -162,8 +172,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
     ) {
       try {
         const payroll = payrolls.find(
-          (p) =>
-            new Date(p.startDate).getTime() === new Date(payrollId).getTime()
+          (p) => p.id === payrollId // Change this to match by ID instead of date
         );
 
         if (!payroll) {
@@ -171,7 +180,8 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           return;
         }
 
-        console.log("Deleting payroll:", {
+        console.log("Attempting to delete payroll:", {
+          id: payroll.id,
           dbPath,
           employeeId: selectedEmployeeId,
           startDate: payroll.startDate,
@@ -185,8 +195,15 @@ export const PayrollList: React.FC<PayrollListProps> = ({
           new Date(payroll.endDate)
         );
 
+        // Remove the deleted payroll from the local state
+        setPayrolls((currentPayrolls) =>
+          currentPayrolls.filter((p) => p.id !== payrollId)
+        );
+
+        // Notify parent component
         onPayrollDeleted();
         toast.success("Payroll record deleted successfully");
+        // Refresh will happen via onPayrollDeleted callback
       } catch (error) {
         console.error("Error deleting payroll:", error);
         toast.error(
@@ -197,6 +214,13 @@ export const PayrollList: React.FC<PayrollListProps> = ({
       }
     }
   };
+
+  console.log("Rendering PayrollList with:", {
+    totalPayrolls: payrolls.length,
+    filterType,
+    selectedMonth: month,
+    employeeId: selectedEmployeeId,
+  });
 
   return (
     <div className="bg-white rounded-lg shadow overflow-visible z-10">
@@ -304,44 +328,61 @@ export const PayrollList: React.FC<PayrollListProps> = ({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {payrolls.map((payroll) => (
-              <tr
-                key={`${payroll.employeeId}-${payroll.endDate}`}
-                onClick={() => handlePayrollSelect(payroll)}
-                className="hover:bg-gray-50 cursor-pointer"
-              >
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(payroll.startDate)} -{" "}
-                  {formatDate(payroll.endDate)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span className="text-emerald-600 font-medium">
-                    ₱{payroll.netPay.toLocaleString()}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Intl.DateTimeFormat("en-PH", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    weekday: "long",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  }).format(new Date(payroll.paymentDate))}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await handleDeletePayroll(payroll.startDate.toString());
-                    }}
-                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
-                  >
-                    Delete
-                  </button>
+            {payrolls.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                  No payrolls found for this period
                 </td>
               </tr>
-            ))}
+            ) : (
+              payrolls.map((payroll) => {
+                console.log("Rendering payroll row:", {
+                  id: payroll.id,
+                  dates: `${formatDate(payroll.startDate)} - ${formatDate(
+                    payroll.endDate
+                  )}`,
+                  paymentDate: payroll.paymentDate,
+                });
+                return (
+                  <tr
+                    key={`${payroll.employeeId}-${payroll.endDate}`}
+                    onClick={() => handlePayrollSelect(payroll)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(payroll.startDate)} -{" "}
+                      {formatDate(payroll.endDate)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className="text-emerald-600 font-medium">
+                        ₱{payroll.netPay.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Intl.DateTimeFormat("en-PH", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        weekday: "long",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      }).format(new Date(payroll.paymentDate))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await handleDeletePayroll(payroll.id);
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

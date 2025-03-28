@@ -7,6 +7,7 @@ import {
 import { Employee } from "@/renderer/model/employee";
 import {
   AttendanceSettingsModel,
+  EmploymentType,
   getScheduleForDay,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "@/renderer/model/holiday";
@@ -97,12 +98,53 @@ export const useTimesheetEdit = ({
       );
       console.log("Existing compensation:", existingCompensation);
 
+      // Get schedule for the day
+      const date = new Date(year, month - 1, foundEntry.day);
+      const dayOfWeek = date.getDay() || 7; // Convert Sunday (0) to 7
+      const schedule = employmentType
+        ? getScheduleForDay(employmentType, dayOfWeek)
+        : null;
+      if (!schedule) {
+        console.log("No schedule found for day:", { dayOfWeek, date });
+        return;
+      }
+      console.log("Schedule found:", schedule);
+
+      // Create time objects and calculate metrics
+      const { actual, scheduled } = createTimeObjects(
+        year,
+        month,
+        foundEntry.day,
+        updatedEntry.timeIn ?? "",
+        updatedEntry.timeOut ?? "",
+        schedule
+      );
+      console.log("Time objects created:", { actual, scheduled });
+
+      const timeMetrics = calculateTimeMetrics(
+        actual,
+        scheduled,
+        attendanceSettings
+      );
+      console.log("Time metrics calculated:", timeMetrics);
+
+      const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+      const payMetrics = calculatePayMetrics(
+        timeMetrics,
+        attendanceSettings,
+        dailyRate,
+        holiday
+      );
+      console.log("Pay metrics calculated:", payMetrics);
+
+      // Add this before creating compensation
+      const isWorkday = !!schedule;
+      const isHoliday = !!holiday;
+      const hasTimeEntries = !!(updatedEntry.timeIn && updatedEntry.timeOut);
+      const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
       // For non-time-tracking employees or missing time entries
-      if (
-        !employmentType?.requiresTimeTracking ||
-        !updatedEntry.timeIn ||
-        !updatedEntry.timeOut
-      ) {
+      if (!employmentType?.requiresTimeTracking || !hasTimeEntries) {
         console.log(
           "Creating base compensation for non-time-tracking employee"
         );
@@ -113,7 +155,21 @@ export const useTimesheetEdit = ({
           year,
           holiday
         );
-        console.log("Base compensation created:", compensation);
+
+        // Set absence and pay based on conditions
+        const isPresent =
+          !employmentType?.requiresTimeTracking &&
+          (updatedEntry.timeIn === "present" ||
+            updatedEntry.timeOut === "present");
+        const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+
+        compensation.absence = !isPresent && isAbsent;
+        compensation.grossPay = isHoliday
+          ? dailyRate * (holiday?.multiplier || 1)
+          : isPresent
+          ? dailyRate
+          : 0;
+        compensation.netPay = compensation.grossPay;
 
         try {
           await compensationModel.saveOrUpdateCompensations(
@@ -145,43 +201,6 @@ export const useTimesheetEdit = ({
         onDataUpdate(updatedAttendanceData, updatedCompensationData);
         return;
       }
-
-      // Get schedule for the day
-      const date = new Date(year, month - 1, foundEntry.day);
-      const dayOfWeek = date.getDay() || 7; // Convert Sunday (0) to 7
-      const schedule = getScheduleForDay(employmentType, dayOfWeek);
-      if (!schedule) {
-        console.log("No schedule found for day:", { dayOfWeek, date });
-        return;
-      }
-      console.log("Schedule found:", schedule);
-
-      // Create time objects and calculate metrics
-      const { actual, scheduled } = createTimeObjects(
-        year,
-        month,
-        foundEntry.day,
-        updatedEntry.timeIn,
-        updatedEntry.timeOut,
-        schedule
-      );
-      console.log("Time objects created:", { actual, scheduled });
-
-      const timeMetrics = calculateTimeMetrics(
-        actual,
-        scheduled,
-        attendanceSettings
-      );
-      console.log("Time metrics calculated:", timeMetrics);
-
-      const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
-      const payMetrics = calculatePayMetrics(
-        timeMetrics,
-        attendanceSettings,
-        dailyRate,
-        holiday
-      );
-      console.log("Pay metrics calculated:", payMetrics);
 
       // Create updated compensation
       const compensation = createCompensationRecord(

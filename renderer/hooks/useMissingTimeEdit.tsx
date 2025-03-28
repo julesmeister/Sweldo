@@ -125,12 +125,58 @@ export const useMissingTimeEdit = ({
         existingCompensation
       );
 
-      // For non-time-tracking employees or missing time entries
-      if (
-        !employmentType?.requiresTimeTracking ||
-        !updatedAttendance.timeIn ||
-        !updatedAttendance.timeOut
-      ) {
+      // Get schedule for the day
+      const date = new Date(year, month - 1, updatedAttendance.day);
+      const dayOfWeek = date.getDay() || 7; // Convert Sunday (0) to 7
+      const schedule = employmentType
+        ? getScheduleForDay(employmentType, dayOfWeek)
+        : null;
+      if (!schedule) {
+        console.log("[useMissingTimeEdit] No schedule found for day:", {
+          dayOfWeek,
+          date,
+        });
+        return;
+      }
+      console.log("[useMissingTimeEdit] Schedule found:", schedule);
+
+      // Create time objects and calculate metrics
+      const { actual, scheduled } = createTimeObjects(
+        year,
+        month,
+        updatedAttendance.day,
+        updatedAttendance.timeIn || "",
+        updatedAttendance.timeOut || "",
+        schedule
+      );
+      console.log("[useMissingTimeEdit] Time objects created:", {
+        actual,
+        scheduled,
+      });
+
+      const timeMetrics = calculateTimeMetrics(
+        actual,
+        scheduled,
+        attendanceSettings
+      );
+      console.log("[useMissingTimeEdit] Time metrics calculated:", timeMetrics);
+
+      const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+      const payMetrics = calculatePayMetrics(
+        timeMetrics,
+        attendanceSettings,
+        dailyRate,
+        holiday
+      );
+      console.log("[useMissingTimeEdit] Pay metrics calculated:", payMetrics);
+
+      // Add this before creating compensation
+      const isWorkday = !!schedule;
+      const isHoliday = !!holiday;
+      const hasTimeEntries = !!(updates.timeIn && updates.timeOut);
+      const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
+      if (!employmentType?.requiresTimeTracking || !hasTimeEntries) {
         console.log(
           "[useMissingTimeEdit] Creating base compensation for non-time-tracking employee"
         );
@@ -141,6 +187,19 @@ export const useMissingTimeEdit = ({
           year,
           holiday
         );
+
+        // Set absence and pay based on conditions
+        const isPresent =
+          !employmentType?.requiresTimeTracking &&
+          (updates.timeIn === "present" || updates.timeOut === "present");
+        compensation.absence = !isPresent && isAbsent;
+        compensation.grossPay = isHoliday
+          ? dailyRate * (holiday?.multiplier || 1)
+          : isPresent
+          ? dailyRate
+          : 0;
+        compensation.netPay = compensation.grossPay;
+
         console.log(
           "[useMissingTimeEdit] Base compensation created:",
           compensation
@@ -164,52 +223,6 @@ export const useMissingTimeEdit = ({
           throw saveError;
         }
       } else {
-        // Get schedule for the day
-        const date = new Date(year, month - 1, updatedAttendance.day);
-        const dayOfWeek = date.getDay() || 7; // Convert Sunday (0) to 7
-        const schedule = getScheduleForDay(employmentType, dayOfWeek);
-        if (!schedule) {
-          console.log("[useMissingTimeEdit] No schedule found for day:", {
-            dayOfWeek,
-            date,
-          });
-          return;
-        }
-        console.log("[useMissingTimeEdit] Schedule found:", schedule);
-
-        // Create time objects and calculate metrics
-        const { actual, scheduled } = createTimeObjects(
-          year,
-          month,
-          updatedAttendance.day,
-          updatedAttendance.timeIn,
-          updatedAttendance.timeOut,
-          schedule
-        );
-        console.log("[useMissingTimeEdit] Time objects created:", {
-          actual,
-          scheduled,
-        });
-
-        const timeMetrics = calculateTimeMetrics(
-          actual,
-          scheduled,
-          attendanceSettings
-        );
-        console.log(
-          "[useMissingTimeEdit] Time metrics calculated:",
-          timeMetrics
-        );
-
-        const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
-        const payMetrics = calculatePayMetrics(
-          timeMetrics,
-          attendanceSettings,
-          dailyRate,
-          holiday
-        );
-        console.log("[useMissingTimeEdit] Pay metrics calculated:", payMetrics);
-
         // Create updated compensation
         const compensation = createCompensationRecord(
           updatedAttendance,
@@ -219,8 +232,11 @@ export const useMissingTimeEdit = ({
           month,
           year,
           holiday,
-          existingCompensation
+          existingCompensation,
+          { ...schedule, dayOfWeek: updatedAttendance.day }
         );
+
+        compensation.absence = isAbsent;
         console.log(
           "[useMissingTimeEdit] Compensation record created:",
           compensation

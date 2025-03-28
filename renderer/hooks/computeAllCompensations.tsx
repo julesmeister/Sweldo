@@ -57,12 +57,35 @@ export const useComputeAllCompensations = (
       const holidayModel = createHolidayModel(dbPath, year, month);
       const holidays = await holidayModel.loadHolidays();
 
-      for (const entry of timesheetEntries) {
+      // Get the last day of the month
+      const lastDayOfMonth = new Date(year, month, 0).getDate();
+      console.log(
+        `Computing compensations for ${year}-${month}, days: 1-${lastDayOfMonth}`
+      );
+
+      // Filter timesheet entries to only include valid days for this month
+      const validTimesheetEntries = timesheetEntries.filter((entry) => {
+        const entryDay = Number(entry.day);
+        const isValidDay = entryDay >= 1 && entryDay <= lastDayOfMonth;
+        if (!isValidDay) {
+          console.log(`Skipping invalid day ${entryDay} for month ${month}`);
+        }
+        return isValidDay;
+      });
+
+      for (const entry of validTimesheetEntries) {
+        const entryDay = Number(entry.day);
+        const entryDate = new Date(year, month - 1, entryDay);
+
+        // Skip if the date is invalid
+        if (isNaN(entryDate.getTime())) {
+          console.log(`Skipping invalid date: ${year}-${month}-${entryDay}`);
+          continue;
+        }
+
         const foundCompensation = updatedCompensations.find(
           (comp) =>
-            comp.year === year &&
-            comp.month === month &&
-            comp.day === Number(entry.day)
+            comp.year === year && comp.month === month && comp.day === entryDay
         );
 
         const shouldCompute = !foundCompensation || recompute;
@@ -72,7 +95,6 @@ export const useComputeAllCompensations = (
           (type) => type.type === employee?.employmentType
         );
 
-        const entryDate = new Date(year, month - 1, entry.day);
         const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
         const schedule = employmentType
           ? getScheduleForDay(employmentType, entryDate.getDay())
@@ -166,7 +188,21 @@ export const useComputeAllCompensations = (
         } else {
           updatedCompensations.push(newCompensation);
         }
+
+        console.log(`Computed compensation for ${year}-${month}-${entryDay}:`, {
+          isWorkday: !!schedule,
+          isHoliday: !!holiday,
+          hasTimeEntries: !!(entry.timeIn && entry.timeOut),
+          isAbsent: isWorkday && !isHoliday && !hasTimeEntries,
+        });
       }
+
+      // Log summary before saving
+      console.log(`Compensation summary for ${year}-${month}:`, {
+        totalDays: lastDayOfMonth,
+        processedEntries: validTimesheetEntries.length,
+        computedCompensations: updatedCompensations.length,
+      });
 
       await compensationModel.saveOrUpdateRecords(
         employee.id,
