@@ -175,38 +175,37 @@ export class AttendanceModel {
     employeeId: string
   ): Promise<void> {
     try {
-      // Construct the file path
       const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_attendance.csv`;
       const directoryPath = `${this.folderPath}/${employeeId}`;
 
-      // Ensure directory exists
       await window.electron.ensureDir(directoryPath);
 
-      // Load existing attendances
       const existingAttendances =
-        (await this.loadAttendancesById(month, year, employeeId)) || []; // Use an empty array if not found
-      if (existingAttendances === null) {
-        console.log(
-          `[AttendanceModel] No existing attendances found for ${employeeId} in ${year}-${month}`
-        );
-        return;
-      }
+        (await this.loadAttendancesById(month, year, employeeId)) || [];
 
       // Iterate through the new attendances
       for (const newAttendance of attendances) {
-        const attendanceIndex = existingAttendances.findIndex(
+        const existingAttendance = existingAttendances.find(
           (att) => att.day === newAttendance.day
         );
 
-        if (attendanceIndex !== -1) {
-          // Update existing attendance
-          existingAttendances[attendanceIndex] = {
-            ...newAttendance,
-            timeIn: newAttendance.timeIn ?? null,
-            timeOut: newAttendance.timeOut ?? null,
+        if (existingAttendance) {
+          // Only update if the existing time entries are null or empty
+          const updatedAttendance = {
+            ...existingAttendance,
+            // Preserve existing timeIn if it exists, otherwise use new timeIn
+            timeIn: existingAttendance.timeIn || newAttendance.timeIn || null,
+            // Preserve existing timeOut if it exists, otherwise use new timeOut
+            timeOut:
+              existingAttendance.timeOut || newAttendance.timeOut || null,
           };
+
+          const index = existingAttendances.findIndex(
+            (att) => att.day === newAttendance.day
+          );
+          existingAttendances[index] = updatedAttendance;
         } else {
-          // Add new attendance
+          // Add new attendance only if it doesn't exist
           existingAttendances.push({
             ...newAttendance,
             timeIn: newAttendance.timeIn ?? null,
@@ -215,7 +214,6 @@ export class AttendanceModel {
         }
       }
 
-      // Save updated attendances to CSV
       const csv = Papa.unparse(existingAttendances);
       await window.electron.writeFile(filePath, csv);
       console.log(
