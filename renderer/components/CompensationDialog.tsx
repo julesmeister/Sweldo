@@ -4,7 +4,7 @@ import {
   AttendanceSettings,
   EmploymentType,
   createAttendanceSettingsModel,
-  getScheduleForDay,
+  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { Employee } from "@/renderer/model/employee";
 import { EmployeeModel } from "@/renderer/model/employee";
@@ -153,22 +153,42 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     accessCodes.includes("MANAGE_ATTENDANCE");
 
   useEffect(() => {
-    attendanceSettingsModel.loadTimeSettings().then((timeSettings) => {
-      setEmploymentTypes(timeSettings);
-      const foundType = timeSettings.find(
-        (type) => type.type === employee?.employmentType
-      );
-      setEmploymentType(foundType || null); // Ensure we set null if undefined
-    });
-    // Load attendance settings
-    attendanceSettingsModel.loadAttendanceSettings().then((settings) => {
-      setAttendanceSettings(settings);
-    });
-    // Load holidays
-    holidayModel.loadHolidays().then((holidays) => {
-      setHolidays(holidays);
-    });
-  }, [compensation.employeeId]);
+    const loadSchedule = async () => {
+      if (!dbPath) return;
+
+      try {
+        const settingsModel = createAttendanceSettingsModel(dbPath);
+        const timeSettings = await settingsModel.loadTimeSettings();
+        const employmentType = timeSettings.find(
+          (type) => type.type === employee?.employmentType
+        );
+
+        if (employmentType) {
+          const date = new Date(year, month - 1, day);
+          const schedule = getScheduleForDate(employmentType, date);
+
+          if (schedule && !schedule.isOff) {
+            setFormData((prev) => ({
+              ...prev,
+              dayType: schedule.isOff ? "Rest Day" : prev.dayType,
+              hoursWorked: schedule.isOff ? 0 : prev.hoursWorked,
+            }));
+          }
+        }
+
+        setEmploymentType(employmentType || null);
+        const settings = await settingsModel.loadAttendanceSettings();
+        setAttendanceSettings(settings);
+      } catch (error) {
+        console.error("Error loading schedule:", error);
+        toast.error("Failed to load schedule");
+      }
+    };
+
+    if (isOpen) {
+      loadSchedule();
+    }
+  }, [dbPath, employee?.employmentType, isOpen, year, month, day]);
 
   useEffect(() => {
     setFormData(compensation);
@@ -208,7 +228,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const scheduleDay = jsDay === 0 ? 7 : jsDay;
 
     const schedule = employmentType
-      ? getScheduleForDay(employmentType, scheduleDay) // Use converted day
+      ? getScheduleForDate(employmentType, entryDate)
       : null;
 
     console.log("JS Day of week:", jsDay); // 0 for Sunday

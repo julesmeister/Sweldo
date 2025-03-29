@@ -14,6 +14,7 @@ import {
   createAttendanceSettingsModel,
   EmploymentType,
   getScheduleForDay,
+  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
@@ -1197,11 +1198,10 @@ export class Payroll {
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
-      const dayOfWeek = currentDate.getDay() || 7; // Convert 0 (Sunday) to 7
-      console.log(`Processing date: ${currentDate}, day of week: ${dayOfWeek}`);
+      console.log(`Processing date: ${currentDate}`);
 
-      const schedule = getScheduleForDay(employeeSchedule, dayOfWeek);
-      console.log("Schedule for day:", schedule);
+      const schedule = getScheduleForDate(employeeSchedule, currentDate);
+      console.log("Schedule for date:", schedule);
 
       // Check if this date is a holiday
       const isHoliday = holidays.some((holiday) => {
@@ -1214,7 +1214,7 @@ export class Payroll {
       });
 
       // Only check for absence if it's a scheduled working day and not a holiday
-      if (schedule && schedule.timeIn && schedule.timeOut && !isHoliday) {
+      if (schedule && !schedule.isOff && !isHoliday) {
         // Find attendance record for this day
         const attendance = attendanceRecords.find(
           (record) =>

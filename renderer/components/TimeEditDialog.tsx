@@ -7,6 +7,7 @@ import {
   AttendanceSettings,
   EmploymentType,
   createAttendanceSettingsModel,
+  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { Attendance } from "../model/attendance";
@@ -46,36 +47,47 @@ export const TimeEditDialog: React.FC<TimeEditDialogProps> = ({
   );
   const [attendanceSettings, setAttendanceSettings] =
     useState<AttendanceSettings | null>(null);
+  const [scheduledTimeIn, setScheduledTimeIn] = useState<string>("");
+  const [scheduledTimeOut, setScheduledTimeOut] = useState<string>("");
 
   const hasEditAccess = accessCodes.includes("MANAGE_ATTENDANCE");
 
   useEffect(() => {
-    if (!dbPath) return;
+    const loadSchedule = async () => {
+      if (!dbPath) return;
 
-    const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
+      try {
+        const settingsModel = createAttendanceSettingsModel(dbPath);
+        const employmentTypes = await settingsModel.loadTimeSettings();
+        const employmentType = employmentTypes.find(
+          (type) => type.type === log.employmentType
+        );
 
-    // Load employment type
-    attendanceSettingsModel.loadTimeSettings().then((timeSettings) => {
-      const foundType = timeSettings.find(
-        (type) => type.type === log.employmentType
-      );
-      setEmploymentType(foundType || null);
-    });
+        if (employmentType) {
+          const date = new Date(log.year, log.month - 1, parseInt(log.day));
+          const schedule = getScheduleForDate(employmentType, date);
 
-    // Load attendance settings
-    attendanceSettingsModel.loadAttendanceSettings().then((settings) => {
-      setAttendanceSettings(settings);
-    });
+          if (schedule && !schedule.isOff) {
+            setScheduledTimeIn(schedule.timeIn);
+            setScheduledTimeOut(schedule.timeOut);
+          } else {
+            setScheduledTimeIn("");
+            setScheduledTimeOut("");
+            toast.error(
+              "No schedule found for this date or it's marked as day off"
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error loading schedule:", error);
+        toast.error("Failed to load schedule");
+      }
+    };
 
-    // Set initial times based on attendance
-    if (attendance) {
-      setTimeIn(attendance.timeIn || "");
-      setTimeOut(attendance.timeOut || "");
-    } else {
-      setTimeIn("");
-      setTimeOut("");
+    if (isOpen) {
+      loadSchedule();
     }
-  }, [dbPath, log.employmentType, attendance]);
+  }, [isOpen, dbPath, log]);
 
   const validateTime = (time: string): boolean => {
     if (!time) return true; // Empty is valid

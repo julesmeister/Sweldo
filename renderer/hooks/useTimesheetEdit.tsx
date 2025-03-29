@@ -9,6 +9,7 @@ import {
   AttendanceSettingsModel,
   EmploymentType,
   getScheduleForDay,
+  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "@/renderer/model/holiday";
 import {
@@ -131,13 +132,13 @@ export const useTimesheetEdit = ({
 
       // Get schedule for the day
       const date = new Date(year, month - 1, foundEntry.day);
-      const jsDay = date.getDay(); // 0-6 (0 = Sunday)
-      const scheduleDay = jsDay === 0 ? 7 : jsDay; // Convert Sunday from 0 to 7
       const schedule = employmentType
-        ? getScheduleForDay(employmentType, scheduleDay)
+        ? getScheduleForDate(employmentType, date)
         : null;
-      if (!schedule) {
-        console.log("No schedule found for day:", { jsDay, scheduleDay, date });
+      if (!schedule || schedule.isOff) {
+        console.log("No schedule found for day or it's marked as off:", {
+          date,
+        });
         return;
       }
       console.log("Schedule found:", schedule);
@@ -149,7 +150,7 @@ export const useTimesheetEdit = ({
         foundEntry.day,
         updatedEntry.timeIn ?? "",
         updatedEntry.timeOut ?? "",
-        schedule
+        employmentType || null
       );
       console.log("Time objects created:", { actual, scheduled });
 

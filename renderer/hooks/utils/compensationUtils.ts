@@ -2,7 +2,11 @@ import { Attendance } from "@/renderer/model/attendance";
 import { Compensation, DayType } from "@/renderer/model/compensation";
 import { Holiday, HolidayModel } from "@/renderer/model/holiday";
 import { Employee } from "@/renderer/model/employee";
-import { AttendanceSettings, EmploymentType } from "@/renderer/model/settings";
+import {
+  AttendanceSettings,
+  EmploymentType,
+  getScheduleForDate,
+} from "@/renderer/model/settings";
 import { Schedule } from "@/renderer/model/schedule";
 
 // Helper function to format date components (e.g., "01" for January)
@@ -392,16 +396,38 @@ export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
   );
 };
 
-// Helper function to create time objects for a day
-// Converts string times to Date objects for both actual and scheduled times
+// Helper function to get schedule for a specific date
+const getEffectiveSchedule = (
+  employmentType: EmploymentType | null,
+  date: Date
+): { timeIn: string; timeOut: string } | null => {
+  if (!employmentType?.requiresTimeTracking) return null;
+
+  const schedule = getScheduleForDate(employmentType, date);
+  if (!schedule || schedule.isOff) return null;
+
+  return {
+    timeIn: schedule.timeIn,
+    timeOut: schedule.timeOut,
+  };
+};
+
+// Update createTimeObjects to use the new schedule format
 export const createTimeObjects = (
   year: number,
   month: number,
   day: number,
   actualTimeIn: string,
   actualTimeOut: string,
-  schedule: { timeIn: string; timeOut: string }
+  employmentType: EmploymentType | null
 ) => {
+  const date = new Date(year, month - 1, day);
+  const schedule = getEffectiveSchedule(employmentType, date);
+
+  if (!schedule) {
+    throw new Error("No schedule found for the given date");
+  }
+
   const actual = {
     timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
     timeOut: new Date(createDateString(year, month, day, actualTimeOut)),

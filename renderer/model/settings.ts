@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import path from "path";
 import { Schedule } from "./schedule";
+
 export interface Settings {
   theme: string;
   language: string;
@@ -9,14 +10,29 @@ export interface Settings {
   attendance: AttendanceSettings;
 }
 
+export interface WeeklySchedule {
+  dayOfWeek: number;
+  timeIn: string;
+  timeOut: string;
+}
+
+export interface DailySchedule {
+  timeIn: string;
+  timeOut: string;
+  isOff?: boolean;
+}
+
+export interface MonthSchedule {
+  [date: string]: DailySchedule; // Format: "YYYY-MM-DD"
+}
+
 export interface EmploymentType {
-  type: string; // Employee type (e.g., full-time, part-time)
-  schedules?: Array<{
-    dayOfWeek: number;
-    timeIn: string;
-    timeOut: string;
-  }>; // Optional schedule (if applicable)
-  requiresTimeTracking: boolean; // Indicates if time tracking is required
+  type: string;
+  schedules?: Schedule[];
+  monthSchedules?: {
+    [yearMonth: string]: MonthSchedule; // Format: "YYYY-MM"
+  };
+  requiresTimeTracking: boolean;
 }
 
 export interface AttendanceSettings {
@@ -138,6 +154,9 @@ export class AttendanceSettingsModel {
             schedules: setting.schedules
               ? JSON.stringify(setting.schedules)
               : "",
+            monthSchedules: setting.monthSchedules
+              ? JSON.stringify(setting.monthSchedules)
+              : "",
             requiresTimeTracking: setting.requiresTimeTracking,
           }))
         );
@@ -192,36 +211,20 @@ export class AttendanceSettingsModel {
   public async loadTimeSettings(): Promise<EmploymentType[]> {
     try {
       await this.ensureTimeSettingsFile();
-      const content = await window.electron.readFile(this.timeSettingsPath);
-      const results = Papa.parse(content, { header: true });
+      const csv = await window.electron.readFile(this.timeSettingsPath);
+      const parsed = Papa.parse(csv, { header: true });
 
-      if (results.data.length === 0) {
-        await this.saveTimeSettings(defaultTimeSettings);
-        return defaultTimeSettings;
-      }
-
-      return results.data
-        .map((item: any) => {
-          let schedules;
-          try {
-            schedules = item.schedules ? JSON.parse(item.schedules) : undefined;
-          } catch (error) {
-            console.error("[SettingsModel] Error parsing schedules:", error);
-            schedules = undefined;
-          }
-
-          return {
-            type: item.type?.toLowerCase() || "",
-            schedules,
-            requiresTimeTracking:
-              item.requiresTimeTracking === "true" ||
-              item.requiresTimeTracking === true,
-          };
-        })
-        .filter((item: any) => item.type);
+      return parsed.data.map((row: any) => ({
+        type: row.type,
+        schedules: row.schedules ? JSON.parse(row.schedules) : undefined,
+        monthSchedules: row.monthSchedules
+          ? JSON.parse(row.monthSchedules)
+          : undefined,
+        requiresTimeTracking: row.requiresTimeTracking === "true",
+      }));
     } catch (error) {
       console.error("[SettingsModel] Error loading time settings:", error);
-      return defaultTimeSettings;
+      throw error;
     }
   }
 
@@ -231,6 +234,9 @@ export class AttendanceSettingsModel {
       const formattedSettings = settings.map((setting) => ({
         type: setting.type,
         schedules: setting.schedules ? JSON.stringify(setting.schedules) : "",
+        monthSchedules: setting.monthSchedules
+          ? JSON.stringify(setting.monthSchedules)
+          : "",
         requiresTimeTracking: setting.requiresTimeTracking,
       }));
 
@@ -274,13 +280,47 @@ export const createAttendanceSettingsModel = (
   return new AttendanceSettingsModel(dbPath);
 };
 
-// Helper function to get schedule for a specific day
-export function getScheduleForDay(
-  employmentType: EmploymentType,
+// Helper function to get schedule for a specific date
+export const getScheduleForDate = (
+  employmentType: EmploymentType | null,
+  date: Date
+): DailySchedule | null => {
+  if (!employmentType) return null;
+
+  // Check for month-specific schedule first
+  const yearMonth = `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}`;
+  const dateStr = date.toISOString().split("T")[0];
+  const monthSchedule = employmentType.monthSchedules?.[yearMonth]?.[dateStr];
+
+  if (monthSchedule) {
+    return monthSchedule;
+  }
+
+  // Fall back to weekly schedule
+  if (employmentType.schedules) {
+    const dayOfWeek = date.getDay();
+    const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
+    const weeklySchedule = employmentType.schedules[scheduleDay - 1];
+
+    if (weeklySchedule) {
+      return {
+        timeIn: weeklySchedule.timeIn,
+        timeOut: weeklySchedule.timeOut,
+        isOff: !weeklySchedule.timeIn || !weeklySchedule.timeOut,
+      };
+    }
+  }
+
+  return null;
+};
+
+// Helper function to get schedule for a specific day of the week
+export const getScheduleForDay = (
+  employmentType: EmploymentType | null,
   dayOfWeek: number
-): { timeIn: string; timeOut: string } | undefined {
-  if (!employmentType.schedules) return undefined;
-  return employmentType.schedules.find(
-    (schedule) => schedule.dayOfWeek === dayOfWeek
-  );
-}
+): Schedule | null => {
+  if (!employmentType?.schedules) return null;
+  return employmentType.schedules[dayOfWeek - 1] || null;
+};

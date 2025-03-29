@@ -151,7 +151,7 @@ export const useComputeAllCompensations = (
           entry.day,
           entry.timeIn || "",
           entry.timeOut || "",
-          schedule
+          employmentType
         );
 
         const timeMetrics = calculateTimeMetrics(

@@ -7,8 +7,12 @@ import {
 } from "@/renderer/model/compensation";
 import { Employee } from "@/renderer/model/employee";
 import { createHolidayModel } from "@/renderer/model/holiday";
-import { getScheduleForDay } from "@/renderer/model/settings";
-import { AttendanceSettingsModel } from "@/renderer/model/settings";
+import {
+  AttendanceSettings,
+  AttendanceSettingsModel,
+  EmploymentType,
+  getScheduleForDate,
+} from "@/renderer/model/settings";
 import { MissingTimeModel } from "@/renderer/model/missingTime";
 
 interface UseTimesheetCheckboxProps {
@@ -106,15 +110,12 @@ export const useTimesheetCheckbox = ({
       );
 
       const date = new Date(year, month - 1, foundEntry.day);
-      const jsDay = date.getDay(); // 0-6 (0 = Sunday)
-      const scheduleDay = jsDay === 0 ? 7 : jsDay; // Convert Sunday from 0 to 7
-
       // Get schedule for the day using found employment type
       const schedule = employmentType
-        ? getScheduleForDay(employmentType, scheduleDay)
+        ? getScheduleForDate(employmentType, date)
         : null;
 
-      const isWorkday = !!schedule; // Update workday check based on schedule
+      const isWorkday = schedule && !schedule.isOff ? true : false; // Ensure boolean type
 
       const holiday = holidays.find((h) => {
         const entryDate = new Date(year, month - 1, foundEntry.day);
