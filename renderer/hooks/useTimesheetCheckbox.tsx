@@ -7,10 +7,13 @@ import {
 } from "@/renderer/model/compensation";
 import { Employee } from "@/renderer/model/employee";
 import { createHolidayModel } from "@/renderer/model/holiday";
+import { getScheduleForDay } from "@/renderer/model/settings";
+import { AttendanceSettingsModel } from "@/renderer/model/settings";
 
 interface UseTimesheetCheckboxProps {
   attendanceModel: AttendanceModel;
   compensationModel: CompensationModel;
+  attendanceSettingsModel: AttendanceSettingsModel;
   employee: Employee | null;
   selectedEmployeeId: string;
   compensationEntries: Compensation[];
@@ -26,6 +29,7 @@ interface UseTimesheetCheckboxProps {
 export const useTimesheetCheckbox = ({
   attendanceModel,
   compensationModel,
+  attendanceSettingsModel,
   employee,
   selectedEmployeeId,
   compensationEntries,
@@ -65,6 +69,24 @@ export const useTimesheetCheckbox = ({
       // Check for holidays
       const holidayModel = createHolidayModel(dbPath, year, month);
       const holidays = await holidayModel.loadHolidays();
+      
+      // Load time settings to get employment type
+      const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+      const employmentType = timeSettings.find(
+        (type) => type.type === employee?.employmentType
+      );
+
+      const date = new Date(year, month - 1, foundEntry.day);
+      const jsDay = date.getDay(); // 0-6 (0 = Sunday)
+      const scheduleDay = jsDay === 0 ? 7 : jsDay; // Convert Sunday from 0 to 7
+
+      // Get schedule for the day using found employment type
+      const schedule = employmentType
+        ? getScheduleForDay(employmentType, scheduleDay)
+        : null;
+
+      const isWorkday = !!schedule; // Update workday check based on schedule
+
       const holiday = holidays.find((h) => {
         const entryDate = new Date(year, month - 1, foundEntry.day);
         return (
@@ -94,7 +116,6 @@ export const useTimesheetCheckbox = ({
 
       const dailyRate = hasCompleteAttendance ? employee?.dailyRate || 0 : 0;
 
-      const isWorkday = true; // Since we're handling checkbox for workdays
       const isHoliday = !!holiday;
       const hasTimeEntries = isPresent; // Using the checkbox state
       const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;

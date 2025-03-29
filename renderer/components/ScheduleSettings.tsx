@@ -291,7 +291,7 @@ export default function ScheduleSettings({
                     <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white via-white to-transparent z-10 pointer-events-none" />
 
                     {/* Scrollable container */}
-                    <div className="overflow-x-auto scrollbar-none">
+                    <div className="overflow-x-auto scrollbar-thin">
                       <nav
                         className="flex gap-2 min-w-full px-12 py-1"
                         aria-label="Employment Types"

@@ -201,9 +201,18 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       absence,
     });
     // Get the schedule for the specific day of the week
+    const jsDay = entryDate.getDay(); // 0-6 (0 = Sunday)
+    // Convert JavaScript day (0-6) to your schedule format (1-7)
+    const scheduleDay = jsDay === 0 ? 7 : jsDay;
+    
     const schedule = employmentType
-      ? getScheduleForDay(employmentType, entryDate.getDay())
+      ? getScheduleForDay(employmentType, scheduleDay)  // Use converted day
       : null;
+    
+    console.log('JS Day of week:', jsDay);  // 0 for Sunday
+    console.log('Schedule Day:', scheduleDay);  // 7 for Sunday
+    console.log('Schedule found:', schedule);
+    console.log('Employment type:', employmentType);
 
     // Separate checks for workday and holiday
     const isWorkday = !!schedule;

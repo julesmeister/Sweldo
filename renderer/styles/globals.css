@@ -15,11 +15,11 @@
 }
 
 @layer components {
-
-  /* Base scrollbar styling */
+  /* Base scrollbar styling - hidden by default */
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
+    opacity: 0;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -27,12 +27,21 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.3);
+    background-color: transparent; /* Start transparent */
     border-radius: 9999px;
     transition: all 0.2s ease;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  /* Show scrollbar only on hover/focus */
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb,
+  .scrollbar-thin:focus::-webkit-scrollbar-thumb,
+  .scrollbar-thin:focus-within::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+  }
+
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb:hover,
+  .scrollbar-thin:focus::-webkit-scrollbar-thumb:hover,
+  .scrollbar-thin:focus-within::-webkit-scrollbar-thumb:hover {
     background-color: rgba(156, 163, 175, 0.5);
   }
 

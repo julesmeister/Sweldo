@@ -126,6 +126,7 @@ const TimesheetPage: React.FC = () => {
   const { handleCheckboxChange } = useTimesheetCheckbox({
     attendanceModel,
     compensationModel,
+    attendanceSettingsModel,
     employee,
     selectedEmployeeId: selectedEmployeeId!,
     compensationEntries,

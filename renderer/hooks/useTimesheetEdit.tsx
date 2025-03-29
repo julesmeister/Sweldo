@@ -100,12 +100,13 @@ export const useTimesheetEdit = ({
 
       // Get schedule for the day
       const date = new Date(year, month - 1, foundEntry.day);
-      const dayOfWeek = date.getDay() || 7; // Convert Sunday (0) to 7
+      const jsDay = date.getDay(); // 0-6 (0 = Sunday)
+      const scheduleDay = jsDay === 0 ? 7 : jsDay; // Convert Sunday from 0 to 7
       const schedule = employmentType
-        ? getScheduleForDay(employmentType, dayOfWeek)
+        ? getScheduleForDay(employmentType, scheduleDay)
         : null;
       if (!schedule) {
-        console.log("No schedule found for day:", { dayOfWeek, date });
+        console.log("No schedule found for day:", { jsDay, scheduleDay, date });
         return;
       }
       console.log("Schedule found:", schedule);
