@@ -22,6 +22,7 @@ import {
   calculatePayMetrics,
   createCompensationRecord,
 } from "./utils/compensationUtils";
+import { MissingTimeModel } from "@/renderer/model/missingTime";
 
 interface UseTimesheetEditProps {
   attendanceModel: AttendanceModel;
@@ -64,6 +65,36 @@ export const useTimesheetEdit = ({
         ...foundEntry,
         [columnKey]: value,
       };
+
+      // Check if both time in and time out are now present
+      if (updatedEntry.timeIn && updatedEntry.timeOut) {
+        // Create MissingTimeModel instance
+        const missingTimeModel =
+          MissingTimeModel.createMissingTimeModel(dbPath);
+
+        // Load missing time logs for this month/year
+        const missingLogs = await missingTimeModel.getMissingTimeLogs(
+          month,
+          year
+        );
+
+        // Find and delete the missing time log for this employee and day
+        const missingLog = missingLogs.find(
+          (log) =>
+            log.employeeId === selectedEmployeeId &&
+            log.day === foundEntry.day.toString()
+        );
+
+        if (missingLog) {
+          await missingTimeModel.deleteMissingTimeLog(
+            missingLog.id,
+            month,
+            year
+          );
+          console.log("Deleted missing time log:", missingLog);
+        }
+      }
+
       console.log("Updated entry to save:", updatedEntry);
 
       await attendanceModel.saveOrUpdateAttendances(

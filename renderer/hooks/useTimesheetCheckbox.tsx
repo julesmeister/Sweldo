@@ -9,6 +9,7 @@ import { Employee } from "@/renderer/model/employee";
 import { createHolidayModel } from "@/renderer/model/holiday";
 import { getScheduleForDay } from "@/renderer/model/settings";
 import { AttendanceSettingsModel } from "@/renderer/model/settings";
+import { MissingTimeModel } from "@/renderer/model/missingTime";
 
 interface UseTimesheetCheckboxProps {
   attendanceModel: AttendanceModel;
@@ -53,6 +54,34 @@ export const useTimesheetCheckbox = ({
         timeOut: isPresent ? "present" : "",
       };
 
+      // If marked as present, delete any missing time logs
+      if (isPresent) {
+        const missingTimeModel =
+          MissingTimeModel.createMissingTimeModel(dbPath);
+
+        // Load missing time logs for this month/year
+        const missingLogs = await missingTimeModel.getMissingTimeLogs(
+          month,
+          year
+        );
+
+        // Find and delete the missing time log for this employee and day
+        const missingLog = missingLogs.find(
+          (log) =>
+            log.employeeId === selectedEmployeeId &&
+            log.day === foundEntry.day.toString()
+        );
+
+        if (missingLog) {
+          await missingTimeModel.deleteMissingTimeLog(
+            missingLog.id,
+            month,
+            year
+          );
+          console.log("Deleted missing time log:", missingLog);
+        }
+      }
+
       // Save the attendance record
       await attendanceModel.saveOrUpdateAttendances(
         [updatedEntry],
@@ -69,7 +98,7 @@ export const useTimesheetCheckbox = ({
       // Check for holidays
       const holidayModel = createHolidayModel(dbPath, year, month);
       const holidays = await holidayModel.loadHolidays();
-      
+
       // Load time settings to get employment type
       const timeSettings = await attendanceSettingsModel.loadTimeSettings();
       const employmentType = timeSettings.find(

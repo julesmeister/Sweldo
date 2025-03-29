@@ -719,7 +719,11 @@ const TimesheetPage: React.FC = () => {
                             onClick={(event) =>
                               handleRowClick(foundEntry, compensation, event)
                             }
-                            className={`cursor-pointer hover:bg-gray-50 ${
+                            className={`cursor-pointer ${
+                              compensation?.absence
+                                ? "bg-red-50 hover:bg-red-100"
+                                : "hover:bg-gray-50"
+                            } ${
                               selectedEntry?.entry.day === day
                                 ? "bg-indigo-50"
                                 : ""
