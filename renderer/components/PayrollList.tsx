@@ -5,6 +5,7 @@ import { Payroll, PayrollSummaryModel } from "@/renderer/model/payroll";
 import { MonthPicker } from "@/renderer/components/MonthPicker";
 import { PayrollSummary } from "@/renderer/components/PayrollSummary";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
+import { useAuthStore } from "@/renderer/stores/authStore";
 
 interface PayrollListProps {
   payrolls: PayrollSummaryModel[];
@@ -14,7 +15,6 @@ interface PayrollListProps {
   dbPath: string;
   employee?: Employee | null;
   canEdit?: boolean;
-  accessCodes?: string[];
   onDeletePayroll?: (payrollId: string) => Promise<void>;
 }
 
@@ -26,9 +26,10 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   dbPath,
   employee,
   canEdit = false,
-  accessCodes = [],
   onDeletePayroll,
 }) => {
+  const { hasAccess } = useAuthStore();
+  const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
   const [filterType, setFilterType] = useState<
     "3months" | "6months" | "year" | "custom"
   >("3months");
@@ -37,8 +38,6 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [selectedPayroll, setSelectedPayroll] =
     useState<PayrollSummaryModel | null>(null);
-
-  const hasDeleteAccess = accessCodes.includes("MANAGE_PAYROLL");
 
   useEffect(() => {
     const loadPayrolls = async () => {

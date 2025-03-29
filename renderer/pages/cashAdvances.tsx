@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
+import { useAuthStore } from "@/renderer/stores/authStore";
 
 export default function CashAdvancesPage() {
   const [cashAdvances, setCashAdvances] = useState<CashAdvance[]>([]);
@@ -46,6 +47,9 @@ export default function CashAdvancesPage() {
       : new Date().getFullYear();
     return createCashAdvanceModel(dbPath, selectedEmployeeId, month, year);
   }, [dbPath, selectedEmployeeId, storedMonth, storedYear]);
+  const { hasAccess } = useAuthStore();
+
+  const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -309,27 +313,6 @@ export default function CashAdvancesPage() {
                         ? employee?.name + "'s Cash Advances"
                         : "Cash Advances"}
                     </h2>
-                    {/* <div className="flex items-center space-x-4">
-                  <button
-                    onClick={handleCloseDialog}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <span className="sr-only">Close</span>
-                    <svg
-                      className="h-6 w-6"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div> */}
                     <div className="relative flex items-center space-x-4">
                       <button
                         type="button"
@@ -448,6 +431,14 @@ export default function CashAdvancesPage() {
                                     onClick={async (e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
+
+                                      if (!hasDeleteAccess) {
+                                        toast.error(
+                                          "You don't have permission to delete cash advance records"
+                                        );
+                                        return;
+                                      }
+
                                       if (!cashAdvanceModel) {
                                         toast.error(
                                           "System not properly initialized"
@@ -490,7 +481,12 @@ export default function CashAdvancesPage() {
                                         setLoading(false);
                                       }
                                     }}
-                                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
+                                    className={`text-red-600 hover:text-red-900 ${
+                                      !hasDeleteAccess
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : "cursor-pointer"
+                                    }`}
+                                    disabled={!hasDeleteAccess}
                                   >
                                     Delete
                                   </button>
