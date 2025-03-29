@@ -28,6 +28,9 @@ export interface AttendanceSettings {
   overtimeAdditionPerMinute: number; // in currency units
   regularHolidayMultiplier: number; // multiplier for regular holidays
   specialHolidayMultiplier: number; // multiplier for special holidays
+  nightDifferentialMultiplier: number; // decimal multiplier for night differential
+  nightDifferentialStartHour: number; // e.g., 22 for 10 PM
+  nightDifferentialEndHour: number; // e.g., 6 for 6 AM
 }
 
 export const defaultAttendanceSettings: AttendanceSettings = {
@@ -39,6 +42,9 @@ export const defaultAttendanceSettings: AttendanceSettings = {
   overtimeAdditionPerMinute: 2,
   regularHolidayMultiplier: 1.5,
   specialHolidayMultiplier: 2,
+  nightDifferentialMultiplier: 0.1,
+  nightDifferentialStartHour: 22,
+  nightDifferentialEndHour: 6,
 };
 
 export const defaultTimeSettings: EmploymentType[] = [
@@ -171,6 +177,11 @@ export class AttendanceSettingsModel {
         overtimeAdditionPerMinute: Number(settings.overtimeAdditionPerMinute),
         regularHolidayMultiplier: Number(settings.regularHolidayMultiplier),
         specialHolidayMultiplier: Number(settings.specialHolidayMultiplier),
+        nightDifferentialMultiplier: Number(
+          settings.nightDifferentialMultiplier
+        ),
+        nightDifferentialStartHour: Number(settings.nightDifferentialStartHour),
+        nightDifferentialEndHour: Number(settings.nightDifferentialEndHour),
       };
     } catch (error) {
       console.error("[SettingsModel] Error loading settings:", error);

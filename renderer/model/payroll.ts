@@ -33,6 +33,8 @@ export interface PayrollSummaryModel {
   lateDeduction?: number;
   lateMinutes?: number;
   holidayBonus?: number;
+  nightDifferentialHours?: number;
+  nightDifferentialPay?: number;
   dayType?: "Regular" | "Holiday" | "Rest Day" | "Special";
   leaveType?: "Vacation" | "Sick" | "Unpaid" | "None";
   leavePay?: number;
@@ -455,6 +457,8 @@ export class Payroll {
     let totalLeavePay = 0;
     let totalGrossPay = 0;
     let totalDeductions = 0;
+    let totalNightDifferentialHours = 0;
+    let totalNightDifferentialPay = 0;
 
     // Calculate the daily rate once
     const dailyRate = parseFloat(`${employee.dailyRate || 0}`);
@@ -473,11 +477,17 @@ export class Payroll {
       totalHolidayBonus += comp.holidayBonus || 0;
       totalLeavePay += comp.leavePay || 0;
       totalDeductions += comp.deductions || 0;
+      totalNightDifferentialHours += comp.nightDifferentialHours || 0;
+      totalNightDifferentialPay += comp.nightDifferentialPay || 0;
     }
 
     // Calculate total gross pay for the period
     totalGrossPay =
-      totalBasicPay + totalOvertime + totalHolidayBonus + totalLeavePay;
+      totalBasicPay +
+      totalOvertime +
+      totalHolidayBonus +
+      totalLeavePay +
+      totalNightDifferentialPay;
 
     // Calculate final net pay with government deductions
     const totalNetPay =
@@ -502,6 +512,8 @@ export class Payroll {
       lateDeduction: totalLateDeduction,
       lateMinutes: totalLateMinutes,
       holidayBonus: totalHolidayBonus,
+      nightDifferentialHours: totalNightDifferentialHours,
+      nightDifferentialPay: totalNightDifferentialPay,
       dayType: filteredCompensations[0]?.dayType || "Regular",
       leaveType: filteredCompensations[0]?.leaveType || "None",
       leavePay: totalLeavePay,
@@ -844,6 +856,14 @@ export class Payroll {
           absences:
             getWorkingDaysInPeriod(startDate, endDate) -
             periodCompensations.length, // Calculate absences
+          nightDifferentialHours: periodCompensations.reduce(
+            (sum, comp) => sum + (comp.nightDifferentialHours || 0),
+            0
+          ),
+          nightDifferentialPay: periodCompensations.reduce(
+            (sum, comp) => sum + (comp.nightDifferentialPay || 0),
+            0
+          ),
         };
 
         payrolls.push(summary);

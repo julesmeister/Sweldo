@@ -35,88 +35,39 @@ export const calculateDeductionMinutes = (
   return minutes > gracePeriod ? minutes - gracePeriod : 0;
 };
 
-// Helper function to calculate deduction minutes after applying grace period
-// Returns 0 if minutes are less than or equal to grace period
-export const createBaseCompensation = (
-  entry: Attendance,
-  employee: Employee | null,
-  month: number,
-  year: number,
-  holiday: Holiday | undefined
-): Compensation => {
+interface NightDifferentialMetrics {
+  nightDifferentialHours: number;
+  nightDifferentialPay: number;
+}
+
+const calculateNightDifferential = (
+  timeIn: Date,
+  timeOut: Date,
+  settings: AttendanceSettings,
+  hourlyRate: number
+): NightDifferentialMetrics => {
+  const startHour = settings.nightDifferentialStartHour || 22; // Default to 10 PM
+  const endHour = settings.nightDifferentialEndHour || 6; // Default to 6 AM
+  const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
+
+  let nightHours = 0;
+  let currentTime = new Date(timeIn);
+
+  while (currentTime < timeOut) {
+    const hour = currentTime.getHours();
+    if (
+      (hour >= startHour && hour < 24) || // Night hours before midnight
+      (hour >= 0 && hour < endHour) // Night hours after midnight
+    ) {
+      nightHours++;
+    }
+    currentTime.setHours(currentTime.getHours() + 1);
+  }
+
   return {
-    employeeId: employee?.id || "",
-    month,
-    year,
-    day: entry.day,
-    dayType: holiday
-      ? holiday.type === "Regular"
-        ? "Holiday"
-        : "Special"
-      : ("Regular" as DayType),
-    dailyRate: 0,
-    grossPay: 0,
-    netPay: 0,
-    holidayBonus: 0,
-    manualOverride: true,
-    lateMinutes: 0,
-    undertimeMinutes: 0,
-    overtimeMinutes: 0,
-    hoursWorked: 0,
-    deductions: 0,
-    overtimePay: 0,
-    lateDeduction: 0,
-    undertimeDeduction: 0,
-    leaveType: "None",
-    leavePay: 0,
-    notes: "",
-    absence: false,
+    nightDifferentialHours: nightHours,
+    nightDifferentialPay: nightHours * hourlyRate * multiplier,
   };
-};
-
-// Helper function to check if a date falls within a holiday period
-// Returns true if the date is within the holiday's start and end dates
-export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
-  return (
-    date >=
-      new Date(
-        holiday.startDate.getFullYear(),
-        holiday.startDate.getMonth(),
-        holiday.startDate.getDate()
-      ) &&
-    date <=
-      new Date(
-        holiday.endDate.getFullYear(),
-        holiday.endDate.getMonth(),
-        holiday.endDate.getDate(),
-        23,
-        59,
-        59
-      )
-  );
-};
-
-// Helper function to create time objects for a day
-// Converts string times to Date objects for both actual and scheduled times
-export const createTimeObjects = (
-  year: number,
-  month: number,
-  day: number,
-  actualTimeIn: string,
-  actualTimeOut: string,
-  schedule: { timeIn: string; timeOut: string }
-) => {
-  const actual = {
-    timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
-    timeOut: new Date(createDateString(year, month, day, actualTimeOut)),
-  };
-
-  const scheduled = {
-    timeIn: new Date(createDateString(year, month, day, schedule.timeIn)),
-    timeOut: new Date(createDateString(year, month, day, schedule.timeOut)),
-  };
-
-  return { actual, scheduled };
 };
 
 // Helper function to calculate all time-based metrics
@@ -176,8 +127,21 @@ export const calculatePayMetrics = (
   timeMetrics: ReturnType<typeof calculateTimeMetrics>,
   attendanceSettings: AttendanceSettings,
   dailyRate: number,
-  holiday?: Holiday
+  holiday?: Holiday,
+  actualTimeIn?: Date,
+  actualTimeOut?: Date
 ) => {
+  const hourlyRate = dailyRate / 8;
+  const nightDifferential =
+    actualTimeIn && actualTimeOut
+      ? calculateNightDifferential(
+          actualTimeIn,
+          actualTimeOut,
+          attendanceSettings,
+          hourlyRate
+        )
+      : { nightDifferentialHours: 0, nightDifferentialPay: 0 };
+
   const {
     lateDeductionMinutes,
     undertimeDeductionMinutes,
@@ -200,13 +164,15 @@ export const calculatePayMetrics = (
     overtimePay,
     baseGrossPay,
     holidayBonus,
-    grossPay,
+    grossPay: grossPay + nightDifferential.nightDifferentialPay,
     netPay,
     lateDeduction:
       lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
     undertimeDeduction:
       undertimeDeductionMinutes *
       attendanceSettings.undertimeDeductionPerMinute,
+    nightDifferentialHours: nightDifferential.nightDifferentialHours,
+    nightDifferentialPay: nightDifferential.nightDifferentialPay,
   };
 };
 
@@ -234,6 +200,8 @@ export const createCompensationRecord = (
     holidayBonus,
     lateDeduction,
     undertimeDeduction,
+    nightDifferentialHours,
+    nightDifferentialPay,
   } = payMetrics;
 
   // Determine absence based on schedule and time entries
@@ -270,5 +238,92 @@ export const createCompensationRecord = (
     leavePay: 0,
     notes: "",
     absence: isAbsent,
+    nightDifferentialHours,
+    nightDifferentialPay,
   } as Compensation;
+};
+
+// Helper function to create a base compensation record
+export const createBaseCompensation = (
+  entry: Attendance,
+  employee: Employee | null,
+  month: number,
+  year: number,
+  holiday: Holiday | undefined
+): Compensation => {
+  return {
+    employeeId: employee?.id || "",
+    month,
+    year,
+    day: entry.day,
+    dayType: holiday
+      ? holiday.type === "Regular"
+        ? "Holiday"
+        : "Special"
+      : ("Regular" as DayType),
+    dailyRate: 0,
+    grossPay: 0,
+    netPay: 0,
+    holidayBonus: 0,
+    manualOverride: true,
+    lateMinutes: 0,
+    undertimeMinutes: 0,
+    overtimeMinutes: 0,
+    hoursWorked: 0,
+    deductions: 0,
+    overtimePay: 0,
+    lateDeduction: 0,
+    undertimeDeduction: 0,
+    leaveType: "None",
+    leavePay: 0,
+    notes: "",
+    absence: false,
+    nightDifferentialHours: 0,
+    nightDifferentialPay: 0,
+  };
+};
+
+// Helper function to check if a date falls within a holiday period
+// Returns true if the date is within the holiday's start and end dates
+export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
+  return (
+    date >=
+      new Date(
+        holiday.startDate.getFullYear(),
+        holiday.startDate.getMonth(),
+        holiday.startDate.getDate()
+      ) &&
+    date <=
+      new Date(
+        holiday.endDate.getFullYear(),
+        holiday.endDate.getMonth(),
+        holiday.endDate.getDate(),
+        23,
+        59,
+        59
+      )
+  );
+};
+
+// Helper function to create time objects for a day
+// Converts string times to Date objects for both actual and scheduled times
+export const createTimeObjects = (
+  year: number,
+  month: number,
+  day: number,
+  actualTimeIn: string,
+  actualTimeOut: string,
+  schedule: { timeIn: string; timeOut: string }
+) => {
+  const actual = {
+    timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
+    timeOut: new Date(createDateString(year, month, day, actualTimeOut)),
+  };
+
+  const scheduled = {
+    timeIn: new Date(createDateString(year, month, day, schedule.timeIn)),
+    timeOut: new Date(createDateString(year, month, day, schedule.timeOut)),
+  };
+
+  return { actual, scheduled };
 };

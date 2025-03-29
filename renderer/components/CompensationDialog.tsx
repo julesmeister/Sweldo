@@ -359,45 +359,55 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       const newData = { ...prev };
 
       // Handle fields that affect gross pay
-      if (name === "overtimePay" || name === "holidayBonus") {
-        newData[name] = numericValue;
+      if (
+        name === "overtimePay" ||
+        name === "holidayBonus" ||
+        name === "nightDifferentialPay"
+      ) {
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
         // Recalculate gross pay by adding the new value to the base gross pay
-        const baseGrossPay = prev.grossPay - (prev[name] || 0);
+        const baseGrossPay =
+          (prev.grossPay || 0) - ((prev[key] as number) || 0);
         newData.grossPay = baseGrossPay + numericValue;
         // Update net pay to reflect the new gross pay minus deductions
         newData.netPay = newData.grossPay - (prev.deductions || 0);
       }
       // Handle fields that affect net pay (deductions)
       else if (name === "undertimeDeduction" || name === "lateDeduction") {
-        newData[name] = numericValue;
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
         // Recalculate total deductions
         const totalDeductions =
           (prev.undertimeDeduction || 0) + (prev.lateDeduction || 0);
         newData.deductions = totalDeductions;
         // Update net pay by subtracting total deductions from gross pay
-        newData.netPay = prev.grossPay - totalDeductions;
+        newData.netPay = (prev.grossPay || 0) - totalDeductions;
       }
       // Handle leave pay (affects net pay)
       else if (name === "leavePay") {
-        newData[name] = numericValue;
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
         // Update net pay by adding leave pay to gross pay minus deductions
-        newData.netPay = prev.grossPay - (prev.deductions || 0) + numericValue;
+        newData.netPay =
+          (prev.grossPay || 0) - (prev.deductions || 0) + numericValue;
       }
       // Handle direct gross pay edits
       else if (name === "grossPay") {
-        newData[name] = numericValue;
+        newData.grossPay = numericValue;
         // Update net pay by subtracting deductions from new gross pay
         newData.netPay = numericValue - (prev.deductions || 0);
       }
       // Handle direct net pay edits
       else if (name === "netPay") {
-        newData[name] = numericValue;
+        newData.netPay = numericValue;
         // Update gross pay by adding deductions to new net pay
         newData.grossPay = numericValue + (prev.deductions || 0);
       }
       // Handle other fields normally
       else {
-        newData[name] =
+        const key = name as keyof Compensation;
+        (newData[key] as string | number) =
           name.includes("Pay") ||
           name.includes("Deduction") ||
           name.includes("Hours") ||
@@ -626,6 +636,26 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 label="Net Pay"
                 name="netPay"
                 value={formData.netPay || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Night Differential Hours"
+                name="nightDifferentialHours"
+                value={formData.nightDifferentialHours || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Night Differential Pay"
+                name="nightDifferentialPay"
+                value={formData.nightDifferentialPay || 0}
                 onChange={handleInputChange}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}

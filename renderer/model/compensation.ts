@@ -25,6 +25,8 @@ export interface Compensation {
   manualOverride?: boolean;
   notes?: string;
   absence?: boolean;
+  nightDifferentialHours: number;
+  nightDifferentialPay: number;
 }
 
 export class CompensationModel {
@@ -94,6 +96,12 @@ export class CompensationModel {
         manualOverride: row.manualOverride === "true",
         notes: row.notes,
         absence: row.absence === "true",
+        nightDifferentialHours: row.nightDifferentialHours
+          ? parseFloat(row.nightDifferentialHours)
+          : undefined,
+        nightDifferentialPay: row.nightDifferentialPay
+          ? parseFloat(row.nightDifferentialPay)
+          : undefined,
       })) as Compensation[];
     } catch (error) {
       console.error("Error reading compensation records:", error);

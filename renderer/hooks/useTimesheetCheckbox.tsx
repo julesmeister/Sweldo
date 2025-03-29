@@ -169,6 +169,8 @@ export const useTimesheetCheckbox = ({
           ? dailyRate
           : 0,
         dayType: "Regular" as DayType,
+        nightDifferentialHours: 0,
+        nightDifferentialPay: 0,
       };
 
       await compensationModel.saveOrUpdateCompensations(
