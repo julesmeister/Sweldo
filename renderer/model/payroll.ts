@@ -855,6 +855,27 @@ export class Payroll {
       const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
       console.log(`Looking for payroll with ID: ${payrollId}`);
 
+      // Find the payroll record before filtering it out
+      const payrollToDelete = parsedData.data.find(
+        (row: any) => row.id === payrollId
+      ) as PayrollSummaryModel;
+      if (!payrollToDelete) {
+        throw new Error("Payroll record not found");
+      }
+
+      // If there are cash advance deductions, reverse them
+      if (payrollToDelete.deductions.cashAdvanceDeductions > 0) {
+        console.log(
+          `Reversing cash advance deduction of ${payrollToDelete.deductions.cashAdvanceDeductions}`
+        );
+        await Payroll.reverseCashAdvanceDeduction(
+          dbPath,
+          employeeId,
+          payrollToDelete.deductions.cashAdvanceDeductions,
+          endDate
+        );
+      }
+
       // Filter out the matching record
       const filteredData = parsedData.data.filter((row: any) => {
         const rowId = row.id?.toString();
@@ -864,11 +885,6 @@ export class Payroll {
       });
 
       console.log(`Remaining records after filter: ${filteredData.length}`);
-
-      if (filteredData.length === parsedData.data.length) {
-        console.warn("No matching record found to delete");
-        throw new Error("Payroll record not found");
-      }
 
       // Convert back to CSV
       const updatedContent = Papa.unparse(filteredData);
