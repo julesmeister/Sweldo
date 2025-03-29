@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   IoWalletOutline,
   IoAddOutline,
   IoTrashOutline,
   IoTimeOutline,
   IoCalendarOutline,
+  IoChevronBack,
+  IoChevronForward,
 } from "react-icons/io5";
 import { toast } from "sonner";
 import { EmploymentType } from "../model/settings";
@@ -68,6 +70,20 @@ export default function ScheduleSettings({
     };
   }>({});
   const [showMonthPicker, setShowMonthPicker] = React.useState(false);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -200, behavior: "smooth" });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 200, behavior: "smooth" });
+    }
+  };
 
   // Add effect to load monthly schedules from employment types
   React.useEffect(() => {
@@ -201,7 +217,22 @@ export default function ScheduleSettings({
   };
 
   const handleRemoveEmploymentType = (index: number) => {
-    setEmploymentTypes(employmentTypes.filter((_, i) => i !== index));
+    // If we're removing the currently selected tab or a tab before it,
+    // adjust the selected tab index
+    if (index <= selectedTypeTab) {
+      // If we're removing the last tab, select the new last tab
+      if (index === employmentTypes.length - 1) {
+        setSelectedTypeTab(Math.max(0, employmentTypes.length - 2));
+      } else {
+        // Otherwise, stay on the same visual position by decreasing the index
+        setSelectedTypeTab(Math.max(0, selectedTypeTab - 1));
+      }
+    }
+
+    // Remove the employment type
+    const newTypes = employmentTypes.filter((_, i) => i !== index);
+    setEmploymentTypes(newTypes);
+    onSave(newTypes);
   };
 
   // Add effect to set schedule mode based on monthly data
@@ -754,8 +785,27 @@ export default function ScheduleSettings({
                     <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white via-white to-transparent z-10 pointer-events-none" />
                     <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white via-white to-transparent z-10 pointer-events-none" />
 
+                    {/* Left scroll button */}
+                    <button
+                      onClick={scrollLeft}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-1.5 rounded-full bg-white shadow-lg border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200"
+                    >
+                      <IoChevronBack className="w-4 h-4" />
+                    </button>
+
+                    {/* Right scroll button */}
+                    <button
+                      onClick={scrollRight}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-1.5 rounded-full bg-white shadow-lg border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200"
+                    >
+                      <IoChevronForward className="w-4 h-4" />
+                    </button>
+
                     {/* Scrollable container */}
-                    <div className="overflow-x-auto scrollbar-thin">
+                    <div
+                      className="overflow-x-auto scrollbar-thin"
+                      ref={scrollContainerRef}
+                    >
                       <nav
                         className="flex gap-2 min-w-full px-12 py-1"
                         aria-label="Employment Types"

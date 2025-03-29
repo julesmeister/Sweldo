@@ -268,7 +268,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       day,
       timeIn,
       timeOut,
-      schedule
+      employmentType
     );
 
     const timeMetrics = calculateTimeMetrics(
