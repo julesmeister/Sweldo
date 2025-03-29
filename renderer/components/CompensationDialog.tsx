@@ -595,54 +595,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
               />
 
               <FormField
-                label="Holiday Bonus"
-                name="holidayBonus"
-                value={formData.holidayBonus || 0}
-                onChange={handleInputChange}
-                manualOverride={formData.manualOverride}
-                isComputedField={true}
-                hasEditAccess={hasEditAccess}
-              />
-
-              <FormField
-                label="Leave Pay"
-                name="leavePay"
-                value={formData.leavePay || 0}
-                onChange={handleInputChange}
-                hasEditAccess={hasEditAccess}
-              />
-
-              <FormField
-                label="Gross Pay"
-                name="grossPay"
-                value={formData.grossPay || 0}
-                onChange={handleInputChange}
-                manualOverride={formData.manualOverride}
-                isComputedField={true}
-                hasEditAccess={hasEditAccess}
-              />
-
-              <FormField
-                label="Deductions"
-                name="deductions"
-                value={formData.deductions || 0}
-                onChange={handleInputChange}
-                manualOverride={formData.manualOverride}
-                isComputedField={true}
-                hasEditAccess={hasEditAccess}
-              />
-
-              <FormField
-                label="Net Pay"
-                name="netPay"
-                value={formData.netPay || 0}
-                onChange={handleInputChange}
-                manualOverride={formData.manualOverride}
-                isComputedField={true}
-                hasEditAccess={hasEditAccess}
-              />
-
-              <FormField
                 label="Night Differential Hours"
                 name="nightDifferentialHours"
                 value={formData.nightDifferentialHours || 0}
@@ -662,7 +614,55 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 hasEditAccess={hasEditAccess}
               />
 
-              <div className="col-span-5">
+              <FormField
+                label="Holiday Bonus"
+                name="holidayBonus"
+                value={formData.holidayBonus || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Leave Pay"
+                name="leavePay"
+                value={formData.leavePay || 0}
+                onChange={handleInputChange}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Deductions"
+                name="deductions"
+                value={formData.deductions || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Gross Pay"
+                name="grossPay"
+                value={formData.grossPay || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <FormField
+                label="Net Pay"
+                name="netPay"
+                value={formData.netPay || 0}
+                onChange={handleInputChange}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
+                hasEditAccess={hasEditAccess}
+              />
+
+              <div className="col-start-7 flex items-center h-[4.5rem] mt-1">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-300">
                   <Switch
                     checked={formData.manualOverride || false}

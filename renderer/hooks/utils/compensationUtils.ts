@@ -87,10 +87,19 @@ export const calculateTimeMetrics = (
       ? calculateTimeDifference(scheduled.timeOut, actual.timeOut)
       : 0;
 
-  const overtimeMinutes =
+  // Calculate overtime for both early-in and late-out
+  const earlyInMinutes =
+    actual.timeIn < scheduled.timeIn
+      ? calculateTimeDifference(scheduled.timeIn, actual.timeIn)
+      : 0;
+
+  const lateOutMinutes =
     actual.timeOut > scheduled.timeOut
       ? calculateTimeDifference(actual.timeOut, scheduled.timeOut)
       : 0;
+
+  // Combine early-in and late-out minutes for total overtime
+  const overtimeMinutes = earlyInMinutes + lateOutMinutes;
 
   const lateDeductionMinutes = calculateDeductionMinutes(
     lateMinutes,
@@ -102,6 +111,7 @@ export const calculateTimeMetrics = (
     attendanceSettings.undertimeGracePeriod
   );
 
+  // Apply overtime grace period to combined overtime minutes
   const overtimeDeductionMinutes = calculateDeductionMinutes(
     overtimeMinutes,
     attendanceSettings.overtimeGracePeriod
