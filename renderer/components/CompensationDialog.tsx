@@ -204,15 +204,15 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const jsDay = entryDate.getDay(); // 0-6 (0 = Sunday)
     // Convert JavaScript day (0-6) to your schedule format (1-7)
     const scheduleDay = jsDay === 0 ? 7 : jsDay;
-    
+
     const schedule = employmentType
-      ? getScheduleForDay(employmentType, scheduleDay)  // Use converted day
+      ? getScheduleForDay(employmentType, scheduleDay) // Use converted day
       : null;
-    
-    console.log('JS Day of week:', jsDay);  // 0 for Sunday
-    console.log('Schedule Day:', scheduleDay);  // 7 for Sunday
-    console.log('Schedule found:', schedule);
-    console.log('Employment type:', employmentType);
+
+    console.log("JS Day of week:", jsDay); // 0 for Sunday
+    console.log("Schedule Day:", scheduleDay); // 7 for Sunday
+    console.log("Schedule found:", schedule);
+    console.log("Employment type:", employmentType);
 
     // Separate checks for workday and holiday
     const isWorkday = !!schedule;
@@ -353,16 +353,61 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return;
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        name.includes("Pay") ||
-        name.includes("Deduction") ||
-        name.includes("Hours") ||
-        name.includes("Minutes")
-          ? parseFloat(value) || 0
-          : value,
-    }));
+    const numericValue = parseFloat(value) || 0;
+
+    setFormData((prev) => {
+      const newData = { ...prev };
+
+      // Handle fields that affect gross pay
+      if (name === "overtimePay" || name === "holidayBonus") {
+        newData[name] = numericValue;
+        // Recalculate gross pay by adding the new value to the base gross pay
+        const baseGrossPay = prev.grossPay - (prev[name] || 0);
+        newData.grossPay = baseGrossPay + numericValue;
+        // Update net pay to reflect the new gross pay minus deductions
+        newData.netPay = newData.grossPay - (prev.deductions || 0);
+      }
+      // Handle fields that affect net pay (deductions)
+      else if (name === "undertimeDeduction" || name === "lateDeduction") {
+        newData[name] = numericValue;
+        // Recalculate total deductions
+        const totalDeductions =
+          (prev.undertimeDeduction || 0) + (prev.lateDeduction || 0);
+        newData.deductions = totalDeductions;
+        // Update net pay by subtracting total deductions from gross pay
+        newData.netPay = prev.grossPay - totalDeductions;
+      }
+      // Handle leave pay (affects net pay)
+      else if (name === "leavePay") {
+        newData[name] = numericValue;
+        // Update net pay by adding leave pay to gross pay minus deductions
+        newData.netPay = prev.grossPay - (prev.deductions || 0) + numericValue;
+      }
+      // Handle direct gross pay edits
+      else if (name === "grossPay") {
+        newData[name] = numericValue;
+        // Update net pay by subtracting deductions from new gross pay
+        newData.netPay = numericValue - (prev.deductions || 0);
+      }
+      // Handle direct net pay edits
+      else if (name === "netPay") {
+        newData[name] = numericValue;
+        // Update gross pay by adding deductions to new net pay
+        newData.grossPay = numericValue + (prev.deductions || 0);
+      }
+      // Handle other fields normally
+      else {
+        newData[name] =
+          name.includes("Pay") ||
+          name.includes("Deduction") ||
+          name.includes("Hours") ||
+          name.includes("Minutes")
+            ? numericValue
+            : value;
+      }
+
+      return newData;
+    });
   };
 
   if (!isOpen) return null;
