@@ -136,16 +136,33 @@ export default function SettingsPage() {
                 <IoTimeOutline className="w-5 h-5 text-blue-600" />
                 Attendance & Time
               </h3>
-              <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
-                <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
-                <p className="text-sm text-gray-800 font-light">
-                  Tip: Select the field you want to change and use the scroll
-                  wheel to adjust the value.
-                  <br />
-                  <span className="text-xs text-gray-700 italic">
-                    (scrolling is more precise than typing)
-                  </span>
-                </p>
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-blue-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-700">
+                      <span className="font-medium">Helpful Tip:</span> Select
+                      any field and use your scroll wheel to adjust values
+                      precisely.
+                      <br />
+                      <span className="text-xs italic">
+                        Scrolling provides more precise control than typing.
+                      </span>
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -255,6 +272,73 @@ export default function SettingsPage() {
                         }
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Night Differential Multiplier
+                    </label>
+                    <div className="mt-1 relative rounded-md">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">%</span>
+                      </div>
+                      <input
+                        type="number"
+                        name="nightDifferentialMultiplier"
+                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
+                        placeholder="10"
+                        value={
+                          attendanceSettings?.nightDifferentialMultiplier
+                            ? (
+                                attendanceSettings.nightDifferentialMultiplier *
+                                100
+                              ).toString()
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) / 100;
+                          if (!attendanceSettings) return;
+                          setAttendanceSettings({
+                            ...attendanceSettings,
+                            nightDifferentialMultiplier: value,
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Night Differential Start Hour
+                    </label>
+                    <input
+                      type="number"
+                      name="nightDifferentialStartHour"
+                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
+                      placeholder="22"
+                      value={
+                        attendanceSettings?.nightDifferentialStartHour ?? ""
+                      }
+                      onChange={(e) =>
+                        handleInputChange(e, "nightDifferentialStartHour")
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Night Differential End Hour
+                    </label>
+                    <input
+                      type="number"
+                      name="nightDifferentialEndHour"
+                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
+                      placeholder="6"
+                      value={attendanceSettings?.nightDifferentialEndHour ?? ""}
+                      onChange={(e) =>
+                        handleInputChange(e, "nightDifferentialEndHour")
+                      }
+                    />
                   </div>
                 </div>
               </div>

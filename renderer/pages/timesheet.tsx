@@ -330,6 +330,8 @@ const TimesheetPage: React.FC = () => {
       grossPay: 0,
       netPay: 0,
       manualOverride: false,
+      nightDifferentialHours: 0,
+      nightDifferentialPay: 0,
     };
     setSelectedEntry({
       entry,
