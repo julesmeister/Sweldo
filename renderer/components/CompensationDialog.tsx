@@ -196,6 +196,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       lateDeduction: 0,
       undertimeDeduction: 0,
       overtimeAddition: 0,
+      nightDifferentialHours: 0,
+      nightDifferentialPay: 0,
       holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
       manualOverride,
       absence,
@@ -258,7 +260,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       timeMetrics,
       attendanceSettings,
       dailyRate,
-      holiday
+      holiday,
+      actual.timeIn,
+      actual.timeOut,
+      scheduled
     );
 
     return {
@@ -274,6 +279,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       undertimeDeduction: payMetrics.undertimeDeduction,
       overtimeAddition: payMetrics.overtimePay,
       holidayBonus: payMetrics.holidayBonus,
+      nightDifferentialHours: payMetrics.nightDifferentialHours,
+      nightDifferentialPay: payMetrics.nightDifferentialPay,
       manualOverride: false,
       absence: false,
     };
@@ -305,6 +312,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         undertimeDeduction: computedValues.undertimeDeduction,
         lateDeduction: computedValues.lateDeduction,
         holidayBonus: computedValues.holidayBonus,
+        nightDifferentialHours: computedValues.nightDifferentialHours,
+        nightDifferentialPay: computedValues.nightDifferentialPay,
         absence: computedValues.absence,
         // manualOverride: computedValues.manualOverride,
       }));

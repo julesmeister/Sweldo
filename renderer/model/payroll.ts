@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   AttendanceSettingsModel,
   createAttendanceSettingsModel,
+  EmploymentType,
   getScheduleForDay,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
@@ -64,6 +65,11 @@ export interface PayrollData {
   // ... other fields
 }
 
+interface TimeEntry {
+  time: string;
+  hour: number;
+}
+
 export class Payroll {
   private dateRange: DateRange;
   private generatedTime: Date;
@@ -72,6 +78,7 @@ export class Payroll {
   private fileType: string;
   private dbPath: string;
   private attendanceSettingsModel: AttendanceSettingsModel;
+  private employmentTypes: EmploymentType[] = [];
 
   constructor(rows: any[][], fileTypeParam: string, dbPath: string) {
     this.dbPath = dbPath;
@@ -141,150 +148,281 @@ export class Payroll {
       }
     }
 
+    // Load time settings before processing
+    await this.loadTimeSettings();
+
     // Process employee data
     for (let i = 4; i < rows.length; i += 2) {
       const timeList = rows[i + 1]?.map((value) => value?.toString());
       const attendances: Attendance[] = [];
       const missingTimeLogs: MissingTimeLog[] = [];
 
+      // Get employee ID and load employee data
+      const employeeId = this.processColumn(rows[i], "ID:");
+      const employeeModel = createEmployeeModel(this.dbPath);
+      const employee = await employeeModel.loadEmployeeById(employeeId);
+      console.log(`Loaded employee data:`, employee);
+
       timeList?.forEach((timeString, j) => {
         if (!timeString) {
           attendances.push({
+            employeeId,
             day: j + 1,
-            timeIn: null,
-            timeOut: null,
-            employeeId: this.processColumn(rows[i], "ID:"),
             month: this.dateRange.start.getMonth() + 1,
             year: this.dateRange.start.getFullYear(),
+            timeIn: null,
+            timeOut: null,
           });
           return;
         }
 
-        // Initialize time variables
+        // Get employee type and schedule from employee data
+        const employeeType = employee?.employmentType;
+        console.log(`Employee type from database:`, employeeType);
+        console.log(`Available employment types:`, this.employmentTypes);
+
+        const employmentType = this.employmentTypes.find(
+          (type) => type.type === employeeType
+        );
+        console.log(`Found employment type:`, employmentType);
+
+        let schedule = null;
+        if (employmentType) {
+          const dayOfWeek = new Date(
+            this.dateRange.start.getFullYear(),
+            this.dateRange.start.getMonth(),
+            j + 1
+          ).getDay();
+          const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+          console.log(`Calculated schedule day:`, {
+            dayOfWeek,
+            scheduleDay,
+            date: new Date(
+              this.dateRange.start.getFullYear(),
+              this.dateRange.start.getMonth(),
+              j + 1
+            ),
+          });
+
+          schedule = employmentType.schedules
+            ? employmentType.schedules.find(
+                (s: any) => s.dayOfWeek === scheduleDay
+              )
+            : null;
+          console.log(`Found schedule for day:`, schedule);
+        }
+
+        // Parse times from current cell
+        const timeRegex = /(\d{2}:\d{2})/g;
+        const times = timeString.match(timeRegex) || [];
+        const uniqueTimes = [...new Set(times)] as string[];
+        console.log(`\nProcessing times for day ${j + 1}:`, {
+          rawTimeString: timeString,
+          parsedTimes: times,
+          uniqueTimes: uniqueTimes,
+        });
+
         let timeIn: string | null = null;
         let timeOut: string | null = null;
 
-        // RULES FOR TIME PARSING:
-        // 1. Time format can be either "HH:mm" (24-hour) or "hh:mm AM/PM" (12-hour)
-        // 2. Time in and out must be at least 5 minutes apart
-        // 3. If times are less than 5 minutes apart:
-        //    - Only the first time will be considered as time in
-        //    - Second time will be ignored and added to missingTimeLogs
-        // 4. For multiple time entries:
-        //    - First valid time is always time in
-        //    - Last valid time (if > 5 mins from time in) is time out
+        if (schedule && schedule.timeIn && schedule.timeOut) {
+          const [schedInHour] = schedule.timeIn.split(":").map(Number);
+          const isNightShift = schedInHour >= 18;
+          console.log(`Schedule info:`, {
+            schedule,
+            schedInHour,
+            isNightShift,
+          });
 
-        // Parse time formats using regex for "HH:mm" format
-        const newFormatRegex = /(\d{2}:\d{1,2})/g; // Global flag to match all occurrences
-        const allTimes = timeString.match(newFormatRegex);
+          if (isNightShift) {
+            // For night shifts, find the latest PM time from current cell
+            const currentCellTimes = (uniqueTimes as string[]).map(
+              (time: string) => {
+                const [hour] = time.split(":").map(Number);
+                return { time, hour };
+              }
+            );
+            console.log(`Current cell times processed:`, currentCellTimes);
 
-        if (allTimes && allTimes.length > 0) {
-          // Get unique times only to avoid duplicates
-          const uniqueTimes = [...new Set(allTimes)] as string[];
-
-          // First time is always considered as time in
-          timeIn = uniqueTimes[0];
-
-          // Only set time out if there's a different time and it's > 5 mins apart
-          if (uniqueTimes.length > 1) {
-            const lastTime = uniqueTimes[uniqueTimes.length - 1];
-
-            // Convert times to minutes for comparison
-            const timeInMinutes = timeIn
-              .split(":")
-              .reduce((acc, time) => acc * 60 + parseInt(time), 0);
-            const timeOutMinutes = lastTime
-              .split(":")
-              .reduce((acc, time) => acc * 60 + parseInt(time), 0);
-
-            // Check if times are at least 5 minutes apart
-            if (Math.abs(timeOutMinutes - timeInMinutes) >= 5) {
-              timeOut = lastTime;
-            } else {
-              // If times are too close, add to missingTimeLogs
-              console.warn(
-                `Time out (${lastTime}) is too close to time in (${timeIn}). Must be at least 5 minutes apart.`
+            // Get PM times (17:00 onwards) from current cell for time in
+            const pmTimes = currentCellTimes
+              .filter((t: { time: string; hour: number }) => t.hour >= 17)
+              .sort(
+                (a: { hour: number }, b: { hour: number }) => b.hour - a.hour
               );
-              // Note: missingTimeLogs should be handled by the calling code
+            console.log(`PM times found for time in:`, pmTimes);
+
+            // Get next day's cell for time out
+            const nextDayString = timeList[j + 1];
+            console.log(`Next day's time string:`, nextDayString);
+
+            if (nextDayString) {
+              const nextDayTimes = (
+                (nextDayString.match(timeRegex) || []) as string[]
+              )
+                .map((time: string) => {
+                  const [hour] = time.split(":").map(Number);
+                  return { time, hour };
+                })
+                .filter((t: { time: string; hour: number }) => t.hour <= 11)
+                .sort(
+                  (a: { hour: number }, b: { hour: number }) => a.hour - b.hour
+                );
+              console.log(
+                `Next day's AM times found for time out:`,
+                nextDayTimes
+              );
+
+              // Set time in from current day's PM time
+              if (pmTimes.length > 0) {
+                timeIn = pmTimes[0].time as string;
+                console.log(`Setting time in from PM times:`, timeIn);
+              }
+
+              // Set time out from next day's AM time, but only if it's not too close to time in
+              if (nextDayTimes.length > 0) {
+                const [timeInHour, timeInMinute] = timeIn
+                  ?.split(":")
+                  .map(Number) || [0, 0];
+                const [timeOutHour, timeOutMinute] = nextDayTimes[0].time
+                  .split(":")
+                  .map(Number);
+
+                // Calculate time difference in minutes
+                const timeInMinutes = timeInHour * 60 + timeInMinute;
+                const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
+                const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
+
+                // Only set time out if it's more than 5 minutes away from time in
+                if (timeDiff > 5) {
+                  timeOut = nextDayTimes[0].time as string;
+                  console.log(
+                    `Setting time out from next day's AM times:`,
+                    timeOut
+                  );
+                } else {
+                  console.log(
+                    `Time out too close to time in (${timeDiff} minutes), leaving blank`
+                  );
+                }
+              }
+            } else {
+              // If it's the last day, only set time in if we have a PM time
+              if (pmTimes.length > 0) {
+                timeIn = pmTimes[0].time as string;
+                console.log(
+                  `Last day - setting time in from PM times:`,
+                  timeIn
+                );
+              }
+            }
+          } else {
+            // Regular shift logic
+            if (uniqueTimes.length > 0) {
+              timeIn = uniqueTimes[0] as string;
+              // Only set time out if it's more than 5 minutes away from time in
+              if (uniqueTimes.length > 1) {
+                const [timeInHour, timeInMinute] = timeIn
+                  .split(":")
+                  .map(Number);
+                const [timeOutHour, timeOutMinute] = uniqueTimes[
+                  uniqueTimes.length - 1
+                ]
+                  .split(":")
+                  .map(Number);
+
+                // Calculate time difference in minutes
+                const timeInMinutes = timeInHour * 60 + timeInMinute;
+                const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
+                const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
+
+                // Only set time out if it's more than 5 minutes away from time in
+                if (timeDiff > 5) {
+                  timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
+                  console.log(`Regular shift - setting times:`, {
+                    timeIn,
+                    timeOut,
+                  });
+                } else {
+                  console.log(
+                    `Time out too close to time in (${timeDiff} minutes), leaving blank`
+                  );
+                }
+              }
             }
           }
         } else {
-          // Fallback for legacy format "hh:mm AM/PM"
-          const timeParts = timeString.split(" ");
-          const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9](\s?[APMapm]{2})?$/;
+          // No schedule - use first and last times, but check time difference
+          if (uniqueTimes.length > 0) {
+            timeIn = uniqueTimes[0] as string;
+            if (uniqueTimes.length > 1) {
+              const [timeInHour, timeInMinute] = timeIn.split(":").map(Number);
+              const [timeOutHour, timeOutMinute] = uniqueTimes[
+                uniqueTimes.length - 1
+              ]
+                .split(":")
+                .map(Number);
 
-          if (timeParts.length) {
-            // Set time in if first part matches format
-            if (timeRegex.test(timeParts[0])) {
-              timeIn = timeParts[0];
-            }
+              // Calculate time difference in minutes
+              const timeInMinutes = timeInHour * 60 + timeInMinute;
+              const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
+              const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
 
-            // Check for time out in remaining parts
-            if (timeParts.length > 1) {
-              const lastTime = timeParts[timeParts.length - 1];
-              if (timeRegex.test(lastTime) && lastTime !== timeParts[0]) {
-                // Convert 12-hour format to 24-hour for comparison
-                const timeInDate = new Date(`1970/01/01 ${timeIn}`);
-                const timeOutDate = new Date(`1970/01/01 ${lastTime}`);
-
-                // Check if times are at least 5 minutes apart
-                const diffMinutes = Math.abs(
-                  (timeOutDate.getTime() - timeInDate.getTime()) / (1000 * 60)
+              // Only set time out if it's more than 5 minutes away from time in
+              if (timeDiff > 5) {
+                timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
+                console.log(`No schedule - using first and last times:`, {
+                  timeIn,
+                  timeOut,
+                });
+              } else {
+                console.log(
+                  `Time out too close to time in (${timeDiff} minutes), leaving blank`
                 );
-
-                if (diffMinutes >= 5) {
-                  timeOut = lastTime;
-                } else {
-                  // If times are too close, add to missingTimeLogs
-                  console.warn(
-                    `Time out (${lastTime}) is too close to time in (${timeIn}). Must be at least 5 minutes apart.`
-                  );
-                  // Note: missingTimeLogs should be handled by the calling code
-                }
               }
             }
           }
         }
 
-        // Check for missing time out when time in exists
+        // Push to attendances in the correct format
+        const attendance = {
+          employeeId,
+          day: j + 1,
+          month: this.dateRange.start.getMonth() + 1,
+          year: this.dateRange.start.getFullYear(),
+          timeIn: timeIn || null,
+          timeOut: timeOut || null,
+        };
+        console.log(`Final attendance record:`, attendance);
+        attendances.push(attendance);
+
+        // Check for missing time out with processed times
         if (timeIn && !timeOut) {
           missingTimeLogs.push({
             id: crypto.randomUUID(),
-            employeeId: this.processColumn(rows[i], "ID:"),
-            employeeName: this.processColumn(rows[i], "Name:"),
+            employeeId,
+            employeeName: employee?.name || "",
             day: (j + 1).toString(),
             month: this.dateRange.start.getMonth() + 1,
             year: this.dateRange.start.getFullYear(),
             missingType: "timeOut",
-            employmentType: this.processColumn(rows[i], "Employment Type:"),
+            employmentType: employeeType || "Unknown",
             createdAt: new Date().toISOString(),
           });
         }
-
-        attendances.push({
-          day: j + 1,
-          timeIn,
-          timeOut,
-          employeeId: this.processColumn(rows[i], "ID:"),
-          month: this.dateRange.start.getMonth() + 1,
-          year: this.dateRange.start.getFullYear(),
-        });
       });
 
-      const id = this.processColumn(rows[i], "ID:");
-      const name = this.processColumn(rows[i], "Name:");
-
-      if (id || name) {
+      if (employee) {
         this.employees.push({
-          id,
-          name,
+          id: employee.id,
+          name: employee.name,
           position: "",
-          dailyRate: 0,
-          sss: 0,
-          philHealth: 0,
-          pagIbig: 0,
+          dailyRate: employee.dailyRate || 0,
+          sss: employee.sss || 0,
+          philHealth: employee.philHealth || 0,
+          pagIbig: employee.pagIbig || 0,
           status: "active",
-          employmentType: "regular",
+          employmentType: employee.employmentType || "regular",
           lastPaymentPeriod: undefined,
         });
 
@@ -294,7 +432,7 @@ export class Payroll {
           attendances,
           this.dateRange.start.getMonth() + 1,
           this.dateRange.start.getFullYear(),
-          id
+          employee.id
         );
 
         // Save missing time logs
@@ -312,6 +450,11 @@ export class Payroll {
     }
     let model = createEmployeeModel(this.dbPath);
     await model.saveOnlyNewEmployees(this.employees);
+  }
+
+  private async loadTimeSettings() {
+    const timeSettings = await this.attendanceSettingsModel.loadTimeSettings();
+    this.employmentTypes = timeSettings;
   }
 
   public async summarizeCompensations(
@@ -1151,6 +1294,90 @@ export class Payroll {
       console.error(`Error reversing cash advance deduction:`, error);
       throw error;
     }
+  }
+
+  // Helper function to determine if a time should be AM or PM based on schedule
+  private determineTimeAMPM(
+    time: string,
+    isTimeIn: boolean,
+    schedule: { timeIn: string; timeOut: string }
+  ): string {
+    if (!time || !schedule) return time;
+
+    const [hours] = time.split(":").map(Number);
+    const [schedInHour] = schedule.timeIn.split(":").map(Number);
+    const [schedOutHour] = schedule.timeOut.split(":").map(Number);
+
+    // Determine if it's a night shift (starts in PM, ends in AM)
+    const isNightShift = schedInHour >= 18;
+
+    if (isNightShift) {
+      if (isTimeIn) {
+        // For time in during night shift:
+        // If hour is between 18-23 or 0-2, it should be PM
+        return hours >= 18 || hours <= 2 ? `${time} PM` : `${time} AM`;
+      } else {
+        // For time out during night shift:
+        // If hour is between 3-11, it should be AM
+        return hours >= 3 && hours <= 11 ? `${time} AM` : `${time} PM`;
+      }
+    }
+
+    // For regular shifts
+    return hours < 12 ? `${time} AM` : `${time} PM`;
+  }
+
+  // Helper to calculate time difference in hours, handling day boundaries
+  private getHoursDifference(time1: string, time2: string): number {
+    const [h1] = time1.split(":").map(Number);
+    const [h2] = time2.split(":").map(Number);
+
+    // Handle cross-day scenarios (e.g. 23:00 vs 01:00)
+    if (Math.abs(h1 - h2) > 12) {
+      return 24 - Math.abs(h1 - h2);
+    }
+    return Math.abs(h1 - h2);
+  }
+
+  // Process time entries based on schedule proximity
+  private processTimeEntries(
+    rawTime1: string,
+    rawTime2: string,
+    schedule: { timeIn: string; timeOut: string } | null
+  ): { timeIn: string | null; timeOut: string | null } {
+    if (!schedule || !rawTime1 || !rawTime2) {
+      return { timeIn: rawTime1 || null, timeOut: rawTime2 || null };
+    }
+
+    const [schedInHour] = schedule.timeIn.split(":").map(Number);
+    const [schedOutHour] = schedule.timeOut.split(":").map(Number);
+    const [time1Hour] = rawTime1.split(":").map(Number);
+    const [time2Hour] = rawTime2.split(":").map(Number);
+
+    // Calculate proximity to scheduled times
+    const time1ToSchedIn = this.getHoursDifference(rawTime1, schedule.timeIn);
+    const time1ToSchedOut = this.getHoursDifference(rawTime1, schedule.timeOut);
+    const time2ToSchedIn = this.getHoursDifference(rawTime2, schedule.timeIn);
+    const time2ToSchedOut = this.getHoursDifference(rawTime2, schedule.timeOut);
+
+    // If either time is within 3 hours of its expected schedule, assign accordingly
+    if (time1ToSchedIn <= 3 && time2ToSchedOut <= 3) {
+      return {
+        timeIn: rawTime1,
+        timeOut: rawTime2,
+      };
+    } else if (time1ToSchedOut <= 3 && time2ToSchedIn <= 3) {
+      return {
+        timeIn: rawTime2,
+        timeOut: rawTime1,
+      };
+    }
+
+    // If no clear match within 3 hours, use default order
+    return {
+      timeIn: rawTime1,
+      timeOut: rawTime2,
+    };
   }
 }
 

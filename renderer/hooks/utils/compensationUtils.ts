@@ -41,8 +41,8 @@ interface NightDifferentialMetrics {
 }
 
 const calculateNightDifferential = (
-  timeIn: Date,
-  timeOut: Date,
+  actual: { timeIn: Date; timeOut: Date },
+  scheduled: { timeIn: Date; timeOut: Date },
   settings: AttendanceSettings,
   hourlyRate: number
 ): NightDifferentialMetrics => {
@@ -50,10 +50,16 @@ const calculateNightDifferential = (
   const endHour = settings.nightDifferentialEndHour || 6; // Default to 6 AM
   const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
 
-  let nightHours = 0;
-  let currentTime = new Date(timeIn);
+  // Only calculate night differential for hours worked within schedule
+  const effectiveTimeIn =
+    actual.timeIn > scheduled.timeIn ? actual.timeIn : scheduled.timeIn;
+  const effectiveTimeOut =
+    actual.timeOut < scheduled.timeOut ? actual.timeOut : scheduled.timeOut;
 
-  while (currentTime < timeOut) {
+  let nightHours = 0;
+  let currentTime = new Date(effectiveTimeIn);
+
+  while (currentTime < effectiveTimeOut) {
     const hour = currentTime.getHours();
     if (
       (hour >= startHour && hour < 24) || // Night hours before midnight
@@ -117,8 +123,9 @@ export const calculateTimeMetrics = (
     attendanceSettings.overtimeGracePeriod
   );
 
-  const hoursWorked =
-    calculateTimeDifference(actual.timeOut, actual.timeIn) / 60;
+  const hoursWorked = Math.abs(
+    calculateTimeDifference(actual.timeOut, actual.timeIn) / 60
+  );
 
   return {
     lateMinutes,
@@ -139,14 +146,15 @@ export const calculatePayMetrics = (
   dailyRate: number,
   holiday?: Holiday,
   actualTimeIn?: Date,
-  actualTimeOut?: Date
+  actualTimeOut?: Date,
+  scheduled?: { timeIn: Date; timeOut: Date }
 ) => {
   const hourlyRate = dailyRate / 8;
   const nightDifferential =
-    actualTimeIn && actualTimeOut
+    actualTimeIn && actualTimeOut && scheduled
       ? calculateNightDifferential(
-          actualTimeIn,
-          actualTimeOut,
+          { timeIn: actualTimeIn, timeOut: actualTimeOut },
+          scheduled,
           attendanceSettings,
           hourlyRate
         )
