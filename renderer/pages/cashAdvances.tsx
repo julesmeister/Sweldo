@@ -154,10 +154,9 @@ export default function CashAdvancesPage() {
     let left = rect.left + rect.width / 2 - dialogWidth / 2;
 
     // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    ) - 60;
+    left =
+      Math.max(spacing, Math.min(left, windowWidth - dialogWidth - spacing)) -
+      60;
 
     // Calculate caret position relative to the dialog
     const caretLeft = rect.left + rect.width / 2 - left;
@@ -257,7 +256,7 @@ export default function CashAdvancesPage() {
           ...data,
           id: crypto.randomUUID(),
           employeeId: selectedEmployeeId!,
-          date: new Date(),
+          date: data.date,
         });
         toast.success("Cash advance created successfully", {
           position: "bottom-right",
@@ -447,6 +446,7 @@ export default function CashAdvancesPage() {
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <button
                                     onClick={async (e) => {
+                                      e.preventDefault();
                                       e.stopPropagation();
                                       if (!cashAdvanceModel) {
                                         toast.error(

@@ -70,6 +70,34 @@ interface TimeEntry {
   hour: number;
 }
 
+interface PayrollCSVData {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  startDate: string;
+  endDate: string;
+  dailyRate: string;
+  basicPay: string;
+  overtimePay: string;
+  overtimeMinutes: string;
+  undertimeDeduction: string;
+  undertimeMinutes: string;
+  lateDeduction: string;
+  lateMinutes: string;
+  holidayBonus: string;
+  grossPay: string;
+  allowances: string;
+  sssDeduction: string;
+  philHealthDeduction: string;
+  pagIbigDeduction: string;
+  cashAdvanceDeductions: string;
+  otherDeductions: string;
+  netPay: string;
+  paymentDate: string;
+  daysWorked: string;
+  absences: string;
+}
+
 export class Payroll {
   private dateRange: DateRange;
   private generatedTime: Date;
@@ -728,38 +756,39 @@ export class Payroll {
         `Using the following deductions: ${JSON.stringify(finalDeductions)}`
       );
 
-      const payrollData = {
+      const payrollData: PayrollCSVData = {
         id: `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`,
         employeeId,
         employeeName: employee.name,
         startDate: start.toISOString(),
         endDate: end.toISOString(),
-        dailyRate: summary.dailyRate,
-        basicPay: summary.basicPay,
-        overtimePay: summary.overtime,
-        overtimeMinutes: summary.overtimeMinutes || 0,
-        undertimeDeduction: summary.undertimeDeduction || 0,
-        undertimeMinutes: summary.undertimeMinutes || 0,
-        lateDeduction: summary.lateDeduction || 0,
-        lateMinutes: summary.lateMinutes || 0,
-        holidayBonus: summary.holidayBonus || 0,
-        grossPay: summary.grossPay,
-        allowances: summary.allowances || 0,
-        sssDeduction: finalDeductions.sss,
-        philHealthDeduction: finalDeductions.philHealth,
-        pagIbigDeduction: finalDeductions.pagIbig,
-        cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions,
-        otherDeductions: finalDeductions.others,
-        netPay:
+        dailyRate: summary.dailyRate.toString(),
+        basicPay: summary.basicPay.toString(),
+        overtimePay: summary.overtime.toString(),
+        overtimeMinutes: (summary.overtimeMinutes || 0).toString(),
+        undertimeDeduction: (summary.undertimeDeduction || 0).toString(),
+        undertimeMinutes: (summary.undertimeMinutes || 0).toString(),
+        lateDeduction: (summary.lateDeduction || 0).toString(),
+        lateMinutes: (summary.lateMinutes || 0).toString(),
+        holidayBonus: (summary.holidayBonus || 0).toString(),
+        grossPay: summary.grossPay.toString(),
+        allowances: (summary.allowances || 0).toString(),
+        sssDeduction: finalDeductions.sss.toString(),
+        philHealthDeduction: finalDeductions.philHealth.toString(),
+        pagIbigDeduction: finalDeductions.pagIbig.toString(),
+        cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions.toString(),
+        otherDeductions: finalDeductions.others.toString(),
+        netPay: (
           summary.grossPay -
           (finalDeductions.sss +
             finalDeductions.philHealth +
             finalDeductions.pagIbig +
             finalDeductions.cashAdvanceDeductions +
-            finalDeductions.others),
+            finalDeductions.others)
+        ).toString(),
         paymentDate: new Date().toISOString(),
-        daysWorked: summary.daysWorked || 0,
-        absences: summary.absences || 0,
+        daysWorked: (summary.daysWorked || 0).toString(),
+        absences: (summary.absences || 0).toString(),
       };
 
       // Get all months between start and end date
@@ -789,7 +818,9 @@ export class Payroll {
       if (fileExists) {
         // Read existing content and append new row
         const existingContent = await window.electron.readFile(filePath);
-        const parsedData = Papa.parse(existingContent, { header: true });
+        const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
+          header: true,
+        });
         parsedData.data.push(payrollData);
         csvContent = Papa.unparse(parsedData.data);
       } else {
@@ -847,7 +878,7 @@ export class Payroll {
 
       // Read the file content
       const content = await window.electron.readFile(filePath);
-      const parsedData = Papa.parse(content, { header: true });
+      const parsedData = Papa.parse<PayrollCSVData>(content, { header: true });
 
       console.log(`Found ${parsedData.data.length} records in file`);
 
@@ -858,20 +889,24 @@ export class Payroll {
       // Find the payroll record before filtering it out
       const payrollToDelete = parsedData.data.find(
         (row: any) => row.id === payrollId
-      ) as PayrollSummaryModel;
+      );
+
       if (!payrollToDelete) {
         throw new Error("Payroll record not found");
       }
 
       // If there are cash advance deductions, reverse them
-      if (payrollToDelete.deductions.cashAdvanceDeductions > 0) {
+      const cashAdvanceDeductions = parseFloat(
+        payrollToDelete.cashAdvanceDeductions || "0"
+      );
+      if (cashAdvanceDeductions > 0) {
         console.log(
-          `Reversing cash advance deduction of ${payrollToDelete.deductions.cashAdvanceDeductions}`
+          `Reversing cash advance deduction of ${cashAdvanceDeductions}`
         );
         await Payroll.reverseCashAdvanceDeduction(
           dbPath,
           employeeId,
-          payrollToDelete.deductions.cashAdvanceDeductions,
+          cashAdvanceDeductions,
           endDate
         );
       }
@@ -1215,96 +1250,89 @@ export class Payroll {
         payrollDate: payrollDate.toISOString(),
       });
 
-      // Create a CashAdvanceModel instance for the specific month
-      const cashAdvanceModel = createCashAdvanceModel(
-        dbPath,
-        employeeId,
-        payrollDate.getMonth() + 1,
-        payrollDate.getFullYear()
-      );
+      // Get all months between the payroll date and 3 months before (to catch recent cash advances)
+      const months = [];
+      let currentDate = new Date(payrollDate);
+      for (let i = 0; i < 3; i++) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() - 1);
+      }
 
-      // Load all cash advances for the employee
-      const cashAdvances = await cashAdvanceModel.loadCashAdvances(employeeId);
-      console.log(`Found ${cashAdvances.length} cash advances for employee`);
+      // Load cash advances from all relevant months
+      const allAdvances: CashAdvance[] = [];
+      for (const { month, year } of months) {
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          employeeId,
+          month,
+          year
+        );
+        const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+        allAdvances.push(...advances);
+      }
 
-      // Find cash advances that have been paid (fully or partially)
-      const relevantCashAdvances = cashAdvances
-        .filter((ca) => {
-          const isRelevant = ca.remainingUnpaid < ca.amount; // Has been paid at least partially
+      // Sort by date (most recent first)
+      allAdvances.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-          console.log(`Checking cash advance:`, {
-            id: ca.id,
-            date: ca.date,
-            amount: ca.amount,
-            remainingUnpaid: ca.remainingUnpaid,
-            isRelevant,
+      // Find the most recent cash advance that can accept this reversal
+      let remainingAmountToReverse = deductionAmount;
+      for (const advance of allAdvances) {
+        if (remainingAmountToReverse <= 0) break;
+
+        const canAcceptMore = advance.remainingUnpaid < advance.amount;
+        if (canAcceptMore) {
+          const amountToAdd = Math.min(
+            remainingAmountToReverse,
+            advance.amount - advance.remainingUnpaid
+          );
+
+          console.log(`Reversing ${amountToAdd} to cash advance:`, {
+            id: advance.id,
+            date: advance.date,
+            currentRemaining: advance.remainingUnpaid,
+            amountToAdd,
+            newRemaining: advance.remainingUnpaid + amountToAdd,
           });
 
-          return isRelevant;
-        })
-        .sort((a, b) => b.date.getTime() - a.date.getTime());
+          // Update the cash advance
+          const updatedCashAdvance = {
+            ...advance,
+            status: "Unpaid" as const,
+            remainingUnpaid: advance.remainingUnpaid + amountToAdd,
+          } as CashAdvance;
 
-      console.log(
-        `Found ${relevantCashAdvances.length} relevant cash advances`
-      );
+          // Update installment details if applicable
+          if (
+            updatedCashAdvance.paymentSchedule === "Installment" &&
+            updatedCashAdvance.installmentDetails
+          ) {
+            const amountPerPayment =
+              updatedCashAdvance.installmentDetails.amountPerPayment;
+            updatedCashAdvance.installmentDetails.remainingPayments = Math.ceil(
+              updatedCashAdvance.remainingUnpaid / amountPerPayment
+            );
+          }
 
-      const relevantCashAdvance = relevantCashAdvances[0];
-
-      if (relevantCashAdvance) {
-        console.log(`Found relevant cash advance to reverse:`, {
-          id: relevantCashAdvance.id,
-          originalAmount: relevantCashAdvance.amount,
-          currentRemainingUnpaid: relevantCashAdvance.remainingUnpaid,
-          deductionToReverse: deductionAmount,
-          newRemainingUnpaid: Math.min(
-            relevantCashAdvance.remainingUnpaid + deductionAmount,
-            relevantCashAdvance.amount
-          ),
-        });
-
-        // Update the cash advance to reflect the reversed deduction
-        const updatedCashAdvance = {
-          ...relevantCashAdvance,
-          status: "Unpaid" as const, // Always mark as unpaid when reversing a deduction
-          remainingUnpaid: Math.min(
-            relevantCashAdvance.remainingUnpaid + deductionAmount,
-            relevantCashAdvance.amount // Don't exceed original amount
-          ),
-        } as CashAdvance;
-
-        // If this was an installment payment, update the remaining payments
-        if (
-          updatedCashAdvance.paymentSchedule === "Installment" &&
-          updatedCashAdvance.installmentDetails
-        ) {
-          const amountPerPayment =
-            updatedCashAdvance.installmentDetails.amountPerPayment;
-          updatedCashAdvance.installmentDetails.remainingPayments = Math.ceil(
-            updatedCashAdvance.remainingUnpaid / amountPerPayment
+          // Save the update
+          const cashAdvanceModel = createCashAdvanceModel(
+            dbPath,
+            employeeId,
+            advance.date.getMonth() + 1,
+            advance.date.getFullYear()
           );
-        }
+          await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
 
-        // Save the updated cash advance
-        await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
-        console.log(`Successfully reversed cash advance deduction:`, {
-          employeeId,
-          cashAdvanceId: updatedCashAdvance.id,
-          deductionAmount,
-          newRemainingUnpaid: updatedCashAdvance.remainingUnpaid,
-          newStatus: updatedCashAdvance.status,
-        });
-      } else {
-        console.warn(`No relevant cash advance found to reverse deduction:`, {
-          employeeId,
-          payrollDate: payrollDate.toISOString(),
-          deductionAmount,
-          availableCashAdvances: cashAdvances.map((ca) => ({
-            id: ca.id,
-            date: ca.date,
-            amount: ca.amount,
-            remainingUnpaid: ca.remainingUnpaid,
-          })),
-        });
+          remainingAmountToReverse -= amountToAdd;
+        }
+      }
+
+      if (remainingAmountToReverse > 0) {
+        console.warn(
+          `Could not fully reverse cash advance deduction. Remaining amount: ${remainingAmountToReverse}`
+        );
       }
     } catch (error) {
       console.error(`Error reversing cash advance deduction:`, error);
