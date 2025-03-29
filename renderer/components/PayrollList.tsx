@@ -15,6 +15,7 @@ interface PayrollListProps {
   employee?: Employee | null;
   canEdit?: boolean;
   accessCodes?: string[];
+  onDeletePayroll?: (payrollId: string) => Promise<void>;
 }
 
 export const PayrollList: React.FC<PayrollListProps> = ({
@@ -26,6 +27,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   employee,
   canEdit = false,
   accessCodes = [],
+  onDeletePayroll,
 }) => {
   const [filterType, setFilterType] = useState<
     "3months" | "6months" | "year" | "custom"

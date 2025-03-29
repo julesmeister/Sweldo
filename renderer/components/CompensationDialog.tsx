@@ -299,6 +299,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   useEffect(() => {
     // Update formData whenever computedValues change
     if (computedValues) {
+      console.log("Updating formData with computed values:", {
+        nightDifferentialHours: computedValues.nightDifferentialHours,
+        nightDifferentialPay: computedValues.nightDifferentialPay,
+        grossPay: computedValues.grossPay,
+        netPay: computedValues.netPay,
+      });
       setFormData((prev) => ({
         ...prev,
         lateMinutes: computedValues.lateMinutes,

@@ -41,6 +41,17 @@ interface SettingSection {
   content: React.ReactNode;
 }
 
+// Helper function to convert hour number to time string (e.g., 22 -> "22:00")
+const hourToTimeString = (hour: number | null | undefined): string => {
+  if (hour === null || hour === undefined) return "";
+  return `${hour.toString().padStart(2, "0")}:00`;
+};
+
+// Helper function to convert time string to hour number (e.g., "22:00" -> 22)
+const timeStringToHour = (timeString: string): number => {
+  return parseInt(timeString.split(":")[0], 10);
+};
+
 export default function SettingsPage() {
   const { dbPath, setDbPath, logoPath, setLogoPath } = useSettingsStore();
   const { hasAccess } = useAuthStore();
@@ -312,16 +323,24 @@ export default function SettingsPage() {
                       Night Differential Start Hour
                     </label>
                     <input
-                      type="number"
+                      type="time"
                       name="nightDifferentialStartHour"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="22"
-                      value={
-                        attendanceSettings?.nightDifferentialStartHour ?? ""
-                      }
-                      onChange={(e) =>
-                        handleInputChange(e, "nightDifferentialStartHour")
-                      }
+                      value={hourToTimeString(
+                        attendanceSettings?.nightDifferentialStartHour
+                      )}
+                      onChange={(e) => {
+                        const hour = timeStringToHour(e.target.value);
+                        handleInputChange(
+                          {
+                            target: {
+                              name: "nightDifferentialStartHour",
+                              value: hour,
+                            },
+                          } as any,
+                          "nightDifferentialStartHour"
+                        );
+                      }}
                     />
                   </div>
 
@@ -330,14 +349,24 @@ export default function SettingsPage() {
                       Night Differential End Hour
                     </label>
                     <input
-                      type="number"
+                      type="time"
                       name="nightDifferentialEndHour"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="6"
-                      value={attendanceSettings?.nightDifferentialEndHour ?? ""}
-                      onChange={(e) =>
-                        handleInputChange(e, "nightDifferentialEndHour")
-                      }
+                      value={hourToTimeString(
+                        attendanceSettings?.nightDifferentialEndHour
+                      )}
+                      onChange={(e) => {
+                        const hour = timeStringToHour(e.target.value);
+                        handleInputChange(
+                          {
+                            target: {
+                              name: "nightDifferentialEndHour",
+                              value: hour,
+                            },
+                          } as any,
+                          "nightDifferentialEndHour"
+                        );
+                      }}
                     />
                   </div>
                 </div>
