@@ -14,6 +14,7 @@ interface PayrollListProps {
   dbPath: string;
   employee?: Employee | null;
   canEdit?: boolean;
+  accessCodes?: string[];
 }
 
 export const PayrollList: React.FC<PayrollListProps> = ({
@@ -24,6 +25,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   dbPath,
   employee,
   canEdit = false,
+  accessCodes = [],
 }) => {
   const [filterType, setFilterType] = useState<
     "3months" | "6months" | "year" | "custom"
@@ -33,6 +35,8 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [selectedPayroll, setSelectedPayroll] =
     useState<PayrollSummaryModel | null>(null);
+
+  const hasDeleteAccess = accessCodes.includes("MANAGE_PAYROLL");
 
   useEffect(() => {
     const loadPayrolls = async () => {
@@ -162,7 +166,7 @@ export const PayrollList: React.FC<PayrollListProps> = ({
   };
 
   const handleDeletePayroll = async (payrollId: string) => {
-    if (!canEdit) {
+    if (!hasDeleteAccess) {
       toast.error("You don't have permission to delete payroll records");
       return;
     }
@@ -375,7 +379,11 @@ export const PayrollList: React.FC<PayrollListProps> = ({
                           e.stopPropagation();
                           await handleDeletePayroll(payroll.id);
                         }}
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
+                        className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md ${
+                          hasDeleteAccess
+                            ? "text-red-700 bg-red-100 hover:bg-red-200"
+                            : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out`}
                       >
                         Delete
                       </button>

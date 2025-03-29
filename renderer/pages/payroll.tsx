@@ -545,6 +545,31 @@ export default function PayrollPage() {
                 dbPath={dbPath}
                 onPayrollDeleted={() => setRefreshPayrolls(true)}
                 canEdit={hasAccess("MANAGE_PAYROLL")}
+                accessCodes={
+                  hasAccess("MANAGE_PAYROLL") ? ["MANAGE_PAYROLL"] : []
+                }
+                onDeletePayroll={async (payrollId: string) => {
+                  const payroll = payrolls.find((p) => p.id === payrollId);
+                  if (!payroll) {
+                    toast.error("Payroll record not found");
+                    return;
+                  }
+
+                  await Payroll.deletePayrollSummary(
+                    dbPath,
+                    selectedEmployeeId!,
+                    new Date(payroll.startDate),
+                    new Date(payroll.endDate)
+                  );
+
+                  // Remove the deleted payroll from the local state
+                  setPayrolls((currentPayrolls) =>
+                    currentPayrolls.filter((p) => p.id !== payrollId)
+                  );
+
+                  // Notify parent component
+                  setRefreshPayrolls(true);
+                }}
               />
             )}
           </div>
