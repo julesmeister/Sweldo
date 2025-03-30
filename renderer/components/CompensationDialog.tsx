@@ -102,14 +102,32 @@ const FormField: React.FC<FormFieldProps> = ({
           ))}
         </select>
       ) : (
-        <input
-          type="text"
-          name={name}
-          value={value}
-          onChange={onChange}
-          readOnly={isFieldReadOnly}
-          className={fieldClassName}
-        />
+        <div className="relative">
+          <input
+            type="number"
+            name={name}
+            value={value}
+            onChange={onChange}
+            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
+            disabled={!hasEditAccess || !manualOverride}
+            min="0"
+            step="0.01"
+          />
+          {name !== "hoursWorked" && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                if (hasEditAccess && manualOverride) {
+                  onChange({ target: { name, value: "0" } } as any);
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-[55%] text-gray-400 hover:text-gray-600 text-xl font-bold"
+              title="Clear value"
+            >
+              ×
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

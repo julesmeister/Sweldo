@@ -56,32 +56,28 @@ const calculateNightDifferential = (
   const endHour = settings.nightDifferentialEndHour || 6; // Default to 6 AM
   const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
 
-  console.log("Night Differential Calculation:");
-  console.log("Settings:", {
-    startHour,
-    endHour,
-    multiplier,
-    hourlyRate,
-  });
-  console.log("Actual times:", {
-    timeIn: actual.timeIn.toLocaleTimeString(),
-    timeOut: actual.timeOut.toLocaleTimeString(),
-  });
-  console.log("Scheduled times:", {
-    timeIn: scheduled.timeIn.toLocaleTimeString(),
-    timeOut: scheduled.timeOut.toLocaleTimeString(),
-  });
-
   // Only calculate night differential for hours worked within schedule
   const effectiveTimeIn =
     actual.timeIn > scheduled.timeIn ? actual.timeIn : scheduled.timeIn;
   const effectiveTimeOut =
     actual.timeOut < scheduled.timeOut ? actual.timeOut : scheduled.timeOut;
 
-  console.log("Effective times:", {
-    timeIn: effectiveTimeIn.toLocaleTimeString(),
-    timeOut: effectiveTimeOut.toLocaleTimeString(),
-  });
+  // Convert times to hours for easier comparison
+  const timeInHour = effectiveTimeIn.getHours();
+  const timeOutHour = effectiveTimeOut.getHours();
+
+  // If the work period doesn't overlap with night differential hours at all, return 0
+  if (
+    // Case 1: Work period is completely outside night differential hours
+    // Example: If night diff is 10PM-6AM, this catches shifts like 7AM-4PM
+    // timeIn >= 6AM && timeOut <= 10PM
+    (timeInHour >= endHour && timeOutHour <= startHour)
+  ) {
+    return {
+      nightDifferentialHours: 0,
+      nightDifferentialPay: 0,
+    };
+  }
 
   let nightHours = 0;
   let currentTime = new Date(effectiveTimeIn);
@@ -94,8 +90,6 @@ const calculateNightDifferential = (
     )
   );
 
-  console.log("Total hours to check:", totalHours);
-
   for (let i = 0; i < totalHours; i++) {
     const hour = currentTime.getHours();
     const isNightHour =
@@ -103,15 +97,6 @@ const calculateNightDifferential = (
       (hour >= startHour && hour < 24) ||
       // Case 2: Hours between midnight and endHour (e.g., 0-5)
       (hour >= 0 && hour < endHour);
-
-    console.log(`Checking hour ${hour}:`, {
-      isNightHour,
-      startHour,
-      endHour,
-      currentTime: currentTime.toLocaleTimeString(),
-      iteration: i + 1,
-      totalHours,
-    });
 
     if (isNightHour) {
       nightHours++;
@@ -122,13 +107,6 @@ const calculateNightDifferential = (
   }
 
   const nightDifferentialPay = nightHours * hourlyRate * multiplier;
-  console.log("Final night differential:", {
-    nightHours,
-    nightDifferentialPay,
-    hourlyRate,
-    multiplier,
-    calculation: `${nightHours} * ${hourlyRate} * ${multiplier}`,
-  });
 
   return {
     nightDifferentialHours: nightHours,
