@@ -155,7 +155,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     dayType: compensation.dayType || ("Regular" as DayType),
     manualOverride: compensation.manualOverride || false,
   });
-  console.log("Initial formData", formData);
   const { dbPath } = useSettingsStore();
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
   const holidayModel = createHolidayModel(dbPath, year, month);
@@ -199,7 +198,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         const settings = await settingsModel.loadAttendanceSettings();
         setAttendanceSettings(settings);
       } catch (error) {
-        console.error("Error loading schedule:", error);
         toast.error("Failed to load schedule");
       }
     };

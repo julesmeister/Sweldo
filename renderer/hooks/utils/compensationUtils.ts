@@ -71,7 +71,8 @@ const calculateNightDifferential = (
     // Case 1: Work period is completely outside night differential hours
     // Example: If night diff is 10PM-6AM, this catches shifts like 7AM-4PM
     // timeIn >= 6AM && timeOut <= 10PM
-    (timeInHour >= endHour && timeOutHour <= startHour)
+    timeInHour >= endHour &&
+    timeOutHour <= startHour
   ) {
     return {
       nightDifferentialHours: 0,
@@ -124,7 +125,6 @@ export const calculateTimeMetrics = (
 ) => {
   // If no schedule, return zero values for all metrics
   if (!scheduled) {
-    console.log("No schedule provided for time metrics calculation");
     return {
       lateMinutes: 0,
       undertimeMinutes: 0,
@@ -207,18 +207,8 @@ export const calculatePayMetrics = (
   const overtimeHourlyRate =
     hourlyRate * attendanceSettings.overtimeHourlyMultiplier;
 
-  console.log("Calculate Pay Metrics:", {
-    dailyRate,
-    hourlyRate,
-    overtimeHourlyRate,
-    standardHours,
-    hasActualTimes: !!(actualTimeIn && actualTimeOut),
-    hasScheduled: !!scheduled,
-  });
-
   // If no schedule, return base pay without any adjustments
   if (!scheduled) {
-    console.log("No schedule provided for pay metrics calculation");
     return {
       deductions: 0,
       overtimePay: 0,
@@ -240,11 +230,6 @@ export const calculatePayMetrics = (
     scheduled,
     attendanceSettings,
     hourlyRate
-  );
-
-  console.log(
-    "Night Differential from calculatePayMetrics:",
-    nightDifferential
   );
 
   const {
@@ -269,7 +254,7 @@ export const calculatePayMetrics = (
   // Update net pay to include night differential
   const netPay = grossPayWithNightDiff - deductions;
 
-  const result = {
+  return {
     deductions,
     overtimePay,
     baseGrossPay,
@@ -284,9 +269,6 @@ export const calculatePayMetrics = (
     nightDifferentialHours: nightDifferential.nightDifferentialHours,
     nightDifferentialPay: nightDifferential.nightDifferentialPay,
   };
-
-  console.log("Final pay metrics result:", result);
-  return result;
 };
 
 // Helper function to create a complete compensation record
@@ -447,10 +429,6 @@ export const createTimeObjects = (
   const schedule = getEffectiveSchedule(employmentType, date);
 
   if (!schedule) {
-    console.log("No schedule found for the given date:", {
-      date: date.toISOString(),
-      employmentType: employmentType?.type,
-    });
     // Return null schedule to indicate no schedule was found
     return {
       actual: {

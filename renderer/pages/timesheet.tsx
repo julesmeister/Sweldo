@@ -476,27 +476,27 @@ const TimesheetPage: React.FC = () => {
       case "overtimeMinutes":
         return compensation?.overtimeMinutes || "-";
       case "overtimePay":
-        return compensation?.overtimePay || "-";
+        return compensation?.overtimePay ? Math.round(compensation.overtimePay) : "-";
       case "undertimeMinutes":
         return compensation?.undertimeMinutes || "-";
       case "undertimeDeduction":
-        return compensation?.undertimeDeduction || "-";
+        return compensation?.undertimeDeduction ? Math.round(compensation.undertimeDeduction) : "-";
       case "lateMinutes":
         return compensation?.lateMinutes || "-";
       case "lateDeduction":
-        return compensation?.lateDeduction || "-";
+        return compensation?.lateDeduction ? Math.round(compensation.lateDeduction) : "-";
       case "holidayBonus":
-        return Math.round((compensation?.holidayBonus || 0) * 100) / 100 || "-";
+        return compensation?.holidayBonus ? Math.round(compensation.holidayBonus) : "-";
       case "leaveType":
         return compensation?.leaveType || "-";
       case "leavePay":
-        return compensation?.leavePay || "-";
+        return compensation?.leavePay ? Math.round(compensation.leavePay) : "-";
       case "grossPay":
-        return compensation?.grossPay || "-";
+        return compensation?.grossPay ? Math.round(compensation.grossPay) : "-";
       case "deductions":
-        return compensation?.deductions || "-";
+        return compensation?.deductions ? Math.round(compensation.deductions) : "-";
       case "netPay":
-        return compensation?.netPay || "-";
+        return compensation?.netPay ? Math.round(compensation.netPay) : "-";
       default:
         return "-";
     }
