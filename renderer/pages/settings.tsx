@@ -438,35 +438,55 @@ export default function SettingsPage() {
                     <label className="block text-sm font-medium text-gray-700">
                       Regular Holiday
                     </label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="2"
-                      value={holidayMultipliers.regular}
-                      onChange={(e) =>
-                        setHolidayMultipliers((prev) => ({
-                          ...prev,
-                          regular: e.target.value,
-                        }))
-                      }
-                    />
+                    <div className="mt-1 relative rounded-md">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">x</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
+                        placeholder="2"
+                        value={holidayMultipliers.regular}
+                        onChange={(e) =>
+                          setHolidayMultipliers((prev) => ({
+                            ...prev,
+                            regular: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 1.00 means same as the regular daily rate which
+                      will be added on top of the regular daily rate (daily rate
+                      + daily rate)
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       Special Holiday
                     </label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="1.3"
-                      value={holidayMultipliers.special}
-                      onChange={(e) =>
-                        setHolidayMultipliers((prev) => ({
-                          ...prev,
-                          special: e.target.value,
-                        }))
-                      }
-                    />
+                    <div className="mt-1 relative rounded-md">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">x</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
+                        placeholder="1.3"
+                        value={holidayMultipliers.special}
+                        onChange={(e) =>
+                          setHolidayMultipliers((prev) => ({
+                            ...prev,
+                            special: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 0.30 means 30% of regular daily rate which will
+                      still be added on top of the regular daily rate (daily
+                      rate x 0.30 + daily rate)
+                    </p>
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end">

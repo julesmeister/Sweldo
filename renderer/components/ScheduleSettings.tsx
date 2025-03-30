@@ -34,6 +34,17 @@ interface EmploymentTypeWithMonthSchedules extends EmploymentType {
   };
 }
 
+interface MonthScheduleData {
+  schedule: DailySchedule;
+  dayOfWeek: number;
+}
+
+interface CopiedMonthSchedule {
+  schedules: { [key: number]: MonthScheduleData };
+  sourceMonth: number;
+  sourceYear: number;
+}
+
 // Move these utility functions outside both components, at the top of the file
 const getDaysInMonth = (date: Date) => {
   const year = date.getFullYear();
@@ -114,6 +125,59 @@ const MonthScheduleView = React.memo(
       onMonthChange(newDate);
     };
 
+    // Update state with proper typing
+    const [copiedMonthSchedule, setCopiedMonthSchedule] =
+      React.useState<CopiedMonthSchedule | null>(null);
+
+    const handleCopyMonth = () => {
+      const schedules: { [key: number]: MonthScheduleData } = {};
+
+      getDaysInMonth(selectedMonth).forEach((day) => {
+        const date = new Date(
+          selectedMonth.getFullYear(),
+          selectedMonth.getMonth(),
+          day
+        );
+        const schedule = getScheduleForDate(type.type, date);
+        schedules[day] = {
+          schedule,
+          dayOfWeek: date.getDay(),
+        };
+      });
+
+      setCopiedMonthSchedule({
+        schedules,
+        sourceMonth: selectedMonth.getMonth(),
+        sourceYear: selectedMonth.getFullYear(),
+      });
+      toast.success("Monthly schedule copied");
+    };
+
+    const handlePasteMonth = () => {
+      if (!copiedMonthSchedule) return;
+
+      const targetDays = getDaysInMonth(selectedMonth);
+
+      // Apply schedules based on the day of the month
+      targetDays.forEach((day) => {
+        // Only paste if we have a schedule for this day number
+        if (copiedMonthSchedule.schedules[day]) {
+          const targetDate = new Date(
+            selectedMonth.getFullYear(),
+            selectedMonth.getMonth(),
+            day
+          );
+          onUpdateSchedule(
+            type.type,
+            targetDate,
+            copiedMonthSchedule.schedules[day].schedule
+          );
+        }
+      });
+
+      toast.success("Monthly schedule pasted");
+    };
+
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
@@ -140,6 +204,44 @@ const MonthScheduleView = React.memo(
             </button>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyMonth}
+              className="px-3 py-1.5 text-sm border border-blue-200 text-blue-600 rounded-md hover:bg-blue-50 transition-colors flex items-center gap-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+              </svg>
+              Copy Month
+            </button>
+            {copiedMonthSchedule && (
+              <button
+                type="button"
+                onClick={handlePasteMonth}
+                className="px-3 py-1.5 text-sm border border-green-200 text-green-600 rounded-md hover:bg-green-50 transition-colors flex items-center gap-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                  <path
+                    fillRule="evenodd"
+                    d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Paste Month
+              </button>
+            )}
             <button
               type="button"
               onClick={onClearSchedules}
@@ -323,9 +425,16 @@ export default function ScheduleSettings({
     }, {} as { [key: number]: boolean })
   );
 
-  // Add new state for month scheduling
+  // Update scheduleMode initialization to check for existing monthly data
   const [scheduleMode, setScheduleMode] = React.useState<"weekly" | "monthly">(
-    "weekly"
+    () => {
+      // Check if any employment type has month-specific schedules
+      const hasMonthlyData = initialEmploymentTypes.some(
+        (type) =>
+          type.monthSchedules && Object.keys(type.monthSchedules).length > 0
+      );
+      return hasMonthlyData ? "monthly" : "weekly";
+    }
   );
 
   const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date());

@@ -10,6 +10,11 @@ interface ComputationBreakdownButtonProps {
   holiday?: Holiday;
 }
 
+const formatNumber = (num: number) => {
+  const formatted = Number(num).toFixed(2);
+  return formatted.endsWith(".00") ? formatted.slice(0, -3) : formatted;
+};
+
 export const ComputationBreakdownButton: React.FC<
   ComputationBreakdownButtonProps
 > = ({ breakdown, attendanceSettings, holiday }) => {
@@ -32,11 +37,13 @@ export const ComputationBreakdownButton: React.FC<
           <div className="bg-gray-700/50 rounded-md p-3">
             <div className="flex justify-between items-center mb-2">
               <span className="text-gray-200">Daily Rate</span>
-              <span className="text-lg font-medium">₱{breakdown.basePay}</span>
+              <span className="text-lg font-medium">
+                ₱{formatNumber(breakdown.basePay)}
+              </span>
             </div>
             <div className="flex justify-between text-gray-400 text-xs">
-              <span>Hourly Rate (₱{breakdown.basePay}/8hrs)</span>
-              <span>₱{breakdown.details.hourlyRate}/hr</span>
+              <span>Hourly Rate (₱{formatNumber(breakdown.basePay)}/8hrs)</span>
+              <span>₱{formatNumber(breakdown.details.hourlyRate)}/hr</span>
             </div>
           </div>
 
@@ -48,7 +55,7 @@ export const ComputationBreakdownButton: React.FC<
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-200">Overtime Pay</span>
                   <span className="text-lg font-medium text-green-400">
-                    ₱{breakdown.overtimePay}
+                    ₱{formatNumber(breakdown.overtimePay)}
                   </span>
                 </div>
                 <div className="space-y-1 text-xs text-gray-400">
@@ -59,17 +66,24 @@ export const ComputationBreakdownButton: React.FC<
                       {breakdown.details.overtimeMinutes % 60}mins
                     </span>
                     <span>
-                      Rate: ₱{breakdown.details.overtimeHourlyRate}/hr
+                      Rate: ₱
+                      {formatNumber(breakdown.details.overtimeHourlyRate)}
+                      /hr
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>
-                      Multiplier: {attendanceSettings.overtimeHourlyMultiplier}x
+                      Multiplier:{" "}
+                      {formatNumber(
+                        attendanceSettings.overtimeHourlyMultiplier
+                      )}
+                      x
                     </span>
                     <span>
                       Calculation:{" "}
                       {Math.floor(breakdown.details.overtimeMinutes / 60)}hrs ×
-                      ₱{breakdown.details.overtimeHourlyRate}/hr
+                      ₱{formatNumber(breakdown.details.overtimeHourlyRate)}
+                      /hr
                     </span>
                   </div>
                 </div>
@@ -82,35 +96,41 @@ export const ComputationBreakdownButton: React.FC<
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-200">Night Differential</span>
                   <span className="text-lg font-medium text-green-400">
-                    ₱{breakdown.nightDifferentialPay}
+                    ₱{formatNumber(breakdown.nightDifferentialPay)}
                   </span>
                 </div>
                 <div className="space-y-1 text-xs text-gray-400">
                   <div className="flex justify-between">
                     <span>
-                      Hours: {breakdown.details.nightDifferentialHours}hrs
+                      Hours:{" "}
+                      {formatNumber(breakdown.details.nightDifferentialHours)}
+                      hrs
                     </span>
                     <span>
                       Rate: ₱
-                      {(
+                      {formatNumber(
                         breakdown.details.hourlyRate *
-                        (1 + attendanceSettings.nightDifferentialMultiplier)
-                      ).toFixed(2)}
+                          (1 + attendanceSettings.nightDifferentialMultiplier)
+                      )}
                       /hr
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>
                       Multiplier:{" "}
-                      {attendanceSettings.nightDifferentialMultiplier * 100}%
+                      {formatNumber(
+                        attendanceSettings.nightDifferentialMultiplier * 100
+                      )}
+                      %
                     </span>
                     <span>
-                      Calculation: {breakdown.details.nightDifferentialHours}hrs
-                      × ₱
-                      {(
+                      Calculation:{" "}
+                      {formatNumber(breakdown.details.nightDifferentialHours)}
+                      hrs × ₱
+                      {formatNumber(
                         breakdown.details.hourlyRate *
-                        (1 + attendanceSettings.nightDifferentialMultiplier)
-                      ).toFixed(2)}
+                          (1 + attendanceSettings.nightDifferentialMultiplier)
+                      )}
                       /hr
                     </span>
                   </div>
@@ -126,17 +146,20 @@ export const ComputationBreakdownButton: React.FC<
                     Holiday Pay ({holiday?.type})
                   </span>
                   <span className="text-lg font-medium text-green-400">
-                    ₱{breakdown.holidayBonus}
+                    ₱{formatNumber(breakdown.holidayBonus)}
                   </span>
                 </div>
                 <div className="space-y-1 text-xs text-gray-400">
                   <div className="flex justify-between">
-                    <span>Daily Rate: ₱{breakdown.basePay}</span>
-                    <span>Multiplier: {holiday?.multiplier}x</span>
+                    <span>Daily Rate: ₱{formatNumber(breakdown.basePay)}</span>
+                    <span>
+                      Multiplier: {holiday?.multiplier}x
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>
-                      Calculation: ₱{breakdown.basePay} × {holiday?.multiplier}
+                      Calculation: ₱{formatNumber(breakdown.basePay)} ×{" "}
+                      {holiday?.multiplier}
                     </span>
                   </div>
                 </div>
@@ -150,7 +173,7 @@ export const ComputationBreakdownButton: React.FC<
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-200">Deductions</span>
                 <span className="text-lg font-medium text-red-400">
-                  -₱{breakdown.deductions.total}
+                  -₱{formatNumber(breakdown.deductions.total)}
                 </span>
               </div>
               <div className="space-y-2 text-xs text-gray-400">
@@ -158,10 +181,11 @@ export const ComputationBreakdownButton: React.FC<
                   <div className="flex justify-between">
                     <span>
                       Late ({breakdown.details.lateMinutes}mins @ ₱
-                      {attendanceSettings.lateDeductionPerMinute}/min)
+                      {formatNumber(attendanceSettings.lateDeductionPerMinute)}
+                      /min)
                     </span>
                     <span className="text-red-400">
-                      -₱{breakdown.deductions.late}
+                      -₱{formatNumber(breakdown.deductions.late)}
                     </span>
                   </div>
                 )}
@@ -169,10 +193,13 @@ export const ComputationBreakdownButton: React.FC<
                   <div className="flex justify-between">
                     <span>
                       Undertime ({breakdown.details.undertimeMinutes}mins @ ₱
-                      {attendanceSettings.undertimeDeductionPerMinute}/min)
+                      {formatNumber(
+                        attendanceSettings.undertimeDeductionPerMinute
+                      )}
+                      /min)
                     </span>
                     <span className="text-red-400">
-                      -₱{breakdown.deductions.undertime}
+                      -₱{formatNumber(breakdown.deductions.undertime)}
                     </span>
                   </div>
                 )}
@@ -185,7 +212,7 @@ export const ComputationBreakdownButton: React.FC<
             <div className="flex justify-between items-center">
               <span className="text-gray-200 font-medium">Net Pay</span>
               <span className="text-xl font-bold text-white">
-                ₱{breakdown.netPay}
+                ₱{formatNumber(breakdown.netPay)}
               </span>
             </div>
           </div>
