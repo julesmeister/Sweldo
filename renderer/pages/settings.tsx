@@ -176,233 +176,386 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Late Grace Period (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      name="lateGracePeriod"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="5"
-                      value={attendanceSettings?.lateGracePeriod ?? ""}
-                      onChange={(e) => handleInputChange(e, "lateGracePeriod")}
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 5 means employees can be up to 5 minutes late
-                      without penalty
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Late Deduction Per Minute
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">₱</span>
-                      </div>
-                      <input
-                        type="number"
-                        name="lateDeductionPerMinute"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="1"
-                        value={attendanceSettings?.lateDeductionPerMinute ?? ""}
-                        onChange={(e) =>
-                          handleInputChange(e, "lateDeductionPerMinute")
-                        }
-                      />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Time Penalties Section */}
+                  <div className="space-y-6">
+                    <div className="border-b border-gray-200 pb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Time Penalties
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Configure late and undertime deductions
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: ₱1 means ₱1 will be deducted for each minute late
-                      after grace period
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Undertime Grace Period (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      name="undertimeGracePeriod"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="5"
-                      value={attendanceSettings?.undertimeGracePeriod ?? ""}
-                      onChange={(e) =>
-                        handleInputChange(e, "undertimeGracePeriod")
-                      }
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 5 means employees can leave up to 5 minutes early
-                      without penalty
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Undertime Deduction Per Minute
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">₱</span>
+
+                    {/* Late Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                      <h4 className="text-md font-medium text-gray-800">
+                        Late Arrival Settings
+                      </h4>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Grace Period
+                        </label>
+                        <div className="mt-1 relative">
+                          <input
+                            type="number"
+                            name="lateGracePeriod"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                            placeholder="5"
+                            value={attendanceSettings?.lateGracePeriod ?? ""}
+                            onChange={(e) =>
+                              handleInputChange(e, "lateGracePeriod")
+                            }
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">
+                              minutes
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Employees can be up to this many minutes late without
+                          penalty
+                        </p>
                       </div>
-                      <input
-                        type="number"
-                        name="undertimeDeductionPerMinute"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="1"
-                        value={
-                          attendanceSettings?.undertimeDeductionPerMinute ?? ""
-                        }
-                        onChange={(e) =>
-                          handleInputChange(e, "undertimeDeductionPerMinute")
-                        }
-                      />
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: ₱1 means ₱1 will be deducted for each minute
-                      early after grace period
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Overtime Threshold (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      name="overtimeThreshold"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      placeholder="5"
-                      value={attendanceSettings?.overtimeThreshold ?? ""}
-                      onChange={(e) =>
-                        handleInputChange(e, "overtimeThreshold")
-                      }
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 5 means overtime pay only applies after working 5
-                      minutes beyond regular hours
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Overtime Hourly Rate Multiplier
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">x</span>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Deduction Rate
+                        </label>
+                        <div className="mt-1 relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₱</span>
+                          </div>
+                          <input
+                            type="number"
+                            name="lateDeductionPerMinute"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 pl-7 pr-12"
+                            placeholder="1"
+                            value={
+                              attendanceSettings?.lateDeductionPerMinute ?? ""
+                            }
+                            onChange={(e) =>
+                              handleInputChange(e, "lateDeductionPerMinute")
+                            }
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">
+                              per minute
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Amount deducted for each minute late after grace
+                          period
+                        </p>
                       </div>
-                      <input
-                        type="number"
-                        name="overtimeHourlyMultiplier"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="1.25"
-                        value={
-                          attendanceSettings?.overtimeHourlyMultiplier ?? ""
-                        }
-                        onChange={(e) =>
-                          handleInputChange(e, "overtimeHourlyMultiplier")
-                        }
-                        step="0.01"
-                      />
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 1.25 means 25% more than regular hourly rate
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Night Differential Multiplier
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">%</span>
+
+                    {/* Undertime Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                      <h4 className="text-md font-medium text-gray-800">
+                        Early Departure Settings
+                      </h4>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Grace Period
+                        </label>
+                        <div className="mt-1 relative">
+                          <input
+                            type="number"
+                            name="undertimeGracePeriod"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                            placeholder="5"
+                            value={
+                              attendanceSettings?.undertimeGracePeriod ?? ""
+                            }
+                            onChange={(e) =>
+                              handleInputChange(e, "undertimeGracePeriod")
+                            }
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">
+                              minutes
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Employees can leave up to this many minutes early
+                          without penalty
+                        </p>
                       </div>
-                      <input
-                        type="number"
-                        name="nightDifferentialMultiplier"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="10"
-                        value={
-                          attendanceSettings?.nightDifferentialMultiplier
-                            ? (
-                                attendanceSettings.nightDifferentialMultiplier *
-                                100
-                              ).toString()
-                            : ""
-                        }
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value) / 100;
-                          if (!attendanceSettings) return;
-                          setAttendanceSettings({
-                            ...attendanceSettings,
-                            nightDifferentialMultiplier: value,
-                          });
-                        }}
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Deduction Rate
+                        </label>
+                        <div className="mt-1 relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₱</span>
+                          </div>
+                          <input
+                            type="number"
+                            name="undertimeDeductionPerMinute"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 pl-7 pr-12"
+                            placeholder="1"
+                            value={
+                              attendanceSettings?.undertimeDeductionPerMinute ??
+                              ""
+                            }
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                "undertimeDeductionPerMinute"
+                              )
+                            }
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">
+                              per minute
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Amount deducted for each minute early after grace
+                          period
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 10% means 10% more than regular hourly rate
-                      during night shift hours
-                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Night Differential Start Hour
-                    </label>
-                    <input
-                      type="time"
-                      name="nightDifferentialStartHour"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      value={hourToTimeString(
-                        attendanceSettings?.nightDifferentialStartHour
-                      )}
-                      onChange={(e) => {
-                        const hour = timeStringToHour(e.target.value);
-                        handleInputChange(
-                          {
-                            target: {
-                              name: "nightDifferentialStartHour",
-                              value: hour,
-                            },
-                          } as any,
-                          "nightDifferentialStartHour"
-                        );
-                      }}
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 22:00 means night differential rate starts at
-                      10:00 PM
-                    </p>
-                  </div>
+                  {/* Additional Pay Section */}
+                  <div className="space-y-6">
+                    <div className="border-b border-gray-200 pb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Additional Pay
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Configure overtime, night differential, and holiday
+                        rates
+                      </p>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Night Differential End Hour
-                    </label>
-                    <input
-                      type="time"
-                      name="nightDifferentialEndHour"
-                      className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
-                      value={hourToTimeString(
-                        attendanceSettings?.nightDifferentialEndHour
-                      )}
-                      onChange={(e) => {
-                        const hour = timeStringToHour(e.target.value);
-                        handleInputChange(
-                          {
-                            target: {
-                              name: "nightDifferentialEndHour",
-                              value: hour,
-                            },
-                          } as any,
-                          "nightDifferentialEndHour"
-                        );
-                      }}
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 06:00 means night differential rate ends at 6:00
-                      AM
-                    </p>
+                    {/* Overtime Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                      <h4 className="text-md font-medium text-gray-800">
+                        Overtime Settings
+                      </h4>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Minimum Duration
+                        </label>
+                        <div className="mt-1 relative">
+                          <input
+                            type="number"
+                            name="overtimeThreshold"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                            placeholder="5"
+                            value={attendanceSettings?.overtimeThreshold ?? ""}
+                            onChange={(e) =>
+                              handleInputChange(e, "overtimeThreshold")
+                            }
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">
+                              minutes
+                            </span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Minimum overtime minutes required before overtime pay
+                          applies
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Rate Multiplier
+                        </label>
+                        <div className="mt-1 relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">×</span>
+                          </div>
+                          <input
+                            type="number"
+                            name="overtimeHourlyMultiplier"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 pl-7"
+                            placeholder="1.25"
+                            value={
+                              attendanceSettings?.overtimeHourlyMultiplier ?? ""
+                            }
+                            onChange={(e) =>
+                              handleInputChange(e, "overtimeHourlyMultiplier")
+                            }
+                            step="0.01"
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Multiplier applied to regular hourly rate for overtime
+                          (e.g., 1.25 = 25% extra)
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Night Differential Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                      <h4 className="text-md font-medium text-gray-800">
+                        Night Differential
+                      </h4>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Rate Increase
+                        </label>
+                        <div className="mt-1 relative">
+                          <input
+                            type="number"
+                            name="nightDifferentialMultiplier"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3 pr-8"
+                            placeholder="10"
+                            value={
+                              attendanceSettings?.nightDifferentialMultiplier
+                                ? (
+                                    attendanceSettings.nightDifferentialMultiplier *
+                                    100
+                                  ).toString()
+                                : ""
+                            }
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value) / 100;
+                              if (!attendanceSettings) return;
+                              setAttendanceSettings({
+                                ...attendanceSettings,
+                                nightDifferentialMultiplier: value,
+                              });
+                            }}
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 text-sm">%</span>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Additional percentage added to regular rate during
+                          night hours
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Start Time
+                          </label>
+                          <input
+                            type="time"
+                            name="nightDifferentialStartHour"
+                            className="mt-1 block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                            value={hourToTimeString(
+                              attendanceSettings?.nightDifferentialStartHour
+                            )}
+                            onChange={(e) => {
+                              const hour = timeStringToHour(e.target.value);
+                              handleInputChange(
+                                {
+                                  target: {
+                                    name: "nightDifferentialStartHour",
+                                    value: hour,
+                                  },
+                                } as any,
+                                "nightDifferentialStartHour"
+                              );
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            End Time
+                          </label>
+                          <input
+                            type="time"
+                            name="nightDifferentialEndHour"
+                            className="mt-1 block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                            value={hourToTimeString(
+                              attendanceSettings?.nightDifferentialEndHour
+                            )}
+                            onChange={(e) => {
+                              const hour = timeStringToHour(e.target.value);
+                              handleInputChange(
+                                {
+                                  target: {
+                                    name: "nightDifferentialEndHour",
+                                    value: hour,
+                                  },
+                                } as any,
+                                "nightDifferentialEndHour"
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Holiday Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+                      <h4 className="text-md font-medium text-gray-800">
+                        Holiday Pay Rates
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Regular Holiday
+                          </label>
+                          <div className="mt-1 relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">
+                                ×
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3 pl-7"
+                              placeholder="2"
+                              value={holidayMultipliers.regular}
+                              onChange={(e) =>
+                                setHolidayMultipliers((prev) => ({
+                                  ...prev,
+                                  regular: e.target.value,
+                                }))
+                              }
+                              step="0.01"
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Multiplier for regular holidays (e.g., 1.00 = double
+                            pay)
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Special Holiday
+                          </label>
+                          <div className="mt-1 relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">
+                                ×
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3 pl-7"
+                              placeholder="1.3"
+                              value={holidayMultipliers.special}
+                              onChange={(e) =>
+                                setHolidayMultipliers((prev) => ({
+                                  ...prev,
+                                  special: e.target.value,
+                                }))
+                              }
+                              step="0.01"
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Multiplier for special holidays (e.g., 0.30 = 30%
+                            additional)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -415,90 +568,6 @@ export default function SettingsPage() {
             >
               Save Changes
             </button>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "holidays",
-      title: "Holidays",
-      icon: <IoCalendarOutline className="w-5 h-5" />,
-      requiredAccess: "MANAGE_ATTENDANCE",
-      content: (
-        <div className="space-y-8">
-          <div className="bg-white rounded-xl border border-gray-100">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <IoCalendarOutline className="w-5 h-5 text-blue-600" />
-                Holiday Pay Multipliers
-              </h3>
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Regular Holiday
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">x</span>
-                      </div>
-                      <input
-                        type="text"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="2"
-                        value={holidayMultipliers.regular}
-                        onChange={(e) =>
-                          setHolidayMultipliers((prev) => ({
-                            ...prev,
-                            regular: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 1.00 means same as the regular daily rate which
-                      will be added on top of the regular daily rate (daily rate
-                      + daily rate)
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Special Holiday
-                    </label>
-                    <div className="mt-1 relative rounded-md">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">x</span>
-                      </div>
-                      <input
-                        type="text"
-                        className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="1.3"
-                        value={holidayMultipliers.special}
-                        onChange={(e) =>
-                          setHolidayMultipliers((prev) => ({
-                            ...prev,
-                            special: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Example: 0.30 means 30% of regular daily rate which will
-                      still be added on top of the regular daily rate (daily
-                      rate x 0.30 + daily rate)
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button
-                    onClick={handleSaveHolidayMultipliers}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
-                  >
-                    Save Holiday Multipliers
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       ),

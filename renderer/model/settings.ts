@@ -237,15 +237,41 @@ export class AttendanceSettingsModel {
   public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
     try {
       await this.ensureTimeSettingsFile();
-      const formattedSettings = settings.map((setting) => ({
-        type: setting.type,
-        schedules: setting.schedules ? JSON.stringify(setting.schedules) : "",
-        monthSchedules: setting.monthSchedules
-          ? JSON.stringify(setting.monthSchedules)
-          : "",
-        requiresTimeTracking: setting.requiresTimeTracking,
-        hoursOfWork: setting.hoursOfWork,
-      }));
+
+      // Get the date 12 months ago
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+      const formattedSettings = settings.map((setting) => {
+        // Clean up old month schedules
+        const cleanedMonthSchedules = setting.monthSchedules
+          ? Object.entries(setting.monthSchedules).reduce(
+              (acc, [yearMonth, schedules]) => {
+                // yearMonth format is "YYYY-MM"
+                const [year, month] = yearMonth.split("-").map(Number);
+                const scheduleDate = new Date(year, month - 1); // month is 0-based in Date constructor
+
+                // Only keep schedules newer than 12 months ago
+                if (scheduleDate >= twelveMonthsAgo) {
+                  acc[yearMonth] = schedules;
+                }
+                return acc;
+              },
+              {} as typeof setting.monthSchedules
+            )
+          : {};
+
+        return {
+          type: setting.type,
+          schedules: setting.schedules ? JSON.stringify(setting.schedules) : "",
+          monthSchedules:
+            Object.keys(cleanedMonthSchedules).length > 0
+              ? JSON.stringify(cleanedMonthSchedules)
+              : "",
+          requiresTimeTracking: setting.requiresTimeTracking,
+          hoursOfWork: setting.hoursOfWork,
+        };
+      });
 
       const csv = Papa.unparse(formattedSettings);
       await window.electron.writeFile(this.timeSettingsPath, csv);
@@ -293,7 +319,6 @@ export const getScheduleForDate = (
   date: Date
 ): DailySchedule | null => {
   if (!employmentType) {
-    console.log("No employment type provided");
     return null;
   }
 
@@ -305,7 +330,6 @@ export const getScheduleForDate = (
   const monthSchedule = employmentType.monthSchedules?.[yearMonth]?.[dateStr];
 
   if (monthSchedule) {
-    console.log(`Using month-specific schedule for ${dateStr}:`, monthSchedule);
     return monthSchedule;
   }
 
@@ -316,12 +340,6 @@ export const getScheduleForDate = (
     const weeklySchedule = employmentType.schedules[scheduleDay - 1];
 
     if (weeklySchedule) {
-      console.log(
-        `Using weekly schedule for ${dateStr} (${
-          ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayOfWeek]
-        }):`,
-        weeklySchedule
-      );
       return {
         timeIn: weeklySchedule.timeIn,
         timeOut: weeklySchedule.timeOut,
@@ -330,7 +348,6 @@ export const getScheduleForDate = (
     }
   }
 
-  console.log(`No schedule found for ${dateStr}`);
   return null;
 };
 

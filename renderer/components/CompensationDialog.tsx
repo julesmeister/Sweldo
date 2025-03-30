@@ -267,11 +267,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       ? getScheduleForDate(employmentType, entryDate)
       : null;
 
-    console.log("JS Day of week:", jsDay); // 0 for Sunday
-    console.log("Schedule Day:", scheduleDay); // 7 for Sunday
-    console.log("Schedule found:", schedule);
-    console.log("Employment type:", employmentType);
-
     // Separate checks for workday and holiday
     const isWorkday = !!schedule;
     const isHoliday = !!holiday;

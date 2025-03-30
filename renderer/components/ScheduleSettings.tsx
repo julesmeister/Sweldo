@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { EmploymentType } from "../model/settings";
 import { Tooltip } from "./Tooltip";
+import { useSchedulePrint } from "../hooks/useSchedulePrint";
 
 interface ScheduleSettingsProps {
   employmentTypes: EmploymentType[];
@@ -877,6 +878,13 @@ export default function ScheduleSettings({
     console.log("[DEBUG] Schedule mode changed to:", scheduleMode);
   }, [scheduleMode]);
 
+  const { handlePrintSchedules } = useSchedulePrint({
+    employmentTypes,
+    selectedMonth,
+    getScheduleForDate,
+    getDaysInMonth,
+  });
+
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-b from-gray-50 to-white rounded-2xl border border-gray-200/50 shadow-lg shadow-gray-200/20">
@@ -923,6 +931,27 @@ export default function ScheduleSettings({
                 <IoAddOutline className="w-5 h-5" />
                 Add Employment Type
               </button>
+
+              {scheduleMode === "monthly" && (
+                <button
+                  onClick={handlePrintSchedules}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-all duration-200 border border-purple-100 hover:border-purple-200"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-5 h-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Print Schedules
+                </button>
+              )}
             </div>
           </div>
           <div className="space-y-8">
