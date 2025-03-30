@@ -190,14 +190,17 @@ export class AttendanceModel {
         );
 
         if (existingAttendance) {
-          // Only update if the existing time entries are null or empty
+          // Update existing attendance with new values
           const updatedAttendance = {
             ...existingAttendance,
-            // Preserve existing timeIn if it exists, otherwise use new timeIn
-            timeIn: existingAttendance.timeIn || newAttendance.timeIn || null,
-            // Preserve existing timeOut if it exists, otherwise use new timeOut
+            timeIn:
+              newAttendance.timeIn !== undefined
+                ? newAttendance.timeIn
+                : existingAttendance.timeIn,
             timeOut:
-              existingAttendance.timeOut || newAttendance.timeOut || null,
+              newAttendance.timeOut !== undefined
+                ? newAttendance.timeOut
+                : existingAttendance.timeOut,
           };
 
           const index = existingAttendances.findIndex(
@@ -205,7 +208,7 @@ export class AttendanceModel {
           );
           existingAttendances[index] = updatedAttendance;
         } else {
-          // Add new attendance only if it doesn't exist
+          // Add new attendance
           existingAttendances.push({
             ...newAttendance,
             timeIn: newAttendance.timeIn ?? null,
