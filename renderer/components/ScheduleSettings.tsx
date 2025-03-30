@@ -34,6 +34,270 @@ interface EmploymentTypeWithMonthSchedules extends EmploymentType {
   };
 }
 
+// Move these utility functions outside both components, at the top of the file
+const getDaysInMonth = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: lastDay }, (_, i) => i + 1);
+};
+
+const getDayOfWeek = (date: Date) => {
+  const day = date.getDay();
+  return day === 0 ? 7 : day; // Convert Sunday from 0 to 7
+};
+
+const getScheduleColor = (timeIn: string, timeOut: string, isOff?: boolean) => {
+  if (isOff) return "bg-gray-50 border-gray-200";
+  if (!timeIn || !timeOut) return "bg-white border-gray-200";
+
+  const [inHour] = timeIn.split(":").map(Number);
+  const [outHour] = timeOut.split(":").map(Number);
+
+  const colorSchemes: { [key: string]: string } = {
+    early: "bg-blue-50 border-blue-200 hover:border-blue-300",
+    morning: "bg-green-50 border-green-200 hover:border-green-300",
+    afternoon: "bg-orange-50 border-orange-200 hover:border-orange-300",
+    evening: "bg-purple-50 border-purple-200 hover:border-purple-300",
+    night: "bg-indigo-50 border-indigo-200 hover:border-indigo-300",
+    late: "bg-rose-50 border-rose-200 hover:border-rose-300",
+  };
+
+  let timeRange = "default";
+  if (inHour >= 4 && inHour < 8) timeRange = "early";
+  else if (inHour >= 8 && inHour < 12) timeRange = "morning";
+  else if (inHour >= 12 && inHour < 16) timeRange = "afternoon";
+  else if (inHour >= 16 && inHour < 20) timeRange = "evening";
+  else if (inHour >= 20 && inHour < 24) timeRange = "night";
+  else if (inHour >= 0 && inHour < 4) timeRange = "late";
+
+  return colorSchemes[timeRange] || "bg-white border-gray-200";
+};
+
+// 1. First, move MonthScheduleView outside of the main component
+// Place this before the ScheduleSettings component
+const MonthScheduleView = React.memo(
+  ({
+    type,
+    selectedMonth,
+    onMonthChange,
+    onUpdateSchedule,
+    copiedSchedule,
+    onCopySchedule,
+    getScheduleForDate,
+    onClearSchedules,
+  }: {
+    type: EmploymentTypeWithMonthSchedules;
+    selectedMonth: Date;
+    onMonthChange: (newDate: Date) => void;
+    onUpdateSchedule: (
+      typeId: string,
+      date: Date,
+      schedule: DailySchedule
+    ) => void;
+    copiedSchedule: { timeIn: string; timeOut: string } | null;
+    onCopySchedule: (schedule: { timeIn: string; timeOut: string }) => void;
+    getScheduleForDate: (typeId: string, date: Date) => DailySchedule;
+    onClearSchedules: () => void;
+  }) => {
+    const days = getDaysInMonth(selectedMonth);
+    const firstDayOfMonth = new Date(
+      selectedMonth.getFullYear(),
+      selectedMonth.getMonth(),
+      1
+    );
+    const startingDayOfWeek = getDayOfWeek(firstDayOfMonth);
+
+    const handleMonthChange = (direction: "prev" | "next") => {
+      const newDate = new Date(selectedMonth);
+      newDate.setMonth(newDate.getMonth() + (direction === "prev" ? -1 : 1));
+      onMonthChange(newDate);
+    };
+
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleMonthChange("prev")}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <IoChevronBack className="w-5 h-5" />
+            </button>
+            <h4 className="text-lg font-medium text-gray-900">
+              {selectedMonth.toLocaleString("default", {
+                month: "long",
+                year: "numeric",
+              })}
+            </h4>
+            <button
+              type="button"
+              onClick={() => handleMonthChange("next")}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <IoChevronForward className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClearSchedules}
+              className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50 transition-colors flex items-center gap-2"
+            >
+              <IoTrashOutline className="w-4 h-4" />
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+            <div
+              key={day}
+              className="text-center font-medium text-gray-600 py-2"
+            >
+              {day}
+            </div>
+          ))}
+
+          {/* Empty cells for days before the first of the month */}
+          {Array.from({ length: startingDayOfWeek - 1 }).map((_, i) => (
+            <div key={`empty-${i}`} className="h-32 bg-gray-50 rounded-lg" />
+          ))}
+
+          {/* Calendar days */}
+          {days.map((day) => {
+            const date = new Date(
+              selectedMonth.getFullYear(),
+              selectedMonth.getMonth(),
+              day
+            );
+            const schedule = getScheduleForDate(type.type, date);
+            const scheduleColor = getScheduleColor(
+              schedule.timeIn,
+              schedule.timeOut,
+              schedule.isOff
+            );
+
+            return (
+              <div
+                key={day}
+                className={`h-32 p-2 rounded-lg border ${scheduleColor}`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-medium">{day}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onCopySchedule({
+                          timeIn: schedule.timeIn || "",
+                          timeOut: schedule.timeOut || "",
+                        });
+                        toast.success("Schedule copied");
+                      }}
+                      className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                        <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                      </svg>
+                    </button>
+                    {copiedSchedule && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onUpdateSchedule(type.type, date, {
+                            timeIn: copiedSchedule.timeIn,
+                            timeOut: copiedSchedule.timeOut,
+                            isOff: false,
+                          });
+                          toast.success("Schedule pasted");
+                        }}
+                        className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                          <path
+                            fillRule="evenodd"
+                            d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onUpdateSchedule(type.type, date, {
+                          timeIn: "",
+                          timeOut: "",
+                          isOff: !schedule.isOff,
+                        });
+                      }}
+                      className={`px-2 py-0.5 text-xs rounded ${
+                        schedule.isOff
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {schedule.isOff ? "Off" : "Working"}
+                    </button>
+                  </div>
+                </div>
+
+                {!schedule.isOff && (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      type="time"
+                      value={schedule.timeIn || ""}
+                      onChange={(e) => {
+                        onUpdateSchedule(type.type, date, {
+                          ...schedule,
+                          timeIn: e.target.value,
+                        });
+                      }}
+                      className="w-full text-xs p-1 rounded border border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20"
+                    />
+                    <input
+                      type="time"
+                      value={schedule.timeOut || ""}
+                      onChange={(e) => {
+                        onUpdateSchedule(type.type, date, {
+                          ...schedule,
+                          timeOut: e.target.value,
+                        });
+                      }}
+                      className="w-full text-xs p-1 rounded border border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+);
+
 export default function ScheduleSettings({
   employmentTypes: initialEmploymentTypes,
   onSave,
@@ -63,12 +327,30 @@ export default function ScheduleSettings({
   const [scheduleMode, setScheduleMode] = React.useState<"weekly" | "monthly">(
     "weekly"
   );
+
   const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date());
   const [monthSchedules, setMonthSchedules] = React.useState<{
     [typeId: string]: {
       [yearMonth: string]: MonthSchedule;
     };
-  }>({});
+  }>(() => {
+    console.log("Initializing monthSchedules with:", initialEmploymentTypes);
+    const initialSchedules: {
+      [typeId: string]: {
+        [yearMonth: string]: MonthSchedule;
+      };
+    } = {};
+
+    initialEmploymentTypes.forEach((type) => {
+      initialSchedules[type.type] = {};
+      // Initialize current month
+      const currentYearMonth = new Date().toISOString().slice(0, 7);
+      initialSchedules[type.type][currentYearMonth] = {};
+    });
+
+    console.log("Initial monthSchedules:", initialSchedules);
+    return initialSchedules;
+  });
   const [showMonthPicker, setShowMonthPicker] = React.useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -235,17 +517,6 @@ export default function ScheduleSettings({
     onSave(newTypes);
   };
 
-  // Add effect to set schedule mode based on monthly data
-  React.useEffect(() => {
-    if (employmentTypes.length > 0) {
-      const selectedType = employmentTypes[selectedTypeTab];
-      const hasMonthlyData =
-        selectedType.monthSchedules &&
-        Object.keys(selectedType.monthSchedules).length > 0;
-      setScheduleMode(hasMonthlyData ? "monthly" : "weekly");
-    }
-  }, [selectedTypeTab, employmentTypes]);
-
   // Update handleEmploymentTypeChange to handle schedule mode
   const handleEmploymentTypeChange = (
     index: number,
@@ -343,347 +614,68 @@ export default function ScheduleSettings({
     }
   };
 
-  // Function to get days in a month
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: lastDay }, (_, i) => i + 1);
-  };
-
-  // Function to get day of week for a date
-  const getDayOfWeek = (date: Date) => {
-    const day = date.getDay();
-    return day === 0 ? 7 : day; // Convert Sunday from 0 to 7
-  };
-
   // Function to format date as YYYY-MM-DD
   const formatDate = (date: Date) => {
     return date.toISOString().split("T")[0];
   };
 
   // Function to update schedule for a specific date
-  const updateDateSchedule = (
-    typeId: string,
-    date: Date,
-    schedule: DailySchedule
-  ) => {
-    const dateStr = formatDate(date);
-    const yearMonth = date.toISOString().slice(0, 7); // Format: YYYY-MM
+  const handleUpdateSchedule = React.useCallback(
+    (typeId: string, date: Date, schedule: DailySchedule) => {
+      const dateStr = formatDate(date);
+      const yearMonth = date.toISOString().slice(0, 7);
 
-    setMonthSchedules((prev) => {
-      const newSchedules = { ...prev };
-      if (!newSchedules[typeId]) {
-        newSchedules[typeId] = {};
-      }
-      if (!newSchedules[typeId][yearMonth]) {
-        newSchedules[typeId][yearMonth] = {};
-      }
-
-      newSchedules[typeId][yearMonth][dateStr] = schedule;
-      return newSchedules;
-    });
-  };
+      setMonthSchedules((prev) => {
+        const newSchedules = { ...prev };
+        if (!newSchedules[typeId]) {
+          newSchedules[typeId] = {};
+        }
+        if (!newSchedules[typeId][yearMonth]) {
+          newSchedules[typeId][yearMonth] = {};
+        }
+        newSchedules[typeId][yearMonth][dateStr] = schedule;
+        return newSchedules;
+      });
+    },
+    []
+  );
 
   // Function to get schedule for a specific date
   const getScheduleForDate = (typeId: string, date: Date): DailySchedule => {
     const dateStr = formatDate(date);
-    const yearMonth = date.toISOString().slice(0, 7); // Format: YYYY-MM
-    const monthSchedule = monthSchedules[typeId]?.[yearMonth]?.[dateStr];
+    const yearMonth = date.toISOString().slice(0, 7);
 
-    // If there's a month-specific schedule, return it
-    if (monthSchedule) {
-      return monthSchedule;
+    // Ensure the schedule structure exists
+    if (!monthSchedules[typeId]) {
+      console.log("Creating new type schedule for:", typeId);
+      setMonthSchedules((prev) => ({
+        ...prev,
+        [typeId]: { [yearMonth]: {} },
+      }));
+      return { timeIn: "", timeOut: "", isOff: false };
     }
 
-    // If no month-specific schedule exists, return empty schedule
-    // This prevents showing weekly schedule data in the monthly view
-    return {
-      timeIn: "",
-      timeOut: "",
-      isOff: false,
-    };
+    if (!monthSchedules[typeId][yearMonth]) {
+      console.log("Creating new month schedule for:", yearMonth);
+      setMonthSchedules((prev) => ({
+        ...prev,
+        [typeId]: {
+          ...prev[typeId],
+          [yearMonth]: {},
+        },
+      }));
+      return { timeIn: "", timeOut: "", isOff: false };
+    }
+
+    const schedule = monthSchedules[typeId][yearMonth][dateStr];
+
+    return schedule || { timeIn: "", timeOut: "", isOff: false };
   };
 
-  // Add color scheme for different schedule patterns
-  const getScheduleColor = (
-    timeIn: string,
-    timeOut: string,
-    isOff?: boolean
-  ) => {
-    if (isOff) return "bg-gray-50 border-gray-200";
-
-    // If no time is set, return default color
-    if (!timeIn || !timeOut) return "bg-white border-gray-200";
-
-    // Convert time strings to hours for comparison
-    const [inHour] = timeIn.split(":").map(Number);
-    const [outHour] = timeOut.split(":").map(Number);
-
-    // Define color schemes for different time ranges
-    const colorSchemes: { [key: string]: string } = {
-      early: "bg-blue-50 border-blue-200 hover:border-blue-300", // 4-8 AM
-      morning: "bg-green-50 border-green-200 hover:border-green-300", // 8-12 PM
-      afternoon: "bg-orange-50 border-orange-200 hover:border-orange-300", // 12-4 PM
-      evening: "bg-purple-50 border-purple-200 hover:border-purple-300", // 4-8 PM
-      night: "bg-indigo-50 border-indigo-200 hover:border-indigo-300", // 8-12 AM
-      late: "bg-rose-50 border-rose-200 hover:border-rose-300", // 12-4 AM
-    };
-
-    // Determine which time range the schedule falls into
-    let timeRange = "default";
-    if (inHour >= 4 && inHour < 8) timeRange = "early";
-    else if (inHour >= 8 && inHour < 12) timeRange = "morning";
-    else if (inHour >= 12 && inHour < 16) timeRange = "afternoon";
-    else if (inHour >= 16 && inHour < 20) timeRange = "evening";
-    else if (inHour >= 20 && inHour < 24) timeRange = "night";
-    else if (inHour >= 0 && inHour < 4) timeRange = "late";
-
-    return colorSchemes[timeRange] || "bg-white border-gray-200";
-  };
-
-  // Add the month schedule UI component
-  const MonthScheduleView = ({
-    type,
-    index,
-  }: {
-    type: EmploymentTypeWithMonthSchedules;
-    index: number;
-  }) => {
-    const days = getDaysInMonth(selectedMonth);
-    const firstDayOfMonth = new Date(
-      selectedMonth.getFullYear(),
-      selectedMonth.getMonth(),
-      1
-    );
-    const startingDayOfWeek = getDayOfWeek(firstDayOfMonth);
-
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                const newDate = new Date(selectedMonth);
-                newDate.setMonth(selectedMonth.getMonth() - 1);
-                setSelectedMonth(newDate);
-              }}
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-            <h4 className="text-lg font-medium text-gray-900">
-              {selectedMonth.toLocaleString("default", {
-                month: "long",
-                year: "numeric",
-              })}
-            </h4>
-            <button
-              onClick={() => {
-                const newDate = new Date(selectedMonth);
-                newDate.setMonth(selectedMonth.getMonth() + 1);
-                setSelectedMonth(newDate);
-              }}
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                setShowMonthPicker(true);
-              }}
-              className="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <IoCalendarOutline className="w-4 h-4" />
-              Change Month
-            </button>
-            <button
-              onClick={clearMonthlySchedules}
-              className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50 transition-colors flex items-center gap-2"
-            >
-              <IoTrashOutline className="w-4 h-4" />
-              Clear All
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-2">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-            <div
-              key={day}
-              className="text-center font-medium text-gray-600 py-2"
-            >
-              {day}
-            </div>
-          ))}
-
-          {/* Empty cells for days before the first of the month */}
-          {Array.from({ length: startingDayOfWeek - 1 }).map((_, i) => (
-            <div key={`empty-${i}`} className="h-32 bg-gray-50 rounded-lg" />
-          ))}
-
-          {/* Calendar days */}
-          {days.map((day) => {
-            const date = new Date(
-              selectedMonth.getFullYear(),
-              selectedMonth.getMonth(),
-              day
-            );
-            const schedule = getScheduleForDate(type.type, date);
-            const scheduleColor = getScheduleColor(
-              schedule.timeIn,
-              schedule.timeOut,
-              schedule.isOff
-            );
-
-            return (
-              <div
-                key={day}
-                className={`h-32 p-2 rounded-lg transition-colors ${scheduleColor}`}
-              >
-                <div className="flex justify-between items-start">
-                  <span className="font-medium">{day}</span>
-                  <div className="flex items-center gap-1">
-                    <Tooltip
-                      content="Copy Schedule"
-                      position="top"
-                      width="130px"
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCopiedSchedule({
-                            timeIn: schedule.timeIn || "",
-                            timeOut: schedule.timeOut || "",
-                          });
-                          toast.success("Schedule copied");
-                        }}
-                        className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                          <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    {copiedSchedule && (
-                      <Tooltip
-                        content="Paste Schedule"
-                        position="top"
-                        width="130px"
-                      >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateDateSchedule(type.type, date, {
-                              ...schedule,
-                              timeIn: copiedSchedule.timeIn,
-                              timeOut: copiedSchedule.timeOut,
-                            });
-                            toast.success("Schedule pasted");
-                          }}
-                          className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                            <path
-                              fillRule="evenodd"
-                              d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </Tooltip>
-                    )}
-                    <button
-                      onClick={() => {
-                        const isOff = !schedule.isOff;
-                        updateDateSchedule(type.type, date, {
-                          ...schedule,
-                          isOff,
-                          timeIn: isOff ? "" : schedule.timeIn,
-                          timeOut: isOff ? "" : schedule.timeOut,
-                        });
-                      }}
-                      className={`px-2 py-0.5 text-xs rounded ${
-                        schedule.isOff
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {schedule.isOff ? "Off" : "Working"}
-                    </button>
-                  </div>
-                </div>
-
-                {!schedule.isOff && (
-                  <div className="mt-2 space-y-2">
-                    <input
-                      type="time"
-                      value={schedule.timeIn}
-                      onChange={(e) => {
-                        updateDateSchedule(type.type, date, {
-                          ...schedule,
-                          timeIn: e.target.value,
-                        });
-                      }}
-                      className="w-full text-xs p-1 rounded border focus:border-blue-500 focus:ring focus:ring-blue-500/20"
-                    />
-                    <input
-                      type="time"
-                      value={schedule.timeOut}
-                      onChange={(e) => {
-                        updateDateSchedule(type.type, date, {
-                          ...schedule,
-                          timeOut: e.target.value,
-                        });
-                      }}
-                      className="w-full text-xs p-1 rounded border focus:border-blue-500 focus:ring focus:ring-blue-500/20"
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+  // Move these functions outside the render
+  const handleMonthChange = React.useCallback((newDate: Date) => {
+    setSelectedMonth(newDate);
+  }, []);
 
   const handleScheduleChange = (
     index: number,
@@ -699,6 +691,19 @@ export default function ScheduleSettings({
       value
     );
   };
+
+  // Add debug for employment type changes
+  React.useEffect(() => {
+    console.log("Employment Types Changed:", {
+      types: employmentTypes,
+      selectedTab: selectedTypeTab,
+      currentMode: scheduleMode,
+    });
+  }, [employmentTypes, selectedTypeTab, scheduleMode]);
+
+  React.useEffect(() => {
+    console.log("[DEBUG] Schedule mode changed to:", scheduleMode);
+  }, [scheduleMode]);
 
   return (
     <div className="space-y-8">
@@ -717,20 +722,8 @@ export default function ScheduleSettings({
               </span>
               <div className="flex items-center bg-white rounded-lg border border-gray-200 p-1">
                 <button
-                  onClick={() => {
-                    const selectedType = employmentTypes[selectedTypeTab];
-                    const hasMonthlyData =
-                      selectedType.monthSchedules &&
-                      Object.keys(selectedType.monthSchedules).length > 0;
-                    if (hasMonthlyData) {
-                      toast.warning(
-                        "This employment type has monthly schedules. Switching to monthly mode."
-                      );
-                      setScheduleMode("monthly");
-                    } else {
-                      setScheduleMode("weekly");
-                    }
-                  }}
+                  type="button"
+                  onClick={() => setScheduleMode("weekly")}
                   className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${
                     scheduleMode === "weekly"
                       ? "bg-blue-100 text-blue-700"
@@ -740,6 +733,7 @@ export default function ScheduleSettings({
                   Weekly Pattern
                 </button>
                 <button
+                  type="button"
                   onClick={() => setScheduleMode("monthly")}
                   className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${
                     scheduleMode === "monthly"
@@ -946,9 +940,8 @@ export default function ScheduleSettings({
                           Remove
                         </button>
                       </div>
-                      {type.requiresTimeTracking ? (
+                      {type.requiresTimeTracking && (
                         <div className="col-span-2 mt-4">
-                          {/* Weekly schedule view */}
                           {scheduleMode === "weekly" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                               {(type.schedules || []).map(
@@ -1158,62 +1151,30 @@ export default function ScheduleSettings({
                             </div>
                           )}
 
-                          {/* Monthly schedule view */}
                           {scheduleMode === "monthly" && (
                             <MonthScheduleView
-                              key={index}
-                              type={type}
-                              index={index}
+                              key={type.type}
+                              type={type as EmploymentTypeWithMonthSchedules}
+                              selectedMonth={selectedMonth}
+                              onMonthChange={handleMonthChange}
+                              onUpdateSchedule={handleUpdateSchedule}
+                              copiedSchedule={copiedSchedule}
+                              onCopySchedule={setCopiedSchedule}
+                              getScheduleForDate={getScheduleForDate}
+                              onClearSchedules={() => {
+                                setMonthSchedules((prev) => {
+                                  const newSchedules = { ...prev };
+                                  Object.keys(newSchedules).forEach(
+                                    (typeId) => {
+                                      newSchedules[typeId] = {};
+                                    }
+                                  );
+                                  return newSchedules;
+                                });
+                                toast.success("Monthly schedules cleared");
+                              }}
                             />
                           )}
-                        </div>
-                      ) : (
-                        <div className="col-span-2 mt-4">
-                          <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-dashed border-gray-200 p-8">
-                            <div className="max-w-2xl mx-auto text-center">
-                              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 mb-4">
-                                <svg
-                                  className="w-6 h-6 text-blue-500"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                                  />
-                                </svg>
-                              </div>
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                Simplified Attendance Tracking
-                              </h3>
-                              <p className="text-gray-600 mb-6">
-                                Time tracking is disabled for this employment
-                                type. Instead of recording specific time-in and
-                                time-out, employees can be marked as present or
-                                absent with a simple checkbox.
-                              </p>
-                              <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg text-blue-700 text-sm">
-                                <svg
-                                  className="w-5 h-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                                  />
-                                </svg>
-                                Perfect for roles with flexible hours or
-                                project-based work
-                              </div>
-                            </div>
-                          </div>
                         </div>
                       )}
                     </div>
