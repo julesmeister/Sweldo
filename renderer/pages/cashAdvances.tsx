@@ -481,7 +481,7 @@ export default function CashAdvancesPage() {
                                         setLoading(false);
                                       }
                                     }}
-                                    className={`text-red-600 hover:text-red-900 ${
+                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${
                                       !hasDeleteAccess
                                         ? "opacity-50 cursor-not-allowed"
                                         : "cursor-pointer"
