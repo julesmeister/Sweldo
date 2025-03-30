@@ -274,6 +274,13 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
     setShowPinCode(false);
   };
 
+  // Add this handler function
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleAuthenticate();
+    }
+  };
+
   // Show loading state while checking for roles
   if (isInitialLoad) {
     return (
@@ -309,6 +316,7 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
                   type={showPinCode ? "text" : "password"}
                   value={authPinCode}
                   onChange={(e) => setAuthPinCode(e.target.value)}
+                  onKeyPress={handleKeyPress}
                   className="block w-full rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 sm:text-sm h-10 px-3"
                   placeholder="Enter pin code..."
                 />
