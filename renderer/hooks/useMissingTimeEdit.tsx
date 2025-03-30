@@ -163,6 +163,13 @@ export const useMissingTimeEdit = ({
         );
 
         const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+        const hourlyRate = dailyRate / 8;
+        const overtimeHours = Math.floor(timeMetrics.overtimeMinutes / 60);
+        const overtimePay =
+          overtimeHours *
+          hourlyRate *
+          (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+
         const payMetrics = calculatePayMetrics(
           timeMetrics,
           attendanceSettings,
@@ -170,9 +177,9 @@ export const useMissingTimeEdit = ({
           holiday,
           actual.timeIn,
           actual.timeOut,
-          scheduled
+          scheduled,
+          employmentType
         );
-        console.log("[useMissingTimeEdit] Pay metrics calculated:", payMetrics);
 
         // Create updated compensation
         const compensation = createCompensationRecord(
