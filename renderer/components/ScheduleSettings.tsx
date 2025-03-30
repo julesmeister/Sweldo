@@ -1008,10 +1008,26 @@ export default function ScheduleSettings({
                                       : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
                                   }`}
                                 >
-                                  {type.schedules?.filter(
-                                    (s) => s.timeIn && s.timeOut
-                                  ).length || 0}
-                                  /{type.schedules?.length || 0}
+                                  {scheduleMode === "weekly"
+                                    ? `${
+                                        type.schedules?.filter(
+                                          (s) => s.timeIn && s.timeOut
+                                        ).length || 0
+                                      }/${type.schedules?.length || 0}`
+                                    : `${
+                                        Object.values(
+                                          type.monthSchedules?.[
+                                            selectedMonth
+                                              .toISOString()
+                                              .slice(0, 7)
+                                          ] || {}
+                                        ).filter((s) => s.timeIn && s.timeOut)
+                                          .length || 0
+                                      }/${new Date(
+                                        selectedMonth.getFullYear(),
+                                        selectedMonth.getMonth() + 1,
+                                        0
+                                      ).getDate()}`}
                                 </span>
                               </span>
                               {selectedTypeTab === index && (
