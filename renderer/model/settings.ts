@@ -292,7 +292,10 @@ export const getScheduleForDate = (
   employmentType: EmploymentType | null,
   date: Date
 ): DailySchedule | null => {
-  if (!employmentType) return null;
+  if (!employmentType) {
+    console.log("No employment type provided");
+    return null;
+  }
 
   // Check for month-specific schedule first
   const yearMonth = `${date.getFullYear()}-${String(
@@ -302,16 +305,23 @@ export const getScheduleForDate = (
   const monthSchedule = employmentType.monthSchedules?.[yearMonth]?.[dateStr];
 
   if (monthSchedule) {
+    console.log(`Using month-specific schedule for ${dateStr}:`, monthSchedule);
     return monthSchedule;
   }
 
-  // Fall back to weekly schedule
+  // Fall back to weekly schedule if no month-specific schedule exists
   if (employmentType.schedules) {
     const dayOfWeek = date.getDay();
     const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
     const weeklySchedule = employmentType.schedules[scheduleDay - 1];
 
     if (weeklySchedule) {
+      console.log(
+        `Using weekly schedule for ${dateStr} (${
+          ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayOfWeek]
+        }):`,
+        weeklySchedule
+      );
       return {
         timeIn: weeklySchedule.timeIn,
         timeOut: weeklySchedule.timeOut,
@@ -320,6 +330,7 @@ export const getScheduleForDate = (
     }
   }
 
+  console.log(`No schedule found for ${dateStr}`);
   return null;
 };
 

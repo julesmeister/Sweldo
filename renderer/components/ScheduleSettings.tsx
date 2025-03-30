@@ -58,31 +58,45 @@ const getDayOfWeek = (date: Date) => {
   return day === 0 ? 7 : day; // Convert Sunday from 0 to 7
 };
 
-const getScheduleColor = (timeIn: string, timeOut: string, isOff?: boolean) => {
+const getScheduleColor = (
+  timeIn: string,
+  timeOut: string,
+  isOff?: boolean,
+  existingSchedules?: { timeIn: string; timeOut: string }[]
+) => {
   if (isOff) return "bg-gray-50 border-gray-200";
   if (!timeIn || !timeOut) return "bg-white border-gray-200";
 
+  // Create a unique key for this time combination
+  const timeKey = `${timeIn}-${timeOut}`;
+
+  // Find existing combinations
+  const existingCombinations = new Set(
+    existingSchedules?.map((s) => `${s.timeIn}-${s.timeOut}`) || []
+  );
+
+  // Base color schemes
+  const colorSchemes = [
+    "bg-blue-50 border-blue-200 hover:border-blue-300",
+    "bg-green-50 border-green-200 hover:border-green-300",
+    "bg-orange-50 border-orange-200 hover:border-orange-300",
+    "bg-purple-50 border-purple-200 hover:border-purple-300",
+    "bg-indigo-50 border-indigo-200 hover:border-indigo-300",
+    "bg-rose-50 border-rose-200 hover:border-rose-300",
+    "bg-yellow-50 border-yellow-200 hover:border-yellow-300",
+    "bg-teal-50 border-teal-200 hover:border-teal-300",
+  ];
+
+  // Get index for this combination
+  const combinationIndex = Array.from(existingCombinations).indexOf(timeKey);
+  if (combinationIndex >= 0) {
+    return colorSchemes[combinationIndex % colorSchemes.length];
+  }
+
+  // Fallback to time-based coloring
   const [inHour] = timeIn.split(":").map(Number);
-  const [outHour] = timeOut.split(":").map(Number);
-
-  const colorSchemes: { [key: string]: string } = {
-    early: "bg-blue-50 border-blue-200 hover:border-blue-300",
-    morning: "bg-green-50 border-green-200 hover:border-green-300",
-    afternoon: "bg-orange-50 border-orange-200 hover:border-orange-300",
-    evening: "bg-purple-50 border-purple-200 hover:border-purple-300",
-    night: "bg-indigo-50 border-indigo-200 hover:border-indigo-300",
-    late: "bg-rose-50 border-rose-200 hover:border-rose-300",
-  };
-
-  let timeRange = "default";
-  if (inHour >= 4 && inHour < 8) timeRange = "early";
-  else if (inHour >= 8 && inHour < 12) timeRange = "morning";
-  else if (inHour >= 12 && inHour < 16) timeRange = "afternoon";
-  else if (inHour >= 16 && inHour < 20) timeRange = "evening";
-  else if (inHour >= 20 && inHour < 24) timeRange = "night";
-  else if (inHour >= 0 && inHour < 4) timeRange = "late";
-
-  return colorSchemes[timeRange] || "bg-white border-gray-200";
+  let timeRange = Math.floor(inHour / 3); // Divide day into 8 ranges
+  return colorSchemes[timeRange % colorSchemes.length];
 };
 
 // 1. First, move MonthScheduleView outside of the main component
@@ -97,6 +111,7 @@ const MonthScheduleView = React.memo(
     onCopySchedule,
     getScheduleForDate,
     onClearSchedules,
+    monthSchedules = {},
   }: {
     type: EmploymentTypeWithMonthSchedules;
     selectedMonth: Date;
@@ -110,6 +125,9 @@ const MonthScheduleView = React.memo(
     onCopySchedule: (schedule: { timeIn: string; timeOut: string }) => void;
     getScheduleForDate: (typeId: string, date: Date) => DailySchedule;
     onClearSchedules: () => void;
+    monthSchedules?: {
+      [typeId: string]: { [yearMonth: string]: MonthSchedule };
+    };
   }) => {
     const days = getDaysInMonth(selectedMonth);
     const firstDayOfMonth = new Date(
@@ -276,16 +294,31 @@ const MonthScheduleView = React.memo(
               day
             );
             const schedule = getScheduleForDate(type.type, date);
+
+            // Get all unique schedules for this month
+            const currentMonthSchedules = Object.values(
+              monthSchedules[type.type]?.[date.toISOString().slice(0, 7)] || {}
+            ).filter(
+              (s): s is DailySchedule =>
+                typeof s === "object" &&
+                s !== null &&
+                "timeIn" in s &&
+                "timeOut" in s &&
+                !!s.timeIn &&
+                !!s.timeOut
+            );
+
             const scheduleColor = getScheduleColor(
               schedule.timeIn,
               schedule.timeOut,
-              schedule.isOff
+              schedule.isOff,
+              currentMonthSchedules
             );
 
             return (
               <div
                 key={day}
-                className={`h-32 p-2 rounded-lg border ${scheduleColor}`}
+                className={`h-32 p-2 rounded-lg border ${scheduleColor} hover:bg-opacity-90 transition-colors`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-medium">{day}</span>
@@ -343,25 +376,55 @@ const MonthScheduleView = React.memo(
                         </svg>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onUpdateSchedule(type.type, date, {
-                          timeIn: "",
-                          timeOut: "",
-                          isOff: !schedule.isOff,
-                        });
-                      }}
-                      className={`px-2 py-0.5 text-xs rounded ${
-                        schedule.isOff
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {schedule.isOff ? "Off" : "Working"}
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onUpdateSchedule(type.type, date, {
+                            timeIn: "",
+                            timeOut: "",
+                            isOff: !schedule.isOff,
+                          });
+                        }}
+                        className={`px-2 py-0.5 text-xs rounded ${
+                          schedule.isOff
+                            ? "bg-blue-100 text-blue-700"
+                            : !schedule.timeIn && !schedule.timeOut
+                            ? "bg-gray-100 text-gray-700"
+                            : !schedule.timeIn || !schedule.timeOut
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {schedule.isOff
+                          ? "Off"
+                          : !schedule.timeIn && !schedule.timeOut
+                          ? "Day Off"
+                          : !schedule.timeIn || !schedule.timeOut
+                          ? "Missing"
+                          : "Working"}
+                      </button>
+                      {!schedule.isOff && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onUpdateSchedule(type.type, date, {
+                              timeIn: "",
+                              timeOut: "",
+                              isOff: false,
+                            });
+                            toast.success("Schedule cleared");
+                          }}
+                          className="absolute inset-0 px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-auto"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1282,6 +1345,7 @@ export default function ScheduleSettings({
                                 });
                                 toast.success("Monthly schedules cleared");
                               }}
+                              monthSchedules={monthSchedules}
                             />
                           )}
                         </div>
