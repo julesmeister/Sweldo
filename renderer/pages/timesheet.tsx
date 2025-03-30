@@ -476,17 +476,25 @@ const TimesheetPage: React.FC = () => {
       case "overtimeMinutes":
         return compensation?.overtimeMinutes || "-";
       case "overtimePay":
-        return compensation?.overtimePay ? Math.round(compensation.overtimePay) : "-";
+        return compensation?.overtimePay
+          ? Math.round(compensation.overtimePay)
+          : "-";
       case "undertimeMinutes":
         return compensation?.undertimeMinutes || "-";
       case "undertimeDeduction":
-        return compensation?.undertimeDeduction ? Math.round(compensation.undertimeDeduction) : "-";
+        return compensation?.undertimeDeduction
+          ? Math.round(compensation.undertimeDeduction)
+          : "-";
       case "lateMinutes":
         return compensation?.lateMinutes || "-";
       case "lateDeduction":
-        return compensation?.lateDeduction ? Math.round(compensation.lateDeduction) : "-";
+        return compensation?.lateDeduction
+          ? Math.round(compensation.lateDeduction)
+          : "-";
       case "holidayBonus":
-        return compensation?.holidayBonus ? Math.round(compensation.holidayBonus) : "-";
+        return compensation?.holidayBonus
+          ? Math.round(compensation.holidayBonus)
+          : "-";
       case "leaveType":
         return compensation?.leaveType || "-";
       case "leavePay":
@@ -494,9 +502,17 @@ const TimesheetPage: React.FC = () => {
       case "grossPay":
         return compensation?.grossPay ? Math.round(compensation.grossPay) : "-";
       case "deductions":
-        return compensation?.deductions ? Math.round(compensation.deductions) : "-";
+        return compensation?.deductions
+          ? Math.round(compensation.deductions)
+          : "-";
       case "netPay":
         return compensation?.netPay ? Math.round(compensation.netPay) : "-";
+      case "nightDifferentialHours":
+        return compensation?.nightDifferentialHours || "-";
+      case "nightDifferentialPay":
+        return compensation?.nightDifferentialPay
+          ? Math.round(compensation.nightDifferentialPay)
+          : "-";
       default:
         return "-";
     }
