@@ -97,6 +97,8 @@ interface PayrollCSVData {
   paymentDate: string;
   daysWorked: string;
   absences: string;
+  nightDifferentialHours: string;
+  nightDifferentialPay: string;
 }
 
 export class Payroll {
@@ -790,6 +792,10 @@ export class Payroll {
         paymentDate: new Date().toISOString(),
         daysWorked: (summary.daysWorked || 0).toString(),
         absences: (summary.absences || 0).toString(),
+        nightDifferentialHours: (
+          summary.nightDifferentialHours || 0
+        ).toString(),
+        nightDifferentialPay: (summary.nightDifferentialPay || 0).toString(),
       };
 
       // Get all months between start and end date

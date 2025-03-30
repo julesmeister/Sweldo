@@ -201,6 +201,21 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                 <div className="bg-slate-50 rounded-lg p-3">
                   <div className="flex justify-between items-baseline mb-1">
                     <span className="text-xs uppercase tracking-wider font-medium text-slate-500">
+                      Night Differential
+                    </span>
+                    <span className="text-xl font-semibold text-emerald-600">
+                      ₱{formatCurrency(data.nightDifferentialPay || 0)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 flex justify-between border-t border-slate-200 pt-1">
+                    <span>Hours</span>
+                    <span>{data.nightDifferentialHours || 0} hours</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <span className="text-xs uppercase tracking-wider font-medium text-slate-500">
                       Undertime
                     </span>
                     <span className="text-xl font-semibold text-rose-600">
