@@ -82,6 +82,23 @@ const FormField: React.FC<FormFieldProps> = ({
       : "bg-gray-800 text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
   } border border-gray-700 rounded-md ${className}`;
 
+  // Determine if this is a monetary field (contains 'Pay' or 'Deduction')
+  const isMonetaryField = name.includes("Pay") || name.includes("Deduction");
+  // Determine if this is a minutes field
+  const isMinutesField = name.includes("Minutes");
+  // Determine if this is an hours field
+  const isHoursField = name.includes("Hours");
+
+  // Format the value based on field type
+  const formattedValue =
+    typeof value === "number"
+      ? isMonetaryField
+        ? Number(value).toFixed(2)
+        : isMinutesField || isHoursField
+        ? Math.round(value)
+        : value
+      : value;
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -106,12 +123,12 @@ const FormField: React.FC<FormFieldProps> = ({
           <input
             type="number"
             name={name}
-            value={value}
+            value={formattedValue}
             onChange={onChange}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
             disabled={!hasEditAccess || !manualOverride}
             min="0"
-            step="0.01"
+            step={isMonetaryField ? "0.01" : "1"}
           />
           {name !== "hoursWorked" && (
             <button
@@ -189,7 +206,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             setFormData((prev) => ({
               ...prev,
               dayType: schedule.isOff ? "Rest Day" : prev.dayType,
-              hoursWorked: schedule.isOff ? 0 : prev.hoursWorked,
+              hoursWorked: schedule.isOff
+                ? 0
+                : Math.round(prev.hoursWorked || 0),
             }));
           }
         }
@@ -342,7 +361,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         lateMinutes: computedValues.lateMinutes,
         undertimeMinutes: computedValues.undertimeMinutes,
         overtimeMinutes: computedValues.overtimeMinutes,
-        hoursWorked: computedValues.hoursWorked,
+        hoursWorked: Math.round(computedValues.hoursWorked),
         grossPay: computedValues.grossPay,
         deductions: computedValues.deductions,
         netPay: computedValues.netPay,
