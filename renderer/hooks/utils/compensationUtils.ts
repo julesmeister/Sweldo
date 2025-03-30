@@ -232,18 +232,15 @@ export const calculatePayMetrics = (
     hourlyRate
   );
 
-  const {
-    lateDeductionMinutes,
-    undertimeDeductionMinutes,
-    overtimeDeductionMinutes,
-  } = timeMetrics;
+  const { lateDeductionMinutes, undertimeDeductionMinutes, overtimeMinutes } =
+    timeMetrics;
 
   const deductions =
     lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute +
     undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute;
 
   // Calculate overtime pay using the new hourly rate multiplier
-  const overtimePay = (overtimeDeductionMinutes / 60) * overtimeHourlyRate;
+  const overtimePay = Math.floor(overtimeMinutes / 60) * overtimeHourlyRate;
   const baseGrossPay = dailyRate + overtimePay;
   const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
   // Add night differential to the gross pay calculation
@@ -499,7 +496,7 @@ export const getPaymentBreakdown = (
     details: {
       hourlyRate,
       overtimeHourlyRate,
-      overtimeMinutes: timeMetrics.overtimeDeductionMinutes,
+      overtimeMinutes: timeMetrics.overtimeMinutes,
       nightDifferentialHours: payMetrics.nightDifferentialHours,
       lateMinutes: timeMetrics.lateDeductionMinutes,
       undertimeMinutes: timeMetrics.undertimeDeductionMinutes,

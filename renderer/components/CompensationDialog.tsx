@@ -437,10 +437,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
         const hourlyRate = (employee?.dailyRate || 0) / 8;
+        const overtimeMultiplier =
+          attendanceSettings?.overtimeHourlyMultiplier || 1.25;
         newData.overtimePay =
-          Math.floor(numericValue / 60) *
-          hourlyRate *
-          (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+          Math.floor(numericValue / 60) * hourlyRate * overtimeMultiplier;
         // Update gross pay and net pay
         newData.grossPay =
           (formData.dailyRate || 0) +
