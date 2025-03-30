@@ -166,7 +166,10 @@ export const useTimesheetEdit = ({
         timeMetrics,
         attendanceSettings,
         dailyRate,
-        holiday
+        holiday,
+        actual.timeIn,
+        actual.timeOut,
+        scheduled
       );
       console.log("Pay metrics calculated:", payMetrics);
 

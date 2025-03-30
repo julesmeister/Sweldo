@@ -166,7 +166,8 @@ export const useComputeAllCompensations = (
           dailyRate,
           holiday,
           actual.timeIn,
-          actual.timeOut
+          actual.timeOut,
+          scheduled
         );
 
         const newCompensation = createCompensationRecord(

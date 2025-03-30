@@ -244,15 +244,20 @@ export const calculatePayMetrics = (
     overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute;
   const baseGrossPay = dailyRate + overtimePay;
   const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
-  const grossPay = holiday ? baseGrossPay + holidayBonus : baseGrossPay;
-  const netPay = grossPay - deductions;
+  // Add night differential to the gross pay calculation
+  const grossPayWithNightDiff = holiday
+    ? baseGrossPay + holidayBonus + nightDifferential.nightDifferentialPay
+    : baseGrossPay + nightDifferential.nightDifferentialPay;
+
+  // Update net pay to include night differential
+  const netPay = grossPayWithNightDiff - deductions;
 
   const result = {
     deductions,
     overtimePay,
     baseGrossPay,
     holidayBonus,
-    grossPay: grossPay + nightDifferential.nightDifferentialPay,
+    grossPay: grossPayWithNightDiff,
     netPay,
     lateDeduction:
       lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute,
