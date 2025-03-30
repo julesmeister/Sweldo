@@ -640,7 +640,10 @@ The compensation calculation system follows these relationships between fields:
 
 1. **Time-Based Fields Affecting Pay/Deductions**:
    - `overtimeMinutes` → `overtimePay`
-     - Calculated using: `(overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier`
+     - Calculated using: `Math.floor(overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier`
+     - Where:
+       - `hourlyRate = dailyRate / 8`
+       - `overtimeHourlyMultiplier` defaults to 1.25 if not set in settings
    - `undertimeMinutes` → `undertimeDeduction`
      - Calculated using: `undertimeMinutes * undertimeDeductionPerMinute`
    - `lateMinutes` → `lateDeduction`
@@ -670,7 +673,7 @@ When manual override is enabled:
 const hourlyRate = dailyRate / 8; // Standard 8-hour workday
 
 // Overtime calculation
-const overtimePay = (overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier;
+const overtimePay = Math.floor(overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier;
 
 // Night differential calculation
 const nightDiffRate = hourlyRate * (1 + nightDifferentialMultiplier);
