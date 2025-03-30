@@ -8,6 +8,8 @@ import {
   getScheduleForDate,
 } from "@/renderer/model/settings";
 import { Schedule } from "@/renderer/model/schedule";
+import { IoCalculator } from "react-icons/io5";
+import React from "react";
 
 // Helper function to format date components (e.g., "01" for January)
 export const formatDateComponent = (value: number) =>
@@ -138,9 +140,26 @@ const calculateNightDifferential = (
 // Computes late, undertime, overtime, and hours worked based on actual vs scheduled times
 export const calculateTimeMetrics = (
   actual: { timeIn: Date; timeOut: Date },
-  scheduled: { timeIn: Date; timeOut: Date },
-  attendanceSettings: AttendanceSettings
+  scheduled: { timeIn: Date; timeOut: Date } | null,
+  attendanceSettings: AttendanceSettings,
+  employmentType: EmploymentType | null
 ) => {
+  // If no schedule, return zero values for all metrics
+  if (!scheduled) {
+    console.log("No schedule provided for time metrics calculation");
+    return {
+      lateMinutes: 0,
+      undertimeMinutes: 0,
+      overtimeMinutes: 0,
+      lateDeductionMinutes: 0,
+      undertimeDeductionMinutes: 0,
+      overtimeDeductionMinutes: 0,
+      hoursWorked: Math.abs(
+        calculateTimeDifference(actual.timeOut, actual.timeIn) / 60
+      ),
+    };
+  }
+
   const lateMinutes =
     actual.timeIn > scheduled.timeIn
       ? calculateTimeDifference(actual.timeIn, scheduled.timeIn)
@@ -151,19 +170,16 @@ export const calculateTimeMetrics = (
       ? calculateTimeDifference(scheduled.timeOut, actual.timeOut)
       : 0;
 
-  // Calculate overtime for both early-in and late-out
-  const earlyInMinutes =
-    actual.timeIn < scheduled.timeIn
-      ? calculateTimeDifference(scheduled.timeIn, actual.timeIn)
-      : 0;
+  // Calculate overtime based on hours of work
+  const standardHours = employmentType?.hoursOfWork || 8; // Default to 8 hours if not specified
+  const standardMinutes = standardHours * 60;
 
-  const lateOutMinutes =
-    actual.timeOut > scheduled.timeOut
-      ? calculateTimeDifference(actual.timeOut, scheduled.timeOut)
-      : 0;
+  const totalMinutesWorked = Math.abs(
+    calculateTimeDifference(actual.timeOut, actual.timeIn)
+  );
 
-  // Combine early-in and late-out minutes for total overtime
-  const overtimeMinutes = earlyInMinutes + lateOutMinutes;
+  // Calculate overtime minutes based on hours of work and threshold
+  const overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
 
   const lateDeductionMinutes = calculateDeductionMinutes(
     lateMinutes,
@@ -175,10 +191,10 @@ export const calculateTimeMetrics = (
     attendanceSettings.undertimeGracePeriod
   );
 
-  // Apply overtime grace period to combined overtime minutes
+  // Apply overtime threshold to overtime minutes
   const overtimeDeductionMinutes = calculateDeductionMinutes(
     overtimeMinutes,
-    attendanceSettings.overtimeGracePeriod
+    attendanceSettings.overtimeThreshold
   );
 
   const hoursWorked = Math.abs(
@@ -205,25 +221,48 @@ export const calculatePayMetrics = (
   holiday?: Holiday,
   actualTimeIn?: Date,
   actualTimeOut?: Date,
-  scheduled?: { timeIn: Date; timeOut: Date }
+  scheduled?: { timeIn: Date; timeOut: Date } | null,
+  employmentType?: EmploymentType | null
 ) => {
-  const hourlyRate = dailyRate / 8;
+  const standardHours = employmentType?.hoursOfWork || 8; // Default to 8 hours if not specified
+  const hourlyRate = dailyRate / standardHours;
+  const overtimeHourlyRate =
+    hourlyRate * attendanceSettings.overtimeHourlyMultiplier;
+
   console.log("Calculate Pay Metrics:", {
     dailyRate,
     hourlyRate,
+    overtimeHourlyRate,
+    standardHours,
     hasActualTimes: !!(actualTimeIn && actualTimeOut),
     hasScheduled: !!scheduled,
   });
 
-  const nightDifferential =
-    actualTimeIn && actualTimeOut && scheduled
-      ? calculateNightDifferential(
-          { timeIn: actualTimeIn, timeOut: actualTimeOut },
-          scheduled,
-          attendanceSettings,
-          hourlyRate
-        )
-      : { nightDifferentialHours: 0, nightDifferentialPay: 0 };
+  // If no schedule, return base pay without any adjustments
+  if (!scheduled) {
+    console.log("No schedule provided for pay metrics calculation");
+    return {
+      deductions: 0,
+      overtimePay: 0,
+      baseGrossPay: dailyRate,
+      holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
+      grossPay: holiday
+        ? dailyRate + dailyRate * holiday.multiplier
+        : dailyRate,
+      netPay: holiday ? dailyRate + dailyRate * holiday.multiplier : dailyRate,
+      lateDeduction: 0,
+      undertimeDeduction: 0,
+      nightDifferentialHours: 0,
+      nightDifferentialPay: 0,
+    };
+  }
+
+  const nightDifferential = calculateNightDifferential(
+    { timeIn: actualTimeIn!, timeOut: actualTimeOut! },
+    scheduled,
+    attendanceSettings,
+    hourlyRate
+  );
 
   console.log(
     "Night Differential from calculatePayMetrics:",
@@ -240,8 +279,8 @@ export const calculatePayMetrics = (
     lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute +
     undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute;
 
-  const overtimePay =
-    overtimeDeductionMinutes * attendanceSettings.overtimeAdditionPerMinute;
+  // Calculate overtime pay using the new hourly rate multiplier
+  const overtimePay = (overtimeDeductionMinutes / 60) * overtimeHourlyRate;
   const baseGrossPay = dailyRate + overtimePay;
   const holidayBonus = holiday ? dailyRate * holiday.multiplier : 0;
   // Add night differential to the gross pay calculation
@@ -430,7 +469,18 @@ export const createTimeObjects = (
   const schedule = getEffectiveSchedule(employmentType, date);
 
   if (!schedule) {
-    throw new Error("No schedule found for the given date");
+    console.log("No schedule found for the given date:", {
+      date: date.toISOString(),
+      employmentType: employmentType?.type,
+    });
+    // Return null schedule to indicate no schedule was found
+    return {
+      actual: {
+        timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
+        timeOut: new Date(createDateString(year, month, day, actualTimeOut)),
+      },
+      scheduled: null,
+    };
   }
 
   const actual = {
@@ -444,4 +494,59 @@ export const createTimeObjects = (
   };
 
   return { actual, scheduled };
+};
+
+export interface PaymentBreakdown {
+  basePay: number;
+  overtimePay: number;
+  nightDifferentialPay: number;
+  holidayBonus: number;
+  deductions: {
+    late: number;
+    undertime: number;
+    total: number;
+  };
+  netPay: number;
+  details: {
+    hourlyRate: number;
+    overtimeHourlyRate: number;
+    overtimeMinutes: number;
+    nightDifferentialHours: number;
+    lateMinutes: number;
+    undertimeMinutes: number;
+  };
+}
+
+export const getPaymentBreakdown = (
+  timeMetrics: ReturnType<typeof calculateTimeMetrics>,
+  payMetrics: ReturnType<typeof calculatePayMetrics>,
+  attendanceSettings: AttendanceSettings,
+  dailyRate: number,
+  employmentType: EmploymentType | null
+): PaymentBreakdown => {
+  const standardHours = employmentType?.hoursOfWork || 8;
+  const hourlyRate = dailyRate / standardHours;
+  const overtimeHourlyRate =
+    hourlyRate * attendanceSettings.overtimeHourlyMultiplier;
+
+  return {
+    basePay: dailyRate,
+    overtimePay: payMetrics.overtimePay,
+    nightDifferentialPay: payMetrics.nightDifferentialPay,
+    holidayBonus: payMetrics.holidayBonus,
+    deductions: {
+      late: payMetrics.lateDeduction,
+      undertime: payMetrics.undertimeDeduction,
+      total: payMetrics.deductions,
+    },
+    netPay: payMetrics.netPay,
+    details: {
+      hourlyRate,
+      overtimeHourlyRate,
+      overtimeMinutes: timeMetrics.overtimeDeductionMinutes,
+      nightDifferentialHours: payMetrics.nightDifferentialHours,
+      lateMinutes: timeMetrics.lateDeductionMinutes,
+      undertimeMinutes: timeMetrics.undertimeDeductionMinutes,
+    },
+  };
 };

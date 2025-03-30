@@ -9,7 +9,7 @@ import {
 import { Employee } from "@/renderer/model/employee";
 import { EmployeeModel } from "@/renderer/model/employee";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
-import { IoClose } from "react-icons/io5";
+import { IoClose, IoCalculator } from "react-icons/io5";
 import { Switch } from "@headlessui/react";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import {
@@ -22,9 +22,10 @@ import {
   calculateTimeMetrics,
   calculatePayMetrics,
   isHolidayDate,
+  getPaymentBreakdown,
 } from "@/renderer/hooks/utils/compensationUtils";
 import { toast } from "sonner";
-
+import { ComputationBreakdownButton } from "@/renderer/components/ComputationBreakdownButton";
 interface CompensationDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -134,7 +135,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     year,
     day,
     dayType: compensation.dayType || ("Regular" as DayType),
-    manualOverride: compensation.manualOverride,
+    manualOverride: compensation.manualOverride || false,
   });
   console.log("Initial formData", formData);
   const { dbPath } = useSettingsStore();
@@ -274,7 +275,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const timeMetrics = calculateTimeMetrics(
       actual,
       scheduled,
-      attendanceSettings
+      attendanceSettings,
+      employmentType
     );
     const payMetrics = calculatePayMetrics(
       timeMetrics,
@@ -317,14 +319,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   ]);
 
   useEffect(() => {
-    // Update formData whenever computedValues change
-    if (computedValues) {
-      console.log("Updating formData with computed values:", {
-        nightDifferentialHours: computedValues.nightDifferentialHours,
-        nightDifferentialPay: computedValues.nightDifferentialPay,
-        grossPay: computedValues.grossPay,
-        netPay: computedValues.netPay,
-      });
+    // Only update formData with computed values if manualOverride is false
+    if (computedValues && !formData.manualOverride) {
       setFormData((prev) => ({
         ...prev,
         lateMinutes: computedValues.lateMinutes,
@@ -341,10 +337,23 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         nightDifferentialHours: computedValues.nightDifferentialHours,
         nightDifferentialPay: computedValues.nightDifferentialPay,
         absence: computedValues.absence,
-        // manualOverride: computedValues.manualOverride,
       }));
     }
-  }, [computedValues]);
+  }, [computedValues, formData.manualOverride]);
+
+  // Update formData when compensation prop changes
+  useEffect(() => {
+    if (compensation) {
+      setFormData({
+        ...compensation,
+        month,
+        year,
+        day,
+        dayType: compensation.dayType || ("Regular" as DayType),
+        manualOverride: compensation.manualOverride || false,
+      });
+    }
+  }, [compensation, month, year, day]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,8 +402,51 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     setFormData((prev) => {
       const newData = { ...prev };
 
+      // Handle minute fields affecting their corresponding pay/deduction fields
+      if (name === "overtimeMinutes" && formData.manualOverride) {
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
+        const hourlyRate = (employee?.dailyRate || 0) / 8;
+        newData.overtimePay =
+          Math.floor(numericValue / 60) *
+          hourlyRate *
+          (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+        // Update gross pay and net pay
+        newData.grossPay =
+          (formData.dailyRate || 0) +
+          newData.overtimePay +
+          (formData.nightDifferentialPay || 0) +
+          (formData.holidayBonus || 0);
+        newData.netPay = newData.grossPay - (formData.deductions || 0);
+      } else if (name === "undertimeMinutes" && formData.manualOverride) {
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
+        const gracePeriod = attendanceSettings?.undertimeGracePeriod || 0;
+        newData.undertimeDeduction =
+          numericValue > gracePeriod
+            ? (numericValue - gracePeriod) *
+              (attendanceSettings?.undertimeDeductionPerMinute || 0)
+            : 0;
+        // Update total deductions and net pay
+        newData.deductions =
+          newData.undertimeDeduction + (formData.lateDeduction || 0);
+        newData.netPay = (formData.grossPay || 0) - newData.deductions;
+      } else if (name === "lateMinutes" && formData.manualOverride) {
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
+        const gracePeriod = attendanceSettings?.lateGracePeriod || 0;
+        newData.lateDeduction =
+          numericValue > gracePeriod
+            ? (numericValue - gracePeriod) *
+              (attendanceSettings?.lateDeductionPerMinute || 0)
+            : 0;
+        // Update total deductions and net pay
+        newData.deductions =
+          (formData.undertimeDeduction || 0) + newData.lateDeduction;
+        newData.netPay = (formData.grossPay || 0) - newData.deductions;
+      }
       // Handle fields that affect gross pay
-      if (
+      else if (
         name === "overtimePay" ||
         name === "holidayBonus" ||
         name === "nightDifferentialPay"
@@ -510,17 +562,183 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         {/* Dialog content */}
         <div className="relative">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 rounded-t-lg">
-            <h3 className="text-lg font-medium text-gray-100">
-              {hasEditAccess
-                ? "Edit Compensation Details"
-                : "View Compensation Details"}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-300 focus:outline-none"
-            >
-              <IoClose className="h-5 w-5" />
-            </button>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-100 flex items-center">
+                {hasEditAccess
+                  ? "Edit Compensation Details"
+                  : "View Compensation Details"}
+                <span
+                  className="text-sm text-gray-400 font-normal ml-2 flex items-center"
+                  title="Scheduled working hours for this day"
+                >
+                  <svg
+                    className="w-4 h-4 mx-2 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  {employmentType
+                    ? (() => {
+                        const schedule = getScheduleForDate(
+                          employmentType,
+                          new Date(
+                            compensation.year,
+                            compensation.month - 1,
+                            compensation.day
+                          )
+                        );
+                        return schedule
+                          ? `${schedule.timeIn.replace(
+                              /(\d{2}):(\d{2})/,
+                              (_, h, m) => {
+                                const hour = parseInt(h);
+                                return `${hour % 12 || 12}:${m}${
+                                  hour < 12 ? "AM" : "PM"
+                                }`;
+                              }
+                            )} - ${schedule.timeOut.replace(
+                              /(\d{2}):(\d{2})/,
+                              (_, h, m) => {
+                                const hour = parseInt(h);
+                                return `${hour % 12 || 12}:${m}${
+                                  hour < 12 ? "AM" : "PM"
+                                }`;
+                              }
+                            )}`
+                          : "Day Off";
+                      })()
+                    : "No Schedule"}
+                </span>
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {attendanceSettings && (
+                <ComputationBreakdownButton
+                  breakdown={
+                    formData.manualOverride
+                      ? {
+                          basePay: formData.dailyRate || 0,
+                          overtimePay: formData.overtimePay || 0,
+                          nightDifferentialPay:
+                            formData.nightDifferentialPay || 0,
+                          holidayBonus: formData.holidayBonus || 0,
+                          deductions: {
+                            late: formData.lateDeduction || 0,
+                            undertime: formData.undertimeDeduction || 0,
+                            total: formData.deductions || 0,
+                          },
+                          netPay: formData.netPay || 0,
+                          details: {
+                            hourlyRate: (formData.dailyRate || 0) / 8,
+                            overtimeHourlyRate:
+                              ((formData.dailyRate || 0) / 8) *
+                              (attendanceSettings.overtimeHourlyMultiplier ||
+                                1.25),
+                            overtimeMinutes: formData.overtimeMinutes || 0,
+                            nightDifferentialHours:
+                              formData.nightDifferentialHours || 0,
+                            lateMinutes: formData.lateMinutes || 0,
+                            undertimeMinutes: formData.undertimeMinutes || 0,
+                          },
+                        }
+                      : getPaymentBreakdown(
+                          calculateTimeMetrics(
+                            createTimeObjects(
+                              year,
+                              month,
+                              day,
+                              timeIn || "00:00",
+                              timeOut || "00:00",
+                              employmentType
+                            ).actual,
+                            createTimeObjects(
+                              year,
+                              month,
+                              day,
+                              timeIn || "00:00",
+                              timeOut || "00:00",
+                              employmentType
+                            ).scheduled,
+                            attendanceSettings,
+                            employmentType
+                          ),
+                          calculatePayMetrics(
+                            calculateTimeMetrics(
+                              createTimeObjects(
+                                year,
+                                month,
+                                day,
+                                timeIn || "00:00",
+                                timeOut || "00:00",
+                                employmentType
+                              ).actual,
+                              createTimeObjects(
+                                year,
+                                month,
+                                day,
+                                timeIn || "00:00",
+                                timeOut || "00:00",
+                                employmentType
+                              ).scheduled,
+                              attendanceSettings,
+                              employmentType
+                            ),
+                            attendanceSettings,
+                            formData.dailyRate,
+                            holidays.find((h) =>
+                              isHolidayDate(new Date(year, month - 1, day), h)
+                            ),
+                            createTimeObjects(
+                              year,
+                              month,
+                              day,
+                              timeIn || "00:00",
+                              timeOut || "00:00",
+                              employmentType
+                            ).actual.timeIn,
+                            createTimeObjects(
+                              year,
+                              month,
+                              day,
+                              timeIn || "00:00",
+                              timeOut || "00:00",
+                              employmentType
+                            ).actual.timeOut,
+                            createTimeObjects(
+                              year,
+                              month,
+                              day,
+                              timeIn || "00:00",
+                              timeOut || "00:00",
+                              employmentType
+                            ).scheduled,
+                            employmentType
+                          ),
+                          attendanceSettings,
+                          formData.dailyRate,
+                          employmentType
+                        )
+                  }
+                  attendanceSettings={attendanceSettings}
+                  holiday={holidays.find((h) =>
+                    isHolidayDate(new Date(year, month - 1, day), h)
+                  )}
+                />
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-300 focus:outline-none"
+              >
+                <IoClose className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           <form

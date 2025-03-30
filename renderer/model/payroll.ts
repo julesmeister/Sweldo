@@ -192,7 +192,23 @@ export class Payroll {
       const employeeId = this.processColumn(rows[i], "ID:");
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
-      console.log(`Loaded employee data:`, employee);
+
+      // Only add employee to this.employees if they don't exist in the database
+      if (!employee) {
+        const employeeName = this.processColumn(rows[i], "Name:");
+        this.employees.push({
+          id: employeeId,
+          name: employeeName || "Unknown",
+          position: "",
+          dailyRate: 0,
+          sss: 0,
+          philHealth: 0,
+          pagIbig: 0,
+          status: "active",
+          employmentType: "regular",
+          lastPaymentPeriod: undefined,
+        });
+      }
 
       timeList?.forEach((timeString, j) => {
         if (!timeString) {
@@ -209,13 +225,10 @@ export class Payroll {
 
         // Get employee type and schedule from employee data
         const employeeType = employee?.employmentType;
-        console.log(`Employee type from database:`, employeeType);
-        console.log(`Available employment types:`, this.employmentTypes);
 
         const employmentType = this.employmentTypes.find(
           (type) => type.type === employeeType
         );
-        console.log(`Found employment type:`, employmentType);
 
         let schedule = null;
         if (employmentType) {
@@ -225,33 +238,18 @@ export class Payroll {
             j + 1
           ).getDay();
           const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-          console.log(`Calculated schedule day:`, {
-            dayOfWeek,
-            scheduleDay,
-            date: new Date(
-              this.dateRange.start.getFullYear(),
-              this.dateRange.start.getMonth(),
-              j + 1
-            ),
-          });
 
           schedule = employmentType.schedules
             ? employmentType.schedules.find(
                 (s: any) => s.dayOfWeek === scheduleDay
               )
             : null;
-          console.log(`Found schedule for day:`, schedule);
         }
 
         // Parse times from current cell
         const timeRegex = /(\d{2}:\d{2})/g;
         const times = timeString.match(timeRegex) || [];
         const uniqueTimes = [...new Set(times)] as string[];
-        console.log(`\nProcessing times for day ${j + 1}:`, {
-          rawTimeString: timeString,
-          parsedTimes: times,
-          uniqueTimes: uniqueTimes,
-        });
 
         let timeIn: string | null = null;
         let timeOut: string | null = null;
@@ -259,11 +257,6 @@ export class Payroll {
         if (schedule && schedule.timeIn && schedule.timeOut) {
           const [schedInHour] = schedule.timeIn.split(":").map(Number);
           const isNightShift = schedInHour >= 18;
-          console.log(`Schedule info:`, {
-            schedule,
-            schedInHour,
-            isNightShift,
-          });
 
           if (isNightShift) {
             // For night shifts, find the latest PM time from current cell
@@ -273,7 +266,6 @@ export class Payroll {
                 return { time, hour };
               }
             );
-            console.log(`Current cell times processed:`, currentCellTimes);
 
             // Get PM times (17:00 onwards) from current cell for time in
             const pmTimes = currentCellTimes
@@ -281,11 +273,9 @@ export class Payroll {
               .sort(
                 (a: { hour: number }, b: { hour: number }) => b.hour - a.hour
               );
-            console.log(`PM times found for time in:`, pmTimes);
 
             // Get next day's cell for time out
             const nextDayString = timeList[j + 1];
-            console.log(`Next day's time string:`, nextDayString);
 
             if (nextDayString) {
               const nextDayTimes = (
@@ -299,15 +289,10 @@ export class Payroll {
                 .sort(
                   (a: { hour: number }, b: { hour: number }) => a.hour - b.hour
                 );
-              console.log(
-                `Next day's AM times found for time out:`,
-                nextDayTimes
-              );
 
               // Set time in from current day's PM time
               if (pmTimes.length > 0) {
                 timeIn = pmTimes[0].time as string;
-                console.log(`Setting time in from PM times:`, timeIn);
               }
 
               // Set time out from next day's AM time, but only if it's not too close to time in
@@ -327,24 +312,12 @@ export class Payroll {
                 // Only set time out if it's more than 5 minutes away from time in
                 if (timeDiff > 5) {
                   timeOut = nextDayTimes[0].time as string;
-                  console.log(
-                    `Setting time out from next day's AM times:`,
-                    timeOut
-                  );
-                } else {
-                  console.log(
-                    `Time out too close to time in (${timeDiff} minutes), leaving blank`
-                  );
                 }
               }
             } else {
               // If it's the last day, only set time in if we have a PM time
               if (pmTimes.length > 0) {
                 timeIn = pmTimes[0].time as string;
-                console.log(
-                  `Last day - setting time in from PM times:`,
-                  timeIn
-                );
               }
             }
           } else {
@@ -370,14 +343,6 @@ export class Payroll {
                 // Only set time out if it's more than 5 minutes away from time in
                 if (timeDiff > 5) {
                   timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
-                  console.log(`Regular shift - setting times:`, {
-                    timeIn,
-                    timeOut,
-                  });
-                } else {
-                  console.log(
-                    `Time out too close to time in (${timeDiff} minutes), leaving blank`
-                  );
                 }
               }
             }
@@ -402,14 +367,6 @@ export class Payroll {
               // Only set time out if it's more than 5 minutes away from time in
               if (timeDiff > 5) {
                 timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
-                console.log(`No schedule - using first and last times:`, {
-                  timeIn,
-                  timeOut,
-                });
-              } else {
-                console.log(
-                  `Time out too close to time in (${timeDiff} minutes), leaving blank`
-                );
               }
             }
           }
@@ -424,7 +381,6 @@ export class Payroll {
           timeIn: timeIn || null,
           timeOut: timeOut || null,
         };
-        console.log(`Final attendance record:`, attendance);
         attendances.push(attendance);
 
         // Check for missing time out with processed times
@@ -444,19 +400,6 @@ export class Payroll {
       });
 
       if (employee) {
-        this.employees.push({
-          id: employee.id,
-          name: employee.name,
-          position: "",
-          dailyRate: employee.dailyRate || 0,
-          sss: employee.sss || 0,
-          philHealth: employee.philHealth || 0,
-          pagIbig: employee.pagIbig || 0,
-          status: "active",
-          employmentType: employee.employmentType || "regular",
-          lastPaymentPeriod: undefined,
-        });
-
         // Save attendances for each employee
         const attendanceModel = createAttendanceModel(this.dbPath);
         await attendanceModel.saveOrUpdateAttendances(
@@ -500,8 +443,6 @@ export class Payroll {
     const attendance = await createAttendanceModel(this.dbPath);
 
     // Get all months between start and end date to handle cross-month payroll periods
-    // Example: Jan 15 to Feb 15 will include both January and February
-    // Example: Feb 1 to Feb 15 will only include February
     const months: { month: number; year: number }[] = [];
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate instanceof Date ? endDate : new Date(endDate);
@@ -513,18 +454,13 @@ export class Payroll {
       });
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
-    console.log(`Processing payroll for months:`, months);
 
     // Fetch all compensations for the date range from all relevant months
-    // This ensures we get data from both months when period spans across months
     const allCompensations = await Promise.all(
       months.map(({ month, year }) =>
         compensationModel.loadRecords(month, year, employeeId)
       )
     ).then((results) => results.flat());
-    console.log(
-      `Loaded ${allCompensations.length} total compensation records from ${months.length} months`
-    );
 
     // Filter records to only include those within the exact date range
     const filteredCompensations = allCompensations.filter((comp) => {
@@ -538,50 +474,21 @@ export class Payroll {
       const endOfRange = new Date(end);
       endOfRange.setHours(23, 59, 59, 999);
 
-      const isInRange = compDate >= startOfRange && compDate <= endOfRange;
-
-      console.log(
-        `Compensation for ${compDate.toISOString()}: ${
-          isInRange ? "included" : "excluded"
-        } (absence: ${comp.absence ? "yes" : "no"}, date comparison:`,
-        {
-          compDate,
-          startOfRange,
-          endOfRange,
-          isAfterStart: compDate >= startOfRange,
-          isBeforeEnd: compDate <= endOfRange,
-        }
-      );
-
-      return isInRange;
+      return compDate >= startOfRange && compDate <= endOfRange;
     });
 
     // Load attendance records from all months in the period
-    // This is important for cross-month periods to get complete attendance data
     const allAttendanceRecords = await Promise.all(
       months.map(({ month, year }) =>
         attendance.loadAttendancesById(month, year, employeeId)
       )
     ).then((results) => results.flat());
-    console.log(
-      `Loaded ${allAttendanceRecords.length} total attendance records from ${months.length} months`
-    );
 
     // Filter attendance records to only include those within the exact date range
-    // This ensures we only count attendance from the specified period, even if it spans months
     const filteredAttendanceRecords = allAttendanceRecords.filter((record) => {
       const recordDate = new Date(record.year, record.month - 1, record.day);
-      const isInRange = recordDate >= start && recordDate <= end;
-      console.log(
-        `Attendance for ${recordDate.toISOString()}: ${
-          isInRange ? "included" : "excluded"
-        }`
-      );
-      return isInRange;
+      return recordDate >= start && recordDate <= end;
     });
-    console.log(
-      `Filtered to ${filteredAttendanceRecords.length} attendance records within date range`
-    );
 
     if (!employee) {
       throw new Error("Employee not found");
@@ -597,17 +504,7 @@ export class Payroll {
       return !record.timeIn || !record.timeOut;
     });
 
-    console.log(
-      "Found absences:",
-      absences.map((record) => ({
-        date: `${record.year}-${record.month}-${record.day}`,
-        timeIn: record.timeIn,
-        timeOut: record.timeOut,
-      }))
-    );
-
     const totalAbsences = absences.length;
-    console.log(`Total absences in period: ${totalAbsences}`);
 
     // Count the number of days worked (days with both timeIn and timeOut)
     const daysWorked = filteredAttendanceRecords.filter((record) => {
@@ -615,8 +512,6 @@ export class Payroll {
       // Count all days (including Sundays) as long as there's a valid time in/out record
       return record.timeIn && record.timeOut;
     }).length;
-
-    console.log(`Total days worked: ${daysWorked}`);
 
     // Calculate totals from pre-computed compensation records
     let totalBasicPay = 0;
@@ -726,9 +621,6 @@ export class Payroll {
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) throw new Error("Employee not found");
 
-      console.log(
-        `Generating payroll summary for employee ${employeeId} between ${startDate.toDateString()} and ${endDate.toDateString()}`
-      );
       const start = startDate instanceof Date ? startDate : new Date(startDate);
       const end = endDate instanceof Date ? endDate : new Date(endDate);
       const summary = await this.summarizeCompensations(employeeId, start, end);
@@ -753,10 +645,6 @@ export class Payroll {
             : deductions?.cashAdvanceDeductions ?? 0,
         others: summary.deductions.others || 0,
       };
-
-      console.log(
-        `Using the following deductions: ${JSON.stringify(finalDeductions)}`
-      );
 
       const payrollData: PayrollCSVData = {
         id: `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`,
@@ -836,9 +724,7 @@ export class Payroll {
 
       try {
         await window.electron.writeFile(filePath, csvContent);
-        console.log(`Payroll data saved to ${filePath}`);
       } catch (error) {
-        console.error(`Error writing to file ${filePath}:`, error);
         throw error;
       }
 
@@ -871,11 +757,6 @@ export class Payroll {
       const endYear = endDate.getFullYear();
       const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
-      console.log(`Attempting to delete payroll from file: ${filePath}`);
-      console.log(
-        `Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
-      );
-
       // Check if file exists
       const fileExists = await window.electron.fileExists(filePath);
       if (!fileExists) {
@@ -886,11 +767,8 @@ export class Payroll {
       const content = await window.electron.readFile(filePath);
       const parsedData = Papa.parse<PayrollCSVData>(content, { header: true });
 
-      console.log(`Found ${parsedData.data.length} records in file`);
-
       // Find the exact record to delete using the ID
       const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
-      console.log(`Looking for payroll with ID: ${payrollId}`);
 
       // Find the payroll record before filtering it out
       const payrollToDelete = parsedData.data.find(
@@ -906,9 +784,6 @@ export class Payroll {
         payrollToDelete.cashAdvanceDeductions || "0"
       );
       if (cashAdvanceDeductions > 0) {
-        console.log(
-          `Reversing cash advance deduction of ${cashAdvanceDeductions}`
-        );
         await Payroll.reverseCashAdvanceDeduction(
           dbPath,
           employeeId,
@@ -920,20 +795,14 @@ export class Payroll {
       // Filter out the matching record
       const filteredData = parsedData.data.filter((row: any) => {
         const rowId = row.id?.toString();
-        const shouldKeep = rowId !== payrollId;
-        console.log(`Row ID: ${rowId}, Keep: ${shouldKeep}`);
-        return shouldKeep;
+        return rowId !== payrollId;
       });
-
-      console.log(`Remaining records after filter: ${filteredData.length}`);
 
       // Convert back to CSV
       const updatedContent = Papa.unparse(filteredData);
 
       // Write the updated content back to the file
       await window.electron.writeFile(filePath, updatedContent);
-
-      console.log(`Successfully deleted payroll record with ID: ${payrollId}`);
     } catch (error) {
       console.error(`Error deleting payroll summary:`, error);
       throw error;

@@ -154,7 +154,8 @@ export const useMissingTimeEdit = ({
         const timeMetrics = calculateTimeMetrics(
           actual,
           scheduled,
-          attendanceSettings
+          attendanceSettings,
+          employmentType
         );
         console.log(
           "[useMissingTimeEdit] Time metrics calculated:",

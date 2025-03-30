@@ -35,7 +35,8 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
     try {
       const success = await login(pin);
       if (success) {
-        if (onSuccess) onSuccess();
+        // Only call onSuccess if login was successful
+        onSuccess?.();
       } else {
         setError("Invalid PIN code");
         setPin("");

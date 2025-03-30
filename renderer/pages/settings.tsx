@@ -189,6 +189,10 @@ export default function SettingsPage() {
                       value={attendanceSettings?.lateGracePeriod ?? ""}
                       onChange={(e) => handleInputChange(e, "lateGracePeriod")}
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 5 means employees can be up to 5 minutes late
+                      without penalty
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -209,6 +213,10 @@ export default function SettingsPage() {
                         }
                       />
                     </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: ₱1 means ₱1 will be deducted for each minute late
+                      after grace period
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -224,6 +232,10 @@ export default function SettingsPage() {
                         handleInputChange(e, "undertimeGracePeriod")
                       }
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 5 means employees can leave up to 5 minutes early
+                      without penalty
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -246,45 +258,56 @@ export default function SettingsPage() {
                         }
                       />
                     </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: ₱1 means ₱1 will be deducted for each minute
+                      early after grace period
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Early-In /Overtime Grace Period (minutes)
+                      Overtime Threshold (minutes)
                     </label>
                     <input
                       type="number"
-                      name="overtimeGracePeriod"
+                      name="overtimeThreshold"
                       className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3"
                       placeholder="5"
-                      value={attendanceSettings?.overtimeGracePeriod ?? ""}
+                      value={attendanceSettings?.overtimeThreshold ?? ""}
                       onChange={(e) =>
-                        handleInputChange(e, "overtimeGracePeriod")
+                        handleInputChange(e, "overtimeThreshold")
                       }
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 5 means overtime pay only applies after working 5
+                      minutes beyond regular hours
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Early-In / Overtime Addition Per Minute
+                      Overtime Hourly Rate Multiplier
                     </label>
                     <div className="mt-1 relative rounded-md">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 sm:text-sm">₱</span>
+                        <span className="text-gray-500 sm:text-sm">x</span>
                       </div>
                       <input
                         type="number"
-                        name="overtimeAdditionPerMinute"
+                        name="overtimeHourlyMultiplier"
                         className="mt-1 block w-full rounded-md border-2 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-12 px-3 pl-7"
-                        placeholder="2"
+                        placeholder="1.25"
                         value={
-                          attendanceSettings?.overtimeAdditionPerMinute ?? ""
+                          attendanceSettings?.overtimeHourlyMultiplier ?? ""
                         }
                         onChange={(e) =>
-                          handleInputChange(e, "overtimeAdditionPerMinute")
+                          handleInputChange(e, "overtimeHourlyMultiplier")
                         }
+                        step="0.01"
                       />
                     </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 1.25 means 25% more than regular hourly rate
+                    </p>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       Night Differential Multiplier
@@ -316,6 +339,10 @@ export default function SettingsPage() {
                         }}
                       />
                     </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 10% means 10% more than regular hourly rate
+                      during night shift hours
+                    </p>
                   </div>
 
                   <div>
@@ -342,6 +369,10 @@ export default function SettingsPage() {
                         );
                       }}
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 22:00 means night differential rate starts at
+                      10:00 PM
+                    </p>
                   </div>
 
                   <div>
@@ -368,6 +399,10 @@ export default function SettingsPage() {
                         );
                       }}
                     />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Example: 06:00 means night differential rate ends at 6:00
+                      AM
+                    </p>
                   </div>
                 </div>
               </div>

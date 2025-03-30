@@ -24,6 +24,7 @@ import {
   createCompensationRecord,
 } from "./utils/compensationUtils";
 import { MissingTimeModel } from "@/renderer/model/missingTime";
+import { toast } from "sonner";
 
 interface UseTimesheetEditProps {
   attendanceModel: AttendanceModel;
@@ -157,7 +158,8 @@ export const useTimesheetEdit = ({
       const timeMetrics = calculateTimeMetrics(
         actual,
         scheduled,
-        attendanceSettings
+        attendanceSettings,
+        employmentType || null
       );
       console.log("Time metrics calculated:", timeMetrics);
 
@@ -278,8 +280,12 @@ export const useTimesheetEdit = ({
 
       // Update parent component
       onDataUpdate(updatedAttendanceData, updatedCompensationData);
+
+      // Show success toast
+      toast.success("Timesheet updated successfully");
     } catch (error) {
       console.error("Error in handleTimesheetEdit:", error);
+      toast.error("Failed to update timesheet");
       throw error;
     }
   };

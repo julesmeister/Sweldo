@@ -153,13 +153,18 @@ const TimesheetPage: React.FC = () => {
     month: storedMonthInt,
     year,
     dbPath,
-    onDataUpdate: (newAttendance, newCompensations) => {
+    onDataUpdate: async (newAttendance, newCompensations) => {
       if (!hasAccess("MANAGE_ATTENDANCE")) {
         toast.error("You don't have permission to modify attendance records");
         return;
       }
+
+      // Update both states immediately
       setTimesheetEntries(newAttendance);
       setCompensationEntries(newCompensations);
+
+      // Recompute compensations to ensure everything is in sync
+      await computeCompensations(newAttendance, newCompensations);
     },
   });
 

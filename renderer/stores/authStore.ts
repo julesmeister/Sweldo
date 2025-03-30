@@ -32,9 +32,16 @@ export const useAuthStore = create<AuthState>()(
         if (!isAuthenticated) return false;
 
         const now = Date.now();
-        const isSessionValid = now - lastActivity < SESSION_TIMEOUT;
+        const timeSinceLastActivity = now - lastActivity;
+        const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
 
         if (!isSessionValid && isAuthenticated) {
+          console.log("Session expired due to inactivity", {
+            timeSinceLastActivity: Math.round(
+              timeSinceLastActivity / 1000 / 60
+            ),
+            timeout: SESSION_TIMEOUT / 1000 / 60,
+          });
           logout();
           return false;
         }
@@ -101,12 +108,16 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({
-          currentRole: null,
-          isAuthenticated: false,
-          accessCodes: [],
-          lastActivity: 0,
-        });
+        const { isAuthenticated } = get();
+        if (isAuthenticated) {
+          set({
+            currentRole: null,
+            isAuthenticated: false,
+            accessCodes: [],
+            lastActivity: 0,
+          });
+          toast.info("Logged out due to inactivity");
+        }
       },
 
       hasAccess: (requiredCode: string) => {

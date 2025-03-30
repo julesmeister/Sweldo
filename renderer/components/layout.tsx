@@ -25,7 +25,7 @@ export default function RootLayout({
   const pathname = usePathname();
   const { setLoading, setActiveLink } = useLoadingStore();
   const initialRender = useRef(true);
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, logout, checkSession } = useAuthStore();
   const { dbPath, isInitialized, initialize } = useSettingsStore();
   const [showLogin, setShowLogin] = useState(false);
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
@@ -121,15 +121,21 @@ export default function RootLayout({
 
     const checkSession = () => {
       const now = Date.now();
-      if (now - lastActivity >= SESSION_TIMEOUT) {
-        toast.info("Session expired due to inactivity");
+      const timeSinceLastActivity = now - lastActivity;
+
+      if (timeSinceLastActivity >= SESSION_TIMEOUT) {
+        console.log("Session timeout detected", {
+          timeSinceLastActivity: Math.round(timeSinceLastActivity / 1000 / 60),
+          timeout: SESSION_TIMEOUT / 1000 / 60,
+        });
         logout();
         setShowLogin(true);
         hasCheckedRoles.current = false; // Reset roles check on session timeout
       }
     };
 
-    const interval = setInterval(checkSession, 1000); // Check every second
+    // Check every minute instead of every second
+    const interval = setInterval(checkSession, 60 * 1000);
     return () => clearInterval(interval);
   }, [isAuthenticated, lastActivity, logout]);
 
@@ -137,7 +143,11 @@ export default function RootLayout({
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const updateActivity = () => setLastActivity(Date.now());
+    const updateActivity = () => {
+      const now = Date.now();
+      setLastActivity(now);
+      useAuthStore.getState().updateLastActivity();
+    };
 
     // Track various user activities
     window.addEventListener("mousemove", updateActivity);

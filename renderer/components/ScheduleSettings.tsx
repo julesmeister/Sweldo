@@ -249,113 +249,81 @@ export default function ScheduleSettings({
   // Update handleEmploymentTypeChange to handle schedule mode
   const handleEmploymentTypeChange = (
     index: number,
-    field: string,
-    value: string | boolean,
-    additionalUpdates?: { field: string; value: string }[]
+    field:
+      | "type"
+      | "requiresTimeTracking"
+      | "hoursOfWork"
+      | `schedules.${number}.timeIn`
+      | `schedules.${number}.timeOut`,
+    value: string | boolean | number
   ) => {
-    console.log("Employment type change:", {
-      index,
-      field,
-      value,
-      additionalUpdates,
-    });
-    let updatedTypes = employmentTypes.map((type, i) => {
-      if (i === index) {
-        if (field.startsWith("schedules.")) {
-          const [, dayIndex, timeField] = field.split(".");
-          console.log("Updating schedule:", { dayIndex, timeField, value });
-          const schedules = type.schedules || [
-            { dayOfWeek: 1, timeIn: "", timeOut: "" },
-            { dayOfWeek: 2, timeIn: "", timeOut: "" },
-            { dayOfWeek: 3, timeIn: "", timeOut: "" },
-            { dayOfWeek: 4, timeIn: "", timeOut: "" },
-            { dayOfWeek: 5, timeIn: "", timeOut: "" },
-            { dayOfWeek: 6, timeIn: "", timeOut: "" },
-            { dayOfWeek: 7, timeIn: "", timeOut: "" },
-          ];
-          const updatedSchedules = [...schedules];
-          if (
-            fixedTimeSchedule[index] &&
-            Number(dayIndex) === 0 &&
-            (timeField === "timeIn" || timeField === "timeOut")
-          ) {
-            // If it's Monday (dayIndex 0) and fixedTimeSchedule is enabled, update Tuesday through Saturday
-            for (let day = 0; day < 6; day++) {
-              updatedSchedules[day] = {
-                ...updatedSchedules[day],
-                [timeField]: value,
-              };
-            }
-          } else {
-            updatedSchedules[Number(dayIndex)] = {
-              ...updatedSchedules[Number(dayIndex)],
-              [timeField]: value,
-            };
-          }
-          console.log("Updated schedules:", updatedSchedules);
-          return { ...type, schedules: updatedSchedules };
-        }
+    const updatedTypes = [...employmentTypes];
 
-        if (field === "requiresTimeTracking") {
-          const requiresTimeTracking = value as boolean;
-          const updatedType = {
-            ...type,
-            requiresTimeTracking,
-            schedules: requiresTimeTracking
-              ? [
-                  { dayOfWeek: 1, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 2, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 3, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 4, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 5, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 6, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 7, timeIn: "", timeOut: "" },
-                ]
-              : undefined,
+    if (field.startsWith("schedules.")) {
+      const [, dayIndex, timeField] = field.split(".");
+      const schedules = updatedTypes[index].schedules || [
+        { dayOfWeek: 1, timeIn: "", timeOut: "" },
+        { dayOfWeek: 2, timeIn: "", timeOut: "" },
+        { dayOfWeek: 3, timeIn: "", timeOut: "" },
+        { dayOfWeek: 4, timeIn: "", timeOut: "" },
+        { dayOfWeek: 5, timeIn: "", timeOut: "" },
+        { dayOfWeek: 6, timeIn: "", timeOut: "" },
+        { dayOfWeek: 7, timeIn: "", timeOut: "" },
+      ];
+
+      const updatedSchedules = [...schedules];
+      if (
+        fixedTimeSchedule[index] &&
+        Number(dayIndex) === 0 &&
+        (timeField === "timeIn" || timeField === "timeOut")
+      ) {
+        // If it's Monday (dayIndex 0) and fixedTimeSchedule is enabled, update Tuesday through Saturday
+        for (let day = 0; day < 6; day++) {
+          updatedSchedules[day] = {
+            ...updatedSchedules[day],
+            [timeField]: value,
           };
-          console.log("Updated type with time tracking:", updatedType);
-          return updatedType;
         }
-
-        const formattedValue =
-          field === "type" && typeof value === "string"
-            ? value.toLowerCase().replace(/\s+/g, "-")
-            : value;
-        return { ...type, [field]: formattedValue };
+      } else {
+        updatedSchedules[Number(dayIndex)] = {
+          ...updatedSchedules[Number(dayIndex)],
+          [timeField]: value,
+        };
       }
-      return type;
-    });
 
-    // Handle additional updates if provided
-    if (additionalUpdates) {
-      additionalUpdates.forEach((update) => {
-        updatedTypes = updatedTypes.map((type, i) => {
-          if (i === index && update.field.startsWith("schedules.")) {
-            const [, dayIndex, timeField] = update.field.split(".");
-            const schedules = type.schedules
-              ? [...type.schedules]
-              : [
-                  { dayOfWeek: 1, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 2, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 3, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 4, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 5, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 6, timeIn: "", timeOut: "" },
-                  { dayOfWeek: 7, timeIn: "", timeOut: "" },
-                ];
-            schedules[Number(dayIndex)] = {
-              ...schedules[Number(dayIndex)],
-              [timeField]: update.value,
-            };
-            return { ...type, schedules };
-          }
-          return type;
-        });
-      });
+      updatedTypes[index] = {
+        ...updatedTypes[index],
+        schedules: updatedSchedules,
+      };
+    } else if (field === "requiresTimeTracking") {
+      const requiresTimeTracking = value as boolean;
+      updatedTypes[index] = {
+        ...updatedTypes[index],
+        requiresTimeTracking,
+        schedules: requiresTimeTracking
+          ? [
+              { dayOfWeek: 1, timeIn: "", timeOut: "" },
+              { dayOfWeek: 2, timeIn: "", timeOut: "" },
+              { dayOfWeek: 3, timeIn: "", timeOut: "" },
+              { dayOfWeek: 4, timeIn: "", timeOut: "" },
+              { dayOfWeek: 5, timeIn: "", timeOut: "" },
+              { dayOfWeek: 6, timeIn: "", timeOut: "" },
+              { dayOfWeek: 7, timeIn: "", timeOut: "" },
+            ]
+          : undefined,
+      };
+    } else {
+      const formattedValue =
+        field === "type" && typeof value === "string"
+          ? value.toLowerCase().replace(/\s+/g, "-")
+          : value;
+      updatedTypes[index] = {
+        ...updatedTypes[index],
+        [field]: formattedValue,
+      };
     }
 
-    console.log("Final updated types:", updatedTypes);
-    setEmploymentTypes(updatedTypes as EmploymentTypeWithMonthSchedules[]);
+    setEmploymentTypes(updatedTypes);
   };
 
   const handleSaveEmploymentTypes = async () => {
@@ -717,6 +685,21 @@ export default function ScheduleSettings({
     );
   };
 
+  const handleScheduleChange = (
+    index: number,
+    dayIndex: number,
+    field: "timeIn" | "timeOut",
+    value: string
+  ) => {
+    handleEmploymentTypeChange(
+      index,
+      `schedules.${dayIndex}.${field}` as
+        | `schedules.${number}.timeIn`
+        | `schedules.${number}.timeOut`,
+      value
+    );
+  };
+
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-b from-gray-50 to-white rounded-2xl border border-gray-200/50 shadow-lg shadow-gray-200/20">
@@ -874,6 +857,28 @@ export default function ScheduleSettings({
                             placeholder="Enter type name..."
                           />
                         </div>
+                        <div className="flex-1 flex items-center gap-4">
+                          <label className="block text-sm font-medium text-gray-700 whitespace-nowrap">
+                            Hours of Work
+                          </label>
+                          <input
+                            type="number"
+                            name={`hours-${index}`}
+                            value={type.hoursOfWork}
+                            onChange={(e) =>
+                              handleEmploymentTypeChange(
+                                index,
+                                "hoursOfWork",
+                                parseFloat(e.target.value)
+                              )
+                            }
+                            min="0"
+                            max="24"
+                            step="0.5"
+                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 sm:text-sm h-10 px-3"
+                            placeholder="Enter hours of work..."
+                          />
+                        </div>
                         <div className="flex flex-row gap-6 items-center min-w-[200px]">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-700 pr-5 flex items-center gap-2">
@@ -1012,17 +1017,11 @@ export default function ScheduleSettings({
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  handleEmploymentTypeChange(
+                                                  handleScheduleChange(
                                                     index,
-                                                    `schedules.${dayIndex}.timeIn`,
-                                                    copiedSchedule.timeIn,
-                                                    [
-                                                      {
-                                                        field: `schedules.${dayIndex}.timeOut`,
-                                                        value:
-                                                          copiedSchedule.timeOut,
-                                                      },
-                                                    ]
+                                                    dayIndex,
+                                                    "timeIn",
+                                                    copiedSchedule.timeIn
                                                   );
                                                   toast.success(
                                                     "Schedule pasted"
@@ -1073,16 +1072,11 @@ export default function ScheduleSettings({
                                                     dayIndex
                                                   ]
                                                 ) {
-                                                  handleEmploymentTypeChange(
+                                                  handleScheduleChange(
                                                     index,
-                                                    `schedules.${dayIndex}.timeIn`,
-                                                    "",
-                                                    [
-                                                      {
-                                                        field: `schedules.${dayIndex}.timeOut`,
-                                                        value: "",
-                                                      },
-                                                    ]
+                                                    dayIndex,
+                                                    "timeIn",
+                                                    ""
                                                   );
                                                 }
                                               }}
@@ -1113,9 +1107,10 @@ export default function ScheduleSettings({
                                             name={`timeIn-${index}-${dayIndex}`}
                                             value={schedule.timeIn}
                                             onChange={(e) =>
-                                              handleEmploymentTypeChange(
+                                              handleScheduleChange(
                                                 index,
-                                                `schedules.${dayIndex}.timeIn`,
+                                                dayIndex,
+                                                "timeIn",
                                                 e.target.value
                                               )
                                             }
@@ -1138,9 +1133,10 @@ export default function ScheduleSettings({
                                             name={`timeOut-${index}-${dayIndex}`}
                                             value={schedule.timeOut}
                                             onChange={(e) =>
-                                              handleEmploymentTypeChange(
+                                              handleScheduleChange(
                                                 index,
-                                                `schedules.${dayIndex}.timeOut`,
+                                                dayIndex,
+                                                "timeOut",
                                                 e.target.value
                                               )
                                             }

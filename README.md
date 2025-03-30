@@ -631,3 +631,60 @@ SweldoDB/
 ```
 
 Make sure to follow these patterns when implementing new features or modifying existing ones.
+
+## Compensation Calculation Formulas
+
+### Field Relationships and Calculations
+
+The compensation calculation system follows these relationships between fields:
+
+1. **Time-Based Fields Affecting Pay/Deductions**:
+   - `overtimeMinutes` → `overtimePay`
+     - Calculated using: `(overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier`
+   - `undertimeMinutes` → `undertimeDeduction`
+     - Calculated using: `undertimeMinutes * undertimeDeductionPerMinute`
+   - `lateMinutes` → `lateDeduction`
+     - Calculated using: `lateMinutes * lateDeductionPerMinute`
+
+2. **Pay/Duction Fields Affecting Gross Pay**:
+   - `grossPay` = `basePay` + `overtimePay` + `holidayBonus` + `nightDifferentialPay`
+   - Changes to any of these components will update the gross pay accordingly
+
+3. **Deduction Fields Affecting Net Pay**:
+   - `deductions` = `lateDeduction` + `undertimeDeduction`
+   - `netPay` = `grossPay` - `deductions` + `leavePay`
+   - Changes to any deduction will update the total deductions and net pay
+
+### Manual Override Behavior
+
+When manual override is enabled:
+1. Users can directly edit computed fields
+2. Changes to time-based fields (minutes) will not automatically update their corresponding pay/deduction fields
+3. Changes to pay/deduction fields will still affect gross pay and net pay calculations
+4. The system maintains the relationship between gross pay, deductions, and net pay
+
+### Example Calculations
+
+```typescript
+// Base calculations
+const hourlyRate = dailyRate / 8; // Standard 8-hour workday
+
+// Overtime calculation
+const overtimePay = (overtimeMinutes / 60) * hourlyRate * overtimeHourlyMultiplier;
+
+// Night differential calculation
+const nightDiffRate = hourlyRate * (1 + nightDifferentialMultiplier);
+const nightDifferentialPay = nightDifferentialHours * nightDiffRate;
+
+// Holiday pay calculation
+const holidayBonus = dailyRate * holidayMultiplier;
+
+// Deduction calculations
+const lateDeduction = lateMinutes * lateDeductionPerMinute;
+const undertimeDeduction = undertimeMinutes * undertimeDeductionPerMinute;
+
+// Final calculations
+const grossPay = dailyRate + overtimePay + holidayBonus + nightDifferentialPay;
+const totalDeductions = lateDeduction + undertimeDeduction;
+const netPay = grossPay - totalDeductions + leavePay;
+```

@@ -28,6 +28,7 @@ export interface MonthSchedule {
 
 export interface EmploymentType {
   type: string;
+  hoursOfWork: number; // Standard hours of work per day
   schedules?: Schedule[];
   monthSchedules?: {
     [yearMonth: string]: MonthSchedule; // Format: "YYYY-MM"
@@ -40,8 +41,8 @@ export interface AttendanceSettings {
   lateDeductionPerMinute: number; // in currency units
   undertimeGracePeriod: number; // in minutes
   undertimeDeductionPerMinute: number; // in currency units
-  overtimeGracePeriod: number; // in minutes
-  overtimeAdditionPerMinute: number; // in currency units
+  overtimeThreshold: number; // in minutes
+  overtimeHourlyMultiplier: number; // multiplier for hourly rate
   regularHolidayMultiplier: number; // multiplier for regular holidays
   specialHolidayMultiplier: number; // multiplier for special holidays
   nightDifferentialMultiplier: number; // decimal multiplier for night differential
@@ -54,8 +55,8 @@ export const defaultAttendanceSettings: AttendanceSettings = {
   lateDeductionPerMinute: 1,
   undertimeGracePeriod: 5,
   undertimeDeductionPerMinute: 1,
-  overtimeGracePeriod: 5,
-  overtimeAdditionPerMinute: 2,
+  overtimeThreshold: 5,
+  overtimeHourlyMultiplier: 1.25, // 25% more than regular hourly rate
   regularHolidayMultiplier: 1.5,
   specialHolidayMultiplier: 2,
   nightDifferentialMultiplier: 0.1,
@@ -66,6 +67,7 @@ export const defaultAttendanceSettings: AttendanceSettings = {
 export const defaultTimeSettings: EmploymentType[] = [
   {
     type: "regular",
+    hoursOfWork: 8,
     schedules: [
       { dayOfWeek: 1, timeIn: "08:00", timeOut: "17:00" }, // Monday
       { dayOfWeek: 2, timeIn: "08:00", timeOut: "17:00" }, // Tuesday
@@ -78,6 +80,7 @@ export const defaultTimeSettings: EmploymentType[] = [
   },
   {
     type: "merchandiser",
+    hoursOfWork: 8,
     schedules: [
       { dayOfWeek: 1, timeIn: "09:00", timeOut: "14:00" }, // Monday
       { dayOfWeek: 2, timeIn: "09:00", timeOut: "14:00" }, // Tuesday
@@ -90,6 +93,7 @@ export const defaultTimeSettings: EmploymentType[] = [
   },
   {
     type: "sales",
+    hoursOfWork: 8,
     schedules: [
       { dayOfWeek: 1, timeIn: "10:00", timeOut: "18:00" }, // Monday
       { dayOfWeek: 2, timeIn: "10:00", timeOut: "18:00" }, // Tuesday
@@ -102,6 +106,7 @@ export const defaultTimeSettings: EmploymentType[] = [
   },
   {
     type: "pharmacist",
+    hoursOfWork: 8,
     requiresTimeTracking: false,
   },
 ];
@@ -192,8 +197,8 @@ export class AttendanceSettingsModel {
         undertimeDeductionPerMinute: Number(
           settings.undertimeDeductionPerMinute
         ),
-        overtimeGracePeriod: Number(settings.overtimeGracePeriod),
-        overtimeAdditionPerMinute: Number(settings.overtimeAdditionPerMinute),
+        overtimeThreshold: Number(settings.overtimeThreshold),
+        overtimeHourlyMultiplier: Number(settings.overtimeHourlyMultiplier),
         regularHolidayMultiplier: Number(settings.regularHolidayMultiplier),
         specialHolidayMultiplier: Number(settings.specialHolidayMultiplier),
         nightDifferentialMultiplier: Number(
@@ -216,6 +221,7 @@ export class AttendanceSettingsModel {
 
       return parsed.data.map((row: any) => ({
         type: row.type,
+        hoursOfWork: Number(row.hoursOfWork),
         schedules: row.schedules ? JSON.parse(row.schedules) : undefined,
         monthSchedules: row.monthSchedules
           ? JSON.parse(row.monthSchedules)
@@ -238,6 +244,7 @@ export class AttendanceSettingsModel {
           ? JSON.stringify(setting.monthSchedules)
           : "",
         requiresTimeTracking: setting.requiresTimeTracking,
+        hoursOfWork: setting.hoursOfWork,
       }));
 
       const csv = Papa.unparse(formattedSettings);

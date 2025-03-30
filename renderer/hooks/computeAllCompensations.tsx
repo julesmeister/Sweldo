@@ -157,7 +157,8 @@ export const useComputeAllCompensations = (
         const timeMetrics = calculateTimeMetrics(
           actual,
           scheduled,
-          attendanceSettings
+          attendanceSettings,
+          employmentType
         );
         const dailyRate = parseFloat((employee.dailyRate || 0).toString());
         const payMetrics = calculatePayMetrics(
