@@ -26,7 +26,16 @@ export const ComputationBreakdownButton: React.FC<
       <IoCalculator className="h-5 w-5" />
 
       {/* Computation Breakdown Popover */}
-      <div className="hidden group-hover:block absolute right-0 top-8 w-96 p-4 bg-gray-800 rounded-lg shadow-lg z-50 text-sm">
+      <div
+        className="hidden group-hover:block fixed w-96 p-4 bg-gray-800 rounded-lg shadow-lg z-50 text-sm"
+        style={{
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+      >
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-medium text-gray-100">Payment Computation</h4>
           <span className="text-xs text-gray-400">Hover to view details</span>
@@ -66,7 +75,7 @@ export const ComputationBreakdownButton: React.FC<
                       {breakdown.details.overtimeMinutes % 60}mins
                     </span>
                     <span>
-                      Rate: ₱
+                      Hourly Rate: ₱
                       {formatNumber(breakdown.details.overtimeHourlyRate)}
                       /hr
                     </span>
@@ -103,21 +112,17 @@ export const ComputationBreakdownButton: React.FC<
                   <div className="flex justify-between">
                     <span>
                       Hours:{" "}
-                      {formatNumber(breakdown.details.nightDifferentialHours)}
+                      {formatNumber(breakdown.details.nightDifferentialHours)}{" "}
                       hrs
                     </span>
                     <span>
-                      Rate: ₱
-                      {formatNumber(
-                        breakdown.details.hourlyRate *
-                          (1 + attendanceSettings.nightDifferentialMultiplier)
-                      )}
+                      Hourly Rate: ₱{formatNumber(breakdown.details.hourlyRate)}
                       /hr
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>
-                      Multiplier:{" "}
+                      Night Diff Rate:{" "}
                       {formatNumber(
                         attendanceSettings.nightDifferentialMultiplier * 100
                       )}
@@ -125,13 +130,11 @@ export const ComputationBreakdownButton: React.FC<
                     </span>
                     <span>
                       Calculation:{" "}
-                      {formatNumber(breakdown.details.nightDifferentialHours)}
-                      hrs × ₱
+                      {formatNumber(breakdown.details.nightDifferentialHours)}{" "}
+                      hrs × ₱{formatNumber(breakdown.details.hourlyRate)}/hr ×{" "}
                       {formatNumber(
-                        breakdown.details.hourlyRate *
-                          (1 + attendanceSettings.nightDifferentialMultiplier)
+                        attendanceSettings.nightDifferentialMultiplier
                       )}
-                      /hr
                     </span>
                   </div>
                 </div>
@@ -152,9 +155,7 @@ export const ComputationBreakdownButton: React.FC<
                 <div className="space-y-1 text-xs text-gray-400">
                   <div className="flex justify-between">
                     <span>Daily Rate: ₱{formatNumber(breakdown.basePay)}</span>
-                    <span>
-                      Multiplier: {holiday?.multiplier}x
-                    </span>
+                    <span>Multiplier: {holiday?.multiplier}x</span>
                   </div>
                   <div className="flex justify-between">
                     <span>

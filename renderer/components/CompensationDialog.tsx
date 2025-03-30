@@ -436,7 +436,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       if (name === "overtimeMinutes" && formData.manualOverride) {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        const hourlyRate = (employee?.dailyRate || 0) / 8;
+        const standardHours = employmentType?.hoursOfWork || 8;
+        const hourlyRate = (employee?.dailyRate || 0) / standardHours;
         const overtimeMultiplier =
           attendanceSettings?.overtimeHourlyMultiplier || 1.25;
         newData.overtimePay =
@@ -474,6 +475,22 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         newData.deductions =
           (formData.undertimeDeduction || 0) + newData.lateDeduction;
         newData.netPay = (formData.grossPay || 0) - newData.deductions;
+      } else if (name === "nightDifferentialHours" && formData.manualOverride) {
+        const key = name as keyof Compensation;
+        (newData[key] as number) = numericValue;
+        const standardHours = employmentType?.hoursOfWork || 8;
+        const hourlyRate = (employee?.dailyRate || 0) / standardHours;
+        const nightDiffMultiplier =
+          attendanceSettings?.nightDifferentialMultiplier || 0.1;
+        newData.nightDifferentialPay =
+          numericValue * hourlyRate * nightDiffMultiplier;
+        // Update gross pay and net pay
+        newData.grossPay =
+          (formData.dailyRate || 0) +
+          (formData.overtimePay || 0) +
+          newData.nightDifferentialPay +
+          (formData.holidayBonus || 0);
+        newData.netPay = newData.grossPay - (formData.deductions || 0);
       }
       // Handle fields that affect gross pay
       else if (
