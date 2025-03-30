@@ -545,9 +545,6 @@ export default function PayrollPage() {
                 dbPath={dbPath}
                 onPayrollDeleted={() => setRefreshPayrolls(true)}
                 canEdit={hasAccess("MANAGE_PAYROLL")}
-                accessCodes={
-                  hasAccess("MANAGE_PAYROLL") ? ["MANAGE_PAYROLL"] : []
-                }
                 onDeletePayroll={async (payrollId: string) => {
                   const payroll = payrolls.find((p) => p.id === payrollId);
                   if (!payroll) {
