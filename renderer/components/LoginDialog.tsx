@@ -11,12 +11,19 @@ interface LoginDialogProps {
 
 export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   const { dbPath } = useSettingsStore();
-  const login = useAuthStore((state) => state.login);
+  const { login, checkSession } = useAuthStore();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const router = useRouter();
+
+  // Check if session is still valid
+  useEffect(() => {
+    if (checkSession()) {
+      onSuccess?.();
+    }
+  }, [checkSession, onSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +35,6 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
     try {
       const success = await login(pin);
       if (success) {
-        toast.success("Login successful");
         if (onSuccess) onSuccess();
       } else {
         setError("Invalid PIN code");

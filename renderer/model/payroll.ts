@@ -612,8 +612,7 @@ export class Payroll {
     // Count the number of days worked (days with both timeIn and timeOut)
     const daysWorked = filteredAttendanceRecords.filter((record) => {
       const recordDate = new Date(record.year, record.month - 1, record.day);
-      // Don't count Sundays
-      if (recordDate.getDay() === 0) return false;
+      // Count all days (including Sundays) as long as there's a valid time in/out record
       return record.timeIn && record.timeOut;
     }).length;
 
@@ -1136,9 +1135,11 @@ export class Payroll {
             others: parseFloat(columns[20]),
           },
           netPay: parseFloat(columns[21]),
-          paymentDate: columns[22], // Fix the type issue by using the string directly
+          paymentDate: columns[22],
           daysWorked: parseInt(columns[23]),
           absences: parseInt(columns[24]),
+          nightDifferentialHours: parseFloat(columns[25] || "0"),
+          nightDifferentialPay: parseFloat(columns[26] || "0"),
         };
 
         payrolls.push(payroll);

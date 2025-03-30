@@ -5,13 +5,18 @@ import { decryptPinCode } from "../lib/encryption";
 import { useSettingsStore } from "./settingsStore";
 import { toast } from "sonner";
 
+const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+
 interface AuthState {
   currentRole: Role | null;
   isAuthenticated: boolean;
   accessCodes: string[];
+  lastActivity: number;
   login: (pinCode: string) => Promise<boolean>;
   logout: () => void;
   hasAccess: (requiredCode: string) => boolean;
+  checkSession: () => boolean;
+  updateLastActivity: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -20,6 +25,26 @@ export const useAuthStore = create<AuthState>()(
       currentRole: null,
       isAuthenticated: false,
       accessCodes: [],
+      lastActivity: Date.now(),
+
+      checkSession: () => {
+        const { lastActivity, isAuthenticated, logout } = get();
+        if (!isAuthenticated) return false;
+
+        const now = Date.now();
+        const isSessionValid = now - lastActivity < SESSION_TIMEOUT;
+
+        if (!isSessionValid && isAuthenticated) {
+          logout();
+          return false;
+        }
+
+        return isSessionValid;
+      },
+
+      updateLastActivity: () => {
+        set({ lastActivity: Date.now() });
+      },
 
       login: async (pinToMatch: string) => {
         const dbPath = useSettingsStore.getState().dbPath;
@@ -43,7 +68,6 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
 
-          // Try to find a role with matching PIN
           const matchedRole = roles.find((role) => {
             try {
               const decryptedPin = decryptPinCode(role.pinCode);
@@ -55,12 +79,13 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (matchedRole) {
-            toast.success("Login successful!");
             set({
               currentRole: matchedRole,
               isAuthenticated: true,
               accessCodes: matchedRole.accessCodes,
+              lastActivity: Date.now(),
             });
+            toast.success("Login successful!");
             return true;
           }
 
@@ -76,21 +101,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        toast.success("Logged out successfully");
         set({
           currentRole: null,
           isAuthenticated: false,
           accessCodes: [],
+          lastActivity: 0,
         });
       },
 
       hasAccess: (requiredCode: string) => {
-        const { accessCodes } = get();
-        const hasAccess = accessCodes.includes(requiredCode);
-        if (!hasAccess) {
-          toast.error("Access denied");
+        const { accessCodes, checkSession } = get();
+        if (!checkSession()) {
+          return false;
         }
-        return hasAccess;
+        return accessCodes.includes(requiredCode);
       },
     }),
     {
@@ -99,6 +123,7 @@ export const useAuthStore = create<AuthState>()(
         currentRole: state.currentRole,
         isAuthenticated: state.isAuthenticated,
         accessCodes: state.accessCodes,
+        lastActivity: state.lastActivity,
       }),
     }
   )
