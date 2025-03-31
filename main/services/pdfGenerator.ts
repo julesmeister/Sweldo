@@ -10,7 +10,7 @@ export async function generatePayrollPDF(
     try {
       // Create a new PDF document
       const doc = new PDFDocument({
-        size: "A4",
+        size: [576, 936], // Long bond paper (8" x 13")
         margin: 20,
         bufferPages: true,
       });
@@ -31,14 +31,23 @@ export async function generatePayrollPDF(
       doc.pipe(writeStream);
 
       // Constants for layout
-      const pageWidth = 595.28; // A4 width in points
-      const pageHeight = 841.89; // A4 height in points
-      const margin = 10; // Reduced from 15
-      const payslipWidth = (pageWidth - margin * 3) / 2; // 2 columns
-      const basePayslipHeight = (pageHeight - margin * 5) / 4; // 4 rows
-      const logoSize = 25; // Reduced from 30
-      const rowHeight = 10; // Reduced from 12
-      const headerSpacing = 5; // New constant for header spacing
+      const pageWidth = 576; // Long bond paper width in points
+      const pageHeight = 936; // Long bond paper height in points
+      const outerMargin = 15; // Margin for page edges
+      const horizontalMargin = 10; // Margin between columns
+      const verticalMargin = 2; // Very small gap between rows
+
+      // Calculate widths
+      const payslipWidth =
+        (pageWidth - (outerMargin * 2 + horizontalMargin)) / 2;
+
+      // Calculate heights - divide available space into 5 equal sections
+      const availableHeight = pageHeight - outerMargin * 2;
+      const basePayslipHeight = availableHeight / 5;
+
+      const logoSize = 18;
+      const rowHeight = 7;
+      const headerSpacing = 3;
 
       // Remove duplicates if any (based on employee and date range)
       const uniquePayrolls = payrolls.filter(
@@ -52,77 +61,25 @@ export async function generatePayrollPDF(
           )
       );
 
-      // Process payrolls in groups of 8 (payslips per page)
-      for (let i = 0; i < uniquePayrolls.length; i += 8) {
+      // Process payrolls in groups of 10 (payslips per page)
+      for (let i = 0; i < uniquePayrolls.length; i += 10) {
         if (i > 0) {
           doc.addPage();
         }
 
         const pagePayrolls = uniquePayrolls.slice(
           i,
-          Math.min(i + 8, uniquePayrolls.length)
+          Math.min(i + 10, uniquePayrolls.length)
         );
 
-        // Draw payslips in 4x2 grid
+        // Draw payslips in 5x2 grid
         pagePayrolls.forEach((payroll, index) => {
           const col = index % 2;
           const row = Math.floor(index / 2);
-          const x = margin + col * (payslipWidth + margin);
-          const y = margin + row * (basePayslipHeight + margin / 4); // Reduced vertical spacing
+          const x = outerMargin + col * (payslipWidth + horizontalMargin);
+          const y = outerMargin + row * basePayslipHeight;
 
-          // Calculate positions for content
-          const headerStartY = y + 5; // Reduced from 8
-          const companyNameY = y + logoSize + 8; // Reduced from 10
-
-          // Add logo if provided
-          if (options.logoPath && fs.existsSync(options.logoPath)) {
-            doc.image(options.logoPath, x + 5, headerStartY, {
-              height: logoSize,
-              width: logoSize * 2,
-              fit: [payslipWidth - 10, logoSize],
-              align: "center",
-            });
-          }
-
-          // Add header text after logo space
-          const headerTextY = headerStartY + logoSize + 2; // Reduced spacing
-          doc
-            .font("Helvetica-Bold")
-            .fontSize(6) // Reduced from 7
-            .text("PAYSLIP", x + 5, headerTextY, {
-              width: payslipWidth - 10,
-              align: "center",
-            })
-            .text(
-              `${new Date(payroll.startDate).toLocaleDateString()} - ${new Date(
-                payroll.endDate
-              ).toLocaleDateString()}`,
-              x + 5,
-              headerTextY + 8, // Reduced from 10
-              {
-                width: payslipWidth - 10,
-                align: "center",
-              }
-            );
-
-          // Add employee info
-          const employeeInfoY = headerTextY + 20; // Reduced from 25
-          doc
-            .font("Helvetica")
-            .fontSize(6) // Reduced from 7
-            .text(`Employee: ${payroll.employeeName}`, x + 5, employeeInfoY)
-            .text(
-              `No. ${payroll.payslipNumber || ""}`,
-              x + payslipWidth - 45,
-              employeeInfoY
-            );
-
-          // Position table after employee info with proper spacing
-          const tableStartY = employeeInfoY + 12; // Reduced from 15
-
-          const colWidth = (payslipWidth - 10) / 2;
-
-          // Define table data
+          // Define table data first
           const deductions = [
             ["SSS", formatCurrency(payroll.deductions.sss)],
             ["PhilHealth", formatCurrency(payroll.deductions.philHealth)],
@@ -156,21 +113,82 @@ export async function generatePayrollPDF(
             ["Net Pay", formatCurrency(payroll.netPay)],
           ];
 
-          // Calculate heights
+          // Calculate positions for content
+          const headerStartY = y + 4;
+          const companyNameY = y + logoSize + 4;
+
+          // Calculate payslip height
           const tableHeight =
             Math.max(deductions.length, earnings.length) * rowHeight;
-          const totalContentHeight = tableStartY + tableHeight + 5;
+          const contentHeight =
+            logoSize + // Logo
+            headerSpacing + // Space after logo
+            10 + // Header text (PAYSLIP + date)
+            14 + // Employee info
+            8 + // Space before table
+            tableHeight + // Table content
+            16; // Signature section
+
+          // Use basePayslipHeight directly without adding margins
           const payslipHeight = Math.min(
-            basePayslipHeight,
-            totalContentHeight + margin
+            basePayslipHeight - verticalMargin,
+            contentHeight
           );
 
-          // Draw border
+          // Draw border first
           doc
             .rect(x, y, payslipWidth, payslipHeight)
             .strokeColor("#000000")
             .lineWidth(0.5)
             .stroke();
+
+          // Add logo if provided
+          if (options.logoPath && fs.existsSync(options.logoPath)) {
+            doc.image(options.logoPath, x + 5, headerStartY, {
+              height: logoSize,
+              width: logoSize * 2,
+              fit: [payslipWidth - 10, logoSize],
+              align: "center",
+            });
+          }
+
+          // Add header text after logo space
+          const headerTextY = headerStartY + logoSize + headerSpacing;
+          doc
+            .font("Helvetica-Bold")
+            .fontSize(6)
+            .text("PAYSLIP", x + 5, headerTextY, {
+              width: payslipWidth - 10,
+              align: "center",
+            })
+            .text(
+              `${new Date(payroll.startDate).toLocaleDateString()} - ${new Date(
+                payroll.endDate
+              ).toLocaleDateString()}`,
+              x + 5,
+              headerTextY + 6,
+              {
+                width: payslipWidth - 10,
+                align: "center",
+              }
+            );
+
+          // Add employee info
+          const employeeInfoY = headerTextY + 14;
+          doc
+            .font("Helvetica")
+            .fontSize(6)
+            .text(`Employee: ${payroll.employeeName}`, x + 5, employeeInfoY)
+            .text(
+              `No. ${payroll.payslipNumber || ""}`,
+              x + payslipWidth - 45,
+              employeeInfoY
+            );
+
+          // Position table after employee info
+          const tableStartY = employeeInfoY + 8;
+
+          const colWidth = (payslipWidth - 10) / 2;
 
           // Draw tables
           let currentY = tableStartY;
@@ -202,26 +220,31 @@ export async function generatePayrollPDF(
             currentY += rowHeight;
           });
 
-          // Add signature lines with minimal spacing
-          const signatureY = tableStartY + tableHeight + 5; // Reduced from 10
+          // Add signature lines relative to bottom of payslip box
+          const signatureSpacing = 16; // Space for signatures
+          const signatureY = y + payslipHeight - signatureSpacing; // Position from bottom of box
+
           doc
-            .fontSize(6) // Reduced from 7
-            .text("Prepared by:", x + 10, signatureY)
+            .fontSize(6)
+            .text("Prepared by:", x + 10, signatureY, {
+              width: payslipWidth / 2 - 15,
+              align: "left",
+            })
             .font("Helvetica")
-            .text(payroll.preparedBy || "", x + 10, signatureY + 8, {
-              width: 100,
+            .text(payroll.preparedBy || "", x + 10, signatureY + 6, {
+              width: payslipWidth / 2 - 15,
               align: "left",
             })
             .text("Approved by:", x + payslipWidth / 2, signatureY, {
-              width: 100,
+              width: payslipWidth / 2 - 10,
               align: "right",
             })
             .text(
               payroll.approvedBy || "",
               x + payslipWidth / 2,
-              signatureY + 8,
+              signatureY + 6,
               {
-                width: 100,
+                width: payslipWidth / 2 - 10,
                 align: "right",
               }
             );

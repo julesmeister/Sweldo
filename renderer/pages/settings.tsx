@@ -325,7 +325,7 @@ export default function SettingsPage() {
                     {/* Undertime Settings */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
                       <h4 className="text-md font-medium text-gray-800">
-                        Early Departure Settings
+                        Undertime Settings
                       </h4>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">

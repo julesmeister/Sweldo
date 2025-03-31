@@ -691,3 +691,33 @@ const grossPay = dailyRate + overtimePay + holidayBonus + nightDifferentialPay;
 const totalDeductions = lateDeduction + undertimeDeduction;
 const netPay = grossPay - totalDeductions + leavePay;
 ```
+
+## PDF Generator Dimensions
+
+### Previous Layout (A4 - 8.5" x 11")
+- Page Size: 595.28 x 841.89 points (A4)
+- Layout: 2 columns x 4 rows (8 payslips per page)
+- Payslip Dimensions:
+  - Width: (pageWidth - margin * 3) / 2
+  - Height: (pageHeight - margin * 5) / 4
+- Margins: 20 points
+- Logo Size: 25 points
+- Row Height: 10 points
+- Font Size: 6 points
+
+### New Layout (Long Bond Paper - 8" x 13")
+- Page Size: 576 x 936 points (8" x 13")
+- Layout: 2 columns x 5 rows (10 payslips per page)
+- Payslip Dimensions:
+  - Width: (pageWidth - margin * 3) / 2
+  - Height: (pageHeight - margin * 6) / 5
+- Margins: 20 points
+- Logo Size: 20 points (reduced for better fit)
+- Row Height: 8 points (reduced for better fit)
+- Font Size: 6 points
+
+### Layout Changes
+1. Increased number of payslips per page from 8 to 10
+2. Reduced individual payslip size to accommodate more rows
+3. Adjusted spacing and margins for optimal readability
+4. Maintained font size for legibility while reducing other dimensions

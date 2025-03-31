@@ -552,7 +552,10 @@ export default function ScheduleSettings({
         loadedSchedules[type.type] = type.monthSchedules;
       }
     });
-    setMonthSchedules(loadedSchedules);
+    // Only update if there are actual changes
+    if (JSON.stringify(loadedSchedules) !== JSON.stringify(monthSchedules)) {
+      setMonthSchedules(loadedSchedules);
+    }
   }, [employmentTypes]);
 
   // Add function to clear monthly schedules
@@ -580,7 +583,13 @@ export default function ScheduleSettings({
       },
       {} as { [key: number]: boolean }
     );
-    setRequiresTimeTracking(updatedRequiresTimeTracking);
+    // Only update if there are actual changes
+    if (
+      JSON.stringify(updatedRequiresTimeTracking) !==
+      JSON.stringify(requiresTimeTracking)
+    ) {
+      setRequiresTimeTracking(updatedRequiresTimeTracking);
+    }
 
     // Initialize schedules for types that require time tracking
     const updatedTypes = employmentTypes.map((type) => {
@@ -613,6 +622,7 @@ export default function ScheduleSettings({
 
   // Add effect to sync with parent component
   React.useEffect(() => {
+    // Only update if there are actual changes
     if (
       JSON.stringify(employmentTypes) !== JSON.stringify(initialEmploymentTypes)
     ) {
