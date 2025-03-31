@@ -209,7 +209,7 @@ export class Payroll {
           pagIbig: 0,
           status: "active",
           employmentType: "regular",
-          lastPaymentPeriod: undefined,
+          lastPaymentPeriod: null,
         });
       }
 
@@ -745,8 +745,10 @@ export class Payroll {
       await employeeModel.updateEmployeeDetails({
         ...employee,
         lastPaymentPeriod: {
-          start: start,
-          end: end,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          start: start.toISOString(),
+          end: end.toISOString(),
         },
       });
 

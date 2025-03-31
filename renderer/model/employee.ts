@@ -1,6 +1,13 @@
 import Papa from "papaparse";
 import { toast } from "sonner";
 
+interface LastPaymentPeriod {
+  startDate: string;
+  endDate: string;
+  start: string;
+  end: string;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -11,10 +18,9 @@ export interface Employee {
   pagIbig?: number;
   status: "active" | "inactive";
   employmentType?: string;
-  lastPaymentPeriod?: {
-    start: Date;
-    end: Date;
-  };
+  lastPaymentPeriod: string | LastPaymentPeriod | null;
+  startType?: string;
+  endType?: string;
 }
 
 // Add a delay utility function
@@ -48,6 +54,13 @@ async function retryOperation<T>(
 
   throw lastError;
 }
+
+// Add type guard
+const isLastPaymentPeriod = (value: any): value is LastPaymentPeriod => {
+  return (
+    value && typeof value === "object" && "start" in value && "end" in value
+  );
+};
 
 export class EmployeeModel {
   private filePath: string;
@@ -101,58 +114,43 @@ export class EmployeeModel {
       console.log("[EmployeeModel] Raw employee data from CSV:", {
         employeeId: employee?.id,
         lastPaymentPeriod: employee?.lastPaymentPeriod,
-        startType: employee?.lastPaymentPeriod?.start
-          ? typeof employee?.lastPaymentPeriod?.start
+        startType: isLastPaymentPeriod(employee?.lastPaymentPeriod)
+          ? typeof employee.lastPaymentPeriod.start
           : "undefined",
-        endType: employee?.lastPaymentPeriod?.end
-          ? typeof employee?.lastPaymentPeriod?.end
+        endType: isLastPaymentPeriod(employee?.lastPaymentPeriod)
+          ? typeof employee.lastPaymentPeriod.end
           : "undefined",
-        startValue: employee?.lastPaymentPeriod?.start,
-        endValue: employee?.lastPaymentPeriod?.end,
+        startValue: isLastPaymentPeriod(employee?.lastPaymentPeriod)
+          ? employee.lastPaymentPeriod.start
+          : undefined,
+        endValue: isLastPaymentPeriod(employee?.lastPaymentPeriod)
+          ? employee.lastPaymentPeriod.end
+          : undefined,
       });
 
-      // Convert lastPaymentPeriod dates back to Date objects if they exist
-      if (employee?.lastPaymentPeriod) {
-        try {
-          // If lastPaymentPeriod is a string, try to parse it as JSON
-          // Handle both escaped and unescaped JSON strings
-          const lastPaymentPeriod =
-            typeof employee.lastPaymentPeriod === "string"
-              ? JSON.parse(employee.lastPaymentPeriod.replace(/\\/g, ""))
-              : employee.lastPaymentPeriod;
+      if (employee) {
+        const lastPaymentPeriod = employee.lastPaymentPeriod
+          ? typeof employee.lastPaymentPeriod === "string"
+            ? JSON.parse(employee.lastPaymentPeriod.replace(/\\/g, ""))
+            : employee.lastPaymentPeriod
+          : null;
 
-          console.log(
-            "[EmployeeModel] Parsed lastPaymentPeriod:",
-            lastPaymentPeriod
-          );
-
-          employee.lastPaymentPeriod = {
-            start: new Date(lastPaymentPeriod.start),
-            end: new Date(lastPaymentPeriod.end),
-          };
-
-          console.log("[EmployeeModel] Converted lastPaymentPeriod:", {
-            after: employee.lastPaymentPeriod,
-            startType: typeof employee.lastPaymentPeriod.start,
-            endType: typeof employee.lastPaymentPeriod.end,
-            startValue: employee.lastPaymentPeriod.start.toISOString(),
-            endValue: employee.lastPaymentPeriod.end.toISOString(),
-          });
-        } catch (error) {
-          console.error(
-            "[EmployeeModel] Error parsing lastPaymentPeriod:",
-            error
-          );
-          employee.lastPaymentPeriod = undefined;
-        }
-      } else {
-        console.log("[EmployeeModel] No lastPaymentPeriod found for employee");
+        return {
+          ...employee,
+          lastPaymentPeriod,
+          startType: isLastPaymentPeriod(lastPaymentPeriod)
+            ? typeof lastPaymentPeriod.start
+            : "undefined",
+          endType: isLastPaymentPeriod(lastPaymentPeriod)
+            ? typeof lastPaymentPeriod.end
+            : "undefined",
+        };
       }
 
-      return employee;
-    } catch (error) {
-      console.error("[EmployeeModel] Error loading employee:", error);
       return null;
+    } catch (error) {
+      console.error("Error loading employee:", error);
+      throw error;
     }
   }
 
@@ -213,14 +211,18 @@ export class EmployeeModel {
       console.log("[EmployeeModel] Updating employee details:", {
         employeeId: employee.id,
         lastPaymentPeriod: employee.lastPaymentPeriod,
-        startType: employee.lastPaymentPeriod?.start
+        startType: isLastPaymentPeriod(employee.lastPaymentPeriod)
           ? typeof employee.lastPaymentPeriod.start
           : "undefined",
-        endType: employee.lastPaymentPeriod?.end
+        endType: isLastPaymentPeriod(employee.lastPaymentPeriod)
           ? typeof employee.lastPaymentPeriod.end
           : "undefined",
-        startValue: employee.lastPaymentPeriod?.start?.toISOString(),
-        endValue: employee.lastPaymentPeriod?.end?.toISOString(),
+        startValue: isLastPaymentPeriod(employee.lastPaymentPeriod)
+          ? employee.lastPaymentPeriod.start
+          : undefined,
+        endValue: isLastPaymentPeriod(employee.lastPaymentPeriod)
+          ? employee.lastPaymentPeriod.end
+          : undefined,
       });
 
       // Load current employees
@@ -242,24 +244,31 @@ export class EmployeeModel {
       console.log("[EmployeeModel] Updated employee data before saving:", {
         employeeId: currentEmployees[index].id,
         lastPaymentPeriod: currentEmployees[index].lastPaymentPeriod,
-        startType: currentEmployees[index].lastPaymentPeriod?.start
+        startType: isLastPaymentPeriod(
+          currentEmployees[index].lastPaymentPeriod
+        )
           ? typeof currentEmployees[index].lastPaymentPeriod.start
           : "undefined",
-        endType: currentEmployees[index].lastPaymentPeriod?.end
+        endType: isLastPaymentPeriod(currentEmployees[index].lastPaymentPeriod)
           ? typeof currentEmployees[index].lastPaymentPeriod.end
           : "undefined",
-        startValue:
-          currentEmployees[index].lastPaymentPeriod?.start?.toISOString(),
-        endValue: currentEmployees[index].lastPaymentPeriod?.end?.toISOString(),
+        startValue: isLastPaymentPeriod(
+          currentEmployees[index].lastPaymentPeriod
+        )
+          ? currentEmployees[index].lastPaymentPeriod.start
+          : undefined,
+        endValue: isLastPaymentPeriod(currentEmployees[index].lastPaymentPeriod)
+          ? currentEmployees[index].lastPaymentPeriod.end
+          : undefined,
       });
 
       // Convert dates to ISO strings and stringify the lastPaymentPeriod object before saving to CSV
       const employeesToSave = currentEmployees.map((emp) => ({
         ...emp,
-        lastPaymentPeriod: emp.lastPaymentPeriod
+        lastPaymentPeriod: isLastPaymentPeriod(emp.lastPaymentPeriod)
           ? JSON.stringify({
-              start: emp.lastPaymentPeriod.start.toISOString(),
-              end: emp.lastPaymentPeriod.end.toISOString(),
+              start: emp.lastPaymentPeriod.start,
+              end: emp.lastPaymentPeriod.end,
             })
           : undefined,
       }));

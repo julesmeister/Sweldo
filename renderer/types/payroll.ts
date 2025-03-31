@@ -27,6 +27,7 @@ export interface PayrollSummary {
   preparedBy?: string;
   approvedBy?: string;
   payslipNumber?: number;
+  nightDifferentialPay?: number;
 }
 
 export interface PDFGeneratorOptions {
