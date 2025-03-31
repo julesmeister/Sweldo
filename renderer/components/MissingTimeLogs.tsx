@@ -195,6 +195,21 @@ export default function MissingTimeLogs() {
     return attendance;
   };
 
+  const handleMissingLogDeletion = async (log: MissingTimeLog) => {
+    if (!dbPath) return;
+    try {
+      const missingTimeModel = MissingTimeModel.createMissingTimeModel(dbPath);
+      await missingTimeModel.deleteMissingTimeLog(log.id, log.month, log.year);
+      toast.success(
+        "Missing time log removed - Time In and Time Out are complete"
+      );
+      await loadMissingLogs();
+    } catch (error) {
+      console.error("Error deleting missing time log:", error);
+      toast.error("Failed to remove missing time log");
+    }
+  };
+
   return (
     <>
       <MagicCard
@@ -230,20 +245,32 @@ export default function MissingTimeLogs() {
                     <tr
                       key={log.id}
                       className="hover:bg-gray-50 cursor-pointer"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.preventDefault();
-                        setSelectedLog(log);
+
+                        // Capture the dimensions immediately before any async operations
                         const rect = e.currentTarget.getBoundingClientRect();
                         const windowHeight = window.innerHeight;
                         const spaceBelow = windowHeight - rect.bottom;
                         const spaceAbove = rect.top;
-                        const dialogHeight = 400; // Approximate height of dialog
-                        const spacing = 8; // Space between dialog and row
-
-                        // If there's not enough space below and more space above, show above
+                        const dialogHeight = 400;
+                        const spacing = 8;
                         const showAbove =
                           spaceBelow < dialogHeight && spaceAbove > spaceBelow;
 
+                        // Now do the async check
+                        const currentAttendance = await loadAttendance(log);
+                        if (
+                          currentAttendance?.timeIn &&
+                          currentAttendance?.timeOut
+                        ) {
+                          // If both times exist, delete the missing time log without showing dialog
+                          await handleMissingLogDeletion(log);
+                          return;
+                        }
+
+                        // If we need to show the dialog, use the previously captured dimensions
+                        setSelectedLog(log);
                         setDialogPosition({
                           top: showAbove
                             ? rect.top - spacing
