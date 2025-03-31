@@ -94,7 +94,11 @@ const FormField: React.FC<FormFieldProps> = ({
   const formattedValue =
     typeof value === "number"
       ? isMonetaryField
-        ? Number(value).toFixed(2)
+        ? name === "overtimePay" ||
+          name === "undertimeDeduction" ||
+          name === "lateDeduction"
+          ? Math.round(value)
+          : Number(value).toFixed(2)
         : isMinutesField || isHoursField
         ? Math.round(value)
         : value
@@ -122,14 +126,20 @@ const FormField: React.FC<FormFieldProps> = ({
       ) : (
         <div className="relative">
           <input
-            type="number"
+            type="text"
             name={name}
             value={formattedValue}
             onChange={onChange}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
             disabled={!hasEditAccess || !manualOverride}
             min="0"
-            step={isMonetaryField ? "0.01" : "1"}
+            step={
+              name === "overtimePay" ||
+              name === "undertimeDeduction" ||
+              name === "lateDeduction"
+                ? "1"
+                : "0.01"
+            }
           />
           {name !== "hoursWorked" && (
             <button
