@@ -42,6 +42,7 @@ export interface PayrollSummaryModel {
   leavePay?: number;
   grossPay: number;
   allowances: number;
+  cashAdvanceIDs?: string[];
   deductions: {
     sss: number;
     philHealth: number;
@@ -49,6 +50,7 @@ export interface PayrollSummaryModel {
     cashAdvanceDeductions: number;
     others: number;
   };
+
   netPay: number;
   paymentDate: string;
   daysWorked: number;
@@ -91,6 +93,7 @@ interface PayrollCSVData {
   sssDeduction: string;
   philHealthDeduction: string;
   pagIbigDeduction: string;
+  cashAdvanceIDs: string;
   cashAdvanceDeductions: string;
   otherDeductions: string;
   netPay: string;
@@ -587,6 +590,7 @@ export class Payroll {
       leavePay: totalLeavePay,
       grossPay: totalGrossPay,
       allowances: 0,
+      cashAdvanceIDs: [],
       deductions: {
         sss: employee.sss || 0,
         philHealth: employee.philHealth || 0,
@@ -595,9 +599,7 @@ export class Payroll {
         others: totalDeductions,
       },
       netPay: totalNetPay,
-      paymentDate: new Date(end.getTime() + 3 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
+      paymentDate: end.toISOString(),
       daysWorked,
       absences: totalAbsences,
     };
@@ -666,6 +668,7 @@ export class Payroll {
         sssDeduction: finalDeductions.sss.toString(),
         philHealthDeduction: finalDeductions.philHealth.toString(),
         pagIbigDeduction: finalDeductions.pagIbig.toString(),
+        cashAdvanceIDs: (summary.cashAdvanceIDs || []).join("|"),
         cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions.toString(),
         otherDeductions: finalDeductions.others.toString(),
         netPay: (
@@ -676,7 +679,9 @@ export class Payroll {
             finalDeductions.cashAdvanceDeductions +
             finalDeductions.others)
         ).toString(),
-        paymentDate: new Date().toISOString(),
+        paymentDate: new Date(
+          end.getTime() + 2 * 24 * 60 * 60 * 1000
+        ).toISOString(),
         daysWorked: (summary.daysWorked || 0).toString(),
         absences: (summary.absences || 0).toString(),
         nightDifferentialHours: (
@@ -738,6 +743,9 @@ export class Payroll {
             finalDeductions.pagIbig +
             finalDeductions.cashAdvanceDeductions +
             finalDeductions.others),
+        paymentDate: new Date(
+          end.getTime() + 2 * 24 * 60 * 60 * 1000
+        ).toISOString(),
       };
     } catch (error) {
       console.error("Error generating payroll summary:", error);
@@ -968,51 +976,63 @@ export class Payroll {
       }
 
       const fileContent = await window.electron.readFile(filePath);
-      const rows = fileContent.split("\n").filter((row) => row.trim());
 
-      // Skip header row
-      const payrolls: PayrollSummaryModel[] = [];
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row.trim()) continue;
+      // Parse the entire CSV file at once with headers
+      const parsedData = Papa.parse<PayrollCSVData>(fileContent, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+        transform: (value) => value.trim(),
+      });
 
-        const columns = row.split(",");
-        console.log(`Processing row: ${row}`);
-
-        const payroll: PayrollSummaryModel = {
-          id: columns[0],
-          employeeId: columns[1],
-          employeeName: columns[2],
-          startDate: new Date(columns[3]),
-          endDate: new Date(columns[4]),
-          dailyRate: parseFloat(columns[5]),
-          basicPay: parseFloat(columns[6]),
-          overtime: parseFloat(columns[7]),
-          overtimeMinutes: parseInt(columns[8]),
-          undertimeDeduction: parseFloat(columns[9]),
-          undertimeMinutes: parseInt(columns[10]),
-          lateDeduction: parseFloat(columns[11]),
-          lateMinutes: parseInt(columns[12]),
-          holidayBonus: parseFloat(columns[13]),
-          grossPay: parseFloat(columns[14]),
-          allowances: parseFloat(columns[15]),
-          deductions: {
-            sss: parseFloat(columns[16]),
-            philHealth: parseFloat(columns[17]),
-            pagIbig: parseFloat(columns[18]),
-            cashAdvanceDeductions: parseFloat(columns[19]),
-            others: parseFloat(columns[20]),
-          },
-          netPay: parseFloat(columns[21]),
-          paymentDate: columns[22],
-          daysWorked: parseInt(columns[23]),
-          absences: parseInt(columns[24]),
-          nightDifferentialHours: parseFloat(columns[25] || "0"),
-          nightDifferentialPay: parseFloat(columns[26] || "0"),
-        };
-
-        payrolls.push(payroll);
+      if (parsedData.errors.length > 0) {
+        console.error("Error parsing CSV:", parsedData.errors);
+        return [];
       }
+
+      const payrolls: PayrollSummaryModel[] = parsedData.data.map((row) => {
+        console.log("Processing row:", row);
+
+        // Ensure dates are properly parsed
+        const startDate = new Date(row.startDate);
+        const endDate = new Date(row.endDate);
+        const paymentDate = new Date(row.paymentDate);
+
+        return {
+          id: row.id,
+          employeeId: row.employeeId,
+          employeeName: row.employeeName,
+          startDate,
+          endDate,
+          dailyRate: parseFloat(row.dailyRate || "0"),
+          basicPay: parseFloat(row.basicPay || "0"),
+          overtime: parseFloat(row.overtimePay || "0"),
+          overtimeMinutes: parseInt(row.overtimeMinutes || "0"),
+          undertimeDeduction: parseFloat(row.undertimeDeduction || "0"),
+          undertimeMinutes: parseInt(row.undertimeMinutes || "0"),
+          lateDeduction: parseFloat(row.lateDeduction || "0"),
+          lateMinutes: parseInt(row.lateMinutes || "0"),
+          holidayBonus: parseFloat(row.holidayBonus || "0"),
+          grossPay: parseFloat(row.grossPay || "0"),
+          allowances: parseFloat(row.allowances || "0"),
+          deductions: {
+            sss: parseFloat(row.sssDeduction || "0"),
+            philHealth: parseFloat(row.philHealthDeduction || "0"),
+            pagIbig: parseFloat(row.pagIbigDeduction || "0"),
+            cashAdvanceDeductions: parseFloat(row.cashAdvanceDeductions || "0"),
+            others: parseFloat(row.otherDeductions || "0"),
+          },
+          netPay: parseFloat(row.netPay || "0"),
+          paymentDate: paymentDate.toISOString(),
+          daysWorked: parseInt(row.daysWorked || "0"),
+          absences: parseInt(row.absences || "0"),
+          nightDifferentialHours: parseFloat(row.nightDifferentialHours || "0"),
+          nightDifferentialPay: parseFloat(row.nightDifferentialPay || "0"),
+          cashAdvanceIDs: row.cashAdvanceIDs
+            ? row.cashAdvanceIDs.split("|")
+            : [],
+        };
+      });
 
       console.log(`Loaded ${payrolls.length} payroll records from ${filePath}`);
       return payrolls;

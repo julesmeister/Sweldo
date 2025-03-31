@@ -364,14 +364,13 @@ export const PayrollList: React.FC<PayrollListProps> = ({
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Intl.DateTimeFormat("en-PH", {
+                      {new Date(
+                        payroll.paymentDate.split("T")[0]
+                      ).toLocaleString("en-PH", {
                         day: "numeric",
                         month: "long",
                         year: "numeric",
-                        weekday: "long",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      }).format(new Date(payroll.paymentDate))}
+                      })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button

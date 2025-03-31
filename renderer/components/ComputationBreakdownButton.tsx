@@ -179,29 +179,53 @@ export const ComputationBreakdownButton: React.FC<
               </div>
               <div className="space-y-2 text-xs text-gray-400">
                 {breakdown.deductions.late > 0 && (
-                  <div className="flex justify-between">
-                    <span>
-                      Late ({breakdown.details.lateMinutes}mins @ ₱
-                      {formatNumber(attendanceSettings.lateDeductionPerMinute)}
-                      /min)
-                    </span>
-                    <span className="text-red-400">
-                      -₱{formatNumber(breakdown.deductions.late)}
-                    </span>
+                  <div>
+                    <div className="flex justify-between">
+                      <span>
+                        Late ({breakdown.details.lateMinutes}mins total)
+                      </span>
+                      <span className="text-red-400">
+                        -₱{formatNumber(breakdown.deductions.late)}
+                      </span>
+                    </div>
+                    <div className="text-gray-500 pl-2 text-left">
+                      After {breakdown.details.lateGracePeriod}mins grace |
+                      Charged:{" "}
+                      {Math.max(
+                        0,
+                        breakdown.details.lateMinutes -
+                          breakdown.details.lateGracePeriod
+                      )}
+                      mins @ ₱
+                      {formatNumber(breakdown.details.lateDeductionPerMinute)}
+                      /min
+                    </div>
                   </div>
                 )}
                 {breakdown.deductions.undertime > 0 && (
-                  <div className="flex justify-between">
-                    <span>
-                      Undertime ({breakdown.details.undertimeMinutes}mins @ ₱
-                      {formatNumber(
-                        attendanceSettings.undertimeDeductionPerMinute
+                  <div>
+                    <div className="flex justify-between">
+                      <span>
+                        Undertime ({breakdown.details.undertimeMinutes}mins)
+                      </span>
+                      <span className="text-red-400">
+                        -₱{formatNumber(breakdown.deductions.undertime)}
+                      </span>
+                    </div>
+                    <div className="text-gray-500 pl-2 text-left">
+                      Grace: {breakdown.details.undertimeGracePeriod}mins |
+                      Deductible:{" "}
+                      {Math.max(
+                        0,
+                        breakdown.details.undertimeMinutes -
+                          breakdown.details.undertimeGracePeriod
                       )}
-                      /min)
-                    </span>
-                    <span className="text-red-400">
-                      -₱{formatNumber(breakdown.deductions.undertime)}
-                    </span>
+                      mins | Rate: ₱
+                      {formatNumber(
+                        breakdown.details.undertimeDeductionPerMinute
+                      )}
+                      /min
+                    </div>
                   </div>
                 )}
               </div>

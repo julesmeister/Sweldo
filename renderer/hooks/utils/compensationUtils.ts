@@ -467,6 +467,10 @@ export interface PaymentBreakdown {
     nightDifferentialHours: number;
     lateMinutes: number;
     undertimeMinutes: number;
+    lateGracePeriod: number;
+    undertimeGracePeriod: number;
+    lateDeductionPerMinute: number;
+    undertimeDeductionPerMinute: number;
   };
 }
 
@@ -498,8 +502,13 @@ export const getPaymentBreakdown = (
       overtimeHourlyRate,
       overtimeMinutes: timeMetrics.overtimeMinutes,
       nightDifferentialHours: payMetrics.nightDifferentialHours,
-      lateMinutes: timeMetrics.lateDeductionMinutes,
-      undertimeMinutes: timeMetrics.undertimeDeductionMinutes,
+      lateMinutes: timeMetrics.lateMinutes,
+      undertimeMinutes: timeMetrics.undertimeMinutes,
+      lateGracePeriod: attendanceSettings.lateGracePeriod,
+      undertimeGracePeriod: attendanceSettings.undertimeGracePeriod,
+      lateDeductionPerMinute: attendanceSettings.lateDeductionPerMinute,
+      undertimeDeductionPerMinute:
+        attendanceSettings.undertimeDeductionPerMinute,
     },
   };
 };

@@ -18,6 +18,8 @@ import { useAuthStore } from "@/renderer/stores/authStore";
 import { IoShieldOutline } from "react-icons/io5";
 import { toast } from "sonner";
 import path from "path";
+import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
+import { usePayrollDelete } from "@/renderer/hooks/usePayrollDelete";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -67,6 +69,11 @@ export default function PayrollPage() {
   const pathname = usePathname();
   const router = useRouter();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const { deletePayroll, isDeleting } = usePayrollDelete({
+    dbPath,
+    selectedEmployeeId: selectedEmployeeId!,
+    onPayrollDeleted: () => setRefreshPayrolls(true),
+  });
 
   // Initialize date range from storage
   useEffect(() => {
@@ -546,26 +553,11 @@ export default function PayrollPage() {
                 onPayrollDeleted={() => setRefreshPayrolls(true)}
                 canEdit={hasAccess("MANAGE_PAYROLL")}
                 onDeletePayroll={async (payrollId: string) => {
-                  const payroll = payrolls.find((p) => p.id === payrollId);
-                  if (!payroll) {
-                    toast.error("Payroll record not found");
-                    return;
-                  }
-
-                  await Payroll.deletePayrollSummary(
-                    dbPath,
-                    selectedEmployeeId!,
-                    new Date(payroll.startDate),
-                    new Date(payroll.endDate)
-                  );
-
-                  // Remove the deleted payroll from the local state
+                  await deletePayroll(payrollId, payrolls);
+                  // Update local state
                   setPayrolls((currentPayrolls) =>
                     currentPayrolls.filter((p) => p.id !== payrollId)
                   );
-
-                  // Notify parent component
-                  setRefreshPayrolls(true);
                 }}
               />
             )}

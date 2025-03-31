@@ -26,6 +26,7 @@ import {
 } from "@/renderer/hooks/utils/compensationUtils";
 import { toast } from "sonner";
 import { ComputationBreakdownButton } from "@/renderer/components/ComputationBreakdownButton";
+
 interface CompensationDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -231,7 +232,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   }, [compensation]);
 
   const computedValues = useMemo(() => {
-    const dailyRate: number = parseFloat((employee?.dailyRate || 0).toString());
+    const dailyRate: number =
+      formData.dailyRate || parseFloat((employee?.dailyRate || 0).toString());
     const entryDate = new Date(year, month - 1, day);
     const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
 
@@ -246,7 +248,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       overtimeMinutes: 0,
       hoursWorked: 0,
       grossPay,
-      dailyRate: 0,
+      dailyRate,
       deductions: 0,
       netPay: grossPay,
       lateDeduction: 0,
@@ -712,7 +714,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   breakdown={
                     formData.manualOverride
                       ? {
-                          basePay: formData.dailyRate || 0,
+                          basePay: parseFloat(
+                            (
+                              formData.dailyRate ||
+                              employee?.dailyRate ||
+                              0
+                            ).toString()
+                          ),
                           overtimePay: formData.overtimePay || 0,
                           nightDifferentialPay:
                             formData.nightDifferentialPay || 0,
@@ -724,9 +732,23 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                           },
                           netPay: formData.netPay || 0,
                           details: {
-                            hourlyRate: (formData.dailyRate || 0) / 8,
+                            hourlyRate:
+                              parseFloat(
+                                (
+                                  formData.dailyRate ||
+                                  employee?.dailyRate ||
+                                  0
+                                ).toString()
+                              ) / 8,
                             overtimeHourlyRate:
-                              ((formData.dailyRate || 0) / 8) *
+                              (parseFloat(
+                                (
+                                  formData.dailyRate ||
+                                  employee?.dailyRate ||
+                                  0
+                                ).toString()
+                              ) /
+                                8) *
                               (attendanceSettings.overtimeHourlyMultiplier ||
                                 1.25),
                             overtimeMinutes: formData.overtimeMinutes || 0,
@@ -734,6 +756,15 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                               formData.nightDifferentialHours || 0,
                             lateMinutes: formData.lateMinutes || 0,
                             undertimeMinutes: formData.undertimeMinutes || 0,
+                            lateGracePeriod:
+                              attendanceSettings.lateGracePeriod || 0,
+                            undertimeGracePeriod:
+                              attendanceSettings.undertimeGracePeriod || 0,
+                            lateDeductionPerMinute:
+                              attendanceSettings.lateDeductionPerMinute || 0,
+                            undertimeDeductionPerMinute:
+                              attendanceSettings.undertimeDeductionPerMinute ||
+                              0,
                           },
                         }
                       : getPaymentBreakdown(
@@ -779,7 +810,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                               employmentType
                             ),
                             attendanceSettings,
-                            formData.dailyRate,
+                            parseFloat(
+                              (
+                                formData.dailyRate ||
+                                employee?.dailyRate ||
+                                0
+                              ).toString()
+                            ),
                             holidays.find((h) =>
                               isHolidayDate(new Date(year, month - 1, day), h)
                             ),
@@ -810,7 +847,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                             employmentType
                           ),
                           attendanceSettings,
-                          formData.dailyRate,
+                          parseFloat(
+                            (
+                              formData.dailyRate ||
+                              employee?.dailyRate ||
+                              0
+                            ).toString()
+                          ),
                           employmentType
                         )
                   }
