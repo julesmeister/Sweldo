@@ -13,8 +13,18 @@ import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { RoleModelImpl } from "../model/role";
 import { IoFolderOutline } from "react-icons/io5";
 import path from "path";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+// Add this new wrapper component
+function RefreshWrapper({ children }: { children: React.ReactNode }) {
+  const selectedMonth = useDateSelectorStore((state) => state.selectedMonth);
+  const selectedYear = useDateSelectorStore((state) => state.selectedYear);
+
+  // Use selectedMonth and selectedYear as a key to force re-render
+  return <div key={`${selectedMonth}-${selectedYear}`}>{children}</div>;
+}
 
 export default function RootLayout({
   children,
@@ -257,7 +267,7 @@ export default function RootLayout({
           pathname?.startsWith("/timesheet") ? "" : "mx-auto px-4 pt-4"
         }`}
       >
-        {children}
+        <RefreshWrapper>{children}</RefreshWrapper>
         <Toaster position="top-right" richColors />
       </main>
     </div>

@@ -17,23 +17,38 @@ interface DateSelectorState {
   setSelectedYear: (year: number) => void;
 }
 
-// Zustand store for managing month and year
+// Modified Zustand store
 const useStore = create<DateSelectorState>((set) => ({
-  selectedMonth: new Date().getMonth(),
-  selectedYear: new Date().getFullYear(),
+  selectedMonth: (() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("selectedMonth");
+      return stored ? parseInt(stored) : new Date().getMonth();
+    }
+    return new Date().getMonth();
+  })(),
+  selectedYear: (() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("selectedYear");
+      return stored ? parseInt(stored) : new Date().getFullYear();
+    }
+    return new Date().getFullYear();
+  })(),
   isOpen: false,
   timeoutId: null,
   setIsOpen: (isOpen) => set({ isOpen }),
   setTimeoutId: (timeoutId) => set({ timeoutId }),
   setSelectedMonth: (month) => {
-    set({ selectedMonth: month });
     localStorage.setItem("selectedMonth", month.toString());
+    set({ selectedMonth: month });
   },
   setSelectedYear: (year) => {
-    set({ selectedYear: year });
     localStorage.setItem("selectedYear", year.toString());
+    set({ selectedYear: year });
   },
 }));
+
+// Export the store so it can be used in other components
+export { useStore as useDateSelectorStore };
 
 export default function DateSelector() {
   const {
@@ -46,14 +61,6 @@ export default function DateSelector() {
     setSelectedMonth,
     setSelectedYear,
   } = useStore();
-
-  // Load from local storage on component mount
-  useEffect(() => {
-    const storedMonth = localStorage.getItem("selectedMonth");
-    const storedYear = localStorage.getItem("selectedYear");
-    if (storedMonth) setSelectedMonth(parseInt(storedMonth));
-    if (storedYear) setSelectedYear(parseInt(storedYear));
-  }, []);
 
   const months = [
     "January",
@@ -100,7 +107,7 @@ export default function DateSelector() {
             ? "bg-white text-black"
             : "text-white hover:bg-white hover:text-black"
         } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500 transition-all duration-200 `}
-      > 
+      >
         <button className="inline-flex items-end flex-col text-left leading-none">
           <span className="text-sm">
             {years[selectedYear - 2024] || "2025"}
@@ -117,9 +124,7 @@ export default function DateSelector() {
       </div>
       {isOpen && (
         <div className="relative">
-          
           <div className="absolute right-0 z-10 mt-2 w-60 rounded-md shadow-lg bg-white">
-            
             <div
               className="grid grid-cols-2 gap-2 p-2 max-h-[200px]"
               role="menu"
