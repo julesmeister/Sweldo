@@ -1381,14 +1381,29 @@ export default function ScheduleSettings({
                               onClearSchedules={() => {
                                 setMonthSchedules((prev) => {
                                   const newSchedules = { ...prev };
+                                  const yearMonth = selectedMonth
+                                    .toISOString()
+                                    .slice(0, 7); // Get YYYY-MM format
+
+                                  // Only clear schedules for the selected month
                                   Object.keys(newSchedules).forEach(
                                     (typeId) => {
-                                      newSchedules[typeId] = {};
+                                      // Keep other months' schedules, only clear the selected month
+                                      newSchedules[typeId] = {
+                                        ...newSchedules[typeId],
+                                        [yearMonth]: {}, // Clear only this month's schedule
+                                      };
                                     }
                                   );
+
                                   return newSchedules;
                                 });
-                                toast.success("Monthly schedules cleared");
+                                toast.success(
+                                  `Schedules cleared for ${selectedMonth.toLocaleString(
+                                    "default",
+                                    { month: "long", year: "numeric" }
+                                  )}`
+                                );
                               }}
                               monthSchedules={monthSchedules}
                             />
