@@ -89,6 +89,24 @@ export const TimeEditDialog: React.FC<TimeEditDialogProps> = ({
     }
   }, [isOpen, dbPath, log]);
 
+  useEffect(() => {
+    // First try to set from attendance data
+    if (attendance) {
+      setTimeIn(attendance.timeIn || "");
+      setTimeOut(attendance.timeOut || "");
+      return;
+    }
+
+    // If no attendance data, check which field is missing and set the other from schedule
+    if (log.missingType === "timeIn") {
+      setTimeIn(""); // This is the missing field
+      setTimeOut(scheduledTimeOut); // Use scheduled time for the non-missing field
+    } else {
+      setTimeIn(scheduledTimeIn); // Use scheduled time for the non-missing field
+      setTimeOut(""); // This is the missing field
+    }
+  }, [attendance, log.missingType, scheduledTimeIn, scheduledTimeOut]);
+
   const validateTime = (time: string): boolean => {
     if (!time) return true; // Empty is valid
     const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
