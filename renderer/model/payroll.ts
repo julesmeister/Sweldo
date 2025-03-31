@@ -733,6 +733,23 @@ export class Payroll {
         throw error;
       }
 
+      // Update employee's last payment period using the correct method name
+      console.log("[Payroll] Updating last payment period:", {
+        employeeId,
+        start: start,
+        end: end,
+        startType: typeof start,
+        endType: typeof end,
+      });
+
+      await employeeModel.updateEmployeeDetails({
+        ...employee,
+        lastPaymentPeriod: {
+          start: start,
+          end: end,
+        },
+      });
+
       return {
         ...summary,
         deductions: finalDeductions,

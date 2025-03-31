@@ -1144,31 +1144,6 @@ export default function SettingsPage() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-blue-700">
-                    <span className="font-medium">Note:</span> The names entered
-                    below will appear in the payslip signature section.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Auto-save Info */}
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-blue-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
                     <span className="font-medium">Helpful Tip:</span> Any
                     changes made to these fields are saved automatically.
                     <br />
@@ -1316,14 +1291,35 @@ export default function SettingsPage() {
         <div className="">
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-2">Database Location</h2>
-            <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
-              <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
-              <p className="text-sm text-gray-800 font-light">
-                Select the directory where your database (CSV) files will be
-                stored. A folder named 'SweldoDB' will be created here if it
-                doesn't already exist and will contain CSV files and folders
-                with employee and payroll data.
-              </p>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Important Note:</span> Select
+                    the directory where your database (CSV) files will be
+                    stored.
+                    <br />
+                    <span className="text-xs italic">
+                      A folder named 'SweldoDB' will be created here if it
+                      doesn't already exist and will contain CSV files and
+                      folders with employee and payroll data.
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <input
@@ -1710,7 +1706,7 @@ export default function SettingsPage() {
                   <h2 className="text-lg font-semibold mb-2">
                     Initial Database Setup
                   </h2>
-                  <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 flex items-center gap-2 border border-yellow-300">
                     <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
                     <p className="text-sm text-gray-800 font-light">
                       Welcome to Sweldo! Before you can start using the

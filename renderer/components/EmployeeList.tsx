@@ -21,6 +21,14 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
 
       try {
         const loadedEmployees = await employeeModel.loadActiveEmployees();
+        console.log(
+          "[EmployeeList] Loaded employees:",
+          loadedEmployees.map((emp) => ({
+            id: emp.id,
+            lastPaymentPeriod: emp.lastPaymentPeriod,
+            rawLastPaymentPeriod: JSON.stringify(emp.lastPaymentPeriod),
+          }))
+        );
         setEmployees(loadedEmployees);
       } catch (error) {
         console.error("Error loading employees:", error);
@@ -148,13 +156,45 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                             <div className="text-sm font-medium text-gray-900">
                               {employee.name}
                             </div>
+                            <div className="text-xs text-gray-500">
+                              {employee.employmentType &&
+                                `${employee.employmentType}`}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {employee.lastPaymentPeriod
-                          ? `${employee.lastPaymentPeriod.start} - ${employee.lastPaymentPeriod.end}`
-                          : "No payments made yet"}
+                        {(() => {
+                          try {
+                            const paymentPeriod =
+                              typeof employee.lastPaymentPeriod === "string" &&
+                              employee.lastPaymentPeriod
+                                ? JSON.parse(employee.lastPaymentPeriod)
+                                : employee.lastPaymentPeriod;
+
+                            return paymentPeriod?.start
+                              ? `${new Date(
+                                  paymentPeriod.start
+                                ).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })} - ${new Date(
+                                  paymentPeriod.end
+                                ).toLocaleDateString("en-US", {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}`
+                              : "No payments made yet";
+                          } catch (error) {
+                            console.error(
+                              "[EmployeeList] Error parsing payment period:",
+                              error
+                            );
+                            return "No payments made yet";
+                          }
+                        })()}
                       </td>
                     </tr>
                   ))
