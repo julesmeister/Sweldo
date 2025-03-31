@@ -451,6 +451,96 @@ export default function PayrollPage() {
     }
   };
 
+  const handleGenerateLandscapePDFForAll = async () => {
+    if (!hasAccess("GENERATE_REPORTS")) {
+      toast.error("You don't have permission to generate reports");
+      return;
+    }
+
+    if (!dateRange.startDate || !dateRange.endDate) {
+      toast.error("Please select a date range");
+      return;
+    }
+
+    try {
+      setIsGeneratingPDF(true);
+      const settings = await window.electron.getSettings();
+
+      // Load all active employees
+      const employeeModel = createEmployeeModel(dbPath);
+      const allEmployees = await employeeModel.loadEmployees();
+      const activeEmployees = allEmployees.filter((e) => e.status === "active");
+
+      if (activeEmployees.length === 0) {
+        toast.error("No active employees found");
+        return;
+      }
+
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+
+      // Load and collect payroll data for each active employee
+      const payrollPromises = activeEmployees.map(async (employee) => {
+        try {
+          const employeePayrolls = await Payroll.loadPayrollSummaries(
+            dbPath,
+            employee.id,
+            startDate.getFullYear(),
+            startDate.getMonth() + 1
+          );
+
+          return employeePayrolls
+            .filter((summary) => {
+              const summaryDate = new Date(summary.startDate);
+              return summaryDate >= startDate && summaryDate <= endDate;
+            })
+            .map((summary) => ({
+              ...summary,
+              employeeName: employee.name,
+              startDate: summary.startDate.toISOString(),
+              endDate: summary.endDate.toISOString(),
+            }));
+        } catch (error) {
+          console.log(`No payroll found for employee ${employee.name}`);
+          return [];
+        }
+      });
+
+      const allPayrolls = (await Promise.all(payrollPromises)).flat();
+
+      if (allPayrolls.length === 0) {
+        toast.error("No payroll data found for the selected date range");
+        return;
+      }
+
+      const outputPath = await window.electron.showSaveDialog({
+        title: "Save Payroll Summary PDF",
+        defaultPath: `Payroll_Summary_${
+          startDate.toISOString().split("T")[0]
+        }_${endDate.toISOString().split("T")[0]}.pdf`,
+        filters: [{ name: "PDF Files", extensions: ["pdf"] }],
+      });
+
+      if (!outputPath) {
+        return;
+      }
+
+      await window.electron.generatePayrollPDFLandscape({
+        payrolls: allPayrolls,
+        outputPath,
+        companyName: settings.companyName,
+        logoPath: settings.companyLogoPath,
+      });
+
+      toast.success("Payroll summary PDF generated successfully!");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   // Check if user has basic access to view payroll
   if (!hasAccess("VIEW_REPORTS")) {
     return (
@@ -488,12 +578,20 @@ export default function PayrollPage() {
               </button>
             )}
             {hasAccess("GENERATE_REPORTS") && (
-              <button
-                onClick={handleGeneratePDFForAll}
-                className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                Generate PDF For All Employees
-              </button>
+              <>
+                <button
+                  onClick={handleGeneratePDFForAll}
+                  className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Generate Payslips PDF
+                </button>
+                <button
+                  onClick={handleGenerateLandscapePDFForAll}
+                  className="ml-2 px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Generate Summary PDF
+                </button>
+              </>
             )}
           </div>
         </div>
