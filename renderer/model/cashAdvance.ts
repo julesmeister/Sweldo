@@ -246,7 +246,6 @@ export class CashAdvanceModel {
           console.log(`Processing line ${index + 1}:`, fields);
 
           try {
-            // Parse fields matching the CSV format
             const [
               id,
               employeeId,
@@ -258,6 +257,15 @@ export class CashAdvanceModel {
               status,
               remainingUnpaid,
             ] = fields;
+
+            const parsedDate = new Date(date);
+            // Filter by month and year
+            if (
+              parsedDate.getMonth() + 1 !== this.month ||
+              parsedDate.getFullYear() !== this.year
+            ) {
+              return null;
+            }
 
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount)) {
@@ -271,7 +279,7 @@ export class CashAdvanceModel {
             const advance = {
               id,
               employeeId,
-              date: new Date(date),
+              date: parsedDate,
               amount: parsedAmount,
               remainingUnpaid: parsedRemainingUnpaid,
               reason,

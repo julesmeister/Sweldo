@@ -56,6 +56,7 @@ export default function CashAdvancesPage() {
       const month = localStorage.getItem("selectedMonth");
       const year = localStorage.getItem("selectedYear");
 
+      console.log("Initial month/year from localStorage:", { month, year });
       setStoredMonth(month);
       setStoredYear(year);
     }
@@ -89,11 +90,23 @@ export default function CashAdvancesPage() {
         if (emp !== null) setEmployee(emp);
 
         // Load cash advances
-        console.log("Loading cash advances for employee:", selectedEmployeeId);
+        console.log("Loading cash advances with params:", {
+          selectedEmployeeId,
+          storedMonth,
+          storedYear,
+          modelMonth: cashAdvanceModel?.month,
+          modelYear: cashAdvanceModel?.year,
+        });
+
         const advances = await cashAdvanceModel.loadCashAdvances(
           selectedEmployeeId
         );
-        console.log("Loaded cash advances:", advances);
+        console.log("Loaded cash advances:", {
+          count: advances.length,
+          advances,
+          storedMonth,
+          storedYear,
+        });
         setCashAdvances(advances);
       } catch (error) {
         console.error("Error loading data:", error);
@@ -292,6 +305,34 @@ export default function CashAdvancesPage() {
     }
   }
 
+  const filteredAdvances = useMemo(() => {
+    return cashAdvances.filter((advance) => {
+      const advanceDate = new Date(advance.date);
+      const advanceMonth = advanceDate.getMonth();
+      const advanceYear = advanceDate.getFullYear();
+
+      console.log("Filtering advance:", {
+        date: advanceDate,
+        advanceMonth,
+        advanceYear,
+        storedMonth: parseInt(storedMonth || "0", 10),
+        storedYear: parseInt(storedYear || "", 10),
+      });
+
+      return (
+        advanceMonth === parseInt(storedMonth || "0", 10) &&
+        advanceYear === parseInt(storedYear || "", 10)
+      );
+    });
+  }, [cashAdvances, storedMonth, storedYear]);
+
+  console.log("Rendering cash advances:", {
+    totalAdvances: cashAdvances.length,
+    filteredAdvances: filteredAdvances.length,
+    storedMonth,
+    storedYear,
+  });
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -325,7 +366,7 @@ export default function CashAdvancesPage() {
                   </div>
                   {selectedEmployeeId ? (
                     <div className="overflow-x-auto relative">
-                      {cashAdvances.length === 0 ? (
+                      {filteredAdvances.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 px-4">
                           <div className="text-center">
                             <svg
@@ -343,10 +384,22 @@ export default function CashAdvancesPage() {
                               />
                             </svg>
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                              No cash advances found
+                              No cash advances found for{" "}
+                              {new Date(
+                                parseInt(
+                                  storedYear ||
+                                    new Date().getFullYear().toString()
+                                ),
+                                parseInt(storedMonth || "0"),
+                                1
+                              ).toLocaleString("default", {
+                                month: "long",
+                                year: "numeric",
+                              })}
                             </h3>
                             <p className="mt-1 text-sm text-gray-500">
-                              Get started by creating a new cash advance.
+                              Get started by clicking the "Apply for Cash
+                              Advance" button above.
                             </p>
                           </div>
                         </div>
@@ -393,7 +446,7 @@ export default function CashAdvancesPage() {
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {cashAdvances.map((advance) => (
+                            {filteredAdvances.map((advance) => (
                               <tr
                                 key={advance.id}
                                 className="hover:bg-gray-50 cursor-pointer"
