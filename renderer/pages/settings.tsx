@@ -52,8 +52,70 @@ const timeStringToHour = (timeString: string): number => {
   return parseInt(timeString.split(":")[0], 10);
 };
 
+// Create a reusable AutoSaveInput component
+const AutoSaveInput = ({
+  value,
+  onChange,
+  placeholder,
+  showSaved,
+  setShowSaved,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  showSaved: boolean;
+  setShowSaved: (show: boolean) => void;
+}) => (
+  <div className="flex-1 relative">
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value);
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
+      }}
+      className="w-full p-2 border rounded-md"
+      placeholder={placeholder}
+    />
+    <div
+      className={`
+      absolute right-2 top-1/2 -translate-y-1/2 
+      flex items-center bg-green-50 px-2 py-0.5 rounded-full
+      transition-all duration-200 ease-in-out
+      ${showSaved ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"}
+    `}
+    >
+      <svg
+        className="w-3.5 h-3.5 text-green-600"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <span className="text-xs text-green-600 ml-1 font-medium">Saved</span>
+    </div>
+  </div>
+);
+
 export default function SettingsPage() {
-  const { dbPath, setDbPath, logoPath, setLogoPath } = useSettingsStore();
+  const {
+    dbPath,
+    setDbPath,
+    logoPath,
+    setLogoPath,
+    preparedBy,
+    setPreparedBy,
+    approvedBy,
+    setApprovedBy,
+    initialize,
+  } = useSettingsStore();
   const { hasAccess } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
   const [logoError, setLogoError] = useState("");
@@ -81,6 +143,13 @@ export default function SettingsPage() {
   const [sssRate, setSssRate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPreparedBySaved, setShowPreparedBySaved] = React.useState(false);
+  const [showApprovedBySaved, setShowApprovedBySaved] = React.useState(false);
+
+  // Add useEffect to initialize the store when component mounts
+  React.useEffect(() => {
+    initialize();
+  }, [initialize]);
 
   const handleSaveChanges = async () => {
     if (!hasAccess("MANAGE_ATTENDANCE")) {
@@ -868,25 +937,60 @@ export default function SettingsPage() {
       ),
     },
     {
-      key: "logo",
-      title: "Company Logo",
+      key: "payslip",
+      title: "Payslip",
       icon: <MdOutlineDataset className="h-5 w-5" />,
       requiredAccess: "MANAGE_SETTINGS",
       content: (
         <div className="">
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-2">Company Logo</h2>
-            <div className="bg-yellow-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-yellow-300">
-              <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
-              <p className="text-sm text-gray-800 font-light">
-                Select your company logo image file (PNG, JPG, or JPEG). The
-                logo will be used in reports and other company documents.
-              </p>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Note:</span> Select your
+                    company logo image file (PNG, JPG, or JPEG). The logo will
+                    be used in reports and other company documents.
+                  </p>
+                </div>
+              </div>
             </div>
             {logoError && (
-              <div className="bg-red-50 rounded-lg p-4 mb-4 flex items-center gap-2 border border-red-300">
-                <IoInformationCircleOutline className="w-6 h-6 text-red-900" />
-                <p className="text-sm text-red-800 font-light">{logoError}</p>
+              <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-red-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">
+                      <span className="font-medium">Error:</span> {logoError}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1020,6 +1124,184 @@ export default function SettingsPage() {
                   Clear
                 </button>
               )}
+            </div>
+
+            {/* Payslip Settings Info */}
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 mt-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Note:</span> The names entered
+                    below will appear in the payslip signature section.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Auto-save Info */}
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Helpful Tip:</span> Any
+                    changes made to these fields are saved automatically.
+                    <br />
+                    <span className="text-xs italic">
+                      No need to manually save your changes.
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Signature Fields */}
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold mb-4">Signature Fields</h2>
+              <div className="grid grid-cols-2 gap-6">
+                {/* Prepared By section */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2 text-gray-700">
+                    Prepared By
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={preparedBy}
+                        onChange={(e) => {
+                          setPreparedBy(e.target.value);
+                          setShowPreparedBySaved(true);
+                          setTimeout(() => setShowPreparedBySaved(false), 2000);
+                        }}
+                        className="w-full p-2 border rounded-md"
+                        placeholder="Enter name of preparer..."
+                      />
+                      <div
+                        className={`
+                        absolute right-2 top-1/2 -translate-y-1/2 
+                        flex items-center bg-green-50 px-2 py-0.5 rounded-full
+                        transition-all duration-200 ease-in-out
+                        ${
+                          showPreparedBySaved
+                            ? "opacity-100 translate-x-0"
+                            : "opacity-0 translate-x-2"
+                        }
+                      `}
+                      >
+                        <svg
+                          className="w-3.5 h-3.5 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        <span className="text-xs text-green-600 ml-1 font-medium">
+                          Saved
+                        </span>
+                      </div>
+                    </div>
+                    {preparedBy && (
+                      <button
+                        onClick={() => setPreparedBy("")}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md border hover:bg-gray-200 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Approved By section */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2 text-gray-700">
+                    Approved By
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={approvedBy}
+                        onChange={(e) => {
+                          setApprovedBy(e.target.value);
+                          setShowApprovedBySaved(true);
+                          setTimeout(() => setShowApprovedBySaved(false), 2000);
+                        }}
+                        className="w-full p-2 border rounded-md"
+                        placeholder="Enter name of approver..."
+                      />
+                      <div
+                        className={`
+                        absolute right-2 top-1/2 -translate-y-1/2 
+                        flex items-center bg-green-50 px-2 py-0.5 rounded-full
+                        transition-all duration-200 ease-in-out
+                        ${
+                          showApprovedBySaved
+                            ? "opacity-100 translate-x-0"
+                            : "opacity-0 translate-x-2"
+                        }
+                      `}
+                      >
+                        <svg
+                          className="w-3.5 h-3.5 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        <span className="text-xs text-green-600 ml-1 font-medium">
+                          Saved
+                        </span>
+                      </div>
+                    </div>
+                    {approvedBy && (
+                      <button
+                        onClick={() => setApprovedBy("")}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md border hover:bg-gray-200 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

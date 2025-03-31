@@ -4,10 +4,14 @@ import { persist } from "zustand/middleware";
 interface SettingsState {
   dbPath: string;
   logoPath: string;
+  preparedBy: string;
+  approvedBy: string;
   isInitialized: boolean;
   isInitializing: boolean;
   setDbPath: (path: string) => Promise<void>;
   setLogoPath: (path: string) => void;
+  setPreparedBy: (name: string) => void;
+  setApprovedBy: (name: string) => void;
   initialize: () => Promise<void>;
 }
 
@@ -16,6 +20,8 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       dbPath: "",
       logoPath: "",
+      preparedBy: "",
+      approvedBy: "",
       isInitialized: false,
       isInitializing: false,
       setDbPath: async (path) => {
@@ -59,6 +65,8 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
       setLogoPath: (path) => set({ logoPath: path }),
+      setPreparedBy: (name) => set({ preparedBy: name }),
+      setApprovedBy: (name) => set({ approvedBy: name }),
       initialize: async () => {
         // Prevent multiple simultaneous initializations
         if (get().isInitialized || get().isInitializing) return;
@@ -113,6 +121,8 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         dbPath: state.dbPath,
         logoPath: state.logoPath,
+        preparedBy: state.preparedBy,
+        approvedBy: state.approvedBy,
       }),
       getStorage: () => localStorage,
     }

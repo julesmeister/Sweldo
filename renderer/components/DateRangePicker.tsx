@@ -47,26 +47,35 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
   `;
 
+  const handleStartDateChange = (date: Date | null) => {
+    try {
+      const validDate = date ? new Date(date) : null;
+      if (validDate && !isNaN(validDate.getTime())) {
+        // If end date is earlier than the new start date, set it to the day after start date
+        if (endDate && endDate <= validDate) {
+          const nextDay = new Date(validDate);
+          nextDay.setDate(validDate.getDate() + 1);
+          onDateRangeChange(validDate, nextDay);
+        } else {
+          onDateRangeChange(validDate, endDate);
+        }
+      } else if (date === null) {
+        onDateRangeChange(null, endDate);
+      } else {
+        console.error("Invalid start date selected");
+      }
+    } catch (error) {
+      console.error("Error handling start date change:", error);
+    }
+  };
+
   return (
     <div className="flex items-center w-full">
       <div className="relative flex-1 flex items-center bg-gradient-to-r from-sky-50/50 via-blue-50/50 to-sky-50/50 rounded-xl px-1.5 border border-blue-100/50">
         <div className="relative z-50 flex-1">
           <DatePicker
             selected={startDate}
-            onChange={(date: Date | null) => {
-              try {
-                const validDate = date ? new Date(date) : null;
-                if (validDate && !isNaN(validDate.getTime())) {
-                  onDateRangeChange(validDate, endDate);
-                } else if (date === null) {
-                  onDateRangeChange(null, endDate);
-                } else {
-                  console.error("Invalid start date selected");
-                }
-              } catch (error) {
-                console.error("Error handling start date change:", error);
-              }
-            }}
+            onChange={handleStartDateChange}
             startDate={startDate}
             endDate={endDate}
             selectsStart

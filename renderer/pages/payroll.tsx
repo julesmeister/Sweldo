@@ -61,7 +61,7 @@ export default function PayrollPage() {
     showAbove?: boolean;
   } | null>(null);
   const { isLoading, setLoading, setActiveLink } = useLoadingStore();
-  const { dbPath, logoPath } = useSettingsStore();
+  const { dbPath, logoPath, preparedBy, approvedBy } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
   const { dateRange, setDateRange } = useDateRangeStore();
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
@@ -369,8 +369,8 @@ export default function PayrollPage() {
                   Number(summary.deductions.cashAdvanceDeductions || 0) +
                   Number(summary.deductions.others || 0),
               },
-              preparedBy: "Penelope Sarah Tan",
-              approvedBy: "Ruth Sy Lee",
+              preparedBy: preparedBy || "",
+              approvedBy: approvedBy || "",
               payslipNumber: index + 1,
             }));
         } catch (error) {
