@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { PayrollSummary } from "@/renderer/components/PayrollSummary";
 import { PayrollList } from "@/renderer/components/PayrollList";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
@@ -75,61 +75,64 @@ export default function PayrollPage() {
     onPayrollDeleted: () => setRefreshPayrolls(true),
   });
 
-  // Initialize date range from storage
-  useEffect(() => {
-    const month = safeStorage.getItem("selectedMonth");
-    const year = safeStorage.getItem("selectedYear");
-
-    if (month !== null) setStoredMonth(month);
-    if (year !== null) setStoredYear(year);
+  // Move callback declarations to the top level
+  const handlePayrollDeleted = useCallback(() => {
+    setRefreshPayrolls(true);
   }, []);
 
-  // Set default year if not present
-  useEffect(() => {
-    if (!storedYear) {
-      const currentYear = new Date().getFullYear().toString();
-      safeStorage.setItem("selectedYear", currentYear);
-      setStoredYear(currentYear);
-    }
-  }, [storedYear]);
+  const handleDeletePayrollItem = useCallback(
+    async (payrollId: string) => {
+      await deletePayroll(payrollId, payrolls);
+      setPayrolls((currentPayrolls) =>
+        currentPayrolls.filter((p) => p.id !== payrollId)
+      );
+    },
+    [deletePayroll, payrolls]
+  );
 
-  // Update date range when month/year are available
-  useEffect(() => {
-    if (storedMonth && storedYear && !dateRange.startDate) {
-      const month = parseInt(storedMonth, 10);
-      const year = parseInt(storedYear, 10);
-      const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0);
-      setDateRange(startDate, endDate);
-    }
-  }, [storedMonth, storedYear, dateRange.startDate, setDateRange]);
+  // Then use the callbacks in useMemo
+  const payrollListProps = useMemo(
+    () => ({
+      employee,
+      payrolls,
+      onSelectPayroll: setSelectedPayroll,
+      selectedEmployeeId: selectedEmployeeId!,
+      dbPath,
+      onPayrollDeleted: handlePayrollDeleted,
+      canEdit: hasAccess("MANAGE_PAYROLL"),
+      onDeletePayroll: handleDeletePayrollItem,
+    }),
+    [
+      employee,
+      payrolls,
+      setSelectedPayroll,
+      selectedEmployeeId,
+      dbPath,
+      hasAccess,
+      handlePayrollDeleted,
+      handleDeletePayrollItem,
+    ]
+  );
 
-  const loadPayrolls = async () => {
+  // Memoize the loadPayrolls function
+  const loadPayrolls = useCallback(async () => {
+    if (
+      !dateRange.startDate ||
+      !dateRange.endDate ||
+      !dbPath ||
+      !selectedEmployeeId
+    ) {
+      console.log("Missing required data for loading payrolls");
+      setPayrolls([]);
+      return;
+    }
+
     try {
       setLoading(true);
-
-      if (!dateRange.startDate || !dateRange.endDate || !dbPath) {
-        console.log("Missing date range or database path");
-        return;
-      }
-
-      if (!selectedEmployeeId) {
-        console.log("No employee selected");
-        setPayrolls([]);
-        return;
-      }
 
       // Create dates and adjust for timezone
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
-
-      // Log the actual dates we're using
-      console.log("Date debugging:", {
-        rawStartDate: dateRange.startDate,
-        parsedStartDate: startDate,
-        month: startDate.getMonth() + 1, // Add 1 because getMonth() returns 0-11
-        year: startDate.getFullYear(),
-      });
 
       // Load employee details
       const employeeModel = createEmployeeModel(dbPath);
@@ -138,11 +141,9 @@ export default function PayrollPage() {
       );
       setEmployee(loadedEmployee);
 
-      // Use the correct month from the startDate
-      const month = startDate.getMonth() + 1; // Add 1 because getMonth() returns 0-11
+      const month = startDate.getMonth() + 1;
       const year = startDate.getFullYear();
 
-      // Load payroll data with the correct month
       const employeePayrolls = await Payroll.loadPayrollSummaries(
         dbPath,
         selectedEmployeeId,
@@ -166,7 +167,6 @@ export default function PayrollPage() {
         })
       );
 
-      console.log("Loaded payroll data:", formattedPayrolls);
       setPayrolls(formattedPayrolls);
     } catch (error) {
       console.error("Error loading payrolls:", error);
@@ -174,11 +174,43 @@ export default function PayrollPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dbPath, selectedEmployeeId, dateRange, setLoading]); // Removed refreshPayrolls from dependencies
 
+  // Modify the refresh handling
+  useEffect(() => {
+    if (refreshPayrolls) {
+      loadPayrolls().then(() => {
+        setRefreshPayrolls(false); // Reset the refresh flag after loading
+      });
+    }
+  }, [refreshPayrolls, loadPayrolls]);
+
+  // Initial load effect
   useEffect(() => {
     loadPayrolls();
-  }, [dbPath, selectedEmployeeId, setLoading, refreshPayrolls, dateRange]);
+  }, [loadPayrolls]);
+
+  // Remove the date range initialization effects and combine them
+  useEffect(() => {
+    if (!storedMonth || !storedYear) {
+      const month = safeStorage.getItem("selectedMonth");
+      const year =
+        safeStorage.getItem("selectedYear") ||
+        new Date().getFullYear().toString();
+
+      if (month) setStoredMonth(month);
+      setStoredYear(year);
+      safeStorage.setItem("selectedYear", year);
+
+      if (month && year && !dateRange.startDate) {
+        const monthNum = parseInt(month, 10);
+        const yearNum = parseInt(year, 10);
+        const startDate = new Date(yearNum, monthNum, 1);
+        const endDate = new Date(yearNum, monthNum + 1, 0);
+        setDateRange(startDate, endDate);
+      }
+    }
+  }, [storedMonth, storedYear, dateRange.startDate, setDateRange]);
 
   const handleDeductionsClick = (
     event: React.MouseEvent<HTMLButtonElement>
@@ -545,20 +577,8 @@ export default function PayrollPage() {
               </div>
             ) : (
               <PayrollList
-                employee={employee}
-                payrolls={payrolls}
-                onSelectPayroll={setSelectedPayroll}
-                selectedEmployeeId={selectedEmployeeId!}
-                dbPath={dbPath}
-                onPayrollDeleted={() => setRefreshPayrolls(true)}
-                canEdit={hasAccess("MANAGE_PAYROLL")}
-                onDeletePayroll={async (payrollId: string) => {
-                  await deletePayroll(payrollId, payrolls);
-                  // Update local state
-                  setPayrolls((currentPayrolls) =>
-                    currentPayrolls.filter((p) => p.id !== payrollId)
-                  );
-                }}
+                key={`${selectedEmployeeId}-${refreshPayrolls}`}
+                {...payrollListProps}
               />
             )}
           </div>
