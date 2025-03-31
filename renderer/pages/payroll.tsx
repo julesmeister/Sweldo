@@ -476,12 +476,7 @@ export default function PayrollPage() {
         <div className="bg-white/40 backdrop-blur-sm rounded-lg shadow-sm border border-blue-100 p-3 mb-4 relative z-20">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <DateRangePicker
-                dateRange={dateRange}
-                onDateRangeChange={(startDate, endDate) =>
-                  setDateRange(startDate, endDate)
-                }
-              />
+              <DateRangePicker variant="timesheet" />
             </div>
             {hasAccess("MANAGE_PAYROLL") && employee && (
               <button

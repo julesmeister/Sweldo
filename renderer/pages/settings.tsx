@@ -32,6 +32,7 @@ import { MagicCard } from "../components/magicui/magic-card";
 import ScheduleSettings from "../components/ScheduleSettings";
 import RoleManagement from "../components/RoleManagement";
 import { RoleModelImpl } from "../model/role";
+import { Switch } from "@headlessui/react";
 
 interface SettingSection {
   key: string;
@@ -405,62 +406,114 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Overtime Settings */}
-                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                      <h4 className="text-md font-medium text-gray-800">
-                        Overtime Settings
-                      </h4>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Minimum Duration
-                        </label>
-                        <div className="mt-1 relative">
-                          <input
-                            type="number"
-                            name="overtimeThreshold"
-                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
-                            placeholder="5"
-                            value={attendanceSettings?.overtimeThreshold ?? ""}
-                            onChange={(e) =>
-                              handleInputChange(e, "overtimeThreshold")
-                            }
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-md font-medium text-gray-800">
+                          Overtime Settings
+                        </h4>
+                        <Switch
+                          checked={
+                            attendanceSettings?.countEarlyTimeInAsOvertime ??
+                            false
+                          }
+                          onChange={(checked) =>
+                            handleInputChange(
+                              {
+                                target: {
+                                  name: "countEarlyTimeInAsOvertime",
+                                  value: checked,
+                                },
+                              },
+                              "countEarlyTimeInAsOvertime"
+                            )
+                          }
+                          className={`${
+                            attendanceSettings?.countEarlyTimeInAsOvertime
+                              ? "bg-indigo-600"
+                              : "bg-gray-200"
+                          } relative inline-flex h-6 w-11 items-center rounded-full`}
+                        >
+                          <span className="sr-only">
+                            Count Early Time In as Overtime
+                          </span>
+                          <span
+                            className={`${
+                              attendanceSettings?.countEarlyTimeInAsOvertime
+                                ? "translate-x-6"
+                                : "translate-x-1"
+                            } inline-block h-4 w-4 transform rounded-full bg-white transition`}
                           />
-                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 text-sm">
-                              minutes
-                            </span>
-                          </div>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Minimum overtime minutes required before overtime pay
-                          applies
+                        </Switch>
+                      </div>
+
+                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg flex items-start gap-2">
+                        <div className="mt-0.5">ℹ️</div>
+                        <p>
+                          {attendanceSettings?.countEarlyTimeInAsOvertime
+                            ? "When enabled, overtime includes both early time-in and extended time-out periods"
+                            : "When disabled, overtime is calculated only from extended time-out periods, regardless of early arrival"}
                         </p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Rate Multiplier
-                        </label>
-                        <div className="mt-1 relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 sm:text-sm">×</span>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Minimum Duration
+                          </label>
+                          <div className="mt-1 relative">
+                            <input
+                              type="number"
+                              name="overtimeThreshold"
+                              className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 px-3"
+                              placeholder="5"
+                              value={
+                                attendanceSettings?.overtimeThreshold ?? ""
+                              }
+                              onChange={(e) =>
+                                handleInputChange(e, "overtimeThreshold")
+                              }
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 text-sm">
+                                minutes
+                              </span>
+                            </div>
                           </div>
-                          <input
-                            type="number"
-                            name="overtimeHourlyMultiplier"
-                            className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 pl-7"
-                            placeholder="1.25"
-                            value={
-                              attendanceSettings?.overtimeHourlyMultiplier ?? ""
-                            }
-                            onChange={(e) =>
-                              handleInputChange(e, "overtimeHourlyMultiplier")
-                            }
-                            step="0.01"
-                          />
+                          <p className="mt-1 text-xs text-gray-500">
+                            Minimum minutes required before overtime pay applies
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Multiplier applied to regular hourly rate for overtime
-                          (e.g., 1.25 = 25% extra)
-                        </p>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Rate Multiplier
+                          </label>
+                          <div className="mt-1 relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">
+                                ×
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              name="overtimeHourlyMultiplier"
+                              className="block w-full rounded-lg border-2 border-gray-200 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20 sm:text-sm h-10 pl-7"
+                              placeholder="1.25"
+                              value={
+                                attendanceSettings?.overtimeHourlyMultiplier ??
+                                ""
+                              }
+                              onChange={(e) =>
+                                handleInputChange(e, "overtimeHourlyMultiplier")
+                              }
+                              step="0.01"
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Multiplier for overtime rate (e.g., 1.25 = 25%
+                            extra)
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -1566,13 +1619,18 @@ export default function SettingsPage() {
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e:
+      | React.ChangeEvent<HTMLInputElement>
+      | { target: { name: string; value: boolean } },
     field: keyof AttendanceSettings
   ) => {
     if (!attendanceSettings) return;
     setAttendanceSettings({
       ...attendanceSettings,
-      [field]: Number(e.target.value),
+      [field]:
+        typeof e.target.value === "boolean"
+          ? e.target.value
+          : Number(e.target.value),
     });
   };
 

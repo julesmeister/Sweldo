@@ -1,20 +1,20 @@
 import React from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { BorderBeam } from "./magicui/border-beam";
+import { useDateRangeStore } from "../stores/dateRangeStore";
 
 interface DateRangePickerProps {
-  dateRange: {
-    startDate: Date | null;
-    endDate: Date | null;
-  };
-  onDateRangeChange: (startDate: Date | null, endDate: Date | null) => void;
+  variant?: "default" | "timesheet";
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
-  dateRange,
-  onDateRangeChange,
+  variant = "default",
 }) => {
-  const { startDate, endDate } = dateRange;
+  const { dateRange, setDateRange } = useDateRangeStore();
+  const startDate = dateRange?.startDate || null;
+  const endDate = dateRange?.endDate || null;
+  const [isEndDateOpen, setIsEndDateOpen] = React.useState(false);
 
   const formatDateDisplay = (date: Date | null) => {
     if (!date) return "";
@@ -38,14 +38,46 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
   };
 
-  const buttonClass = (date: Date | null) => `
-    relative group flex items-center px-4 py-2.5 rounded-lg
-    ${
+  const containerClass =
+    variant === "timesheet"
+      ? "flex items-center w-full bg-gray-100 rounded-xl border border-gray-200"
+      : "flex items-center w-full";
+
+  const innerContainerClass =
+    variant === "timesheet"
+      ? "relative flex-1 flex items-center px-1.5"
+      : "relative flex-1 flex items-center bg-gradient-to-r from-sky-50/50 via-blue-50/50 to-sky-50/50 rounded-xl px-1.5 border border-blue-100/50";
+
+  const buttonClass = (date: Date | null) => {
+    const baseClass = "relative group flex items-center px-4 py-2.5";
+
+    if (variant === "timesheet") {
+      return `${baseClass} ${
+        date
+          ? "text-gray-900 font-medium hover:text-gray-700"
+          : "text-gray-500 hover:text-gray-600"
+      }`;
+    }
+
+    return `${baseClass} rounded-lg ${
       date
         ? "text-blue-400 font-medium hover:text-blue-500"
         : "text-blue-300 hover:text-blue-400"
-    }
-  `;
+    }`;
+  };
+
+  const arrowIconClass =
+    variant === "timesheet" ? "w-5 h-5 text-gray-400" : "w-5 h-5 text-blue-400";
+
+  const calendarIconClass =
+    variant === "timesheet"
+      ? "w-4 h-4 mr-2.5 text-gray-400 group-hover:text-gray-500 transition-colors"
+      : "w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors";
+
+  const clearButtonClass =
+    variant === "timesheet"
+      ? "relative px-2 py-1 text-sm text-gray-500 hover:text-gray-600 hover:bg-gray-200 rounded-md transition-all active:scale-95 active:bg-gray-300 overflow-hidden"
+      : "relative px-2 py-1 text-sm text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all active:scale-95 active:bg-blue-100 overflow-hidden";
 
   const handleStartDateChange = (date: Date | null) => {
     try {
@@ -55,12 +87,14 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         if (endDate && endDate <= validDate) {
           const nextDay = new Date(validDate);
           nextDay.setDate(validDate.getDate() + 1);
-          onDateRangeChange(validDate, nextDay);
+          setDateRange(validDate, nextDay);
         } else {
-          onDateRangeChange(validDate, endDate);
+          setDateRange(validDate, endDate);
         }
+        // Open end date picker after selecting start date
+        setIsEndDateOpen(true);
       } else if (date === null) {
-        onDateRangeChange(null, endDate);
+        setDateRange(null, endDate);
       } else {
         console.error("Invalid start date selected");
       }
@@ -70,8 +104,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   };
 
   return (
-    <div className="flex items-center w-full">
-      <div className="relative flex-1 flex items-center bg-gradient-to-r from-sky-50/50 via-blue-50/50 to-sky-50/50 rounded-xl px-1.5 border border-blue-100/50">
+    <div className={containerClass}>
+      <div className={innerContainerClass}>
         <div className="relative z-50 flex-1">
           <DatePicker
             selected={startDate}
@@ -86,7 +120,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             customInput={
               <button type="button" className={buttonClass(startDate)}>
                 <svg
-                  className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors"
+                  className={calendarIconClass}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -105,7 +139,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         </div>
         <div className="flex items-center px-3">
           <svg
-            className="w-5 h-5 text-blue-400"
+            className={arrowIconClass}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -125,14 +159,17 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               try {
                 const validDate = date ? new Date(date) : null;
                 if (validDate && !isNaN(validDate.getTime())) {
-                  onDateRangeChange(startDate, validDate);
+                  setDateRange(startDate, validDate);
+                  setIsEndDateOpen(false);
                 } else if (date === null) {
-                  onDateRangeChange(startDate, null);
+                  setDateRange(startDate, null);
+                  setIsEndDateOpen(false);
                 } else {
                   console.error("Invalid end date selected");
                 }
               } catch (error) {
                 console.error("Error handling end date change:", error);
+                setIsEndDateOpen(false);
               }
             }}
             startDate={startDate}
@@ -141,10 +178,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             className="w-full bg-transparent focus:outline-none"
             placeholderText="End date"
             dateFormat="MMM d, yyyy"
+            open={isEndDateOpen}
+            onCalendarClose={() => setIsEndDateOpen(false)}
             customInput={
               <button type="button" className={buttonClass(endDate)}>
                 <svg
-                  className="w-4 h-4 mr-2.5 text-blue-400 group-hover:text-blue-500 transition-colors"
+                  className={calendarIconClass}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -161,6 +200,23 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             }
           />
         </div>
+        {(startDate || endDate) && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDateRange(null, null)}
+              className={clearButtonClass}
+            >
+              Clear
+              <BorderBeam
+                duration={2}
+                size={20}
+                colorFrom={variant === "timesheet" ? "#9ca3af" : "#60a5fa"}
+                colorTo={variant === "timesheet" ? "#4b5563" : "#3b82f6"}
+              />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

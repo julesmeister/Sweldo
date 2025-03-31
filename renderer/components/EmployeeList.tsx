@@ -157,8 +157,11 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                               {employee.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {employee.employmentType &&
-                                `${employee.employmentType}`}
+                              {employee.position && employee.employmentType
+                                ? `${employee.position} • ${employee.employmentType}`
+                                : employee.position ||
+                                  employee.employmentType ||
+                                  ""}
                             </div>
                           </div>
                         </div>

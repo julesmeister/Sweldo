@@ -149,15 +149,30 @@ export const calculateTimeMetrics = (
       : 0;
 
   // Calculate overtime based on hours of work
-  const standardHours = employmentType?.hoursOfWork || 8; // Default to 8 hours if not specified
+  const standardHours = employmentType?.hoursOfWork || 8;
   const standardMinutes = standardHours * 60;
-
   const totalMinutesWorked = Math.abs(
     calculateTimeDifference(actual.timeOut, actual.timeIn)
   );
 
-  // Calculate overtime minutes based on hours of work and threshold
-  const overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
+  // New overtime calculation logic
+  let overtimeMinutes = 0;
+  if (scheduled) {
+    const earlyMinutes =
+      scheduled.timeIn > actual.timeIn
+        ? calculateTimeDifference(scheduled.timeIn, actual.timeIn)
+        : 0;
+    const lateMinutes =
+      actual.timeOut > scheduled.timeOut
+        ? calculateTimeDifference(actual.timeOut, scheduled.timeOut)
+        : 0;
+
+    overtimeMinutes = attendanceSettings.countEarlyTimeInAsOvertime
+      ? earlyMinutes + lateMinutes
+      : lateMinutes;
+  } else {
+    overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
+  }
 
   const lateDeductionMinutes = calculateDeductionMinutes(
     lateMinutes,

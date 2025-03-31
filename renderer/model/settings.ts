@@ -48,6 +48,7 @@ export interface AttendanceSettings {
   nightDifferentialMultiplier: number; // decimal multiplier for night differential
   nightDifferentialStartHour: number; // e.g., 22 for 10 PM
   nightDifferentialEndHour: number; // e.g., 6 for 6 AM
+  countEarlyTimeInAsOvertime: boolean; // new field to control early time in overtime
 }
 
 export const defaultAttendanceSettings: AttendanceSettings = {
@@ -62,6 +63,7 @@ export const defaultAttendanceSettings: AttendanceSettings = {
   nightDifferentialMultiplier: 0.1,
   nightDifferentialStartHour: 22,
   nightDifferentialEndHour: 6,
+  countEarlyTimeInAsOvertime: false,
 };
 
 export const defaultTimeSettings: EmploymentType[] = [
@@ -188,7 +190,7 @@ export class AttendanceSettingsModel {
         return defaultAttendanceSettings;
       }
 
-      // Convert string values to numbers
+      // Convert string values to numbers and boolean
       const settings = results.data[0];
       return {
         lateGracePeriod: Number(settings.lateGracePeriod),
@@ -206,6 +208,10 @@ export class AttendanceSettingsModel {
         ),
         nightDifferentialStartHour: Number(settings.nightDifferentialStartHour),
         nightDifferentialEndHour: Number(settings.nightDifferentialEndHour),
+        countEarlyTimeInAsOvertime:
+          typeof settings.countEarlyTimeInAsOvertime === "string"
+            ? settings.countEarlyTimeInAsOvertime === "true"
+            : Boolean(settings.countEarlyTimeInAsOvertime),
       };
     } catch (error) {
       console.error("[SettingsModel] Error loading settings:", error);
@@ -286,7 +292,14 @@ export class AttendanceSettingsModel {
   ): Promise<void> {
     try {
       await this.ensureSettingsFile();
-      const csv = Papa.unparse([settings]);
+      // Convert boolean to string before saving
+      const settingsToSave = {
+        ...settings,
+        countEarlyTimeInAsOvertime: settings.countEarlyTimeInAsOvertime
+          ? "true"
+          : "false",
+      };
+      const csv = Papa.unparse([settingsToSave]);
       await window.electron.writeFile(this.settingsPath, csv);
     } catch (error) {
       console.error("[SettingsModel] Error saving settings:", error);

@@ -41,6 +41,9 @@ import AddButton from "@/renderer/components/magicui/add-button";
 import { useTimesheetCheckbox } from "@/renderer/hooks/useTimesheetCheckbox";
 import { useTimesheetEdit } from "@/renderer/hooks/useTimesheetEdit";
 import { useAuthStore } from "@/renderer/stores/authStore";
+import { DateRangePicker } from "@/renderer/components/DateRangePicker";
+import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
+
 const TimesheetPage: React.FC = () => {
   const [timesheetEntries, setTimesheetEntries] = useState<Attendance[]>([]);
   const [compensationEntries, setCompensationEntries] = useState<
@@ -69,6 +72,8 @@ const TimesheetPage: React.FC = () => {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [validEntriesCount, setValidEntriesCount] = useState<number>(0);
   const { accessCodes, hasAccess } = useAuthStore();
+  const { dateRange, setDateRange } = useDateRangeStore();
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const month = localStorage.getItem("selectedMonth");
@@ -420,6 +425,18 @@ const TimesheetPage: React.FC = () => {
     router.push(path);
   };
 
+  const filteredTimesheetEntries = useMemo(() => {
+    if (!dateRange?.startDate || !dateRange?.endDate) {
+      return timesheetEntries;
+    }
+
+    return timesheetEntries.filter((entry) => {
+      const entryDate = new Date(year, storedMonthInt - 1, entry.day);
+      if (!dateRange.startDate || !dateRange.endDate) return false;
+      return entryDate >= dateRange.startDate && entryDate <= dateRange.endDate;
+    });
+  }, [timesheetEntries, dateRange, year, storedMonthInt]);
+
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
     return (
@@ -525,11 +542,18 @@ const TimesheetPage: React.FC = () => {
           <div className="bg-white flex flex-col h-full">
             {/* Title header - always visible */}
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
-              <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                {selectedEmployeeId
-                  ? employee?.name + "'s Timesheet"
-                  : "Timesheet"}
-              </h2>
+              <div className="flex items-center space-x-4 flex-1">
+                <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                  {selectedEmployeeId
+                    ? employee?.name + "'s Timesheet"
+                    : "Timesheet"}
+                </h2>
+                {selectedEmployeeId && (
+                  <div className="w-[480px]">
+                    <DateRangePicker variant="timesheet" />
+                  </div>
+                )}
+              </div>
               {selectedEmployeeId && (
                 <div className="relative flex items-center space-x-4">
                   <div className="flex items-center px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-600">
@@ -685,7 +709,7 @@ const TimesheetPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {timesheetEntries.length === 0 ? (
+                    {filteredTimesheetEntries.length === 0 ? (
                       <tr>
                         <td
                           colSpan={columns.filter((col) => col.visible).length}
@@ -716,9 +740,11 @@ const TimesheetPage: React.FC = () => {
                       </tr>
                     ) : (
                       Array.from(
-                        new Set(timesheetEntries.map((entry) => entry.day))
+                        new Set(
+                          filteredTimesheetEntries.map((entry) => entry.day)
+                        )
                       ).map((day) => {
-                        const foundEntry = timesheetEntries.find(
+                        const foundEntry = filteredTimesheetEntries.find(
                           (entry) => entry.day === day
                         );
                         const foundCompensation = compensationEntries.find(
