@@ -7,6 +7,30 @@ interface PayrollSummaryProps {
   canEdit?: boolean;
 }
 
+interface DiscrepancyCalculation {
+  type: "Gross Pay" | "Net Pay" | "Basic Pay";
+  expected: number;
+  actual: number;
+  difference: number;
+  calculation: {
+    basicPay?: number;
+    overtime?: number;
+    holidayBonus?: number;
+    nightDifferential?: number;
+    leavePay?: number;
+    grossPay?: number;
+    dailyRate?: number;
+    daysWorked?: number;
+    deductions?: {
+      sss: number;
+      philHealth: number;
+      pagIbig: number;
+      cashAdvance: number;
+      others: number;
+    };
+  };
+}
+
 export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
   data,
   onClose,
@@ -21,6 +45,80 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  };
+
+  const getDiscrepancyDetails = (data: PayrollSummaryType) => {
+    const discrepancies = [];
+
+    // Check Gross Pay
+    const expectedGrossPay =
+      data.basicPay +
+      data.overtime +
+      (data.holidayBonus || 0) +
+      (data.nightDifferentialPay || 0) +
+      (data.leavePay || 0);
+    if (Math.abs(data.grossPay - expectedGrossPay) >= 0.01) {
+      discrepancies.push({
+        type: "Gross Pay",
+        expected: expectedGrossPay,
+        actual: data.grossPay,
+        difference: data.grossPay - expectedGrossPay,
+        calculation: {
+          basicPay: data.basicPay,
+          overtime: data.overtime,
+          holidayBonus: data.holidayBonus || 0,
+          nightDifferential: data.nightDifferentialPay || 0,
+          leavePay: data.leavePay || 0,
+        },
+      });
+    }
+
+    // Check Net Pay - FIXED calculation
+    const totalDeductions =
+      data.deductions.sss +
+      data.deductions.philHealth +
+      data.deductions.pagIbig +
+      data.deductions.cashAdvanceDeductions +
+      data.deductions.others; // Remove duplicate counting of late/undertime
+    const expectedNetPay = data.grossPay - totalDeductions;
+    if (Math.abs(data.netPay - expectedNetPay) >= 0.01) {
+      discrepancies.push({
+        type: "Net Pay",
+        expected: expectedNetPay,
+        actual: data.netPay,
+        difference: data.netPay - expectedNetPay,
+        calculation: {
+          grossPay: data.grossPay,
+          deductions: {
+            sss: data.deductions.sss,
+            philHealth: data.deductions.philHealth,
+            pagIbig: data.deductions.pagIbig,
+            cashAdvance: data.deductions.cashAdvanceDeductions,
+            others: data.deductions.others,
+            // Remove these since they're included in others
+            // late: data.lateDeduction || 0,
+            // undertime: data.undertimeDeduction || 0
+          },
+        },
+      });
+    }
+
+    // Check Basic Pay
+    const expectedBasicPay = data.dailyRate * data.daysWorked;
+    if (Math.abs(data.basicPay - expectedBasicPay) >= 0.01) {
+      discrepancies.push({
+        type: "Basic Pay",
+        expected: expectedBasicPay,
+        actual: data.basicPay,
+        difference: data.basicPay - expectedBasicPay,
+        calculation: {
+          dailyRate: data.dailyRate,
+          daysWorked: data.daysWorked,
+        },
+      });
+    }
+
+    return discrepancies;
   };
 
   return (
@@ -458,6 +556,326 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                       </span>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-span-1 row-span-1">
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <h3 className="p-4 bg-white rounded-xl mb-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center">
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-2.5 rounded-xl mr-4 shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200">
+                      <svg
+                        className="w-6 h-6 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xl font-semibold text-slate-700">
+                      Verification Checks
+                    </span>
+                  </div>
+                </div>
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        Math.abs(
+                          data.grossPay -
+                            (data.basicPay +
+                              data.overtime +
+                              (data.holidayBonus || 0) +
+                              (data.nightDifferentialPay || 0))
+                        ) < 0.01
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      } mr-2`}
+                    ></div>
+                    <span className="text-sm font-medium text-slate-600">
+                      Gross Pay Calculation
+                    </span>
+                  </div>
+                  <span className="text-sm font-medium text-slate-500">
+                    Basic + Overtime + Holiday + Night Diff
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        Math.abs(
+                          data.netPay -
+                            (data.grossPay -
+                              (data.deductions.sss +
+                                data.deductions.philHealth +
+                                data.deductions.pagIbig +
+                                data.deductions.cashAdvanceDeductions +
+                                data.deductions.others +
+                                (data.lateDeduction || 0) +
+                                (data.undertimeDeduction || 0)))
+                        ) < 0.01
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      } mr-2`}
+                    ></div>
+                    <span className="text-sm font-medium text-slate-600">
+                      Net Pay Calculation
+                    </span>
+                  </div>
+                  <span className="text-sm font-medium text-slate-500">
+                    Gross - (Deductions + Late + Undertime)
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        Math.abs(
+                          data.basicPay - data.dailyRate * data.daysWorked
+                        ) < 0.01
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      } mr-2`}
+                    ></div>
+                    <span className="text-sm font-medium text-slate-600">
+                      Basic Pay Calculation
+                    </span>
+                  </div>
+                  <span className="text-sm font-medium text-slate-500">
+                    Daily Rate × Days Worked
+                  </span>
+                </div>
+
+                <div className="mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex flex-col space-y-3">
+                    {(() => {
+                      const discrepancies = getDiscrepancyDetails(data);
+
+                      if (discrepancies.length === 0) {
+                        return (
+                          <div className="flex items-center">
+                            <svg
+                              className="w-5 h-5 text-green-500 mr-2"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            <span className="text-sm font-medium text-green-700">
+                              All calculations are verified and correct
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <>
+                          <div className="flex items-center">
+                            <svg
+                              className="w-5 h-5 text-red-500 mr-2"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                              />
+                            </svg>
+                            <span className="text-sm font-medium text-red-700">
+                              Discrepancies found in calculations:
+                            </span>
+                          </div>
+
+                          <div className="ml-7 space-y-2">
+                            {discrepancies.map((discrepancy, index) => (
+                              <div
+                                key={index}
+                                className="text-sm bg-white p-3 rounded border border-red-100"
+                              >
+                                <div className="font-medium text-red-800">
+                                  {discrepancy.type} Discrepancy:
+                                </div>
+                                <div className="mt-1 space-y-1 text-red-600">
+                                  <div className="bg-red-50 p-2 rounded">
+                                    <div className="font-medium mb-1">
+                                      Expected Calculation:
+                                    </div>
+                                    {discrepancy.type === "Gross Pay" && (
+                                      <div className="space-y-1 text-sm">
+                                        <div>
+                                          Basic Pay: ₱
+                                          {discrepancy.calculation.basicPay?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          + Overtime: ₱
+                                          {discrepancy.calculation.overtime?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          + Holiday Bonus: ₱
+                                          {discrepancy.calculation.holidayBonus?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          + Night Differential: ₱
+                                          {discrepancy.calculation.nightDifferential?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          + Leave Pay: ₱
+                                          {discrepancy.calculation.leavePay?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div className="border-t border-red-200 pt-1 font-medium">
+                                          = Expected Total: ₱
+                                          {discrepancy.expected.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {discrepancy.type === "Net Pay" && (
+                                      <div className="space-y-1 text-sm">
+                                        <div>
+                                          Gross Pay: ₱
+                                          {discrepancy.calculation.grossPay?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          - SSS: ₱
+                                          {discrepancy.calculation.deductions?.sss.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          - PhilHealth: ₱
+                                          {discrepancy.calculation.deductions?.philHealth.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          - Pag-IBIG: ₱
+                                          {discrepancy.calculation.deductions?.pagIbig.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          - Cash Advance: ₱
+                                          {discrepancy.calculation.deductions?.cashAdvance.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          - Other Deductions: ₱
+                                          {discrepancy.calculation.deductions?.others.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div className="text-xs text-red-500 ml-4">
+                                          (Includes late and undertime
+                                          deductions)
+                                        </div>
+                                        <div className="border-t border-red-200 pt-1 font-medium">
+                                          = Expected Total: ₱
+                                          {discrepancy.expected.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {discrepancy.type === "Basic Pay" && (
+                                      <div className="space-y-1 text-sm">
+                                        <div>
+                                          Daily Rate: ₱
+                                          {discrepancy.calculation.dailyRate?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
+                                          × Days Worked:{" "}
+                                          {discrepancy.calculation.daysWorked ||
+                                            0}
+                                        </div>
+                                        <div className="border-t border-red-200 pt-1 font-medium">
+                                          = Expected Total: ₱
+                                          {discrepancy.expected.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    Actual Amount: ₱
+                                    {discrepancy.actual.toLocaleString(
+                                      "en-PH",
+                                      { minimumFractionDigits: 2 }
+                                    )}
+                                  </div>
+                                  <div className="font-medium">
+                                    Difference: ₱
+                                    {Math.abs(
+                                      discrepancy.difference
+                                    ).toLocaleString("en-PH", {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                    {discrepancy.difference > 0
+                                      ? " (over)"
+                                      : " (under)"}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

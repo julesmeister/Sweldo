@@ -147,6 +147,7 @@ export async function generatePayrollPDF(
             ["Basic Pay", formatCurrency(payroll.basicPay)],
             ["Legal Holiday", formatCurrency(payroll.holidayBonus || 0)],
             ["OT Pay", formatCurrency(payroll.overtime || 0)],
+            ["Night Diff", formatCurrency(payroll.nightDifferentialPay || 0)],
             ["Gross Pay", formatCurrency(payroll.grossPay)],
             [
               "Less: Deductions",
@@ -280,9 +281,9 @@ function formatCurrency(amount: number): string {
     if (isNaN(numAmount)) return "Php 0.00";
 
     // Format with commas for thousands and two decimal places
-    const formattedAmount = Math.abs(numAmount).toLocaleString('en-US', {
+    const formattedAmount = Math.abs(numAmount).toLocaleString("en-US", {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     });
     return `Php ${formattedAmount}`;
   } catch (e) {

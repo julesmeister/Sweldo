@@ -33,9 +33,15 @@ export default function LoansPage() {
   const { selectedEmployeeId } = useEmployeeStore();
   const [employee, setEmployee] = useState<Employee | null>(null);
 
-  const employeeModel = useMemo(() => dbPath ? createEmployeeModel(dbPath) : null, [dbPath]);
+  const employeeModel = useMemo(
+    () => (dbPath ? createEmployeeModel(dbPath) : null),
+    [dbPath]
+  );
   const loanModel = useMemo(
-    () => dbPath && selectedEmployeeId ? createLoanModel(dbPath, selectedEmployeeId) : null,
+    () =>
+      dbPath && selectedEmployeeId
+        ? createLoanModel(dbPath, selectedEmployeeId)
+        : null,
     [dbPath, selectedEmployeeId]
   );
   const pathname = usePathname();
@@ -49,12 +55,18 @@ export default function LoansPage() {
     const loadEmployee = async () => {
       console.log("[LoansPage] Loading employee with ID", selectedEmployeeId);
       if (!dbPath) {
-        console.error("[LoansPage] Error loading employee:", "database path is not set");
+        console.error(
+          "[LoansPage] Error loading employee:",
+          "database path is not set"
+        );
         console.log("[LoansPage] dbPath:", dbPath);
         return;
       }
       if (!selectedEmployeeId) {
-        console.error("[LoansPage] Error loading employee:", "no selectedEmployeeId provided");
+        console.error(
+          "[LoansPage] Error loading employee:",
+          "no selectedEmployeeId provided"
+        );
         console.log("[LoansPage] selectedEmployeeId:", selectedEmployeeId);
         return;
       }
@@ -108,10 +120,13 @@ export default function LoansPage() {
   useEffect(() => {
     const loadLoans = async () => {
       if (!loanModel || !storedYear || storedMonthInt === 0) return;
-      
+
       try {
         setLoading(true);
-        const currentLoans = await loanModel.loadLoans(parseInt(storedYear), storedMonthInt);
+        const currentLoans = await loanModel.loadLoans(
+          parseInt(storedYear),
+          storedMonthInt
+        );
         setLoans(currentLoans);
       } catch (error) {
         console.error("[LoansPage] Error loading loans:", error);
@@ -210,239 +225,241 @@ export default function LoansPage() {
 
   return (
     <RootLayout>
-    <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
-    <MagicCard
-              className="p-0.5 rounded-lg col-span-2"
-              gradientSize={200}
-              gradientColor="#9E7AFF"
-              gradientOpacity={0.8}
-              gradientFrom="#9E7AFF"
-              gradientTo="#FE8BBB"
-            >
-      <div className="px-4sm:px-0">
-        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
-          <div className="col-span-1 md:col-span-1">
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                  {selectedEmployeeId ? employee?.name + "'s Loans" : "Loans"}
-                </h2>
-                <div className="relative flex items-center space-x-4">
-                  <button
-                    type="button"
-                    onClick={handleButtonClick}
-                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
-                  >
-                    Apply for Loan
-                  </button>
-                </div>
-              </div>
-              {selectedEmployeeId ? (
-                <div className="overflow-x-auto relative">
-                  {loans.length === 0 ? (
+      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
+        <MagicCard
+          className="p-0.5 rounded-lg col-span-2"
+          gradientSize={200}
+          gradientColor="#9E7AFF"
+          gradientOpacity={0.8}
+          gradientFrom="#9E7AFF"
+          gradientTo="#FE8BBB"
+        >
+          <div className="px-4sm:px-0">
+            <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
+              <div className="col-span-1 md:col-span-1">
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                      {selectedEmployeeId
+                        ? employee?.name + "'s Loans"
+                        : "Loans"}
+                    </h2>
+                    <div className="relative flex items-center space-x-4">
+                      <button
+                        type="button"
+                        onClick={handleButtonClick}
+                        className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+                      >
+                        Apply for Loan
+                      </button>
+                    </div>
+                  </div>
+                  {selectedEmployeeId ? (
+                    <div className="overflow-x-auto relative">
+                      {loans.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-4">
+                          <div className="text-center">
+                            <svg
+                              className="mx-auto h-12 w-12 text-gray-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              />
+                            </svg>
+                            <h3 className="mt-2 text-sm font-semibold text-gray-900">
+                              No loans found
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              Get started by creating a new loan.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Date
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Type
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Amount
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Status
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Monthly Payment
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Remaining Balance
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              >
+                                Next Payment
+                              </th>
+                              <th
+                                scope="col"
+                                className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                              >
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {loans.map((loan) => (
+                              <tr
+                                key={loan.id}
+                                className="hover:bg-gray-50 cursor-pointer"
+                                onClick={() => {
+                                  setSelectedLoan(loan);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(loan.date).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getLoanTypeColor(
+                                      loan.type
+                                    )}`}
+                                  >
+                                    {loan.type}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  ₱{loan.amount.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
+                                      loan.status
+                                    )}`}
+                                  >
+                                    {loan.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  ₱{loan.monthlyPayment.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  ₱{loan.remainingBalance.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(
+                                    loan.nextPaymentDate
+                                  ).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Handle delete
+                                    }}
+                                    className="text-red-600 hover:text-red-900"
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ) : (
                     <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <div className="text-center">
+                      <div className="mb-6">
                         <svg
-                          className="mx-auto h-12 w-12 text-gray-400"
+                          className="mx-auto h-24 w-24 text-gray-300"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            strokeWidth={1}
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                           />
                         </svg>
-                        <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                          No loans found
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Get started by creating a new loan.
-                        </p>
+                      </div>
+                      <h3 className="mt-2 text-xl font-semibold text-gray-900">
+                        No Employee Selected
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Please select an employee from the dropdown menu to view
+                        their loans.
+                      </p>
+                      <div className="mt-6">
+                        <AddButton
+                          text="Select Employee"
+                          onClick={() => handleLinkClick("/")}
+                        />
                       </div>
                     </div>
-                  ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Date
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Type
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Amount
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Status
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Monthly Payment
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Remaining Balance
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Next Payment
-                          </th>
-                          <th
-                            scope="col"
-                            className="relative py-3.5 pl-3 pr-4 sm:pr-6"
-                          >
-                            <span className="sr-only">Actions</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {loans.map((loan) => (
-                          <tr
-                            key={loan.id}
-                            className="hover:bg-gray-50 cursor-pointer"
-                            onClick={() => {
-                              setSelectedLoan(loan);
-                              setIsDialogOpen(true);
-                            }}
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(loan.date).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span
-                                className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getLoanTypeColor(
-                                  loan.type
-                                )}`}
-                              >
-                                {loan.type}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              ₱{loan.amount.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span
-                                className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
-                                  loan.status
-                                )}`}
-                              >
-                                {loan.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              ₱{loan.monthlyPayment.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              ₱{loan.remainingBalance.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(
-                                loan.nextPaymentDate
-                              ).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Handle delete
-                                }}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   )}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 px-4">
-                  <div className="mb-6">
-                    <svg
-                      className="mx-auto h-24 w-24 text-gray-300"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="mt-2 text-xl font-semibold text-gray-900">
-                    No Employee Selected
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Please select an employee from the dropdown menu to view
-                    their loans.
-                  </p>
-                  <div className="mt-6">
-                    <AddButton
-                      text="Select Employee"
-                      onClick={() => handleLinkClick("/")}
-                    />
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-      </MagicCard>
-      {isDialogOpen && (
-        <div className="fixed inset-0 bg-black opacity-50 z-40" />
-      )}
-      {isDialogOpen && (
-        <div
-          className="fixed inset-0 z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsDialogOpen(false);
-              setClickPosition(null);
-            }
-          }}
-        >
-          <LoanForm
-            onClose={() => {
-              setIsDialogOpen(false);
-              setClickPosition(null);
+        </MagicCard>
+        {isDialogOpen && (
+          <div className="fixed inset-0 bg-black opacity-50 z-40" />
+        )}
+        {isDialogOpen && (
+          <div
+            className="fixed inset-0 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsDialogOpen(false);
+                setClickPosition(null);
+              }
             }}
-            onSave={handleSaveLoan}
-            initialData={undefined}
-            position={clickPosition!}
-          />
-        </div>
-      )}
-    </main>
+          >
+            <LoanForm
+              onClose={() => {
+                setIsDialogOpen(false);
+                setClickPosition(null);
+              }}
+              onSave={handleSaveLoan}
+              initialData={undefined}
+              position={clickPosition!}
+            />
+          </div>
+        )}
+      </main>
     </RootLayout>
   );
 }
