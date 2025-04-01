@@ -116,6 +116,8 @@ export default function SettingsPage() {
     approvedBy,
     setApprovedBy,
     initialize,
+    companyName,
+    setCompanyName,
   } = useSettingsStore();
   const { hasAccess } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
@@ -146,6 +148,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPreparedBySaved, setShowPreparedBySaved] = React.useState(false);
   const [showApprovedBySaved, setShowApprovedBySaved] = React.useState(false);
+  const [showCompanyNameSaved, setShowCompanyNameSaved] = useState(false);
 
   // Add useEffect to initialize the store when component mounts
   React.useEffect(() => {
@@ -1208,6 +1211,69 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Company Name Field */}
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold mb-4">
+                Company Information
+              </h2>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => {
+                    setCompanyName(e.target.value);
+                    if (window.saveTimeout) {
+                      clearTimeout(window.saveTimeout);
+                    }
+                    window.saveTimeout = setTimeout(() => {
+                      setShowCompanyNameSaved(true);
+                      setTimeout(() => setShowCompanyNameSaved(false), 2000);
+                    }, 500);
+                  }}
+                  className="w-full p-2 border rounded-md"
+                  placeholder="Enter company name..."
+                />
+                <div
+                  className={`
+                    absolute right-2 top-1/2 -translate-y-1/2 
+                    flex items-center bg-green-50 px-2 py-0.5 rounded-full
+                    transition-all duration-200 ease-in-out
+                    ${
+                      showCompanyNameSaved
+                        ? "opacity-100 translate-x-0"
+                        : "opacity-0 translate-x-2"
+                    }
+                  `}
+                >
+                  {showCompanyNameSaved && (
+                    <div className="fireworks-container">
+                      <div className="firework"></div>
+                      <div className="firework"></div>
+                      <div className="firework"></div>
+                      <div className="firework"></div>
+                      <div className="firework"></div>
+                    </div>
+                  )}
+                  <svg
+                    className="w-3.5 h-3.5 text-green-600 z-10"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span className="text-xs text-green-600 ml-1 font-medium z-10">
+                    Saved
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Signature Fields */}
             <div className="mt-8">
               <h2 className="text-lg font-semibold mb-4">Signature Fields</h2>
@@ -1224,8 +1290,16 @@ export default function SettingsPage() {
                         value={preparedBy}
                         onChange={(e) => {
                           setPreparedBy(e.target.value);
-                          setShowPreparedBySaved(true);
-                          setTimeout(() => setShowPreparedBySaved(false), 2000);
+                          if (window.preparedByTimeout) {
+                            clearTimeout(window.preparedByTimeout);
+                          }
+                          window.preparedByTimeout = setTimeout(() => {
+                            setShowPreparedBySaved(true);
+                            setTimeout(
+                              () => setShowPreparedBySaved(false),
+                              2000
+                            );
+                          }, 500);
                         }}
                         className="w-full p-2 border rounded-md"
                         placeholder="Enter name of preparer..."
@@ -1242,8 +1316,17 @@ export default function SettingsPage() {
                         }
                       `}
                       >
+                        {showPreparedBySaved && (
+                          <div className="fireworks-container">
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                          </div>
+                        )}
                         <svg
-                          className="w-3.5 h-3.5 text-green-600"
+                          className="w-3.5 h-3.5 text-green-600 z-10"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -1255,7 +1338,7 @@ export default function SettingsPage() {
                             d="M5 13l4 4L19 7"
                           />
                         </svg>
-                        <span className="text-xs text-green-600 ml-1 font-medium">
+                        <span className="text-xs text-green-600 ml-1 font-medium z-10">
                           Saved
                         </span>
                       </div>
@@ -1283,8 +1366,16 @@ export default function SettingsPage() {
                         value={approvedBy}
                         onChange={(e) => {
                           setApprovedBy(e.target.value);
-                          setShowApprovedBySaved(true);
-                          setTimeout(() => setShowApprovedBySaved(false), 2000);
+                          if (window.approvedByTimeout) {
+                            clearTimeout(window.approvedByTimeout);
+                          }
+                          window.approvedByTimeout = setTimeout(() => {
+                            setShowApprovedBySaved(true);
+                            setTimeout(
+                              () => setShowApprovedBySaved(false),
+                              2000
+                            );
+                          }, 500);
                         }}
                         className="w-full p-2 border rounded-md"
                         placeholder="Enter name of approver..."
@@ -1301,8 +1392,17 @@ export default function SettingsPage() {
                         }
                       `}
                       >
+                        {showApprovedBySaved && (
+                          <div className="fireworks-container">
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                            <div className="firework"></div>
+                          </div>
+                        )}
                         <svg
-                          className="w-3.5 h-3.5 text-green-600"
+                          className="w-3.5 h-3.5 text-green-600 z-10"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -1314,7 +1414,7 @@ export default function SettingsPage() {
                             d="M5 13l4 4L19 7"
                           />
                         </svg>
-                        <span className="text-xs text-green-600 ml-1 font-medium">
+                        <span className="text-xs text-green-600 ml-1 font-medium z-10">
                           Saved
                         </span>
                       </div>

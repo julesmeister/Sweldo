@@ -8,10 +8,12 @@ interface SettingsState {
   approvedBy: string;
   isInitialized: boolean;
   isInitializing: boolean;
+  companyName: string;
   setDbPath: (path: string) => Promise<void>;
   setLogoPath: (path: string) => void;
   setPreparedBy: (name: string) => void;
   setApprovedBy: (name: string) => void;
+  setCompanyName: (name: string) => void;
   initialize: () => Promise<void>;
 }
 
@@ -24,6 +26,7 @@ export const useSettingsStore = create<SettingsState>()(
       approvedBy: "",
       isInitialized: false,
       isInitializing: false,
+      companyName: "",
       setDbPath: async (path) => {
         console.log("Setting dbPath in settings store:", path);
         // Verify the path exists before setting
@@ -67,6 +70,7 @@ export const useSettingsStore = create<SettingsState>()(
       setLogoPath: (path) => set({ logoPath: path }),
       setPreparedBy: (name) => set({ preparedBy: name }),
       setApprovedBy: (name) => set({ approvedBy: name }),
+      setCompanyName: (name) => set({ companyName: name }),
       initialize: async () => {
         // Prevent multiple simultaneous initializations
         if (get().isInitialized || get().isInitializing) return;
@@ -123,6 +127,7 @@ export const useSettingsStore = create<SettingsState>()(
         logoPath: state.logoPath,
         preparedBy: state.preparedBy,
         approvedBy: state.approvedBy,
+        companyName: state.companyName,
       }),
       getStorage: () => localStorage,
     }

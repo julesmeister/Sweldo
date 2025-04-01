@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electron", {
   openPath: (path: string) => ipcRenderer.invoke("app:openPath", path),
   generatePDF: (payrollSummaries: any[], options: any) =>
     ipcRenderer.invoke("pdf:generate", payrollSummaries, options),
+  generatePDFLandscape: (payrolls: any[], options: any) =>
+    ipcRenderer.invoke("pdf:generateLandscape", payrolls, options),
 });
 
 export type IpcHandler = typeof handler;

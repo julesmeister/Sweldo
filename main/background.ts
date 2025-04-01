@@ -7,6 +7,7 @@ import { createWriteStream } from "fs";
 import { ensureDir } from "fs-extra";
 import PDFDocument from "pdfkit";
 import { generatePayrollPDF } from "./services/pdfGenerator";
+import { generatePayrollPDFLandscape } from "./services/pdfGeneratorLandscape";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -199,6 +200,20 @@ ipcMain.handle(
       return outputPath;
     } catch (error) {
       console.error("Error generating PDF:", error);
+      throw error;
+    }
+  }
+);
+
+// Add landscape PDF generation handler
+ipcMain.handle(
+  "pdf:generateLandscape",
+  async (_, payrolls: PayrollSummary[], options: PDFGeneratorOptions) => {
+    try {
+      const outputPath = await generatePayrollPDFLandscape(payrolls, options);
+      return outputPath;
+    } catch (error) {
+      console.error("Error generating landscape PDF:", error);
       throw error;
     }
   }

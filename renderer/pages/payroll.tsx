@@ -464,7 +464,6 @@ export default function PayrollPage() {
 
     try {
       setIsGeneratingPDF(true);
-      const settings = await window.electron.getSettings();
 
       // Load all active employees
       const employeeModel = createEmployeeModel(dbPath);
@@ -489,50 +488,84 @@ export default function PayrollPage() {
             startDate.getMonth() + 1
           );
 
+          // Filter payrolls within date range
           return employeePayrolls
             .filter((summary) => {
               const summaryDate = new Date(summary.startDate);
               return summaryDate >= startDate && summaryDate <= endDate;
             })
-            .map((summary) => ({
+            .map((summary, index) => ({
               ...summary,
-              employeeName: employee.name,
               startDate: summary.startDate.toISOString(),
               endDate: summary.endDate.toISOString(),
+              employeeName: employee.name,
+              // Include all the same fields as handleGeneratePDFForAll
+              daysWorked: Number(summary.daysWorked) || 15,
+              basicPay: Number(summary.basicPay) || 0,
+              undertimeDeduction: Number(summary.undertimeDeduction) || 0,
+              holidayBonus: Number(summary.holidayBonus) || 0,
+              overtime: Number(summary.overtime) || 0,
+              grossPay: Number(summary.grossPay) || 0,
+              netPay: Number(summary.netPay) || 0,
+              dailyRate: Number(summary.dailyRate) || 0,
+              deductions: {
+                sss: Number(summary.deductions.sss) || 0,
+                philHealth: Number(summary.deductions.philHealth) || 0,
+                pagIbig: Number(summary.deductions.pagIbig) || 0,
+                cashAdvanceDeductions:
+                  Number(summary.deductions.cashAdvanceDeductions) || 0,
+                others: Number(summary.deductions.others) || 0,
+                totalDeduction:
+                  Number(summary.deductions.sss || 0) +
+                  Number(summary.deductions.philHealth || 0) +
+                  Number(summary.deductions.pagIbig || 0) +
+                  Number(summary.deductions.cashAdvanceDeductions || 0) +
+                  Number(summary.deductions.others || 0),
+              },
+              preparedBy: preparedBy || "",
+              approvedBy: approvedBy || "",
+              payslipNumber: index + 1,
             }));
         } catch (error) {
-          console.log(`No payroll found for employee ${employee.name}`);
+          console.log(
+            `No payroll found for employee ${employee.name} (${employee.id})`
+          );
           return [];
         }
       });
 
-      const allPayrolls = (await Promise.all(payrollPromises)).flat();
+      // Wait for all payroll data to be collected
+      const payrollResults = await Promise.all(payrollPromises);
+      const formattedPayrolls = payrollResults
+        .flat()
+        .filter((payroll) => payroll !== null);
 
-      if (allPayrolls.length === 0) {
+      // Check if there's any data to generate PDF
+      if (formattedPayrolls.length === 0) {
         toast.error("No payroll data found for the selected date range");
         return;
       }
 
-      const outputPath = await window.electron.showSaveDialog({
-        title: "Save Payroll Summary PDF",
-        defaultPath: `Payroll_Summary_${
-          startDate.toISOString().split("T")[0]
-        }_${endDate.toISOString().split("T")[0]}.pdf`,
-        filters: [{ name: "PDF Files", extensions: ["pdf"] }],
-      });
-
-      if (!outputPath) {
-        return;
-      }
-
-      await window.electron.generatePayrollPDFLandscape({
-        payrolls: allPayrolls,
+      // Get the output directory path
+      const outputPath = await window.electron.getPath("documents");
+      const pdfOutputPath = path.join(
         outputPath,
-        companyName: settings.companyName,
-        logoPath: settings.companyLogoPath,
-      });
+        "payroll_summaries_landscape.pdf"
+      );
 
-      toast.success("Payroll summary PDF generated successfully!");
+      // Generate PDF with formatted payroll summaries
+      const pdfPath = await window.electron.generatePDFLandscape(
+        formattedPayrolls,
+        {
+          outputPath: pdfOutputPath,
+          logoPath: logoPath || "",
+          companyName: useSettingsStore.getState().companyName,
+        }
+      );
+
+      // Open the generated PDF
+      await window.electron.openPath(pdfPath);
+      toast.success("PDF generated successfully!");
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF");
@@ -568,31 +601,33 @@ export default function PayrollPage() {
             <div className="flex-1">
               <DateRangePicker variant="timesheet" />
             </div>
-            {hasAccess("MANAGE_PAYROLL") && employee && (
-              <button
-                onClick={handleDeductionsClick}
-                disabled={!selectedEmployeeId || isLoading}
-                className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Generate Payroll For {employee?.name}
-              </button>
-            )}
-            {hasAccess("GENERATE_REPORTS") && (
-              <>
+            <div className="flex gap-4">
+              {hasAccess("MANAGE_PAYROLL") && employee && (
                 <button
-                  onClick={handleGeneratePDFForAll}
-                  className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  onClick={handleDeductionsClick}
+                  disabled={!selectedEmployeeId || isLoading}
+                  className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  Generate Payslips PDF
+                  Generate Payroll For {employee?.name}
                 </button>
-                <button
-                  onClick={handleGenerateLandscapePDFForAll}
-                  className="ml-2 px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Generate Summary PDF
-                </button>
-              </>
-            )}
+              )}
+              {hasAccess("GENERATE_REPORTS") && (
+                <>
+                  <button
+                    onClick={handleGeneratePDFForAll}
+                    className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Generate Payslips PDF
+                  </button>
+                  <button
+                    onClick={handleGenerateLandscapePDFForAll}
+                    className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Generate Summary PDF
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

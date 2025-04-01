@@ -22,6 +22,10 @@ export interface ElectronAPI {
     payrollSummaries: PayrollSummary[],
     options: PDFGeneratorOptions
   ): Promise<string>;
+  generatePDFLandscape(
+    payrolls: PayrollSummary[],
+    options: PDFGeneratorOptions
+  ): Promise<string>;
 }
 
 declare global {
