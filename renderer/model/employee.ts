@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { toast } from "sonner";
+import path from "path";
 
 interface LastPaymentPeriod {
   startDate: string;
@@ -67,11 +68,30 @@ export class EmployeeModel {
 
   constructor(filePath: string) {
     this.filePath = filePath;
+    this.ensureEmployeeFile();
+  }
+
+  private async ensureEmployeeFile(): Promise<void> {
+    try {
+      const exists = await window.electron.fileExists(this.filePath);
+      if (!exists) {
+        // Create directory if it doesn't exist
+        await window.electron.ensureDir(path.dirname(this.filePath));
+        // Create file with headers
+        const headers =
+          "id,name,position,dailyRate,sss,philHealth,pagIbig,status,employmentType,lastPaymentPeriod,startType,endType\n";
+        await window.electron.writeFile(this.filePath, headers);
+      }
+    } catch (error) {
+      console.error("[EmployeeModel] Error ensuring employee file:", error);
+      throw error;
+    }
   }
 
   // Load employees from CSV
   public async loadEmployees(): Promise<Employee[]> {
     try {
+      await this.ensureEmployeeFile();
       const fileContent = await retryOperation(async () => {
         return await window.electron.readFile(this.filePath);
       });
@@ -97,6 +117,7 @@ export class EmployeeModel {
   // Load a specific employee from CSV by ID
   public async loadEmployeeById(id: string): Promise<Employee | null> {
     try {
+      await this.ensureEmployeeFile();
       const fileContent = await retryOperation(async () => {
         return await window.electron.readFile(this.filePath);
       });
@@ -157,6 +178,7 @@ export class EmployeeModel {
   // Save employees to CSV
   public async saveOnlyNewEmployees(employees: Employee[]): Promise<void> {
     try {
+      await this.ensureEmployeeFile();
       const currentEmployees = await this.loadEmployees();
       const newEmployees = employees.filter(
         (newEmployee) =>
@@ -177,6 +199,7 @@ export class EmployeeModel {
   // Update employee status
   public async updateEmployeeStatus(employee: Employee): Promise<void> {
     try {
+      await this.ensureEmployeeFile();
       // Load current employees
       const currentEmployees = await this.loadEmployees();
       // Find the index of the employee to update
@@ -208,6 +231,7 @@ export class EmployeeModel {
   // Update employee details
   public async updateEmployeeDetails(employee: Employee): Promise<void> {
     try {
+      await this.ensureEmployeeFile();
       console.log("[EmployeeModel] Updating employee details:", {
         employeeId: employee.id,
         lastPaymentPeriod: employee.lastPaymentPeriod,
