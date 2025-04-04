@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import path from "path";
 import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
 import { usePayrollDelete } from "@/renderer/hooks/usePayrollDelete";
+import { usePayrollStatistics } from "@/renderer/hooks/usePayrollStatistics";
+import { createStatisticsModel } from "@/renderer/model/statistics";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -74,6 +76,8 @@ export default function PayrollPage() {
     selectedEmployeeId: selectedEmployeeId!,
     onPayrollDeleted: () => setRefreshPayrolls(true),
   });
+  const { isGeneratingStatistics, generatePayrollStatistics } =
+    usePayrollStatistics();
 
   // Move callback declarations to the top level
   const handlePayrollDeleted = useCallback(() => {
@@ -562,12 +566,16 @@ export default function PayrollPage() {
           logoPath: logoPath || "",
           companyName: useSettingsStore.getState().companyName,
           columnColors: useSettingsStore.getState().columnColors,
+          dbPath: dbPath,
         }
       );
 
       // Open the generated PDF
       await window.electron.openPath(pdfPath);
       toast.success("PDF generated successfully!");
+
+      // Generate statistics after PDF is generated
+      await generatePayrollStatistics(formattedPayrolls, dbPath);
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF");

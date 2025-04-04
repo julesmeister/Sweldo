@@ -35,7 +35,10 @@ export default function EditEmployee() {
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const employeeModel = createEmployeeModel(dbPath);
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
-  const statisticsModel = createStatisticsModel(dbPath);
+  const statisticsModel = createStatisticsModel(
+    dbPath,
+    new Date().getFullYear()
+  );
   const [settings, setSettings] = useState<EmploymentType[]>();
   let timeSettings: EmploymentType[] = [];
   const formatTime = (time: string | undefined): string => {
@@ -131,11 +134,10 @@ export default function EditEmployee() {
       // Check if daily rate has changed and update statistics
       if (currentEmployee.dailyRate !== formData.dailyRate) {
         // Add to daily rate history in statistics
-        await statisticsModel.updateDailyRateHistory({
-          employee: updatedEmployee.name,
-          date: new Date().toISOString().split("T")[0], // Format as YYYY-MM-DD
-          rate: formData.dailyRate,
-        });
+        await statisticsModel.updateDailyRateHistory(
+          updatedEmployee.id,
+          formData.dailyRate
+        );
         console.log("Daily rate history updated in statistics.");
       }
 
@@ -146,46 +148,10 @@ export default function EditEmployee() {
         currentEmployee.pagIbig !== formData.pagIbig;
 
       if (deductionsChanged) {
-        // Update SSS if changed
-        if (currentEmployee.sss !== formData.sss) {
-          await statisticsModel.updateDeductionHistory({
-            type: "SSS",
-            changes: [
-              {
-                date: new Date().toISOString().split("T")[0],
-                amount: formData.sss,
-              },
-            ],
-          });
-        }
-
-        // Update PhilHealth if changed
-        if (currentEmployee.philHealth !== formData.philHealth) {
-          await statisticsModel.updateDeductionHistory({
-            type: "PhilHealth",
-            changes: [
-              {
-                date: new Date().toISOString().split("T")[0],
-                amount: formData.philHealth,
-              },
-            ],
-          });
-        }
-
-        // Update Pag-IBIG if changed
-        if (currentEmployee.pagIbig !== formData.pagIbig) {
-          await statisticsModel.updateDeductionHistory({
-            type: "Pag-IBIG",
-            changes: [
-              {
-                date: new Date().toISOString().split("T")[0],
-                amount: formData.pagIbig,
-              },
-            ],
-          });
-        }
-
-        console.log("Deductions history updated in statistics.");
+        // Note: Deduction history tracking has been removed from the statistics model
+        console.log(
+          "Deductions changed, but history tracking is no longer available."
+        );
       }
     } catch (error) {
       console.error("Error updating employee details:", error);

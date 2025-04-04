@@ -15,7 +15,7 @@ import {
   IoRefreshOutline,
 } from "react-icons/io5";
 import { MdOutlineDataset } from "react-icons/md";
-import { createStatisticsModel, StatisticsData } from "../model/statistics";
+import { createStatisticsModel, Statistics } from "../model/statistics";
 import { useSettingsStore } from "../stores/settingsStore";
 import { toast } from "sonner";
 
@@ -355,9 +355,7 @@ const DeductionsTimeline = ({
 export default function StatisticsPage() {
   const [selectedYear, setSelectedYear] = useState(2025);
   const [isLoading, setIsLoading] = useState(false);
-  const [statisticsData, setStatisticsData] = useState<StatisticsData | null>(
-    null
-  );
+  const [statisticsData, setStatisticsData] = useState<Statistics | null>(null);
   const years = generateYearOptions();
   const { dbPath, isInitialized, initialize } = useSettingsStore();
 
@@ -385,7 +383,7 @@ export default function StatisticsPage() {
       console.log(`DB Path: ${dbPath}`);
 
       const statisticsModel = createStatisticsModel(dbPath, selectedYear);
-      const data = await statisticsModel.loadStatistics();
+      const data = await statisticsModel.getStatistics();
 
       console.log("=== Statistics Data Loaded ===");
       console.log("Monthly Payrolls:", data.monthlyPayrolls);
@@ -412,13 +410,16 @@ export default function StatisticsPage() {
       // Initialize with empty data if loading fails
       setStatisticsData({
         dailyRateHistory: [],
-        currentDailyRate: 0,
-        previousDailyRate: 0,
-        rateChangePercentage: "0%",
         monthlyPayrolls: [],
+        deductionsHistory: [],
+        totalEmployees: 0,
+        totalPayroll: 0,
+        totalDeductions: 0,
+        totalNetPay: 0,
+        totalOvertime: 0,
+        totalAbsences: 0,
         yearlyTotal: 0,
         yearlyAverage: 0,
-        deductionsHistory: [],
       });
     } finally {
       setIsLoading(false);
@@ -533,16 +534,28 @@ export default function StatisticsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <StatCard
                     title="Yearly Total"
-                    value={`₱${
-                      statisticsData?.yearlyTotal.toLocaleString() || "0"
-                    }`}
+                    value={new Intl.NumberFormat("en-PH", {
+                      style: "currency",
+                      currency: "PHP",
+                    }).format(
+                      statisticsData?.monthlyPayrolls.reduce(
+                        (sum, item) => sum + item.amount,
+                        0
+                      ) || 0
+                    )}
                     icon={<IoWalletOutline className="w-6 h-6" />}
                   />
                   <StatCard
                     title="Monthly Average"
-                    value={`₱${
-                      statisticsData?.yearlyAverage.toLocaleString() || "0"
-                    }`}
+                    value={new Intl.NumberFormat("en-PH", {
+                      style: "currency",
+                      currency: "PHP",
+                    }).format(
+                      (statisticsData?.monthlyPayrolls.reduce(
+                        (sum, item) => sum + item.amount,
+                        0
+                      ) || 0) / (statisticsData?.monthlyPayrolls.length || 1)
+                    )}
                     icon={<IoCalendarOutline className="w-6 h-6" />}
                   />
                 </div>

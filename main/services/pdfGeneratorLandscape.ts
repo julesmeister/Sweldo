@@ -1,7 +1,6 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import { PayrollSummary, PDFGeneratorOptions } from "@/renderer/types/payroll";
-import { createStatisticsModel } from "../model/statistics";
 
 export async function generatePayrollPDFLandscape(
   payrolls: PayrollSummary[],
@@ -23,24 +22,7 @@ export async function generatePayrollPDFLandscape(
       );
 
       // Handle stream events
-      writeStream.on("finish", async () => {
-        // Update statistics after PDF is generated
-        try {
-          if (payrolls.length > 0) {
-            // Get the year from the first payroll's end date
-            const endDate = new Date(payrolls[0].endDate);
-            const year = endDate.getFullYear();
-
-            // Create statistics model and update statistics
-            const statisticsModel = createStatisticsModel(options.dbPath, year);
-            await statisticsModel.updatePayrollStatistics(payrolls, year);
-            console.log("[PDF] Statistics updated successfully");
-          }
-        } catch (error) {
-          console.error("[PDF] Error updating statistics:", error);
-          // Don't reject the promise here, as the PDF generation was successful
-        }
-
+      writeStream.on("finish", () => {
         resolve(options.outputPath.replace(".pdf", "_landscape.pdf"));
       });
 

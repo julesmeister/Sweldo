@@ -735,14 +735,6 @@ export class Payroll {
       }
 
       // Update employee's last payment period using the correct method name
-      console.log("[Payroll] Updating last payment period:", {
-        employeeId,
-        start: start,
-        end: end,
-        startType: typeof start,
-        endType: typeof end,
-      });
-
       await employeeModel.updateEmployeeDetails({
         ...employee,
         lastPaymentPeriod: {
@@ -775,20 +767,11 @@ export class Payroll {
       };
 
       // Update statistics
-      console.log("=== Updating Statistics ===");
-      console.log("DB Path:", this.dbPath);
-      console.log("End Year:", endYear);
-      console.log("Payroll Summary:", payrollSummary);
-
       const statisticsModel = createStatisticsModel(this.dbPath, endYear);
-      console.log("Statistics Model Created");
-
-      await statisticsModel.updatePayrollStatistics([payrollSummary], endYear);
-      console.log("Statistics Updated Successfully");
+      await statisticsModel.updatePayrollStatistics([payrollSummary]);
 
       return payrollSummary;
     } catch (error) {
-      console.error("Error generating payroll summary:", error);
       throw error;
     }
   }
@@ -852,7 +835,6 @@ export class Payroll {
       // Write the updated content back to the file
       await window.electron.writeFile(filePath, updatedContent);
     } catch (error) {
-      console.error(`Error deleting payroll summary:`, error);
       throw error;
     }
   }
@@ -991,7 +973,6 @@ export class Payroll {
           new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
     } catch (error) {
-      console.error("[Payroll.loadPayrolls] Error:", error);
       throw error;
     }
   }
@@ -1003,15 +984,11 @@ export class Payroll {
     month: number
   ): Promise<PayrollSummaryModel[]> {
     try {
-      console.log(
-        `Loading payroll summaries for ${year}-${month}, employee: ${employeeId}`
-      );
       const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${year}_${month}_payroll.csv`;
 
       // Check if file exists using electron
       const fileExists = await window.electron.fileExists(filePath);
       if (!fileExists) {
-        console.log(`No payroll file found for ${year}-${month}`);
         return [];
       }
 
@@ -1026,13 +1003,10 @@ export class Payroll {
       });
 
       if (parsedData.errors.length > 0) {
-        console.error("Error parsing CSV:", parsedData.errors);
         return [];
       }
 
       const payrolls: PayrollSummaryModel[] = parsedData.data.map((row) => {
-        console.log("Processing row:", row);
-
         // Ensure dates are properly parsed
         const startDate = new Date(row.startDate);
         const endDate = new Date(row.endDate);
@@ -1074,14 +1048,9 @@ export class Payroll {
         };
       });
 
-      console.log(`Loaded ${payrolls.length} payroll records from ${filePath}`);
       return payrolls;
     } catch (error) {
-      console.error(
-        `[Payroll.loadPayrollSummaries] Error loading payrolls for ${year}-${month}:`,
-        error
-      );
-      return [];
+      throw error;
     }
   }
 
@@ -1104,21 +1073,12 @@ export class Payroll {
     attendanceRecords: Attendance[],
     compensations: Compensation[]
   ): Promise<number> {
-    console.log(
-      `Calculating actual working days from ${start} to ${end} for employment type: ${employmentType}`
-    );
-    console.log("Attendance records:", attendanceRecords);
-
     const timeSettings = await this.attendanceSettingsModel.loadTimeSettings();
-    console.log("Time settings:", timeSettings);
-
     const employeeSchedule = timeSettings.find(
       (type) => type.type === employmentType
     );
-    console.log("Found employee schedule:", employeeSchedule);
 
     if (!employeeSchedule) {
-      console.log("No schedule found for employment type:", employmentType);
       return 0;
     }
 
@@ -1134,10 +1094,7 @@ export class Payroll {
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
-      console.log(`Processing date: ${currentDate}`);
-
       const schedule = getScheduleForDate(employeeSchedule, currentDate);
-      console.log("Schedule for date:", schedule);
 
       // Check if this date is a holiday
       const isHoliday = holidays.some((holiday) => {
@@ -1158,18 +1115,15 @@ export class Payroll {
             record.timeIn &&
             record.timeOut // Must have both timeIn and timeOut
         );
-        console.log("Found attendance record:", attendance);
 
         // If no attendance record found for a scheduled day, count as absence
         if (!attendance) {
-          console.log(`Absence found for date: ${currentDate}`);
           absences++;
         }
       }
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    console.log(`Total absences found: ${absences}`);
     return absences;
   }
 
@@ -1180,12 +1134,6 @@ export class Payroll {
     payrollDate: Date
   ): Promise<void> {
     try {
-      console.log(`Attempting to reverse cash advance deduction:`, {
-        employeeId,
-        deductionAmount,
-        payrollDate: payrollDate.toISOString(),
-      });
-
       // Get all months between the payroll date and 3 months before (to catch recent cash advances)
       const months = [];
       let currentDate = new Date(payrollDate);
@@ -1225,14 +1173,6 @@ export class Payroll {
             advance.amount - advance.remainingUnpaid
           );
 
-          console.log(`Reversing ${amountToAdd} to cash advance:`, {
-            id: advance.id,
-            date: advance.date,
-            currentRemaining: advance.remainingUnpaid,
-            amountToAdd,
-            newRemaining: advance.remainingUnpaid + amountToAdd,
-          });
-
           // Update the cash advance
           const updatedCashAdvance = {
             ...advance,
@@ -1266,12 +1206,11 @@ export class Payroll {
       }
 
       if (remainingAmountToReverse > 0) {
-        console.warn(
+        throw new Error(
           `Could not fully reverse cash advance deduction. Remaining amount: ${remainingAmountToReverse}`
         );
       }
     } catch (error) {
-      console.error(`Error reversing cash advance deduction:`, error);
       throw error;
     }
   }
