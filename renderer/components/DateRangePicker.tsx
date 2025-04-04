@@ -3,19 +3,23 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { BorderBeam } from "./magicui/border-beam";
 import { useDateRangeStore } from "../stores/dateRangeStore";
+import { IoRefreshOutline } from "react-icons/io5";
 
 interface DateRangePickerProps {
   variant?: "default" | "timesheet";
+  onRefresh?: () => void;
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   variant = "default",
+  onRefresh,
 }) => {
   const { dateRange, setDateRange } = useDateRangeStore();
   const startDate = dateRange?.startDate || null;
   const endDate = dateRange?.endDate || null;
   const [isStartDateOpen, setIsStartDateOpen] = React.useState(false);
   const [isEndDateOpen, setIsEndDateOpen] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const formatDateDisplay = (date: Date | null) => {
     if (!date) return "";
@@ -104,6 +108,13 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     } catch (error) {
       console.error("Error handling start date change:", error);
     }
+  };
+
+  const handleRefresh = async () => {
+    if (!onRefresh) return;
+    setIsRefreshing(true);
+    await onRefresh();
+    setIsRefreshing(false);
   };
 
   return (
@@ -206,6 +217,20 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             }
           />
         </div>
+        {variant === "timesheet" && onRefresh && (
+          <div className="relative ml-2">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="p-1.5 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
+              disabled={isRefreshing}
+            >
+              <IoRefreshOutline
+                className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+            </button>
+          </div>
+        )}
         {(startDate || endDate) && (
           <div className="relative">
             <button

@@ -23,6 +23,8 @@ import {
   IoSettingsOutline,
   IoRefreshOutline,
   IoShieldOutline,
+  IoTimeOutline,
+  IoChevronDownOutline,
 } from "react-icons/io5";
 import { EditableCell } from "@/renderer/components/EditableCell";
 import { CompensationDialog } from "@/renderer/components/CompensationDialog";
@@ -44,6 +46,21 @@ import { useAuthStore } from "@/renderer/stores/authStore";
 import { DateRangePicker } from "@/renderer/components/DateRangePicker";
 import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
 
+const formatName = (name: string): string => {
+  if (!name) return "";
+
+  // Split the name into parts
+  const nameParts = name.split(" ");
+
+  // Capitalize each part
+  return nameParts
+    .map((part) => {
+      if (!part) return "";
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(" ");
+};
+
 const TimesheetPage: React.FC = () => {
   const [timesheetEntries, setTimesheetEntries] = useState<Attendance[]>([]);
   const [compensationEntries, setCompensationEntries] = useState<
@@ -64,7 +81,7 @@ const TimesheetPage: React.FC = () => {
   const [isRecomputing, setIsRecomputing] = useState(false);
   const [timeSettings, setTimeSettings] = useState<EmploymentType[]>([]);
   const { dbPath } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const { columns, setColumns, resetToDefault } = useColumnVisibilityStore();
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
@@ -73,6 +90,7 @@ const TimesheetPage: React.FC = () => {
   const [validEntriesCount, setValidEntriesCount] = useState<number>(0);
   const { accessCodes, hasAccess } = useAuthStore();
   const { dateRange, setDateRange } = useDateRangeStore();
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -225,12 +243,11 @@ const TimesheetPage: React.FC = () => {
           compensationData.filter((comp) => comp.absence).length
         );
 
-        // Compute compensations only once after loading data
-        await computeCompensations(attendanceData, compensationData);
+        if (attendanceData.length > 0 || compensationData.length > 0) {
+          await computeCompensations(attendanceData, compensationData);
+        }
       } catch (error) {
         toast.error("Error loading timesheet data");
-        setLoading(false);
-        setIsLoading(false);
       } finally {
         setLoading(false);
         setIsLoading(false);
@@ -238,14 +255,7 @@ const TimesheetPage: React.FC = () => {
     };
 
     loadData();
-  }, [
-    employee?.id,
-    selectedEmployeeId,
-    dbPath,
-    year,
-    storedMonthInt,
-    setLoading,
-  ]);
+  }, [selectedEmployeeId, storedMonthInt, year]);
 
   // Find the employee's time tracking setting
   const employeeTimeSettings = useMemo(() => {
@@ -264,7 +274,6 @@ const TimesheetPage: React.FC = () => {
         setTimeSettings(types);
         setEmploymentTypes(types);
 
-        // Update column names and visibility based on time tracking requirement
         if (employee) {
           const employeeType = types.find(
             (type) =>
@@ -356,7 +365,6 @@ const TimesheetPage: React.FC = () => {
       return;
     }
     try {
-      // First ensure we have all the required fields
       if (
         !updatedCompensation.employeeId ||
         !updatedCompensation.month ||
@@ -372,7 +380,6 @@ const TimesheetPage: React.FC = () => {
         updatedCompensation.employeeId
       );
 
-      // Refresh the compensation entries
       const newCompensationEntries = await compensationModel.loadRecords(
         storedMonthInt,
         year,
@@ -380,7 +387,6 @@ const TimesheetPage: React.FC = () => {
       );
       setCompensationEntries(newCompensationEntries);
 
-      // Show success message
       toast.success("Compensation saved successfully");
     } catch (error) {
       toast.error("Failed to save compensation");
@@ -430,12 +436,89 @@ const TimesheetPage: React.FC = () => {
       return timesheetEntries;
     }
 
+    const startDate = dateRange.startDate.getTime();
+    const endDate = dateRange.endDate.getTime();
+
     return timesheetEntries.filter((entry) => {
-      const entryDate = new Date(year, storedMonthInt - 1, entry.day);
-      if (!dateRange.startDate || !dateRange.endDate) return false;
-      return entryDate >= dateRange.startDate && entryDate <= dateRange.endDate;
+      const entryDate = new Date(year, storedMonthInt - 1, entry.day).getTime();
+      return entryDate >= startDate && entryDate <= endDate;
     });
-  }, [timesheetEntries, dateRange, year, storedMonthInt]);
+  }, [timesheetEntries, dateRange?.startDate, dateRange?.endDate]);
+
+  // Remove performance monitoring for employee loading
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath]);
+
+  // Simplify dropdown render without performance monitoring
+  const employeeDropdown = useMemo(() => {
+    const activeEmployees = employees.filter((emp) => emp.status === "active");
+
+    return (
+      <div className="absolute z-50 mt-2 w-72 bg-white rounded-xl shadow-lg border border-gray-200/50 max-h-[320px] overflow-y-auto opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 scrollbar-thin">
+        <div className="py-2">
+          {activeEmployees.map((emp) => (
+            <div
+              key={emp.id}
+              className={`mx-2 px-3 py-2.5 text-sm cursor-pointer rounded-lg transition-all duration-150 ${
+                emp.id === selectedEmployeeId
+                  ? "bg-blue-50/80 text-blue-600"
+                  : "hover:bg-gray-50"
+              }`}
+              onClick={() => setSelectedEmployeeId(emp.id)}
+            >
+              <div className="flex items-center">
+                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-3 shadow-sm">
+                  <span className="text-sm font-medium text-indigo-600">
+                    {emp.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </span>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900">
+                    {formatName(emp.name)}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {emp.position || "No position set"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }, [employees, selectedEmployeeId]);
+
+  // Optimize row rendering with memoization
+  const memoizedDays = useMemo(() => {
+    return Array.from(
+      new Set(filteredTimesheetEntries.map((entry) => entry.day))
+    );
+  }, [filteredTimesheetEntries]);
+
+  // Optimize compensation lookup with memoization
+  const compensationLookup = useMemo(() => {
+    const lookup = new Map();
+    compensationEntries.forEach((comp) => {
+      const key = `${comp.year}-${comp.month}-${comp.day}`;
+      lookup.set(key, comp);
+    });
+    return lookup;
+  }, [compensationEntries]);
 
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
@@ -544,13 +627,71 @@ const TimesheetPage: React.FC = () => {
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
               <div className="flex items-center space-x-4 flex-1">
                 <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                  {selectedEmployeeId
-                    ? employee?.name + "'s Timesheet"
-                    : "Timesheet"}
+                  {selectedEmployeeId ? (
+                    <div className="relative inline-block group">
+                      <span className="cursor-pointer hover:text-blue-600 transition-colors flex items-center gap-1">
+                        {employee?.name
+                          ? `${formatName(employee.name)}${
+                              employee.name.toLowerCase().endsWith("s")
+                                ? "'"
+                                : "'s"
+                            } Timesheet`
+                          : "Select Employee"}
+                      </span>
+                      {employeeDropdown}
+                    </div>
+                  ) : (
+                    "Timesheet"
+                  )}
                 </h2>
                 {selectedEmployeeId && (
                   <div className="w-[480px]">
-                    <DateRangePicker variant="timesheet" />
+                    <DateRangePicker
+                      variant="timesheet"
+                      onRefresh={async () => {
+                        if (!employee || !dbPath || !selectedEmployeeId) return;
+
+                        try {
+                          setLoading(true);
+                          const [attendanceData, compensationData] =
+                            await Promise.all([
+                              attendanceModel.loadAttendancesById(
+                                storedMonthInt,
+                                year,
+                                selectedEmployeeId
+                              ),
+                              compensationModel.loadRecords(
+                                storedMonthInt,
+                                year,
+                                selectedEmployeeId
+                              ),
+                            ]);
+
+                          setTimesheetEntries(attendanceData);
+                          setCompensationEntries(compensationData);
+                          setValidEntriesCount(
+                            compensationData.filter((comp) => comp.absence)
+                              .length
+                          );
+
+                          if (
+                            attendanceData.length > 0 ||
+                            compensationData.length > 0
+                          ) {
+                            await computeCompensations(
+                              attendanceData,
+                              compensationData
+                            );
+                          }
+
+                          toast.success("Records refreshed successfully");
+                        } catch (error) {
+                          toast.error("Error refreshing records");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -739,27 +880,16 @@ const TimesheetPage: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      Array.from(
-                        new Set(
-                          filteredTimesheetEntries.map((entry) => entry.day)
-                        )
-                      ).map((day) => {
+                      memoizedDays.map((day) => {
                         const foundEntry = filteredTimesheetEntries.find(
                           (entry) => entry.day === day
                         );
-                        const foundCompensation = compensationEntries.find(
-                          (comp) =>
-                            comp.year === year &&
-                            comp.month === storedMonthInt &&
-                            comp.day === Number(day)
-                        );
+                        const compensationKey = `${year}-${storedMonthInt}-${day}`;
                         const compensation =
-                          foundCompensation === undefined
-                            ? null
-                            : foundCompensation;
+                          compensationLookup.get(compensationKey) || null;
 
                         if (!foundEntry) {
-                          return;
+                          return null;
                         }
 
                         return (

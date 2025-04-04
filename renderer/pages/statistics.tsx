@@ -366,7 +366,7 @@ export default function StatisticsPage() {
     }
   }, [isInitialized, initialize]);
 
-  // Load statistics data when year changes or component mounts
+  // Load statistics data function (only used for manual refresh)
   const loadStatistics = async () => {
     setIsLoading(true);
     const loadingToast = toast.loading("Refreshing statistics data...");
@@ -426,17 +426,30 @@ export default function StatisticsPage() {
     }
   };
 
-  // Load data when component mounts or year changes
+  // Initialize empty data when year changes
   useEffect(() => {
     console.log("=== Statistics Page Effect ===");
     console.log("Is Initialized:", isInitialized);
     console.log("Selected Year:", selectedYear);
     console.log("DB Path:", dbPath);
 
-    if (isInitialized) {
-      loadStatistics();
+    if (isInitialized && dbPath) {
+      // Initialize with empty data
+      setStatisticsData({
+        dailyRateHistory: [],
+        monthlyPayrolls: [],
+        deductionsHistory: [],
+        totalEmployees: 0,
+        totalPayroll: 0,
+        totalDeductions: 0,
+        totalNetPay: 0,
+        totalOvertime: 0,
+        totalAbsences: 0,
+        yearlyTotal: 0,
+        yearlyAverage: 0,
+      });
     }
-  }, [selectedYear, isInitialized]);
+  }, [selectedYear, isInitialized, dbPath]);
 
   // Filter data based on selected year
   const filteredDailyRateHistory = statisticsData?.dailyRateHistory || [];
