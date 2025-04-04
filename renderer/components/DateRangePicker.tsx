@@ -14,6 +14,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const { dateRange, setDateRange } = useDateRangeStore();
   const startDate = dateRange?.startDate || null;
   const endDate = dateRange?.endDate || null;
+  const [isStartDateOpen, setIsStartDateOpen] = React.useState(false);
   const [isEndDateOpen, setIsEndDateOpen] = React.useState(false);
 
   const formatDateDisplay = (date: Date | null) => {
@@ -91,10 +92,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         } else {
           setDateRange(validDate, endDate);
         }
-        // Open end date picker after selecting start date
+        // Close start date picker and open end date picker
+        setIsStartDateOpen(false);
         setIsEndDateOpen(true);
       } else if (date === null) {
         setDateRange(null, endDate);
+        setIsStartDateOpen(false);
       } else {
         console.error("Invalid start date selected");
       }
@@ -117,6 +120,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             className="w-full bg-transparent focus:outline-none"
             placeholderText="Start date"
             dateFormat="MMM d, yyyy"
+            open={isStartDateOpen}
+            onCalendarOpen={() => setIsStartDateOpen(true)}
+            onCalendarClose={() => setIsStartDateOpen(false)}
             customInput={
               <button type="button" className={buttonClass(startDate)}>
                 <svg

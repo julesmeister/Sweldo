@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import { PayrollSummary, PDFGeneratorOptions } from "@/renderer/types/payroll";
-import { createStatisticsModel } from "@/renderer/model/statistics";
+import { createStatisticsModel } from "../model/statistics";
 
 export async function generatePayrollPDFLandscape(
   payrolls: PayrollSummary[],

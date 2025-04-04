@@ -106,7 +106,6 @@ export class HolidayModel {
     }
   }
 
-  // Already fetches holidays for the current month and year because of the constructor
   async loadHolidays(): Promise<Holiday[]> {
     try {
       const filePath = this.getFilePath();
@@ -114,6 +113,15 @@ export class HolidayModel {
       try {
         // Ensure directory exists before trying to read file
         await window.electron.ensureDir(path.dirname(filePath));
+
+        // Check if file exists
+        const exists = await window.electron.fileExists(filePath);
+        if (!exists) {
+          // Create empty file if it doesn't exist
+          await window.electron.writeFile(filePath, "");
+          return [];
+        }
+
         const data = await window.electron.readFile(filePath);
         const lines = data.split("\n");
 
@@ -142,6 +150,8 @@ export class HolidayModel {
           error.code === "ENOENT" ||
           (error instanceof Error && error.message.includes("ENOENT"))
         ) {
+          // Create empty file if it doesn't exist
+          await window.electron.writeFile(filePath, "");
           return [];
         }
         throw error;
