@@ -7,6 +7,7 @@ export interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
   companyName: string;
+  dbPath: string; // Path to the database directory
 }
 
 // Re-export the type to ensure it's recognized

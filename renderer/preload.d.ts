@@ -25,6 +25,7 @@ interface PayrollSummary {
 interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
+  dbPath: string;
 }
 
 interface IpcRenderer {

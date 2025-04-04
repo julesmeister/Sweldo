@@ -162,6 +162,11 @@ export default function SettingsPage() {
   const [showTotalDeductionsSaved, setShowTotalDeductionsSaved] =
     useState(false);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
+  const [showVariables, setShowVariables] = useState(false);
+  const calculationSettingsRef = useRef<HTMLDivElement>(null);
+  const variablesPanelRef = useRef<HTMLDivElement>(null);
+  const [showVariablesPanel, setShowVariablesPanel] = useState(false);
 
   // Add useEffect to initialize the store when component mounts
   React.useEffect(() => {
@@ -1558,21 +1563,63 @@ export default function SettingsPage() {
 
             {/* Calculation Settings */}
             <div className="mt-8">
-              <h2 className="text-lg font-semibold mb-4 flex items-center">
-                <svg
-                  className="w-5 h-5 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <h2 className="text-lg font-semibold mb-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Calculation Settings
+                </div>
+                <button
+                  onClick={() => setShowVariablesPanel(!showVariablesPanel)}
+                  className="flex items-center gap-2 px-3 py-1 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
-                Calculation Settings
+                  {showVariablesPanel ? (
+                    <>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                      Hide Variables
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 6h16M4 12h16m-7 6h7"
+                        />
+                      </svg>
+                      Show Variables
+                    </>
+                  )}
+                </button>
               </h2>
 
               <div className="flex gap-6">
@@ -1618,17 +1665,13 @@ export default function SettingsPage() {
                         );
                       }}
                       onDrop={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove(
-                          "bg-blue-50",
-                          "border-blue-200"
-                        );
                         if (!selectedOperator) {
                           toast.error(
                             "Please select an operator first (e.g., +, -, *, /)"
                           );
                           return;
                         }
+                        e.preventDefault();
                         const variable = e.dataTransfer.getData("text/plain");
                         const currentFormula =
                           calculationSettings.grossPay?.formula || "";
@@ -1774,17 +1817,13 @@ export default function SettingsPage() {
                         );
                       }}
                       onDrop={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove(
-                          "bg-blue-50",
-                          "border-blue-200"
-                        );
                         if (!selectedOperator) {
                           toast.error(
                             "Please select an operator first (e.g., +, -, *, /)"
                           );
                           return;
                         }
+                        e.preventDefault();
                         const variable = e.dataTransfer.getData("text/plain");
                         const currentFormula =
                           calculationSettings.others?.formula || "";
@@ -1903,7 +1942,7 @@ export default function SettingsPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M20 12H4"
+                          d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
                         />
                       </svg>
                       Total Deductions Formula
@@ -1918,29 +1957,16 @@ export default function SettingsPage() {
                           return;
                         }
                         e.preventDefault();
-                        e.currentTarget.classList.add(
-                          "bg-blue-50",
-                          "border-blue-200"
-                        );
-                      }}
-                      onDragLeave={(e) => {
-                        e.currentTarget.classList.remove(
-                          "bg-blue-50",
-                          "border-blue-200"
-                        );
+                        e.dataTransfer.dropEffect = "copy";
                       }}
                       onDrop={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove(
-                          "bg-blue-50",
-                          "border-blue-200"
-                        );
                         if (!selectedOperator) {
                           toast.error(
                             "Please select an operator first (e.g., +, -, *, /)"
                           );
                           return;
                         }
+                        e.preventDefault();
                         const variable = e.dataTransfer.getData("text/plain");
                         const currentFormula =
                           calculationSettings.totalDeductions?.formula || "";
@@ -1950,6 +1976,7 @@ export default function SettingsPage() {
                         setCalculationSettings({
                           ...calculationSettings,
                           totalDeductions: {
+                            ...calculationSettings.totalDeductions,
                             formula: newFormula,
                             description:
                               calculationSettings.totalDeductions
@@ -1957,108 +1984,96 @@ export default function SettingsPage() {
                               "Sum of all statutory and voluntary deductions",
                           },
                         });
-                        setShowTotalDeductionsSaved(true);
-                        setTimeout(
-                          () => setShowTotalDeductionsSaved(false),
-                          2000
-                        );
+                        setShowSaved(true);
+                        setTimeout(() => setShowSaved(false), 2000);
                         setSelectedOperator(null);
                       }}
                     >
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={
-                            calculationSettings.totalDeductions?.formula ||
-                            "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
-                          }
-                          onChange={(e) => {
-                            setCalculationSettings({
-                              ...calculationSettings,
-                              totalDeductions: {
-                                formula: e.target.value,
-                                description:
-                                  calculationSettings.totalDeductions
-                                    ?.description ||
-                                  "Sum of all statutory and voluntary deductions",
-                              },
-                            });
-                            setShowTotalDeductionsSaved(true);
-                            setTimeout(
-                              () => setShowTotalDeductionsSaved(false),
-                              2000
-                            );
-                          }}
-                          className="w-full p-2 bg-white border rounded font-mono text-sm"
-                          placeholder="Enter or drag variables to build formula..."
-                        />
-                        <div className="flex gap-2">
-                          {["+", "-", "*", "/", "(", ")"].map((operator) => (
-                            <button
-                              key={operator}
-                              onClick={() => {
-                                if (selectedOperator === operator) {
-                                  setSelectedOperator(null);
-                                } else {
-                                  setSelectedOperator(operator);
-                                }
-                              }}
-                              className={`px-3 py-1 border rounded transition-all duration-200 font-mono
-                                ${
-                                  selectedOperator === operator
-                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
-                                }`}
-                            >
-                              {operator}
-                            </button>
-                          ))}
-                        </div>
-                        {!selectedOperator && (
-                          <div className="text-xs text-gray-500 italic mt-1">
-                            Select an operator before dragging variables
-                          </div>
-                        )}
-                        <div className="font-mono text-sm bg-white p-2 rounded border">
-                          {(
-                            calculationSettings.totalDeductions?.formula ||
-                            "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
-                          )
-                            .split(/([+\-*/()])/g)
-                            .map((part, index) => {
-                              const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
-                                part.trim()
-                              );
-                              return (
-                                <span
-                                  key={index}
-                                  className={`${
-                                    isVariable
-                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                      : "text-gray-600"
-                                  }`}
-                                >
-                                  {part}
-                                </span>
-                              );
-                            })}
-                        </div>
+                      <AutoSaveInput
+                        value={
+                          calculationSettings.totalDeductions?.formula ||
+                          "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                        }
+                        onChange={(value) => {
+                          setCalculationSettings({
+                            ...calculationSettings,
+                            totalDeductions: {
+                              ...calculationSettings.totalDeductions,
+                              formula: value,
+                              description:
+                                calculationSettings.totalDeductions
+                                  ?.description ||
+                                "Sum of all statutory and voluntary deductions",
+                            },
+                          });
+                          setShowSaved(true);
+                          setTimeout(() => setShowSaved(false), 2000);
+                        }}
+                        placeholder="Enter or drag variables to build formula..."
+                        showSaved={showSaved}
+                        setShowSaved={setShowSaved}
+                      />
+                      <div className="flex gap-2 mt-2">
+                        {["+", "-", "*", "/", "(", ")"].map((operator) => (
+                          <button
+                            key={operator}
+                            onClick={() => {
+                              if (selectedOperator === operator) {
+                                setSelectedOperator(null);
+                              } else {
+                                setSelectedOperator(operator);
+                              }
+                            }}
+                            className={`px-3 py-1 border rounded transition-all duration-200 font-mono
+                              ${
+                                selectedOperator === operator
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                              }`}
+                          >
+                            {operator}
+                          </button>
+                        ))}
                       </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-3 text-sm text-gray-600">
-                      <p className="font-medium mb-1">Description:</p>
+                      {!selectedOperator && (
+                        <div className="text-xs text-gray-500 italic mt-1">
+                          Select an operator before dragging variables
+                        </div>
+                      )}
+                      <div className="font-mono text-sm bg-white p-2 rounded border">
+                        {(
+                          calculationSettings.totalDeductions?.formula ||
+                          "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                        )
+                          .split(/([+\-*/()])/g)
+                          .map((part, index) => {
+                            const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
+                              part.trim()
+                            );
+                            return (
+                              <span
+                                key={index}
+                                className={`${
+                                  isVariable
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {part}
+                              </span>
+                            );
+                          })}
+                      </div>
                       <p className="italic">
                         {calculationSettings.totalDeductions?.description ||
                           "Sum of all statutory and voluntary deductions"}
                       </p>
                     </div>
                   </div>
-                </div>
 
-                {/* Variables Panel - Right Side */}
-                <div className="w-80">
-                  <div className="sticky top-4 bg-white rounded-lg border border-gray-200 p-4">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                  {/* Net Pay Formula */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                       <svg
                         className="w-4 h-4 mr-1"
                         fill="none"
@@ -2069,54 +2084,235 @@ export default function SettingsPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M4 6h16M4 12h16m-7 6h7"
+                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                       </svg>
-                      Available Variables
+                      Net Pay Formula
                     </h3>
-                    <div className="space-y-2">
-                      {[
-                        { name: "basicPay", description: "Basic Pay" },
-                        { name: "overtime", description: "Overtime Pay" },
-                        { name: "holidayBonus", description: "Holiday Bonus" },
-                        {
-                          name: "undertimeDeduction",
-                          description: "Undertime Deduction",
-                        },
-                        {
-                          name: "nightDifferentialPay",
-                          description: "Night Differential",
-                        },
-                        { name: "sss", description: "SSS Contribution" },
-                        { name: "philHealth", description: "PhilHealth" },
-                        { name: "pagIbig", description: "Pag-IBIG" },
-                        { name: "sssLoan", description: "SSS Loan" },
-                        { name: "pagibigLoan", description: "Pag-IBIG Loan" },
-                        {
-                          name: "cashAdvanceDeductions",
-                          description: "Cash Advance",
-                        },
-                        { name: "partial", description: "Partial Payment" },
-                      ].map((variable) => (
-                        <div
-                          key={variable.name}
-                          className="bg-white p-2 rounded border border-gray-200 cursor-move hover:bg-blue-50 hover:border-blue-200 transition-colors"
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", variable.name);
-                          }}
-                        >
-                          <div className="text-sm font-medium text-gray-700">
-                            {variable.description}
-                          </div>
-                          <div className="text-xs text-gray-500 font-mono">
-                            {variable.name}
-                          </div>
+                    <div
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
+                        !selectedOperator ? "cursor-not-allowed" : ""
+                      }`}
+                      onDragOver={(e) => {
+                        if (!selectedOperator) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                      }}
+                      onDrop={(e) => {
+                        if (!selectedOperator) {
+                          toast.error(
+                            "Please select an operator first (e.g., +, -, *, /)"
+                          );
+                          return;
+                        }
+                        e.preventDefault();
+                        const variable = e.dataTransfer.getData("text/plain");
+                        const currentFormula =
+                          calculationSettings.netPay?.formula || "";
+                        const newFormula = currentFormula
+                          ? `${currentFormula} ${selectedOperator} ${variable}`
+                          : variable;
+                        setCalculationSettings({
+                          ...calculationSettings,
+                          netPay: {
+                            ...calculationSettings.netPay,
+                            formula: newFormula,
+                            description:
+                              calculationSettings.netPay?.description ||
+                              "Gross pay minus total deductions",
+                          },
+                        });
+                        setShowSaved(true);
+                        setTimeout(() => setShowSaved(false), 2000);
+                        setSelectedOperator(null);
+                      }}
+                    >
+                      <AutoSaveInput
+                        value={
+                          calculationSettings.netPay?.formula ||
+                          "grossPay - totalDeductions"
+                        }
+                        onChange={(value) => {
+                          setCalculationSettings({
+                            ...calculationSettings,
+                            netPay: {
+                              ...calculationSettings.netPay,
+                              formula: value,
+                              description:
+                                calculationSettings.netPay?.description ||
+                                "Gross pay minus total deductions",
+                            },
+                          });
+                          setShowSaved(true);
+                          setTimeout(() => setShowSaved(false), 2000);
+                        }}
+                        placeholder="Enter or drag variables to build formula..."
+                        showSaved={showSaved}
+                        setShowSaved={setShowSaved}
+                      />
+                      <div className="flex gap-2 mt-2">
+                        {["+", "-", "*", "/", "(", ")"].map((operator) => (
+                          <button
+                            key={operator}
+                            onClick={() => {
+                              if (selectedOperator === operator) {
+                                setSelectedOperator(null);
+                              } else {
+                                setSelectedOperator(operator);
+                              }
+                            }}
+                            className={`px-3 py-1 border rounded transition-all duration-200 font-mono
+                              ${
+                                selectedOperator === operator
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                              }`}
+                          >
+                            {operator}
+                          </button>
+                        ))}
+                      </div>
+                      {!selectedOperator && (
+                        <div className="text-xs text-gray-500 italic mt-1">
+                          Select an operator before dragging variables
                         </div>
-                      ))}
+                      )}
+                      <div className="font-mono text-sm bg-white p-2 rounded border">
+                        {(
+                          calculationSettings.netPay?.formula ||
+                          "grossPay - totalDeductions"
+                        )
+                          .split(/([+\-*/()])/g)
+                          .map((part, index) => {
+                            const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
+                              part.trim()
+                            );
+                            return (
+                              <span
+                                key={index}
+                                className={`${
+                                  isVariable
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {part}
+                              </span>
+                            );
+                          })}
+                      </div>
+                      <p className="italic">
+                        {calculationSettings.netPay?.description ||
+                          "Gross pay minus total deductions"}
+                      </p>
                     </div>
                   </div>
                 </div>
+
+                {/* Variables Column - Right Side */}
+                {showVariablesPanel && (
+                  <div className="w-64" ref={variablesPanelRef}>
+                    <div
+                      className="bg-white rounded-lg border border-gray-200 p-4"
+                      style={{
+                        position: "fixed",
+                        width: "16rem",
+                        right: "2rem",
+                        top: "6rem",
+                        maxHeight: "calc(100vh - 8rem)",
+                        overflowY: "auto",
+                        zIndex: 10,
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                        <h3 className="text-sm font-medium text-gray-700 flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 6h16M4 12h16m-7 6h7"
+                            />
+                          </svg>
+                          Available Variables
+                        </h3>
+                        <button
+                          onClick={() => setShowVariablesPanel(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="space-y-2 mt-2">
+                        {[
+                          { name: "basicPay", description: "Basic Pay" },
+                          { name: "overtime", description: "Overtime Pay" },
+                          {
+                            name: "holidayBonus",
+                            description: "Holiday Bonus",
+                          },
+                          {
+                            name: "undertimeDeduction",
+                            description: "Undertime Deduction",
+                          },
+                          {
+                            name: "nightDifferentialPay",
+                            description: "Night Differential",
+                          },
+                          { name: "sss", description: "SSS Contribution" },
+                          { name: "philHealth", description: "PhilHealth" },
+                          { name: "pagIbig", description: "Pag-IBIG" },
+                          { name: "sssLoan", description: "SSS Loan" },
+                          { name: "pagibigLoan", description: "Pag-IBIG Loan" },
+                          {
+                            name: "cashAdvanceDeductions",
+                            description: "Cash Advance",
+                          },
+                          { name: "partial", description: "Partial Payment" },
+                        ].map((variable) => (
+                          <div
+                            key={variable.name}
+                            className="bg-white p-2 rounded border border-gray-200 cursor-move hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData(
+                                "text/plain",
+                                variable.name
+                              );
+                            }}
+                          >
+                            <div className="text-sm font-medium text-gray-700">
+                              {variable.description}
+                            </div>
+                            <div className="text-xs text-gray-500 font-mono">
+                              {variable.name}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2486,6 +2682,25 @@ export default function SettingsPage() {
       setShowColumnColorSaved((prev) => ({ ...prev, [columnId]: false }));
     }, 2000);
   };
+
+  // Add useEffect to handle scroll events for the variables panel
+  useEffect(() => {
+    const handleScroll = () => {
+      if (calculationSettingsRef.current) {
+        const rect = calculationSettingsRef.current.getBoundingClientRect();
+        const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+        setShowVariables(isVisible);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    // Initial check
+    handleScroll();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   // Show loading state
   if (isLoading) {

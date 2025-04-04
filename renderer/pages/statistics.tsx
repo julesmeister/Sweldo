@@ -380,19 +380,28 @@ export default function StatisticsPage() {
         );
       }
 
-      console.log(
-        `Loading statistics for year: ${selectedYear}, using dbPath: ${dbPath}`
-      );
+      console.log("=== Loading Statistics ===");
+      console.log(`Year: ${selectedYear}`);
+      console.log(`DB Path: ${dbPath}`);
+
       const statisticsModel = createStatisticsModel(dbPath, selectedYear);
       const data = await statisticsModel.loadStatistics();
-      console.log("Loaded statistics data:", data);
+
+      console.log("=== Statistics Data Loaded ===");
+      console.log("Monthly Payrolls:", data.monthlyPayrolls);
+      console.log("Daily Rate History:", data.dailyRateHistory);
+      console.log("Deductions History:", data.deductionsHistory);
+      console.log("Yearly Total:", data.yearlyTotal);
+      console.log("Yearly Average:", data.yearlyAverage);
+
       setStatisticsData(data);
 
       toast.success("Statistics data refreshed successfully!", {
         id: loadingToast,
       });
     } catch (error) {
-      console.error("Error loading statistics:", error);
+      console.error("=== Error Loading Statistics ===");
+      console.error(error);
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
 
@@ -418,6 +427,11 @@ export default function StatisticsPage() {
 
   // Load data when component mounts or year changes
   useEffect(() => {
+    console.log("=== Statistics Page Effect ===");
+    console.log("Is Initialized:", isInitialized);
+    console.log("Selected Year:", selectedYear);
+    console.log("DB Path:", dbPath);
+
     if (isInitialized) {
       loadStatistics();
     }

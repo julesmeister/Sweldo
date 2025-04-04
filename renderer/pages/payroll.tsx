@@ -324,7 +324,7 @@ export default function PayrollPage() {
     router.push(path);
   };
 
-  const handleGeneratePDFForAll = async () => {
+  const handleGeneratePayslipsForAll = async () => {
     if (!hasAccess("GENERATE_REPORTS")) {
       toast.error("You don't have permission to generate reports");
       return;
@@ -438,6 +438,7 @@ export default function PayrollPage() {
       const pdfPath = await window.electron.generatePDF(formattedPayrolls, {
         outputPath: pdfOutputPath,
         logoPath: logoPath || "",
+        dbPath: dbPath,
       });
 
       // Open the generated PDF
@@ -451,7 +452,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handleGenerateLandscapePDFForAll = async () => {
+  const handleGeneratePayrollSummariesPDFForAll = async () => {
     if (!hasAccess("GENERATE_REPORTS")) {
       toast.error("You don't have permission to generate reports");
       return;
@@ -615,13 +616,13 @@ export default function PayrollPage() {
               {hasAccess("GENERATE_REPORTS") && (
                 <>
                   <button
-                    onClick={handleGeneratePDFForAll}
+                    onClick={handleGeneratePayslipsForAll}
                     className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
                     Generate Payslips PDF
                   </button>
                   <button
-                    onClick={handleGenerateLandscapePDFForAll}
+                    onClick={handleGeneratePayrollSummariesPDFForAll}
                     className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     Generate Summary PDF

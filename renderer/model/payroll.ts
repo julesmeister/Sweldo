@@ -19,6 +19,7 @@ import {
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
 import * as fs from "fs";
+import { createStatisticsModel } from "./statistics";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -752,7 +753,8 @@ export class Payroll {
         },
       });
 
-      return {
+      // Create the payroll summary object
+      const payrollSummary = {
         ...summary,
         deductions: finalDeductions,
         netPay:
@@ -765,7 +767,26 @@ export class Payroll {
         paymentDate: new Date(
           end.getTime() + 2 * 24 * 60 * 60 * 1000
         ).toISOString(),
+        employeeId,
+        employeeName: employee.name,
+        dailyRate: summary.dailyRate,
+        daysWorked: summary.daysWorked || 0,
+        absences: summary.absences || 0,
       };
+
+      // Update statistics
+      console.log("=== Updating Statistics ===");
+      console.log("DB Path:", this.dbPath);
+      console.log("End Year:", endYear);
+      console.log("Payroll Summary:", payrollSummary);
+
+      const statisticsModel = createStatisticsModel(this.dbPath, endYear);
+      console.log("Statistics Model Created");
+
+      await statisticsModel.updatePayrollStatistics([payrollSummary], endYear);
+      console.log("Statistics Updated Successfully");
+
+      return payrollSummary;
     } catch (error) {
       console.error("Error generating payroll summary:", error);
       throw error;

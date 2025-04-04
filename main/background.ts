@@ -189,6 +189,7 @@ interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
   companyName: string;
+  dbPath: string; // Path to the database directory
   columnColors?: {
     [key: string]: string; // Key is column id, value is hex color code
   };

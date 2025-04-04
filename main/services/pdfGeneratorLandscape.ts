@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import { PayrollSummary, PDFGeneratorOptions } from "@/renderer/types/payroll";
+import { createStatisticsModel } from "@/renderer/model/statistics";
 
 export async function generatePayrollPDFLandscape(
   payrolls: PayrollSummary[],
@@ -22,7 +23,24 @@ export async function generatePayrollPDFLandscape(
       );
 
       // Handle stream events
-      writeStream.on("finish", () => {
+      writeStream.on("finish", async () => {
+        // Update statistics after PDF is generated
+        try {
+          if (payrolls.length > 0) {
+            // Get the year from the first payroll's end date
+            const endDate = new Date(payrolls[0].endDate);
+            const year = endDate.getFullYear();
+
+            // Create statistics model and update statistics
+            const statisticsModel = createStatisticsModel(options.dbPath, year);
+            await statisticsModel.updatePayrollStatistics(payrolls, year);
+            console.log("[PDF] Statistics updated successfully");
+          }
+        } catch (error) {
+          console.error("[PDF] Error updating statistics:", error);
+          // Don't reject the promise here, as the PDF generation was successful
+        }
+
         resolve(options.outputPath.replace(".pdf", "_landscape.pdf"));
       });
 
@@ -295,11 +313,34 @@ export async function generatePayrollPDFLandscape(
             (curr.deductions.cashAdvanceDeductions || 0) +
             (curr.deductions.others || 0);
 
-          // Special handling for NET PAY when there are deductions but no gross pay
-          const netPay =
-            curr.grossPay === 0 && totalDeductions > 0
-              ? totalDeductions // If no gross pay but has deductions, NET PAY should be positive deductions
-              : curr.grossPay - totalDeductions;
+          // Use the netPay formula if available, otherwise use the default calculation
+          let netPay;
+          if (options.calculationSettings?.netPay?.formula) {
+            netPay = evaluateFormula(
+              options.calculationSettings.netPay.formula,
+              {
+                grossPay: curr.grossPay,
+                totalDeductions: totalDeductions,
+                // Add any other variables that might be needed for the formula
+                basicPay: curr.basicPay,
+                overtime: curr.overtime,
+                holidayBonus: curr.holidayBonus || 0,
+                undertimeDeduction: curr.undertimeDeduction || 0,
+                sss: curr.deductions.sss || 0,
+                philHealth: curr.deductions.philHealth || 0,
+                pagIbig: curr.deductions.pagIbig || 0,
+                cashAdvanceDeductions:
+                  curr.deductions.cashAdvanceDeductions || 0,
+                others: curr.deductions.others || 0,
+              }
+            );
+          } else {
+            // Default calculation
+            netPay =
+              curr.grossPay === 0 && totalDeductions > 0
+                ? totalDeductions // If no gross pay but has deductions, NET PAY should be positive deductions
+                : curr.grossPay - totalDeductions;
+          }
 
           return {
             days: acc.days + curr.daysWorked,

@@ -38,21 +38,26 @@ export class StatisticsModel {
   year: number;
 
   constructor(dbPath: string, year?: number) {
-    // Ensure dbPath is a directory path
-    this.filePath = dbPath.endsWith("/") ? dbPath : `${dbPath}/`;
+    // Ensure dbPath is a directory path and includes SweldoDB/statistics
+    this.filePath = dbPath.endsWith("/")
+      ? `${dbPath}SweldoDB/statistics/`
+      : `${dbPath}/SweldoDB/statistics/`;
     this.year = year || new Date().getFullYear();
-    console.log(
-      `StatisticsModel initialized with path: ${this.filePath}, year: ${this.year}`
-    );
+    console.log("=== Statistics Model Initialized ===");
+    console.log("File Path:", this.filePath);
+    console.log("Year:", this.year);
   }
 
   async ensureDirectoryExists(): Promise<void> {
     try {
       const statisticsPath = `${this.filePath}`;
+      console.log("=== Ensuring Directory Exists ===");
+      console.log("Statistics Path:", statisticsPath);
       await window.electron.ensureDir(statisticsPath);
-      console.log(`Ensured directory exists: ${statisticsPath}`);
+      console.log("Directory exists or was created successfully");
     } catch (error) {
-      console.error(`Failed to ensure directory exists: ${error}`);
+      console.error("=== Error Ensuring Directory ===");
+      console.error(error);
       throw error;
     }
   }
@@ -60,31 +65,48 @@ export class StatisticsModel {
   async loadStatistics(year?: number): Promise<StatisticsData> {
     try {
       const targetYear = year || this.year;
-      console.log(`Loading statistics for year: ${targetYear}`);
+      console.log("=== Loading Statistics File ===");
+      console.log("Target Year:", targetYear);
 
       const filePath = `${this.filePath}${targetYear}_statistics.json`;
-      console.log(`Reading file: ${filePath}`);
+      console.log("Reading from file:", filePath);
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
-        console.log("Successfully loaded statistics file");
-        return JSON.parse(data) as StatisticsData;
+        console.log("=== Successfully Loaded Statistics File ===");
+        console.log("Raw Data Length:", data.length);
+        const parsedData = JSON.parse(data) as StatisticsData;
+        console.log("Parsed Data Summary:");
+        console.log(
+          "- Monthly Payrolls Count:",
+          parsedData.monthlyPayrolls.length
+        );
+        console.log(
+          "- Daily Rate History Count:",
+          parsedData.dailyRateHistory.length
+        );
+        console.log(
+          "- Deductions History Count:",
+          parsedData.deductionsHistory.length
+        );
+        return parsedData;
       } catch (error) {
         // If file doesn't exist, return empty data structure
         if ((error as any)?.message?.includes("no such file")) {
-          console.log(
-            `No statistics file found for year ${targetYear}, returning empty data`
-          );
+          console.log(`No statistics file found at: ${filePath}`);
+          console.log("Returning empty data structure");
           return this.getEmptyStatisticsData();
         }
-        console.error("Error reading statistics file:", error);
+        console.error("=== Error Reading Statistics File ===");
+        console.error(error);
         throw new Error(
           `Failed to read statistics file: ${(error as any).message}`
         );
       }
     } catch (error) {
-      console.error("Unexpected error loading statistics:", error as any);
+      console.error("=== Unexpected Error Loading Statistics ===");
+      console.error(error);
       throw new Error(`Failed to load statistics: ${(error as any).message}`);
     }
   }
@@ -245,6 +267,167 @@ export class StatisticsModel {
     }
   }
 
+  /**
+   * Updates payroll statistics based on payroll data
+   * This method handles partial months and replaces existing data for the same month
+   * @param payrolls Array of payroll summaries to update statistics with
+   * @param year Optional year to update statistics for (defaults to current year)
+   */
+  async updatePayrollStatistics(payrolls: any[], year?: number): Promise<void> {
+    try {
+      console.log("=== Starting updatePayrollStatistics ===");
+      console.log("Number of payrolls:", payrolls.length);
+      console.log("Year:", year);
+      console.log("File Path:", this.filePath);
+
+      // Load existing statistics
+      const statistics = await this.loadStatistics(year);
+      console.log("Loaded existing statistics:", statistics);
+
+      // Group payrolls by month
+      const payrollsByMonth: Record<string, any[]> = {};
+
+      payrolls.forEach((payroll) => {
+        const endDate = new Date(payroll.endDate);
+        const monthKey = `${endDate.getFullYear()}-${String(
+          endDate.getMonth() + 1
+        ).padStart(2, "0")}`;
+
+        console.log("Processing payroll for month:", monthKey);
+        console.log("Payroll details:", {
+          employeeName: payroll.employeeName,
+          startDate: payroll.startDate,
+          endDate: payroll.endDate,
+          netPay: payroll.netPay,
+          dailyRate: payroll.dailyRate,
+        });
+
+        if (!payrollsByMonth[monthKey]) {
+          payrollsByMonth[monthKey] = [];
+        }
+
+        payrollsByMonth[monthKey].push(payroll);
+      });
+
+      console.log("Grouped payrolls by month:", Object.keys(payrollsByMonth));
+
+      // Process each month's payrolls
+      for (const [monthKey, monthPayrolls] of Object.entries(payrollsByMonth)) {
+        console.log(`\nProcessing month: ${monthKey}`);
+
+        // Calculate total amount, days, employees, and absences for this month
+        const totalAmount = monthPayrolls.reduce((sum, p) => sum + p.netPay, 0);
+        const totalDays = monthPayrolls.reduce(
+          (sum, p) => sum + (p.daysWorked || 0),
+          0
+        );
+        const uniqueEmployees = new Set(monthPayrolls.map((p) => p.employeeId))
+          .size;
+        const totalAbsences = monthPayrolls.reduce(
+          (sum, p) => sum + (p.absences || 0),
+          0
+        );
+
+        console.log("Month totals:", {
+          amount: totalAmount,
+          days: totalDays,
+          employees: uniqueEmployees,
+          absences: totalAbsences,
+        });
+
+        // Create or update monthly payroll entry
+        const monthlyPayroll: MonthlyPayroll = {
+          month: monthKey,
+          amount: totalAmount,
+          days: totalDays,
+          employees: uniqueEmployees,
+          absences: totalAbsences,
+        };
+
+        // Find if the month already exists
+        const monthIndex = statistics.monthlyPayrolls.findIndex(
+          (item) => item.month === monthKey
+        );
+
+        if (monthIndex >= 0) {
+          console.log("Updating existing month record");
+          statistics.monthlyPayrolls[monthIndex] = monthlyPayroll;
+        } else {
+          console.log("Adding new month record");
+          statistics.monthlyPayrolls.push(monthlyPayroll);
+        }
+
+        // Update daily rate history for each employee
+        for (const payroll of monthPayrolls) {
+          const dailyRateHistory: DailyRateHistory = {
+            employee: payroll.employeeName,
+            date: payroll.endDate,
+            rate: payroll.dailyRate,
+          };
+
+          // Check if this exact entry already exists to prevent duplicates
+          const isDuplicate = statistics.dailyRateHistory.some(
+            (entry) =>
+              entry.employee === dailyRateHistory.employee &&
+              entry.date === dailyRateHistory.date &&
+              entry.rate === dailyRateHistory.rate
+          );
+
+          if (!isDuplicate) {
+            console.log("Adding new daily rate history:", dailyRateHistory);
+            statistics.dailyRateHistory.push(dailyRateHistory);
+          } else {
+            console.log("Skipping duplicate daily rate history");
+          }
+        }
+      }
+
+      // Update current and previous daily rates
+      if (statistics.dailyRateHistory.length > 0) {
+        // Sort by date in descending order
+        const sortedHistory = [...statistics.dailyRateHistory].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        // Update current and previous rates
+        statistics.currentDailyRate = sortedHistory[0].rate;
+        if (sortedHistory.length > 1) {
+          statistics.previousDailyRate = sortedHistory[1].rate;
+
+          // Calculate rate change percentage
+          const change =
+            statistics.currentDailyRate - statistics.previousDailyRate;
+          const percentage = (change / statistics.previousDailyRate) * 100;
+          statistics.rateChangePercentage = `${
+            percentage >= 0 ? "+" : ""
+          }${percentage.toFixed(1)}%`;
+        }
+      }
+
+      // Recalculate yearly totals
+      statistics.yearlyTotal = statistics.monthlyPayrolls.reduce(
+        (sum, item) => sum + item.amount,
+        0
+      );
+      statistics.yearlyAverage =
+        statistics.yearlyTotal / statistics.monthlyPayrolls.length;
+
+      console.log("\n=== Final Statistics ===");
+      console.log("Monthly Payrolls:", statistics.monthlyPayrolls.length);
+      console.log("Daily Rate History:", statistics.dailyRateHistory.length);
+      console.log("Yearly Total:", statistics.yearlyTotal);
+      console.log("Yearly Average:", statistics.yearlyAverage);
+
+      // Save updated statistics
+      await this.saveStatistics(statistics, year);
+      console.log("Statistics saved successfully");
+    } catch (error) {
+      console.error("=== Error in updatePayrollStatistics ===");
+      console.error("Error details:", error);
+      throw error;
+    }
+  }
+
   private getEmptyStatisticsData(): StatisticsData {
     return {
       dailyRateHistory: [],
@@ -264,7 +447,9 @@ export const createStatisticsModel = (
   dbPath: string,
   year?: number
 ): StatisticsModel => {
-  console.log(`Creating statistics model for year: ${year || "current"}`);
+  console.log("=== Creating Statistics Model ===");
+  console.log("Input dbPath:", dbPath);
+  console.log("Input year:", year || "current");
 
   if (!dbPath) {
     console.error("dbPath is not set in settings store");
@@ -275,7 +460,10 @@ export const createStatisticsModel = (
 
   // Ensure the path ends with a slash
   const normalizedDbPath = dbPath.endsWith("/") ? dbPath : `${dbPath}/`;
+  console.log("Normalized dbPath:", normalizedDbPath);
+
   const folderPath = `${normalizedDbPath}SweldoDB/statistics`;
+  console.log("Final folder path:", folderPath);
 
   // Create the statistics model
   const model = new StatisticsModel(folderPath, year);

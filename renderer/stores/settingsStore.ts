@@ -16,6 +16,7 @@ interface SettingsState {
     grossPay?: { formula: string; description: string };
     others?: { formula: string; description: string };
     totalDeductions?: { formula: string; description: string };
+    netPay?: { formula: string; description: string };
   };
   setDbPath: (path: string) => Promise<void>;
   setLogoPath: (path: string) => void;
@@ -27,6 +28,7 @@ interface SettingsState {
     grossPay?: { formula: string; description: string };
     others?: { formula: string; description: string };
     totalDeductions?: { formula: string; description: string };
+    netPay?: { formula: string; description: string };
   }) => void;
   initialize: () => Promise<void>;
 }
@@ -56,6 +58,10 @@ export const useSettingsStore = create<SettingsState>()(
           formula:
             "sss + philHealth + pagIbig + cashAdvanceDeductions + others",
           description: "Sum of all statutory and voluntary deductions",
+        },
+        netPay: {
+          formula: "grossPay - totalDeductions",
+          description: "Gross pay minus total deductions",
         },
       },
       setDbPath: async (path) => {

@@ -34,6 +34,7 @@ export interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
   companyName: string;
+  dbPath: string; // Path to the database directory
   columnColors?: {
     [key: string]: string; // Key is column id, value is hex color code
   };
@@ -49,6 +50,10 @@ export interface PDFGeneratorOptions {
     totalDeductions?: {
       formula: string; // e.g., "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
       description: string; // e.g., "Sum of all statutory and voluntary deductions"
+    };
+    netPay?: {
+      formula: string; // e.g., "grossPay - totalDeductions"
+      description: string; // e.g., "Gross pay minus total deductions"
     };
   };
 }
