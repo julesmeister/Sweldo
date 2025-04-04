@@ -195,7 +195,12 @@ export async function generatePayrollPDFLandscape(
             .text(cell.text, currentX + 2, currentY + (rowHeight - 5) / 2, {
               // Adjusted vertical centering
               width: cell.width * tableWidth - 4,
-              align: cell.align,
+              align: cell.align as
+                | "center"
+                | "justify"
+                | "left"
+                | "right"
+                | undefined,
             });
           currentX += cell.width * tableWidth;
         });
@@ -342,7 +347,12 @@ export async function generatePayrollPDFLandscape(
           .text(cell.text, currentX + 2, currentY + (rowHeight - 5) / 2, {
             // Adjusted vertical centering
             width: cell.width * tableWidth - 4,
-            align: cell.align,
+            align: cell.align as
+              | "center"
+              | "justify"
+              | "left"
+              | "right"
+              | undefined,
           });
         currentX += cell.width * tableWidth;
       });
