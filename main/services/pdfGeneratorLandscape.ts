@@ -155,8 +155,41 @@ export async function generatePayrollPDFLandscape(
       );
 
       // Draw rows
-      const rowData = sortedPayrolls.map((payroll, index) =>
-        columns.map((column) => ({
+      const rowData = sortedPayrolls.map((payroll, index) => {
+        // Calculate values based on settings
+        const grossPay = options.calculationSettings?.grossPay?.formula
+          ? evaluateFormula(options.calculationSettings.grossPay.formula, {
+              basicPay: payroll.basicPay,
+              overtime: payroll.overtime,
+              holidayBonus: payroll.holidayBonus || 0,
+              undertimeDeduction: payroll.undertimeDeduction || 0,
+              nightDifferentialPay: payroll.nightDifferentialPay || 0,
+            })
+          : payroll.grossPay;
+
+        const others = options.calculationSettings?.others?.formula
+          ? evaluateFormula(options.calculationSettings.others.formula, {
+              sssLoan: payroll.deductions.sssLoan || 0,
+              pagibigLoan: payroll.deductions.pagibigLoan || 0,
+              partial: payroll.deductions.partial || 0,
+            })
+          : payroll.deductions.others;
+
+        const totalDeductions = options.calculationSettings?.totalDeductions
+          ?.formula
+          ? evaluateFormula(
+              options.calculationSettings.totalDeductions.formula,
+              {
+                sss: payroll.deductions.sss,
+                philHealth: payroll.deductions.philHealth,
+                pagIbig: payroll.deductions.pagIbig,
+                cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions,
+                others: others,
+              }
+            )
+          : payroll.deductions.totalDeduction;
+
+        return columns.map((column) => ({
           id: column.id,
           width: column.width,
           text:
@@ -175,7 +208,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "ut"
               ? formatCurrency(payroll.undertimeDeduction || 0)
               : column.id === "gross"
-              ? formatCurrency(payroll.grossPay)
+              ? formatCurrency(grossPay)
               : column.id === "sss"
               ? formatCurrency(payroll.deductions.sss || 0)
               : column.id === "philhealth"
@@ -189,9 +222,9 @@ export async function generatePayrollPDFLandscape(
               : column.id === "partial"
               ? formatCurrency(0)
               : column.id === "others"
-              ? formatCurrency(payroll.deductions.others || 0)
+              ? formatCurrency(others)
               : column.id === "totalDeductions"
-              ? formatCurrency(payroll.deductions.totalDeduction || 0)
+              ? formatCurrency(totalDeductions)
               : column.id === "netPay"
               ? formatCurrency(payroll.netPay)
               : "",
@@ -202,8 +235,8 @@ export async function generatePayrollPDFLandscape(
               ? "center"
               : "right",
           color: options.columnColors?.[column.id] || "#000000", // Default color
-        }))
-      );
+        }));
+      });
 
       // Draw data rows with adjusted vertical positioning
       rowData.forEach((row) => {
@@ -466,4 +499,72 @@ function formatCurrency(amount: number): string {
   } catch (e) {
     return "0.00";
   }
+}
+
+// Add a function to evaluate formulas
+function evaluateFormula(formula: string, data: any): number {
+  try {
+    // Replace variable names with their values
+    let evaluatedFormula = formula;
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === "number") {
+        evaluatedFormula = evaluatedFormula.replace(
+          new RegExp(key, "g"),
+          value.toString()
+        );
+      }
+    }
+
+    // Evaluate the formula
+    return eval(evaluatedFormula);
+  } catch (error) {
+    console.error("Error evaluating formula:", error);
+    return 0;
+  }
+}
+
+// Update the data row population logic
+function drawDataRows(
+  doc: PDFKit.PDFDocument,
+  payrolls: PayrollSummary[],
+  options: PDFGeneratorOptions
+) {
+  payrolls.forEach((payroll, index) => {
+    // Calculate values based on settings
+    const grossPay = options.calculationSettings?.grossPay?.formula
+      ? evaluateFormula(options.calculationSettings.grossPay.formula, {
+          basicPay: payroll.basicPay,
+          overtime: payroll.overtime,
+          holidayBonus: payroll.holidayBonus || 0,
+          undertimeDeduction: payroll.undertimeDeduction || 0,
+          nightDifferentialPay: payroll.nightDifferentialPay || 0,
+        })
+      : payroll.grossPay;
+
+    const others = options.calculationSettings?.others?.formula
+      ? evaluateFormula(options.calculationSettings.others.formula, {
+          sssLoan: payroll.deductions.sssLoan || 0,
+          pagibigLoan: payroll.deductions.pagibigLoan || 0,
+          partial: payroll.deductions.partial || 0,
+        })
+      : payroll.deductions.others;
+
+    const totalDeductions = options.calculationSettings?.totalDeductions
+      ?.formula
+      ? evaluateFormula(options.calculationSettings.totalDeductions.formula, {
+          sss: payroll.deductions.sss,
+          philHealth: payroll.deductions.philHealth,
+          pagIbig: payroll.deductions.pagIbig,
+          cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions,
+          others: others,
+        })
+      : payroll.deductions.totalDeduction;
+
+    // Update the text for each column
+    const columnTexts: { [key: string]: string } = {
+      GROSS: grossPay.toFixed(2),
+      OTHERS: others.toFixed(2),
+      "TOTAL DED.": totalDeductions.toFixed(2),
+    };
+  });
 }

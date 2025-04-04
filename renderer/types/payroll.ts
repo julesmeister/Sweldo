@@ -37,4 +37,18 @@ export interface PDFGeneratorOptions {
   columnColors?: {
     [key: string]: string; // Key is column id, value is hex color code
   };
+  calculationSettings?: {
+    grossPay?: {
+      formula: string; // e.g., "basicPay + overtime + holidayBonus - undertimeDeduction"
+      description: string; // e.g., "Basic pay plus overtime and holiday bonus, minus undertime deductions"
+    };
+    others?: {
+      formula: string; // e.g., "sssLoan + pagibigLoan + partial"
+      description: string; // e.g., "Sum of SSS loan, Pag-IBIG loan, and partial payments"
+    };
+    totalDeductions?: {
+      formula: string; // e.g., "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+      description: string; // e.g., "Sum of all statutory and voluntary deductions"
+    };
+  };
 }

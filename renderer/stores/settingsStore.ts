@@ -12,12 +12,22 @@ interface SettingsState {
   columnColors: {
     [key: string]: string; // Key is column id, value is hex color code
   };
+  calculationSettings: {
+    grossPay?: { formula: string; description: string };
+    others?: { formula: string; description: string };
+    totalDeductions?: { formula: string; description: string };
+  };
   setDbPath: (path: string) => Promise<void>;
   setLogoPath: (path: string) => void;
   setPreparedBy: (name: string) => void;
   setApprovedBy: (name: string) => void;
   setCompanyName: (name: string) => void;
   setColumnColor: (columnId: string, color: string) => void;
+  setCalculationSettings: (settings: {
+    grossPay?: { formula: string; description: string };
+    others?: { formula: string; description: string };
+    totalDeductions?: { formula: string; description: string };
+  }) => void;
   initialize: () => Promise<void>;
 }
 
@@ -32,6 +42,22 @@ export const useSettingsStore = create<SettingsState>()(
       isInitializing: false,
       companyName: "",
       columnColors: {},
+      calculationSettings: {
+        grossPay: {
+          formula: "basicPay + overtime + holidayBonus - undertimeDeduction",
+          description:
+            "Basic pay plus overtime and holiday bonus, minus undertime deductions",
+        },
+        others: {
+          formula: "sssLoan + pagibigLoan + partial",
+          description: "Sum of SSS loan, Pag-IBIG loan, and partial payments",
+        },
+        totalDeductions: {
+          formula:
+            "sss + philHealth + pagIbig + cashAdvanceDeductions + others",
+          description: "Sum of all statutory and voluntary deductions",
+        },
+      },
       setDbPath: async (path) => {
         console.log("Setting dbPath in settings store:", path);
         // Verify the path exists before setting
@@ -83,6 +109,8 @@ export const useSettingsStore = create<SettingsState>()(
             [columnId]: color,
           },
         })),
+      setCalculationSettings: (settings) =>
+        set({ calculationSettings: settings }),
       initialize: async () => {
         // Prevent multiple simultaneous initializations
         if (get().isInitialized || get().isInitializing) return;
@@ -141,6 +169,7 @@ export const useSettingsStore = create<SettingsState>()(
         approvedBy: state.approvedBy,
         companyName: state.companyName,
         columnColors: state.columnColors,
+        calculationSettings: state.calculationSettings,
       }),
       getStorage: () => localStorage,
     }

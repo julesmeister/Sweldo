@@ -108,18 +108,21 @@ const AutoSaveInput = ({
 export default function SettingsPage() {
   const {
     dbPath,
-    setDbPath,
     logoPath,
-    setLogoPath,
     preparedBy,
-    setPreparedBy,
     approvedBy,
-    setApprovedBy,
-    initialize,
     companyName,
-    setCompanyName,
     columnColors,
+    calculationSettings,
+    setDbPath,
+    setLogoPath,
+    setPreparedBy,
+    setApprovedBy,
+    setCompanyName,
     setColumnColor,
+    setCalculationSettings,
+    isInitialized,
+    initialize,
   } = useSettingsStore();
   const { hasAccess } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
@@ -154,6 +157,11 @@ export default function SettingsPage() {
   const [showColumnColorSaved, setShowColumnColorSaved] = useState<{
     [key: string]: boolean;
   }>({});
+  const [showGrossPaySaved, setShowGrossPaySaved] = useState(false);
+  const [showOthersSaved, setShowOthersSaved] = useState(false);
+  const [showTotalDeductionsSaved, setShowTotalDeductionsSaved] =
+    useState(false);
+  const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
 
   // Add useEffect to initialize the store when component mounts
   React.useEffect(() => {
@@ -1493,18 +1501,31 @@ export default function SettingsPage() {
                   { id: "signature", label: "Signature" },
                 ].map((column) => (
                   <div key={column.id} className="flex items-center space-x-2">
-                    <label className="text-sm font-medium text-gray-700 w-1/3">
+                    <label className="text-sm font-medium text-gray-700 w-1/3 flex items-center">
                       {column.label}
+                      {columnColors[column.id] &&
+                        columnColors[column.id] !== "#000000" && (
+                          <span
+                            className="ml-2 w-2 h-2 rounded-full"
+                            style={{ backgroundColor: columnColors[column.id] }}
+                          />
+                        )}
                     </label>
                     <div className="flex-1 flex items-center">
-                      <input
-                        type="color"
-                        value={columnColors[column.id] || "#000000"}
-                        onChange={(e) =>
-                          handleColumnColorChange(column.id, e.target.value)
-                        }
-                        className="h-8 w-8 rounded border border-gray-300 cursor-pointer"
-                      />
+                      <div className="relative">
+                        <input
+                          type="color"
+                          value={columnColors[column.id] || "#000000"}
+                          onChange={(e) =>
+                            handleColumnColorChange(column.id, e.target.value)
+                          }
+                          className="h-8 w-8 rounded border border-gray-300 cursor-pointer"
+                        />
+                        {columnColors[column.id] &&
+                          columnColors[column.id] !== "#000000" && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white" />
+                          )}
+                      </div>
                       <button
                         onClick={() =>
                           handleColumnColorChange(column.id, "#000000")
@@ -1514,13 +1535,588 @@ export default function SettingsPage() {
                         Reset
                       </button>
                       {showColumnColorSaved[column.id] && (
-                        <span className="ml-2 text-xs text-green-600">
+                        <span className="ml-2 text-xs text-green-600 flex items-center">
+                          <svg
+                            className="w-3 h-3 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                           Saved
                         </span>
                       )}
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Calculation Settings */}
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                  />
+                </svg>
+                Calculation Settings
+              </h2>
+
+              <div className="flex gap-6">
+                {/* Formulas Column - Left Side */}
+                <div className="flex-1 space-y-6">
+                  {/* Gross Pay Formula */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                        />
+                      </svg>
+                      Gross Pay Formula
+                    </h3>
+                    <div
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
+                        !selectedOperator ? "cursor-not-allowed" : ""
+                      }`}
+                      onDragOver={(e) => {
+                        if (!selectedOperator) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.preventDefault();
+                        e.currentTarget.classList.add(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                        if (!selectedOperator) {
+                          toast.error(
+                            "Please select an operator first (e.g., +, -, *, /)"
+                          );
+                          return;
+                        }
+                        const variable = e.dataTransfer.getData("text/plain");
+                        const currentFormula =
+                          calculationSettings.grossPay?.formula || "";
+                        const newFormula = currentFormula
+                          ? `${currentFormula} ${selectedOperator} ${variable}`
+                          : variable;
+                        setCalculationSettings({
+                          ...calculationSettings,
+                          grossPay: {
+                            formula: newFormula,
+                            description:
+                              calculationSettings.grossPay?.description ||
+                              "Basic pay plus overtime and holiday bonus, minus undertime deductions",
+                          },
+                        });
+                        setShowGrossPaySaved(true);
+                        setTimeout(() => setShowGrossPaySaved(false), 2000);
+                        setSelectedOperator(null);
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={
+                            calculationSettings.grossPay?.formula ||
+                            "basicPay + overtime + holidayBonus - undertimeDeduction"
+                          }
+                          onChange={(e) => {
+                            setCalculationSettings({
+                              ...calculationSettings,
+                              grossPay: {
+                                formula: e.target.value,
+                                description:
+                                  calculationSettings.grossPay?.description ||
+                                  "Basic pay plus overtime and holiday bonus, minus undertime deductions",
+                              },
+                            });
+                            setShowGrossPaySaved(true);
+                            setTimeout(() => setShowGrossPaySaved(false), 2000);
+                          }}
+                          className="w-full p-2 bg-white border rounded font-mono text-sm"
+                          placeholder="Enter or drag variables to build formula..."
+                        />
+                        <div className="flex gap-2">
+                          {["+", "-", "*", "/", "(", ")"].map((operator) => (
+                            <button
+                              key={operator}
+                              onClick={() => {
+                                if (selectedOperator === operator) {
+                                  setSelectedOperator(null);
+                                } else {
+                                  setSelectedOperator(operator);
+                                }
+                              }}
+                              className={`px-3 py-1 border rounded transition-all duration-200 font-mono
+                                ${
+                                  selectedOperator === operator
+                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                }`}
+                            >
+                              {operator}
+                            </button>
+                          ))}
+                        </div>
+                        {!selectedOperator && (
+                          <div className="text-xs text-gray-500 italic mt-1">
+                            Select an operator before dragging variables
+                          </div>
+                        )}
+                        <div className="font-mono text-sm bg-white p-2 rounded border">
+                          {(
+                            calculationSettings.grossPay?.formula ||
+                            "basicPay + overtime + holidayBonus - undertimeDeduction"
+                          )
+                            .split(/([+\-*/()])/g)
+                            .map((part, index) => {
+                              const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
+                                part.trim()
+                              );
+                              return (
+                                <span
+                                  key={index}
+                                  className={`${
+                                    isVariable
+                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {part}
+                                </span>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3 text-sm text-gray-600">
+                      <p className="font-medium mb-1">Description:</p>
+                      <p className="italic">
+                        {calculationSettings.grossPay?.description ||
+                          "Basic pay plus overtime and holiday bonus, minus undertime deductions"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Others Formula */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                        />
+                      </svg>
+                      Others Formula
+                    </h3>
+                    <div
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
+                        !selectedOperator ? "cursor-not-allowed" : ""
+                      }`}
+                      onDragOver={(e) => {
+                        if (!selectedOperator) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.preventDefault();
+                        e.currentTarget.classList.add(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                        if (!selectedOperator) {
+                          toast.error(
+                            "Please select an operator first (e.g., +, -, *, /)"
+                          );
+                          return;
+                        }
+                        const variable = e.dataTransfer.getData("text/plain");
+                        const currentFormula =
+                          calculationSettings.others?.formula || "";
+                        const newFormula = currentFormula
+                          ? `${currentFormula} ${selectedOperator} ${variable}`
+                          : variable;
+                        setCalculationSettings({
+                          ...calculationSettings,
+                          others: {
+                            formula: newFormula,
+                            description:
+                              calculationSettings.others?.description ||
+                              "Sum of SSS loan, Pag-IBIG loan, and partial payments",
+                          },
+                        });
+                        setShowOthersSaved(true);
+                        setTimeout(() => setShowOthersSaved(false), 2000);
+                        setSelectedOperator(null);
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={
+                            calculationSettings.others?.formula ||
+                            "sssLoan + pagibigLoan + partial"
+                          }
+                          onChange={(e) => {
+                            setCalculationSettings({
+                              ...calculationSettings,
+                              others: {
+                                formula: e.target.value,
+                                description:
+                                  calculationSettings.others?.description ||
+                                  "Sum of SSS loan, Pag-IBIG loan, and partial payments",
+                              },
+                            });
+                            setShowOthersSaved(true);
+                            setTimeout(() => setShowOthersSaved(false), 2000);
+                          }}
+                          className="w-full p-2 bg-white border rounded font-mono text-sm"
+                          placeholder="Enter or drag variables to build formula..."
+                        />
+                        <div className="flex gap-2">
+                          {["+", "-", "*", "/", "(", ")"].map((operator) => (
+                            <button
+                              key={operator}
+                              onClick={() => {
+                                if (selectedOperator === operator) {
+                                  setSelectedOperator(null);
+                                } else {
+                                  setSelectedOperator(operator);
+                                }
+                              }}
+                              className={`px-3 py-1 border rounded transition-all duration-200 font-mono
+                                ${
+                                  selectedOperator === operator
+                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                }`}
+                            >
+                              {operator}
+                            </button>
+                          ))}
+                        </div>
+                        {!selectedOperator && (
+                          <div className="text-xs text-gray-500 italic mt-1">
+                            Select an operator before dragging variables
+                          </div>
+                        )}
+                        <div className="font-mono text-sm bg-white p-2 rounded border">
+                          {(
+                            calculationSettings.others?.formula ||
+                            "sssLoan + pagibigLoan + partial"
+                          )
+                            .split(/([+\-*/()])/g)
+                            .map((part, index) => {
+                              const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
+                                part.trim()
+                              );
+                              return (
+                                <span
+                                  key={index}
+                                  className={`${
+                                    isVariable
+                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {part}
+                                </span>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3 text-sm text-gray-600">
+                      <p className="font-medium mb-1">Description:</p>
+                      <p className="italic">
+                        {calculationSettings.others?.description ||
+                          "Sum of SSS loan, Pag-IBIG loan, and partial payments"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Total Deductions Formula */}
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M20 12H4"
+                        />
+                      </svg>
+                      Total Deductions Formula
+                    </h3>
+                    <div
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
+                        !selectedOperator ? "cursor-not-allowed" : ""
+                      }`}
+                      onDragOver={(e) => {
+                        if (!selectedOperator) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.preventDefault();
+                        e.currentTarget.classList.add(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove(
+                          "bg-blue-50",
+                          "border-blue-200"
+                        );
+                        if (!selectedOperator) {
+                          toast.error(
+                            "Please select an operator first (e.g., +, -, *, /)"
+                          );
+                          return;
+                        }
+                        const variable = e.dataTransfer.getData("text/plain");
+                        const currentFormula =
+                          calculationSettings.totalDeductions?.formula || "";
+                        const newFormula = currentFormula
+                          ? `${currentFormula} ${selectedOperator} ${variable}`
+                          : variable;
+                        setCalculationSettings({
+                          ...calculationSettings,
+                          totalDeductions: {
+                            formula: newFormula,
+                            description:
+                              calculationSettings.totalDeductions
+                                ?.description ||
+                              "Sum of all statutory and voluntary deductions",
+                          },
+                        });
+                        setShowTotalDeductionsSaved(true);
+                        setTimeout(
+                          () => setShowTotalDeductionsSaved(false),
+                          2000
+                        );
+                        setSelectedOperator(null);
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={
+                            calculationSettings.totalDeductions?.formula ||
+                            "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                          }
+                          onChange={(e) => {
+                            setCalculationSettings({
+                              ...calculationSettings,
+                              totalDeductions: {
+                                formula: e.target.value,
+                                description:
+                                  calculationSettings.totalDeductions
+                                    ?.description ||
+                                  "Sum of all statutory and voluntary deductions",
+                              },
+                            });
+                            setShowTotalDeductionsSaved(true);
+                            setTimeout(
+                              () => setShowTotalDeductionsSaved(false),
+                              2000
+                            );
+                          }}
+                          className="w-full p-2 bg-white border rounded font-mono text-sm"
+                          placeholder="Enter or drag variables to build formula..."
+                        />
+                        <div className="flex gap-2">
+                          {["+", "-", "*", "/", "(", ")"].map((operator) => (
+                            <button
+                              key={operator}
+                              onClick={() => {
+                                if (selectedOperator === operator) {
+                                  setSelectedOperator(null);
+                                } else {
+                                  setSelectedOperator(operator);
+                                }
+                              }}
+                              className={`px-3 py-1 border rounded transition-all duration-200 font-mono
+                                ${
+                                  selectedOperator === operator
+                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                }`}
+                            >
+                              {operator}
+                            </button>
+                          ))}
+                        </div>
+                        {!selectedOperator && (
+                          <div className="text-xs text-gray-500 italic mt-1">
+                            Select an operator before dragging variables
+                          </div>
+                        )}
+                        <div className="font-mono text-sm bg-white p-2 rounded border">
+                          {(
+                            calculationSettings.totalDeductions?.formula ||
+                            "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                          )
+                            .split(/([+\-*/()])/g)
+                            .map((part, index) => {
+                              const isVariable = /^[a-zA-Z][a-zA-Z0-9]*$/.test(
+                                part.trim()
+                              );
+                              return (
+                                <span
+                                  key={index}
+                                  className={`${
+                                    isVariable
+                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {part}
+                                </span>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3 text-sm text-gray-600">
+                      <p className="font-medium mb-1">Description:</p>
+                      <p className="italic">
+                        {calculationSettings.totalDeductions?.description ||
+                          "Sum of all statutory and voluntary deductions"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Variables Panel - Right Side */}
+                <div className="w-80">
+                  <div className="sticky top-4 bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 6h16M4 12h16m-7 6h7"
+                        />
+                      </svg>
+                      Available Variables
+                    </h3>
+                    <div className="space-y-2">
+                      {[
+                        { name: "basicPay", description: "Basic Pay" },
+                        { name: "overtime", description: "Overtime Pay" },
+                        { name: "holidayBonus", description: "Holiday Bonus" },
+                        {
+                          name: "undertimeDeduction",
+                          description: "Undertime Deduction",
+                        },
+                        {
+                          name: "nightDifferentialPay",
+                          description: "Night Differential",
+                        },
+                        { name: "sss", description: "SSS Contribution" },
+                        { name: "philHealth", description: "PhilHealth" },
+                        { name: "pagIbig", description: "Pag-IBIG" },
+                        { name: "sssLoan", description: "SSS Loan" },
+                        { name: "pagibigLoan", description: "Pag-IBIG Loan" },
+                        {
+                          name: "cashAdvanceDeductions",
+                          description: "Cash Advance",
+                        },
+                        { name: "partial", description: "Partial Payment" },
+                      ].map((variable) => (
+                        <div
+                          key={variable.name}
+                          className="bg-white p-2 rounded border border-gray-200 cursor-move hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", variable.name);
+                          }}
+                        >
+                          <div className="text-sm font-medium text-gray-700">
+                            {variable.description}
+                          </div>
+                          <div className="text-xs text-gray-500 font-mono">
+                            {variable.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
