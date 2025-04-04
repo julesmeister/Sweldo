@@ -16,7 +16,8 @@ const navLinks = [
   { path: "/leaves/", label: "Leaves" },
   { path: "/cashAdvances/", label: "Cash Advances" },
   { path: "/loans/", label: "Loans" },
-  { path: "/settings/", label: "Settings" }
+  { path: "/statistics/", label: "Stats" },
+  { path: "/settings/", label: "Settings" },
 ];
 
 export default function Navbar() {
@@ -29,7 +30,7 @@ export default function Navbar() {
   const [highlighterStyle, setHighlighterStyle] = useState({
     left: 0,
     width: 0,
-    display: 'none' // Initially hidden
+    display: "none", // Initially hidden
   });
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function Navbar() {
   useEffect(() => {
     // Update the active link whenever the pathname changes
     setActiveLink(pathname);
-    
+
     // Update the highlighter position based on the active link
     updateHighlighterPosition(pathname);
   }, [pathname]); // Run whenever pathname changes
@@ -49,19 +50,20 @@ export default function Navbar() {
     const activeElement = navRefs.current[path];
     if (activeElement) {
       const rect = activeElement.getBoundingClientRect();
-      const containerRect = activeElement.parentElement?.getBoundingClientRect();
-      
+      const containerRect =
+        activeElement.parentElement?.getBoundingClientRect();
+
       setHighlighterStyle({
         left: rect.left - (containerRect?.left || 0),
         width: rect.width,
-        display: 'block'
+        display: "block",
       });
     }
   };
 
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    
+
     setLoading(true);
     updateHighlighterPosition(path);
     setTimeout(() => {
@@ -102,18 +104,18 @@ export default function Navbar() {
             <div className="hidden sm:ml-8 sm:flex sm:items-center sm:justify-between flex-1">
               <div className="flex space-x-8 relative">
                 {/* The sliding background element */}
-                <div 
+                <div
                   className="absolute bg-blue-900 rounded-full transition-all duration-300 ease-in-out z-0"
                   style={{
                     left: `${highlighterStyle.left}px`,
                     width: `${highlighterStyle.width}px`,
-                    height: '2rem',
-                    transform: 'translateY(-50%)',
-                    top: '50%',
-                    display: highlighterStyle.display
+                    height: "2rem",
+                    transform: "translateY(-50%)",
+                    top: "50%",
+                    display: highlighterStyle.display,
                   }}
                 />
-                
+
                 {/* Map through navigation links */}
                 {navLinks.map(({ path, label }) => (
                   <Link

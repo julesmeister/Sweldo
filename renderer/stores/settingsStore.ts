@@ -9,11 +9,15 @@ interface SettingsState {
   isInitialized: boolean;
   isInitializing: boolean;
   companyName: string;
+  columnColors: {
+    [key: string]: string; // Key is column id, value is hex color code
+  };
   setDbPath: (path: string) => Promise<void>;
   setLogoPath: (path: string) => void;
   setPreparedBy: (name: string) => void;
   setApprovedBy: (name: string) => void;
   setCompanyName: (name: string) => void;
+  setColumnColor: (columnId: string, color: string) => void;
   initialize: () => Promise<void>;
 }
 
@@ -27,6 +31,7 @@ export const useSettingsStore = create<SettingsState>()(
       isInitialized: false,
       isInitializing: false,
       companyName: "",
+      columnColors: {},
       setDbPath: async (path) => {
         console.log("Setting dbPath in settings store:", path);
         // Verify the path exists before setting
@@ -71,6 +76,13 @@ export const useSettingsStore = create<SettingsState>()(
       setPreparedBy: (name) => set({ preparedBy: name }),
       setApprovedBy: (name) => set({ approvedBy: name }),
       setCompanyName: (name) => set({ companyName: name }),
+      setColumnColor: (columnId, color) =>
+        set((state) => ({
+          columnColors: {
+            ...state.columnColors,
+            [columnId]: color,
+          },
+        })),
       initialize: async () => {
         // Prevent multiple simultaneous initializations
         if (get().isInitialized || get().isInitializing) return;
@@ -128,6 +140,7 @@ export const useSettingsStore = create<SettingsState>()(
         preparedBy: state.preparedBy,
         approvedBy: state.approvedBy,
         companyName: state.companyName,
+        columnColors: state.columnColors,
       }),
       getStorage: () => localStorage,
     }

@@ -118,6 +118,8 @@ export default function SettingsPage() {
     initialize,
     companyName,
     setCompanyName,
+    columnColors,
+    setColumnColor,
   } = useSettingsStore();
   const { hasAccess } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
@@ -149,6 +151,9 @@ export default function SettingsPage() {
   const [showPreparedBySaved, setShowPreparedBySaved] = React.useState(false);
   const [showApprovedBySaved, setShowApprovedBySaved] = React.useState(false);
   const [showCompanyNameSaved, setShowCompanyNameSaved] = useState(false);
+  const [showColumnColorSaved, setShowColumnColorSaved] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   // Add useEffect to initialize the store when component mounts
   React.useEffect(() => {
@@ -994,7 +999,7 @@ export default function SettingsPage() {
     },
     {
       key: "payslip",
-      title: "Payslip",
+      title: "Payslip & Payroll",
       icon: <MdOutlineDataset className="h-5 w-5" />,
       requiredAccess: "MANAGE_SETTINGS",
       content: (
@@ -1431,6 +1436,93 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Column Color Settings */}
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold mb-4">
+                Column Color Settings
+              </h2>
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-blue-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-700">
+                      <span className="font-medium">Note:</span> Customize the
+                      colors of columns in your payroll PDF.
+                      <br />
+                      <span className="text-xs italic">
+                        These colors will be applied to the text in the
+                        corresponding columns.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { id: "no", label: "No." },
+                  { id: "name", label: "Name of Employee" },
+                  { id: "days", label: "Days" },
+                  { id: "rate", label: "Rate" },
+                  { id: "holiday", label: "Holiday" },
+                  { id: "ot", label: "OT" },
+                  { id: "gross", label: "Gross" },
+                  { id: "ut", label: "UT" },
+                  { id: "sss", label: "SSS" },
+                  { id: "philhealth", label: "PhilHealth" },
+                  { id: "pagibig", label: "Pag-IBIG" },
+                  { id: "loan", label: "Loan" },
+                  { id: "ca", label: "CA" },
+                  { id: "partial", label: "Partial" },
+                  { id: "others", label: "Others" },
+                  { id: "totalDeductions", label: "Total Deductions" },
+                  { id: "netPay", label: "Net Pay" },
+                  { id: "signature", label: "Signature" },
+                ].map((column) => (
+                  <div key={column.id} className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700 w-1/3">
+                      {column.label}
+                    </label>
+                    <div className="flex-1 flex items-center">
+                      <input
+                        type="color"
+                        value={columnColors[column.id] || "#000000"}
+                        onChange={(e) =>
+                          handleColumnColorChange(column.id, e.target.value)
+                        }
+                        className="h-8 w-8 rounded border border-gray-300 cursor-pointer"
+                      />
+                      <button
+                        onClick={() =>
+                          handleColumnColorChange(column.id, "#000000")
+                        }
+                        className="ml-2 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Reset
+                      </button>
+                      {showColumnColorSaved[column.id] && (
+                        <span className="ml-2 text-xs text-green-600">
+                          Saved
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ),
@@ -1789,6 +1881,15 @@ export default function SettingsPage() {
     console.log("[Settings] Initializing with dbPath:", dbPath);
     initializeData();
   }, [dbPath, initializeData]);
+
+  // Function to handle column color changes
+  const handleColumnColorChange = (columnId: string, color: string) => {
+    setColumnColor(columnId, color);
+    setShowColumnColorSaved((prev) => ({ ...prev, [columnId]: true }));
+    setTimeout(() => {
+      setShowColumnColorSaved((prev) => ({ ...prev, [columnId]: false }));
+    }, 2000);
+  };
 
   // Show loading state
   if (isLoading) {

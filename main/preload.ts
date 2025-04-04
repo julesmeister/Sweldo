@@ -48,7 +48,14 @@ const fileSystem = {
   },
   async generatePDF(
     payrollSummaries: any[],
-    options: { outputPath: string; logoPath?: string; companyName: string }
+    options: {
+      outputPath: string;
+      logoPath?: string;
+      companyName: string;
+      columnColors?: {
+        [key: string]: string;
+      };
+    }
   ): Promise<string> {
     return await ipcRenderer.invoke("pdf:generate", payrollSummaries, options);
   },
@@ -77,10 +84,28 @@ contextBridge.exposeInMainWorld("electron", {
   openFile: (filePath: string) => ipcRenderer.invoke("fs:openFile", filePath),
   getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
   openPath: (path: string) => ipcRenderer.invoke("app:openPath", path),
-  generatePDF: (payrollSummaries: any[], options: any) =>
-    ipcRenderer.invoke("pdf:generate", payrollSummaries, options),
-  generatePDFLandscape: (payrolls: any[], options: any) =>
-    ipcRenderer.invoke("pdf:generateLandscape", payrolls, options),
+  generatePDF: (
+    payrollSummaries: any[],
+    options: {
+      outputPath: string;
+      logoPath?: string;
+      companyName: string;
+      columnColors?: {
+        [key: string]: string;
+      };
+    }
+  ) => ipcRenderer.invoke("pdf:generate", payrollSummaries, options),
+  generatePDFLandscape: (
+    payrolls: any[],
+    options: {
+      outputPath: string;
+      logoPath?: string;
+      companyName: string;
+      columnColors?: {
+        [key: string]: string;
+      };
+    }
+  ) => ipcRenderer.invoke("pdf:generateLandscape", payrolls, options),
 });
 
 export type IpcHandler = typeof handler;

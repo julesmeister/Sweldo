@@ -17,6 +17,7 @@ import {
   AttendanceSettings,
   createAttendanceSettingsModel,
 } from "@/renderer/model/settings";
+import { createStatisticsModel } from "@/renderer/model/statistics";
 import Papa from "papaparse";
 
 interface EmployeeFormData {
@@ -34,6 +35,7 @@ export default function EditEmployee() {
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const employeeModel = createEmployeeModel(dbPath);
   const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
+  const statisticsModel = createStatisticsModel(dbPath);
   const [settings, setSettings] = useState<EmploymentType[]>();
   let timeSettings: EmploymentType[] = [];
   const formatTime = (time: string | undefined): string => {
@@ -122,8 +124,69 @@ export default function EditEmployee() {
         ...formData,
       };
 
+      // Update employee details in the employee model
       await employeeModel.updateEmployeeDetails(updatedEmployee);
       console.log("Employee details updated successfully.");
+
+      // Check if daily rate has changed and update statistics
+      if (currentEmployee.dailyRate !== formData.dailyRate) {
+        // Add to daily rate history in statistics
+        await statisticsModel.updateDailyRateHistory({
+          employee: updatedEmployee.name,
+          date: new Date().toISOString().split("T")[0], // Format as YYYY-MM-DD
+          rate: formData.dailyRate,
+        });
+        console.log("Daily rate history updated in statistics.");
+      }
+
+      // Check if deductions have changed and update statistics
+      const deductionsChanged =
+        currentEmployee.sss !== formData.sss ||
+        currentEmployee.philHealth !== formData.philHealth ||
+        currentEmployee.pagIbig !== formData.pagIbig;
+
+      if (deductionsChanged) {
+        // Update SSS if changed
+        if (currentEmployee.sss !== formData.sss) {
+          await statisticsModel.updateDeductionHistory({
+            type: "SSS",
+            changes: [
+              {
+                date: new Date().toISOString().split("T")[0],
+                amount: formData.sss,
+              },
+            ],
+          });
+        }
+
+        // Update PhilHealth if changed
+        if (currentEmployee.philHealth !== formData.philHealth) {
+          await statisticsModel.updateDeductionHistory({
+            type: "PhilHealth",
+            changes: [
+              {
+                date: new Date().toISOString().split("T")[0],
+                amount: formData.philHealth,
+              },
+            ],
+          });
+        }
+
+        // Update Pag-IBIG if changed
+        if (currentEmployee.pagIbig !== formData.pagIbig) {
+          await statisticsModel.updateDeductionHistory({
+            type: "Pag-IBIG",
+            changes: [
+              {
+                date: new Date().toISOString().split("T")[0],
+                amount: formData.pagIbig,
+              },
+            ],
+          });
+        }
+
+        console.log("Deductions history updated in statistics.");
+      }
     } catch (error) {
       console.error("Error updating employee details:", error);
     }
@@ -223,69 +286,69 @@ export default function EditEmployee() {
           </div>
 
           {/* Benefits Section */}
-            <h3 className="text-lg font-medium text-gray-200 mb-3">Benefits</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* SSS */}
-              <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
-                  SSS
-                </label>
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">₱</span>
-                  </div>
-                  <input
-                    type="text"
-                    name="sss"
-                    value={formData.sss}
-                    onChange={handleChange}
-                    className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
-                    placeholder="0.00"
-                  />
+          <h3 className="text-lg font-medium text-gray-200 mb-3">Benefits</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* SSS */}
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
+                SSS
+              </label>
+              <div className="relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
+                <input
+                  type="text"
+                  name="sss"
+                  value={formData.sss}
+                  onChange={handleChange}
+                  className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
+                  placeholder="0.00"
+                />
               </div>
+            </div>
 
-              {/* PhilHealth */}
-              <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
-                  PhilHealth
-                </label>
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">₱</span>
-                  </div>
-                  <input
-                    type="text"
-                    name="philHealth"
-                    value={formData.philHealth}
-                    onChange={handleChange}
-                    className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
-                    placeholder="0.00"
-                  />
+            {/* PhilHealth */}
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
+                PhilHealth
+              </label>
+              <div className="relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
+                <input
+                  type="text"
+                  name="philHealth"
+                  value={formData.philHealth}
+                  onChange={handleChange}
+                  className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
+                  placeholder="0.00"
+                />
               </div>
+            </div>
 
-              {/* Pag-IBIG */}
-              <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
-                  Pag-IBIG
-                </label>
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">₱</span>
-                  </div>
-                  <input
-                    type="text"
-                    name="pagIbig"
-                    value={formData.pagIbig}
-                    onChange={handleChange}
-                    className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
-                    placeholder="0.00"
-                  />
+            {/* Pag-IBIG */}
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-1 group-hover:text-blue-400 transition-colors duration-200">
+                Pag-IBIG
+              </label>
+              <div className="relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
+                <input
+                  type="text"
+                  name="pagIbig"
+                  value={formData.pagIbig}
+                  onChange={handleChange}
+                  className="pl-7 block w-full rounded-md bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring focus:ring-blue-500/20 text-gray-100 text-sm h-10 px-3 transition-all duration-200 hover:border-gray-600"
+                  placeholder="0.00"
+                />
               </div>
             </div>
           </div>
+        </div>
       </form>
 
       {/* Footer */}

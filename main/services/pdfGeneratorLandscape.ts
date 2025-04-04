@@ -110,9 +110,29 @@ export async function generatePayrollPDFLandscape(
 
       // Draw table headers with adjusted vertical positioning
       columns.forEach((column) => {
+        // Apply column color if specified
+        const columnColor = options.columnColors?.[column.id];
+
+        // Draw the cell background with the column color or white as default
+        if (columnColor) {
+          doc.fillColor(columnColor);
+        } else {
+          doc.fillColor("#FFFFFF"); // Default to white background
+        }
         doc
           .rect(currentX, currentY, column.width * tableWidth, rowHeight)
-          .stroke()
+          .fill();
+
+        // Draw the cell border
+        doc.strokeColor("#000000");
+        doc
+          .rect(currentX, currentY, column.width * tableWidth, rowHeight)
+          .stroke();
+
+        // Set text color to black for better contrast
+        doc.fillColor("#000000");
+
+        doc
           .font("Helvetica-Bold")
           .fontSize(column.id === "philhealth" ? 5.5 : 6)
           .text(column.header, currentX + 2, currentY + (rowHeight - 5) / 2, {
@@ -137,6 +157,7 @@ export async function generatePayrollPDFLandscape(
       // Draw rows
       const rowData = sortedPayrolls.map((payroll, index) =>
         columns.map((column) => ({
+          id: column.id,
           width: column.width,
           text:
             column.id === "no"
@@ -180,6 +201,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "no" || column.id === "days"
               ? "center"
               : "right",
+          color: options.columnColors?.[column.id] || "#000000", // Default color
         }))
       );
 
@@ -187,9 +209,29 @@ export async function generatePayrollPDFLandscape(
       rowData.forEach((row) => {
         currentX = leftMargin;
         row.forEach((cell) => {
+          // Apply column color if specified
+          const columnColor = options.columnColors?.[cell.id];
+
+          // Draw the cell background with the column color or white as default
+          if (columnColor) {
+            doc.fillColor(columnColor);
+          } else {
+            doc.fillColor("#FFFFFF"); // Default to white background
+          }
           doc
             .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
-            .stroke()
+            .fill();
+
+          // Draw the cell border
+          doc.strokeColor("#000000");
+          doc
+            .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
+            .stroke();
+
+          // Set text color to black for better contrast
+          doc.fillColor("#000000");
+
+          doc
             .font("Helvetica")
             .fontSize(6)
             .text(cell.text, currentX + 2, currentY + (rowHeight - 5) / 2, {
@@ -280,6 +322,7 @@ export async function generatePayrollPDFLandscape(
       };
 
       const totalRowData = columns.map((column) => ({
+        id: column.id,
         width: column.width,
         text:
           column.id === "no"
@@ -325,24 +368,45 @@ export async function generatePayrollPDFLandscape(
             : column.id === "no" || column.id === "days"
             ? "center"
             : "right",
+        color: options.columnColors?.[column.id] || "#000000", // Default color
       }));
 
       // Draw total row with adjusted vertical positioning
       doc.font("Helvetica-Bold");
       totalRowData.forEach((cell) => {
-        // Draw cell background for totals row
-        if (cell.text !== "") {
+        // Apply column color if specified
+        const columnColor = options.columnColors?.[cell.id];
+
+        // Draw the cell background with the column color or light gray for total row
+        if (columnColor) {
+          doc.fillColor(columnColor);
           doc
             .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
-            .fillAndStroke("#f5f5f5", "#000000");
+            .fill();
+        } else if (cell.text !== "") {
+          // Use light gray for total row cells without a specific color
+          doc.fillColor("#f5f5f5");
+          doc
+            .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
+            .fill();
         } else {
+          // Empty cells in total row get white background
+          doc.fillColor("#FFFFFF");
           doc
             .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
-            .stroke();
+            .fill();
         }
 
+        // Draw the cell border
+        doc.strokeColor("#000000");
         doc
-          .fillColor("#000000")
+          .rect(currentX, currentY, cell.width * tableWidth, rowHeight)
+          .stroke();
+
+        // Set text color to black for better contrast
+        doc.fillColor("#000000");
+
+        doc
           .fontSize(6)
           .text(cell.text, currentX + 2, currentY + (rowHeight - 5) / 2, {
             // Adjusted vertical centering

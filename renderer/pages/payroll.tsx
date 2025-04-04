@@ -560,6 +560,7 @@ export default function PayrollPage() {
           outputPath: pdfOutputPath,
           logoPath: logoPath || "",
           companyName: useSettingsStore.getState().companyName,
+          columnColors: useSettingsStore.getState().columnColors,
         }
       );
 

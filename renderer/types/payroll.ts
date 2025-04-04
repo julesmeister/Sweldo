@@ -34,4 +34,7 @@ export interface PDFGeneratorOptions {
   outputPath: string;
   logoPath?: string;
   companyName: string;
+  columnColors?: {
+    [key: string]: string; // Key is column id, value is hex color code
+  };
 }
