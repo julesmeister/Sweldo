@@ -13,6 +13,7 @@ export interface MonthlyPayroll {
 }
 
 export interface DeductionChange {
+  employee: string;
   date: string;
   amount: number;
 }
@@ -234,6 +235,49 @@ export class StatisticsModel {
       await this.saveStatistics();
     } catch (error) {
       console.error("Error updating daily rate history:", error);
+      throw error;
+    }
+  }
+
+  async updateDeductionHistory(
+    employeeId: string,
+    employeeName: string,
+    deductions: { type: string; amount: number }[]
+  ): Promise<void> {
+    try {
+      // Load existing statistics
+      await this.loadStatistics();
+
+      // Get current date
+      const currentDate = new Date().toISOString();
+
+      // Update deductions history
+      deductions.forEach(({ type, amount }) => {
+        // Find existing deduction type or create new one
+        let deductionHistory = this.statistics.deductionsHistory.find(
+          (d) => d.type === type
+        );
+
+        if (!deductionHistory) {
+          deductionHistory = {
+            type,
+            changes: [],
+          };
+          this.statistics.deductionsHistory.push(deductionHistory);
+        }
+
+        // Add new deduction change
+        deductionHistory.changes.push({
+          employee: employeeName,
+          date: currentDate,
+          amount,
+        });
+      });
+
+      // Save updated statistics
+      await this.saveStatistics();
+    } catch (error) {
+      console.error("Error updating deductions history:", error);
       throw error;
     }
   }

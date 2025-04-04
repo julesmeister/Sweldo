@@ -436,14 +436,20 @@ const TimesheetPage: React.FC = () => {
       return timesheetEntries;
     }
 
-    const startDate = dateRange.startDate.getTime();
-    const endDate = dateRange.endDate.getTime();
+    const startDate = new Date(dateRange.startDate).getTime();
+    const endDate = new Date(dateRange.endDate).getTime();
 
     return timesheetEntries.filter((entry) => {
       const entryDate = new Date(year, storedMonthInt - 1, entry.day).getTime();
       return entryDate >= startDate && entryDate <= endDate;
     });
-  }, [timesheetEntries, dateRange?.startDate, dateRange?.endDate]);
+  }, [
+    timesheetEntries,
+    dateRange?.startDate,
+    dateRange?.endDate,
+    year,
+    storedMonthInt,
+  ]);
 
   // Remove performance monitoring for employee loading
   useEffect(() => {

@@ -19,6 +19,7 @@ import {
 } from "@/renderer/model/settings";
 import { createStatisticsModel } from "@/renderer/model/statistics";
 import Papa from "papaparse";
+import { toast } from "sonner";
 
 interface EmployeeFormData {
   name: string;
@@ -129,16 +130,13 @@ export default function EditEmployee() {
 
       // Update employee details in the employee model
       await employeeModel.updateEmployeeDetails(updatedEmployee);
-      console.log("Employee details updated successfully.");
 
       // Check if daily rate has changed and update statistics
       if (currentEmployee.dailyRate !== formData.dailyRate) {
-        // Add to daily rate history in statistics
         await statisticsModel.updateDailyRateHistory(
           updatedEmployee.id,
           formData.dailyRate
         );
-        console.log("Daily rate history updated in statistics.");
       }
 
       // Check if deductions have changed and update statistics
@@ -148,13 +146,34 @@ export default function EditEmployee() {
         currentEmployee.pagIbig !== formData.pagIbig;
 
       if (deductionsChanged) {
-        // Note: Deduction history tracking has been removed from the statistics model
-        console.log(
-          "Deductions changed, but history tracking is no longer available."
+        const deductionChanges = [];
+
+        // Check each deduction type
+        if (currentEmployee.sss !== formData.sss) {
+          deductionChanges.push({ type: "SSS", amount: formData.sss });
+        }
+        if (currentEmployee.philHealth !== formData.philHealth) {
+          deductionChanges.push({
+            type: "PhilHealth",
+            amount: formData.philHealth,
+          });
+        }
+        if (currentEmployee.pagIbig !== formData.pagIbig) {
+          deductionChanges.push({ type: "Pag-IBIG", amount: formData.pagIbig });
+        }
+
+        // Update deductions history with employee name
+        await statisticsModel.updateDeductionHistory(
+          updatedEmployee.id,
+          updatedEmployee.name,
+          deductionChanges
         );
       }
+
+      toast.success("Employee details updated successfully");
     } catch (error) {
       console.error("Error updating employee details:", error);
+      toast.error("Failed to update employee details");
     }
   };
 

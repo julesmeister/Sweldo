@@ -2216,7 +2216,7 @@ export default function SettingsPage() {
                 {showVariablesPanel && (
                   <div className="w-64" ref={variablesPanelRef}>
                     <div
-                      className="bg-white rounded-lg border border-gray-200 p-4"
+                      className="bg-white rounded-lg border border-gray-200 p-4 scrollbar-thin"
                       style={{
                         position: "fixed",
                         width: "16rem",

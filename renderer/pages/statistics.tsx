@@ -18,6 +18,7 @@ import { MdOutlineDataset } from "react-icons/md";
 import { createStatisticsModel, Statistics } from "../model/statistics";
 import { useSettingsStore } from "../stores/settingsStore";
 import { toast } from "sonner";
+import { createEmployeeModel } from "../model/employee";
 
 // Stat card component
 const StatCard = ({
@@ -33,11 +34,14 @@ const StatCard = ({
   trend?: string;
   trendUp?: boolean;
 }) => (
-  <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex items-center justify-between">
+  <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
+    <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-full opacity-20 -mr-12 -mt-12"></div>
+    <div className="flex items-center justify-between relative z-10">
       <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className="text-2xl font-semibold text-gray-900 mt-1">{value}</p>
+        <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 mt-1 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+          {value}
+        </p>
         {trend && (
           <div className="flex items-center mt-2">
             <span
@@ -55,7 +59,9 @@ const StatCard = ({
           </div>
         )}
       </div>
-      <div className="bg-blue-50 p-3 rounded-full text-blue-600">{icon}</div>
+      <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-full text-white shadow-md">
+        {icon}
+      </div>
     </div>
   </div>
 );
@@ -203,7 +209,13 @@ const Timeline = ({
                         <p className="text-sm font-medium text-gray-900">
                           ₱{item.rate.toLocaleString()}
                         </p>
-                        <p className="text-xs text-gray-500">{item.date}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(item.date).toLocaleDateString("en-PH", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </p>
                       </div>
                       {index < sortedHistory.length - 1 && (
                         <div className="h-0.5 bg-gray-200 w-8 ml-3"></div>
@@ -237,7 +249,7 @@ const DeductionsTimeline = ({
 }: {
   data: {
     type: string;
-    changes: { date: string; amount: number }[];
+    changes: { date: string; amount: number; employee: string }[];
   }[];
 }) => {
   if (data.length === 0) {
@@ -335,7 +347,20 @@ const DeductionsTimeline = ({
                         <p className="text-sm font-medium text-gray-900">
                           ₱{change.amount.toLocaleString()}
                         </p>
-                        <p className="text-xs text-gray-500">{change.date}</p>
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-gray-500">
+                            {new Date(change.date).toLocaleDateString("en-PH", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                          <p className="text-xs text-gray-600 italic">
+                            Updated {change.employee || "Unknown"}
+                          </p>
+                        </div>
                       </div>
                       {index < sortedChanges.length - 1 && (
                         <div className="h-0.5 bg-gray-200 w-8 ml-3"></div>
@@ -366,8 +391,43 @@ export default function StatisticsPage() {
     }
   }, [isInitialized, initialize]);
 
-  // Load statistics data function (only used for manual refresh)
-  const loadStatistics = async () => {
+  // Initialize daily rate history if empty
+  const initializeDailyRateHistory = async (statisticsModel: any) => {
+    try {
+      const employeeModel = createEmployeeModel(dbPath);
+      const employees = await employeeModel.loadEmployees();
+      let newEntriesAdded = false;
+
+      // For each employee with a daily rate, add to history
+      for (const employee of employees) {
+        if (employee.dailyRate && employee.dailyRate > 0) {
+          // First check if employee already has history
+          const currentStats = await statisticsModel.getStatistics();
+          const hasExistingHistory = currentStats.dailyRateHistory.some(
+            (history: any) => history.employee === employee.name
+          );
+
+          if (!hasExistingHistory) {
+            newEntriesAdded = true;
+            // Add current daily rate to history
+            await statisticsModel.updateDailyRateHistory(
+              employee.name,
+              Number(employee.dailyRate)
+            );
+          }
+        }
+      }
+
+      if (newEntriesAdded) {
+        toast.success("New daily rates added to history");
+      }
+    } catch (error) {
+      toast.error("Failed to initialize daily rate history");
+    }
+  };
+
+  // Load statistics data function for manual refresh
+  const handleRefresh = async () => {
     setIsLoading(true);
     const loadingToast = toast.loading("Refreshing statistics data...");
 
@@ -378,77 +438,71 @@ export default function StatisticsPage() {
         );
       }
 
-      console.log("=== Loading Statistics ===");
-      console.log(`Year: ${selectedYear}`);
-      console.log(`DB Path: ${dbPath}`);
-
       const statisticsModel = createStatisticsModel(dbPath, selectedYear);
       const data = await statisticsModel.getStatistics();
 
-      console.log("=== Statistics Data Loaded ===");
-      console.log("Monthly Payrolls:", data.monthlyPayrolls);
-      console.log("Daily Rate History:", data.dailyRateHistory);
-      console.log("Deductions History:", data.deductionsHistory);
-      console.log("Yearly Total:", data.yearlyTotal);
-      console.log("Yearly Average:", data.yearlyAverage);
+      // Always initialize daily rates to ensure all employees are included
+      await initializeDailyRateHistory(statisticsModel);
 
-      setStatisticsData(data);
+      // Reload statistics after initialization
+      const updatedData = await statisticsModel.getStatistics();
+      setStatisticsData(updatedData);
 
       toast.success("Statistics data refreshed successfully!", {
         id: loadingToast,
       });
     } catch (error) {
-      console.error("=== Error Loading Statistics ===");
-      console.error(error);
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
-
       toast.error(`Error: ${errorMessage}`, {
         id: loadingToast,
-      });
-
-      // Initialize with empty data if loading fails
-      setStatisticsData({
-        dailyRateHistory: [],
-        monthlyPayrolls: [],
-        deductionsHistory: [],
-        totalEmployees: 0,
-        totalPayroll: 0,
-        totalDeductions: 0,
-        totalNetPay: 0,
-        totalOvertime: 0,
-        totalAbsences: 0,
-        yearlyTotal: 0,
-        yearlyAverage: 0,
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Initialize empty data when year changes
+  // Initialize and load data when year changes
   useEffect(() => {
-    console.log("=== Statistics Page Effect ===");
-    console.log("Is Initialized:", isInitialized);
-    console.log("Selected Year:", selectedYear);
-    console.log("DB Path:", dbPath);
+    if (!isInitialized || !dbPath) return;
 
-    if (isInitialized && dbPath) {
-      // Initialize with empty data
-      setStatisticsData({
-        dailyRateHistory: [],
-        monthlyPayrolls: [],
-        deductionsHistory: [],
-        totalEmployees: 0,
-        totalPayroll: 0,
-        totalDeductions: 0,
-        totalNetPay: 0,
-        totalOvertime: 0,
-        totalAbsences: 0,
-        yearlyTotal: 0,
-        yearlyAverage: 0,
-      });
-    }
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      try {
+        const statisticsModel = createStatisticsModel(dbPath, selectedYear);
+        const data = await statisticsModel.getStatistics();
+
+        // Always initialize daily rates to ensure all employees are included
+        await initializeDailyRateHistory(statisticsModel);
+
+        // Reload statistics after initialization
+        const updatedData = await statisticsModel.getStatistics();
+        setStatisticsData(updatedData);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "An unknown error occurred";
+        toast.error(`Error: ${errorMessage}`);
+
+        // Initialize with empty data if loading fails
+        setStatisticsData({
+          dailyRateHistory: [],
+          monthlyPayrolls: [],
+          deductionsHistory: [],
+          totalEmployees: 0,
+          totalPayroll: 0,
+          totalDeductions: 0,
+          totalNetPay: 0,
+          totalOvertime: 0,
+          totalAbsences: 0,
+          yearlyTotal: 0,
+          yearlyAverage: 0,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadInitialData();
   }, [selectedYear, isInitialized, dbPath]);
 
   // Filter data based on selected year
@@ -514,7 +568,7 @@ export default function StatisticsPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={loadStatistics}
+                    onClick={handleRefresh}
                     className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1"
                     title="Refresh statistics data"
                     disabled={isLoading}
@@ -541,10 +595,11 @@ export default function StatisticsPage() {
             <div className="p-6">
               {/* Monthly Payroll Section */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 w-1 h-6 rounded-full mr-3"></span>
                   Monthly Payroll Overview
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                   <StatCard
                     title="Yearly Total"
                     value={new Intl.NumberFormat("en-PH", {
