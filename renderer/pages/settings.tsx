@@ -60,12 +60,14 @@ const AutoSaveInput = ({
   placeholder,
   showSaved,
   setShowSaved,
+  label,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   showSaved: boolean;
   setShowSaved: (show: boolean) => void;
+  label?: string;
 }) => (
   <div className="flex-1 relative">
     <input
@@ -74,6 +76,7 @@ const AutoSaveInput = ({
       onChange={(e) => {
         onChange(e.target.value);
         setShowSaved(true);
+        toast.success(`${label || "Formula"} updated successfully`);
         setTimeout(() => setShowSaved(false), 2000);
       }}
       className="w-full p-2 border rounded-md"
@@ -1688,6 +1691,7 @@ export default function SettingsPage() {
                           },
                         });
                         setShowGrossPaySaved(true);
+                        toast.success("Gross Pay formula updated successfully");
                         setTimeout(() => setShowGrossPaySaved(false), 2000);
                         setSelectedOperator(null);
                       }}
@@ -1710,6 +1714,9 @@ export default function SettingsPage() {
                               },
                             });
                             setShowGrossPaySaved(true);
+                            toast.success(
+                              "Gross Pay formula updated successfully"
+                            );
                             setTimeout(() => setShowGrossPaySaved(false), 2000);
                           }}
                           className="w-full p-2 bg-white border rounded font-mono text-sm"
@@ -1840,6 +1847,7 @@ export default function SettingsPage() {
                           },
                         });
                         setShowOthersSaved(true);
+                        toast.success("Others formula updated successfully");
                         setTimeout(() => setShowOthersSaved(false), 2000);
                         setSelectedOperator(null);
                       }}
@@ -1862,6 +1870,9 @@ export default function SettingsPage() {
                               },
                             });
                             setShowOthersSaved(true);
+                            toast.success(
+                              "Others formula updated successfully"
+                            );
                             setTimeout(() => setShowOthersSaved(false), 2000);
                           }}
                           className="w-full p-2 bg-white border rounded font-mono text-sm"
@@ -1992,7 +2003,7 @@ export default function SettingsPage() {
                       <AutoSaveInput
                         value={
                           calculationSettings.totalDeductions?.formula ||
-                          "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                          "sss + philHealth + pagIbig + cashAdvanceDeductions + shorts + others"
                         }
                         onChange={(value) => {
                           setCalculationSettings({
@@ -2012,6 +2023,7 @@ export default function SettingsPage() {
                         placeholder="Enter or drag variables to build formula..."
                         showSaved={showSaved}
                         setShowSaved={setShowSaved}
+                        label="Total Deductions"
                       />
                       <div className="flex gap-2 mt-2">
                         {["+", "-", "*", "/", "(", ")"].map((operator) => (
@@ -2043,7 +2055,7 @@ export default function SettingsPage() {
                       <div className="font-mono text-sm bg-white p-2 rounded border">
                         {(
                           calculationSettings.totalDeductions?.formula ||
-                          "sss + philHealth + pagIbig + cashAdvanceDeductions + others"
+                          "sss + philHealth + pagIbig + cashAdvanceDeductions + shorts + others"
                         )
                           .split(/([+\-*/()])/g)
                           .map((part, index) => {
@@ -2152,6 +2164,7 @@ export default function SettingsPage() {
                         placeholder="Enter or drag variables to build formula..."
                         showSaved={showSaved}
                         setShowSaved={setShowSaved}
+                        label="Net Pay"
                       />
                       <div className="flex gap-2 mt-2">
                         {["+", "-", "*", "/", "(", ")"].map((operator) => (
@@ -2288,6 +2301,7 @@ export default function SettingsPage() {
                             name: "cashAdvanceDeductions",
                             description: "Cash Advance",
                           },
+                          { name: "shorts", description: "Shorts Deductions" },
                           { name: "partial", description: "Partial Payment" },
                         ].map((variable) => (
                           <div
