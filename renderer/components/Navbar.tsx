@@ -15,6 +15,7 @@ const navLinks = [
   { path: "/holidays/", label: "Holidays" },
   { path: "/leaves/", label: "Leaves" },
   { path: "/cashAdvances/", label: "Cash Advances" },
+  { path: "/shorts/", label: "Shorts" },
   { path: "/loans/", label: "Loans" },
   { path: "/statistics/", label: "Stats" },
   { path: "/settings/", label: "Settings" },

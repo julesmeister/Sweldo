@@ -18,6 +18,7 @@ import {
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
+import { createShortModel, Short } from "./shorts";
 import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 
@@ -44,6 +45,7 @@ export interface PayrollSummaryModel {
   grossPay: number;
   allowances: number;
   cashAdvanceIDs?: string[];
+  shortIDs?: string[];
   deductions: {
     sss: number;
     philHealth: number;
@@ -96,6 +98,7 @@ interface PayrollCSVData {
   pagIbigDeduction: string;
   cashAdvanceIDs: string;
   cashAdvanceDeductions: string;
+  shortIDs: string;
   otherDeductions: string;
   netPay: string;
   paymentDate: string;
@@ -569,6 +572,40 @@ export class Payroll {
       (employee.philHealth || 0) -
       (employee.pagIbig || 0);
 
+    // Load cash advances for the period
+    const cashAdvanceModel = createCashAdvanceModel(
+      this.dbPath,
+      employeeId,
+      endDate.getMonth() + 1,
+      endDate.getFullYear()
+    );
+    const cashAdvances = await cashAdvanceModel.loadCashAdvances(employeeId);
+
+    // Load shorts for the period
+    const shortModel = createShortModel(
+      this.dbPath,
+      employeeId,
+      endDate.getMonth() + 1,
+      endDate.getFullYear()
+    );
+    const shorts = await shortModel.loadShorts(employeeId);
+
+    // Calculate cash advance deductions
+    const cashAdvanceDeductions = cashAdvances.reduce((sum, advance) => {
+      if (advance.status === "Paid") {
+        return sum + (advance.amount - advance.remainingUnpaid);
+      }
+      return sum;
+    }, 0);
+
+    // Calculate short deductions (add to others)
+    const shortDeductions = shorts.reduce((sum, short) => {
+      if (short.status === "Paid") {
+        return sum + (short.amount - short.remainingUnpaid);
+      }
+      return sum;
+    }, 0);
+
     const summary: PayrollSummaryModel = {
       id: `${employeeId}-${start.getTime()}`,
       employeeName: employee.name,
@@ -591,13 +628,14 @@ export class Payroll {
       leavePay: totalLeavePay,
       grossPay: totalGrossPay,
       allowances: 0,
-      cashAdvanceIDs: [],
+      cashAdvanceIDs: cashAdvances.map((advance) => advance.id),
+      shortIDs: shorts.map((short) => short.id),
       deductions: {
         sss: employee.sss || 0,
         philHealth: employee.philHealth || 0,
         pagIbig: employee.pagIbig || 0,
-        cashAdvanceDeductions: 0,
-        others: totalDeductions,
+        cashAdvanceDeductions,
+        others: totalDeductions + shortDeductions,
       },
       netPay: totalNetPay,
       paymentDate: end.toISOString(),
@@ -671,6 +709,7 @@ export class Payroll {
         pagIbigDeduction: finalDeductions.pagIbig.toString(),
         cashAdvanceIDs: (summary.cashAdvanceIDs || []).join("|"),
         cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions.toString(),
+        shortIDs: (summary.shortIDs || []).join("|"),
         otherDeductions: finalDeductions.others.toString(),
         netPay: (
           summary.grossPay -
@@ -819,6 +858,19 @@ export class Payroll {
           dbPath,
           employeeId,
           cashAdvanceDeductions,
+          endDate
+        );
+      }
+
+      // If there are short deductions, reverse them
+      const shortIDs = payrollToDelete.shortIDs
+        ? payrollToDelete.shortIDs.split("|")
+        : [];
+      if (shortIDs.length > 0) {
+        await Payroll.reverseShortDeduction(
+          dbPath,
+          employeeId,
+          shortIDs,
           endDate
         );
       }
@@ -1045,6 +1097,7 @@ export class Payroll {
           cashAdvanceIDs: row.cashAdvanceIDs
             ? row.cashAdvanceIDs.split("|")
             : [],
+          shortIDs: row.shortIDs ? row.shortIDs.split("|") : [],
         };
       });
 
@@ -1211,6 +1264,63 @@ export class Payroll {
         );
       }
     } catch (error) {
+      throw error;
+    }
+  }
+
+  private static async reverseShortDeduction(
+    dbPath: string,
+    employeeId: string,
+    shortIDs: string[],
+    payrollDate: Date
+  ): Promise<void> {
+    try {
+      // Get all months between the payroll date and 3 months before (to catch recent shorts)
+      const months = [];
+      let currentDate = new Date(payrollDate);
+      for (let i = 0; i < 3; i++) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() - 1);
+      }
+
+      // Load shorts from all relevant months
+      const allShorts: Short[] = [];
+      for (const { month, year } of months) {
+        const shortModel = createShortModel(dbPath, employeeId, month, year);
+        const shorts = await shortModel.loadShorts(employeeId);
+        allShorts.push(...shorts);
+      }
+
+      // Filter shorts by the provided IDs
+      const shortsToReverse = allShorts.filter((short) =>
+        shortIDs.includes(short.id)
+      );
+
+      // Update each short
+      for (const short of shortsToReverse) {
+        if (short.status === "Paid") {
+          // Update the short
+          const updatedShort = {
+            ...short,
+            status: "Unpaid" as const,
+            remainingUnpaid: short.amount,
+          } as Short;
+
+          // Save the update
+          const shortModel = createShortModel(
+            dbPath,
+            employeeId,
+            short.date.getMonth() + 1,
+            short.date.getFullYear()
+          );
+          await shortModel.updateShort(updatedShort);
+        }
+      }
+    } catch (error) {
+      console.error("Error reversing short deduction:", error);
       throw error;
     }
   }
