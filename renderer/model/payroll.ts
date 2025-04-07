@@ -572,23 +572,79 @@ export class Payroll {
       (employee.philHealth || 0) -
       (employee.pagIbig || 0);
 
-    // Load cash advances for the period
-    const cashAdvanceModel = createCashAdvanceModel(
-      this.dbPath,
-      employeeId,
-      endDate.getMonth() + 1,
-      endDate.getFullYear()
-    );
-    const cashAdvances = await cashAdvanceModel.loadCashAdvances(employeeId);
+    // Load cash advances for the period - handle cross-month periods
+    let cashAdvances: CashAdvance[] = [];
 
-    // Load shorts for the period
-    const shortModel = createShortModel(
+    // If start and end dates are in different months, load from both months
+    if (
+      startDate.getMonth() !== endDate.getMonth() ||
+      startDate.getFullYear() !== endDate.getFullYear()
+    ) {
+      // Load from start month
+      const startMonthCashAdvanceModel = createCashAdvanceModel(
+        this.dbPath,
+        employeeId,
+        startDate.getMonth() + 1,
+        startDate.getFullYear()
+      );
+      const startMonthCashAdvances =
+        await startMonthCashAdvanceModel.loadCashAdvances(employeeId);
+      cashAdvances = [...cashAdvances, ...startMonthCashAdvances];
+    }
+
+    // Always load from end month
+    const endMonthCashAdvanceModel = createCashAdvanceModel(
       this.dbPath,
       employeeId,
       endDate.getMonth() + 1,
       endDate.getFullYear()
     );
-    const shorts = await shortModel.loadShorts(employeeId);
+    const endMonthCashAdvances =
+      await endMonthCashAdvanceModel.loadCashAdvances(employeeId);
+    cashAdvances = [...cashAdvances, ...endMonthCashAdvances];
+
+    // Filter cash advances to only include those within the date range
+    cashAdvances = cashAdvances.filter((advance) => {
+      const advanceDate = new Date(advance.date);
+      return advanceDate >= startDate && advanceDate <= endDate;
+    });
+
+    // Load shorts for the period - handle cross-month periods
+    let shorts: Short[] = [];
+
+    // If start and end dates are in different months, load from both months
+    if (
+      startDate.getMonth() !== endDate.getMonth() ||
+      startDate.getFullYear() !== endDate.getFullYear()
+    ) {
+      // Load from start month
+      const startMonthShortModel = createShortModel(
+        this.dbPath,
+        employeeId,
+        startDate.getMonth() + 1,
+        startDate.getFullYear()
+      );
+      const startMonthShorts = await startMonthShortModel.loadShorts(
+        employeeId
+      );
+      shorts = [...shorts, ...startMonthShorts];
+    }
+
+    // Always load from end month
+    const endMonthShortModel = createShortModel(
+      this.dbPath,
+      employeeId,
+      endDate.getMonth() + 1,
+      endDate.getFullYear()
+    );
+    const endMonthShorts = await endMonthShortModel.loadShorts(employeeId);
+    shorts = [...shorts, ...endMonthShorts];
+
+    // Filter shorts to only include those within the date range
+    shorts = shorts.filter((short) => {
+      const shortDate = new Date(short.date);
+      return shortDate >= startDate && shortDate <= endDate;
+    });
 
     // Calculate cash advance deductions
     const cashAdvanceDeductions = cashAdvances.reduce((sum, advance) => {
