@@ -14,6 +14,7 @@ import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 
 export default function ShortsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -26,6 +27,7 @@ export default function ShortsPage() {
     showAbove: boolean;
     caretLeft: number;
   } | null>(null);
+  const [showTip, setShowTip] = useState(false);
 
   // Initialize month/year from localStorage on first render
   const [dateContext] = useState(() => {
@@ -295,31 +297,36 @@ export default function ShortsPage() {
                           ? employee?.name + "'s Shorts"
                           : "Shorts"}
                       </h2>
-                      <button
-                        type="button"
-                        onClick={handleButtonClick}
-                        className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
-                      >
-                        Apply for Short
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowTip((prev) => !prev)}
+                          className={`inline-flex items-center justify-center rounded-md p-2 text-sm font-medium shadow-sm transition-all duration-300 ease-in-out
+                            ${
+                              showTip
+                                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white ring-2 ring-blue-500 ring-offset-2"
+                                : "bg-gradient-to-r from-white to-gray-50 text-blue-600 hover:from-blue-50 hover:to-purple-50 border border-gray-200"
+                            }
+                            transform hover:scale-105 active:scale-95`}
+                        >
+                          <InformationCircleIcon
+                            className={`h-5 w-5 transition-colors duration-300 ${
+                              showTip ? "text-white" : "text-blue-600"
+                            }`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleButtonClick}
+                          className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+                        >
+                          Apply for Short
+                        </button>
+                      </div>
                     </div>
-                    <div className="p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2 text-blue-500 flex-shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <div className="relative">
-                        <span className="text-sm text-blue-700 line-clamp-1 hover:line-clamp-none transition-all duration-300 cursor-pointer">
+                    <div className="relative">
+                      {showTip && (
+                        <div className="mt-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-md border border-blue-100">
                           Shorts are deductions from employee pay for company
                           purchases or unpaid payables. They represent amounts
                           that employees owe to the company, such as when they
@@ -328,8 +335,8 @@ export default function ShortsPage() {
                           other company-related expenses. These amounts are
                           tracked and can be paid back over time as the employee
                           earns wages.
-                        </span>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   {selectedEmployeeId ? (
