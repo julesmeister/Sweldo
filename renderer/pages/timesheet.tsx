@@ -25,6 +25,7 @@ import {
   IoShieldOutline,
   IoTimeOutline,
   IoChevronDownOutline,
+  IoWarningOutline,
 } from "react-icons/io5";
 import { EditableCell } from "@/renderer/components/EditableCell";
 import { CompensationDialog } from "@/renderer/components/CompensationDialog";
@@ -45,6 +46,7 @@ import { useTimesheetEdit } from "@/renderer/hooks/useTimesheetEdit";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { DateRangePicker } from "@/renderer/components/DateRangePicker";
 import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
+import { RecomputeDialog } from "@/renderer/components/RecomputeDialog";
 
 const formatName = (name: string): string => {
   if (!name) return "";
@@ -91,6 +93,7 @@ const TimesheetPage: React.FC = () => {
   const { accessCodes, hasAccess } = useAuthStore();
   const { dateRange, setDateRange } = useDateRangeStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [showRecomputeDialog, setShowRecomputeDialog] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -713,8 +716,8 @@ const TimesheetPage: React.FC = () => {
                     {hasAccess("MANAGE_PAYROLL") && (
                       <button
                         type="button"
-                        className="mr-1 p-1 rounded-md bg-gray-100 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        onClick={handleRecompute}
+                        className="mr-1 p-1.5 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-150"
+                        onClick={() => setShowRecomputeDialog(true)}
                       >
                         <span className="sr-only">Recompute Compensations</span>
                         <svg
@@ -1100,6 +1103,11 @@ const TimesheetPage: React.FC = () => {
             accessCodes={accessCodes}
           />
         )}
+        <RecomputeDialog
+          isOpen={showRecomputeDialog}
+          onClose={() => setShowRecomputeDialog(false)}
+          onRecompute={handleRecompute}
+        />
       </main>
     </RootLayout>
   );
