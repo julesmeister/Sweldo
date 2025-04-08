@@ -193,6 +193,24 @@ interface PDFGeneratorOptions {
   columnColors?: {
     [key: string]: string; // Key is column id, value is hex color code
   };
+  calculationSettings?: {
+    grossPay?: {
+      formula: string;
+      description: string;
+    };
+    others?: {
+      formula: string;
+      description: string;
+    };
+    totalDeductions?: {
+      formula: string;
+      description: string;
+    };
+    netPay?: {
+      formula: string;
+      description: string;
+    };
+  };
 }
 
 // PDF Generation

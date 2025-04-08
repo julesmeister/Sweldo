@@ -32,17 +32,12 @@ export function usePayrollStatistics() {
       // Get the year from the first payroll's end date if not provided
       const targetYear = year || new Date(payrolls[0].endDate).getFullYear();
 
-      console.log(`Generating payroll statistics for year ${targetYear}`);
-      console.log(`Processing ${payrolls.length} payroll records`);
-
       // Create statistics model and update statistics
       const statisticsModel = createStatisticsModel(dbPath, targetYear);
       await statisticsModel.updatePayrollStatistics(payrolls);
 
-      console.log("Payroll statistics generated successfully");
       toast.success("Payroll statistics updated successfully");
     } catch (error) {
-      console.error("Error generating payroll statistics:", error);
       toast.error("Failed to generate payroll statistics");
     } finally {
       setIsGeneratingStatistics(false);

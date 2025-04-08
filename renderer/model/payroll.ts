@@ -21,6 +21,7 @@ import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
 import { createShortModel, Short } from "./shorts";
 import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
+import { evaluateFormula } from "../utils/formula";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -51,6 +52,7 @@ export interface PayrollSummaryModel {
     philHealth: number;
     pagIbig: number;
     cashAdvanceDeductions: number;
+    shortDeductions?: number;
     others: number;
   };
 
@@ -99,6 +101,7 @@ interface PayrollCSVData {
   cashAdvanceIDs: string;
   cashAdvanceDeductions: string;
   shortIDs: string;
+  shortDeductions: string;
   otherDeductions: string;
   netPay: string;
   paymentDate: string;
@@ -691,6 +694,7 @@ export class Payroll {
         philHealth: employee.philHealth || 0,
         pagIbig: employee.pagIbig || 0,
         cashAdvanceDeductions,
+        shortDeductions,
         others: totalDeductions + shortDeductions,
       },
       netPay: totalNetPay,
@@ -702,6 +706,26 @@ export class Payroll {
     return summary;
   }
 
+  private async loadCalculationSettings(): Promise<{
+    grossPay?: { formula: string; description: string };
+    others?: { formula: string; description: string };
+    totalDeductions?: { formula: string; description: string };
+    netPay?: { formula: string; description: string };
+  }> {
+    try {
+      const settingsPath = `${this.dbPath}/SweldoDB/settings/calculation_settings.json`;
+      const exists = await window.electron.fileExists(settingsPath);
+      if (!exists) {
+        return {};
+      }
+      const content = await window.electron.readFile(settingsPath);
+      return JSON.parse(content);
+    } catch (error) {
+      console.error("Error loading calculation settings:", error);
+      return {};
+    }
+  }
+
   public async generatePayrollSummary(
     employeeId: string,
     startDate: Date,
@@ -711,9 +735,16 @@ export class Payroll {
       philHealth: number;
       pagIbig: number;
       cashAdvanceDeductions: number;
+      shortDeductions?: number;
     }
   ): Promise<PayrollSummaryModel> {
     try {
+      console.log("[generatePayrollSummary] Starting with deductions:", {
+        deductions,
+        startDate,
+        endDate,
+      });
+
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) throw new Error("Employee not found");
@@ -722,7 +753,161 @@ export class Payroll {
       const end = endDate instanceof Date ? endDate : new Date(endDate);
       const summary = await this.summarizeCompensations(employeeId, start, end);
 
-      // Use provided deductions or default to employee's saved deductions or 0
+      console.log("[generatePayrollSummary] Loaded summary:", {
+        summaryDeductions: summary.deductions,
+        shortIDs: summary.shortIDs,
+      });
+
+      const calculationSettings = await this.loadCalculationSettings();
+
+      // Calculate values using formulas if available
+      const variables = {
+        basicPay: summary.basicPay,
+        overtime: summary.overtime,
+        holidayBonus: summary.holidayBonus || 0,
+        undertimeDeduction: summary.undertimeDeduction || 0,
+        lateDeduction: summary.lateDeduction || 0,
+        nightDifferentialPay: summary.nightDifferentialPay || 0,
+        sss: deductions?.sss ?? employee.sss ?? 0,
+        philHealth: deductions?.philHealth ?? employee.philHealth ?? 0,
+        pagIbig: deductions?.pagIbig ?? employee.pagIbig ?? 0,
+        sssLoan: 0,
+        pagibigLoan: 0,
+        partial: 0,
+        shorts: deductions?.shortDeductions || 0,
+        cashAdvanceDeductions: deductions?.cashAdvanceDeductions || 0,
+      };
+
+      console.log("[generatePayrollSummary] Formula variables:", variables);
+
+      // Calculate gross pay using formula if available
+      let grossPayValue = summary.grossPay;
+      if (calculationSettings.grossPay?.formula) {
+        try {
+          grossPayValue = evaluateFormula(
+            calculationSettings.grossPay.formula,
+            variables
+          );
+        } catch (error) {
+          console.error("Error evaluating gross pay formula:", error);
+          grossPayValue = summary.grossPay;
+        }
+      }
+
+      // Calculate others using formula if available
+      let othersValue = 0;
+      if (calculationSettings.others?.formula) {
+        try {
+          othersValue = evaluateFormula(
+            calculationSettings.others.formula,
+            variables
+          );
+        } catch (error) {
+          console.error("Error evaluating others formula:", error);
+          othersValue =
+            (summary.deductions.others || 0) -
+            (summary.deductions.shortDeductions || 0);
+        }
+      } else {
+        othersValue =
+          (summary.deductions.others || 0) -
+          (summary.deductions.shortDeductions || 0);
+      }
+
+      // Calculate total deductions using formula if available
+      const deductionVariables = {
+        sss: deductions?.sss ?? employee.sss ?? 0,
+        philHealth: deductions?.philHealth ?? employee.philHealth ?? 0,
+        pagIbig: deductions?.pagIbig ?? employee.pagIbig ?? 0,
+        cashAdvanceDeductions: deductions?.cashAdvanceDeductions ?? 0,
+        others: deductions?.shortDeductions ?? 0, // shorts go into others
+        lateDeduction: summary.lateDeduction ?? 0,
+        undertimeDeduction: summary.undertimeDeduction ?? 0,
+      };
+
+      // Clear console log formatting
+      console.log("\n=== Deductions Breakdown ===");
+      console.log(`Employee: ${employee.name}`);
+      console.log("Individual Deductions:");
+      console.log(`  SSS: ${deductionVariables.sss}`);
+      console.log(`  PhilHealth: ${deductionVariables.philHealth}`);
+      console.log(`  Pag-IBIG: ${deductionVariables.pagIbig}`);
+      console.log(
+        `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
+      );
+      console.log(`  Others (Shorts): ${deductionVariables.others}`); // Clarify that Others is Shorts
+      console.log(`  Late Deduction: ${deductionVariables.lateDeduction}`);
+      console.log(`  Undertime: ${deductionVariables.undertimeDeduction}`);
+
+      let totalDeductions = 0;
+      if (calculationSettings?.totalDeductions?.formula) {
+        try {
+          console.log(
+            "\nFormula:",
+            calculationSettings.totalDeductions.formula
+          );
+
+          // Calculate total deductions
+          totalDeductions = evaluateFormula(
+            calculationSettings.totalDeductions.formula,
+            deductionVariables
+          );
+
+          console.log("\nVariables used in calculation:");
+          Object.entries(deductionVariables).forEach(([key, value]) => {
+            console.log(`  ${key}: ${value}`);
+          });
+
+          console.log("\nBreakdown of total:");
+          console.log(
+            `  Government Deductions: ${
+              deductionVariables.sss +
+              deductionVariables.philHealth +
+              deductionVariables.pagIbig
+            }`
+          );
+          console.log(
+            `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
+          );
+          console.log(`  Others (Shorts): ${deductionVariables.others}`);
+          console.log(`  Late Deduction: ${deductionVariables.lateDeduction}`);
+          console.log(`  Undertime: ${deductionVariables.undertimeDeduction}`);
+          console.log("\nTotal Deduction Calculated:", totalDeductions);
+          console.log("========================");
+        } catch (error) {
+          console.error("Formula evaluation failed:", error);
+          // Fallback calculation if formula fails
+          totalDeductions = Object.values(deductionVariables).reduce(
+            (sum, val) => sum + (typeof val === "number" ? val : 0),
+            0
+          );
+          console.log("Fallback total deductions:", totalDeductions);
+        }
+      } else {
+        // No formula available, sum all deductions
+        totalDeductions = Object.values(deductionVariables).reduce(
+          (sum, val) => sum + (typeof val === "number" ? val : 0),
+          0
+        );
+        console.log("Total deductions (no formula):", totalDeductions);
+      }
+
+      // Calculate net pay using formula if available
+      let netPayValue = grossPayValue - totalDeductions;
+      if (calculationSettings.netPay?.formula) {
+        try {
+          netPayValue = evaluateFormula(calculationSettings.netPay.formula, {
+            ...variables,
+            grossPay: grossPayValue,
+            totalDeductions,
+            others: othersValue,
+          });
+        } catch (error) {
+          console.error("Error evaluating net pay formula:", error);
+          netPayValue = grossPayValue - totalDeductions;
+        }
+      }
+
       const finalDeductions = {
         sss:
           typeof deductions?.sss === "string"
@@ -740,8 +925,19 @@ export class Payroll {
           typeof deductions?.cashAdvanceDeductions === "string"
             ? parseFloat(deductions?.cashAdvanceDeductions)
             : deductions?.cashAdvanceDeductions ?? 0,
-        others: summary.deductions.others || 0,
+        shortDeductions:
+          typeof deductions?.shortDeductions === "string"
+            ? parseFloat(deductions?.shortDeductions)
+            : deductions?.shortDeductions ?? 0,
+        others: othersValue,
       };
+
+      console.log("[generatePayrollSummary] Final calculations:", {
+        grossPay: grossPayValue,
+        totalDeductions,
+        netPay: netPayValue,
+        finalDeductions,
+      });
 
       const payrollData: PayrollCSVData = {
         id: `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`,
@@ -758,7 +954,7 @@ export class Payroll {
         lateDeduction: (summary.lateDeduction || 0).toString(),
         lateMinutes: (summary.lateMinutes || 0).toString(),
         holidayBonus: (summary.holidayBonus || 0).toString(),
-        grossPay: summary.grossPay.toString(),
+        grossPay: grossPayValue.toString(),
         allowances: (summary.allowances || 0).toString(),
         sssDeduction: finalDeductions.sss.toString(),
         philHealthDeduction: finalDeductions.philHealth.toString(),
@@ -766,15 +962,9 @@ export class Payroll {
         cashAdvanceIDs: (summary.cashAdvanceIDs || []).join("|"),
         cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions.toString(),
         shortIDs: (summary.shortIDs || []).join("|"),
+        shortDeductions: finalDeductions.shortDeductions.toString(),
         otherDeductions: finalDeductions.others.toString(),
-        netPay: (
-          summary.grossPay -
-          (finalDeductions.sss +
-            finalDeductions.philHealth +
-            finalDeductions.pagIbig +
-            finalDeductions.cashAdvanceDeductions +
-            finalDeductions.others)
-        ).toString(),
+        netPay: netPayValue.toString(),
         paymentDate: new Date(
           end.getTime() + 2 * 24 * 60 * 60 * 1000
         ).toISOString(),
@@ -786,6 +976,11 @@ export class Payroll {
         nightDifferentialPay: (summary.nightDifferentialPay || 0).toString(),
       };
 
+      console.log("[generatePayrollSummary] PayrollData created:", {
+        shortDeductions: payrollData.shortDeductions,
+        shortIDs: payrollData.shortIDs,
+      });
+
       // Get all months between start and end date
       const months = [];
       let currentDate = new Date(start);
@@ -795,6 +990,100 @@ export class Payroll {
           year: currentDate.getFullYear(),
         });
         currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+
+      // Update cash advances if there are any deductions
+      const cashAdvanceDeductionAmount = deductions?.cashAdvanceDeductions || 0;
+      const cashAdvanceIDsToUpdate = summary.cashAdvanceIDs || [];
+      if (cashAdvanceDeductionAmount > 0 && cashAdvanceIDsToUpdate.length > 0) {
+        // Load all cash advances from relevant months
+        const allAdvances: CashAdvance[] = [];
+        for (const { month, year } of months) {
+          const cashAdvanceModel = createCashAdvanceModel(
+            this.dbPath,
+            employeeId,
+            month,
+            year
+          );
+          const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+          allAdvances.push(...advances);
+        }
+
+        // Filter advances by the IDs in the summary
+        const advancesToUpdate = allAdvances.filter((advance) =>
+          cashAdvanceIDsToUpdate.includes(advance.id)
+        );
+
+        // Update each cash advance
+        for (const advance of advancesToUpdate) {
+          if (advance.status !== "Paid") {
+            const updatedAdvance = {
+              ...advance,
+              status: "Paid" as const,
+              remainingUnpaid: 0,
+            } as CashAdvance;
+
+            // Update installment details if applicable
+            if (
+              updatedAdvance.paymentSchedule === "Installment" &&
+              updatedAdvance.installmentDetails
+            ) {
+              updatedAdvance.installmentDetails.remainingPayments = 0;
+            }
+
+            // Save the update
+            const cashAdvanceModel = createCashAdvanceModel(
+              this.dbPath,
+              employeeId,
+              advance.date.getMonth() + 1,
+              advance.date.getFullYear()
+            );
+            await cashAdvanceModel.updateCashAdvance(updatedAdvance);
+          }
+        }
+      }
+
+      // Update shorts if there are any deductions
+      const shortDeductionAmount = deductions?.shortDeductions || 0;
+      const shortIDsToUpdate = summary.shortIDs || [];
+      if (shortDeductionAmount > 0 && shortIDsToUpdate.length > 0) {
+        // Load all shorts from relevant months
+        const allShorts: Short[] = [];
+        for (const { month, year } of months) {
+          const shortModel = createShortModel(
+            this.dbPath,
+            employeeId,
+            month,
+            year
+          );
+          const shorts = await shortModel.loadShorts(employeeId);
+          allShorts.push(...shorts);
+        }
+
+        // Filter shorts by the IDs in the summary
+        const shortsToUpdate = allShorts.filter((short) =>
+          shortIDsToUpdate.includes(short.id)
+        );
+
+        // Update each short
+        for (const short of shortsToUpdate) {
+          if (short.status !== "Paid") {
+            const updatedShort = {
+              ...short,
+              status: "Paid" as const,
+              remainingUnpaid: 0,
+            } as Short;
+
+            // Save the update
+            const shortModel = createShortModel(
+              this.dbPath,
+              employeeId,
+              short.date.getMonth() + 1,
+              short.date.getFullYear()
+            );
+            await shortModel.updateShort(updatedShort);
+          }
+        }
       }
 
       // Save payroll data only to the file corresponding to the end date's month
@@ -850,6 +1139,7 @@ export class Payroll {
             finalDeductions.philHealth +
             finalDeductions.pagIbig +
             finalDeductions.cashAdvanceDeductions +
+            finalDeductions.shortDeductions +
             finalDeductions.others),
         paymentDate: new Date(
           end.getTime() + 2 * 24 * 60 * 60 * 1000
@@ -859,6 +1149,8 @@ export class Payroll {
         dailyRate: summary.dailyRate,
         daysWorked: summary.daysWorked || 0,
         absences: summary.absences || 0,
+        shortIDs: summary.shortIDs || [],
+        cashAdvanceIDs: summary.cashAdvanceIDs || [],
       };
 
       // Update statistics
@@ -1142,6 +1434,7 @@ export class Payroll {
             philHealth: parseFloat(row.philHealthDeduction || "0"),
             pagIbig: parseFloat(row.pagIbigDeduction || "0"),
             cashAdvanceDeductions: parseFloat(row.cashAdvanceDeductions || "0"),
+            shortDeductions: parseFloat(row.shortDeductions || "0"),
             others: parseFloat(row.otherDeductions || "0"),
           },
           netPay: parseFloat(row.netPay || "0"),
@@ -1270,23 +1563,25 @@ export class Payroll {
       // Sort by date (most recent first)
       allAdvances.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-      // Find the most recent cash advance that can accept this reversal
-      let remainingAmountToReverse = deductionAmount;
-      for (const advance of allAdvances) {
-        if (remainingAmountToReverse <= 0) break;
+      // Find cash advances that were partially or fully paid
+      const paidAdvances = allAdvances.filter(
+        (advance) => advance.remainingUnpaid < advance.amount
+      );
 
-        const canAcceptMore = advance.remainingUnpaid < advance.amount;
-        if (canAcceptMore) {
-          const amountToAdd = Math.min(
-            remainingAmountToReverse,
-            advance.amount - advance.remainingUnpaid
-          );
+      if (paidAdvances.length === 0) {
+        throw new Error("No paid cash advances found to reverse");
+      }
 
+      // Calculate how much was deducted from each advance
+      let totalReversed = 0;
+      for (const advance of paidAdvances) {
+        const amountDeducted = advance.amount - advance.remainingUnpaid;
+        if (amountDeducted > 0) {
           // Update the cash advance
           const updatedCashAdvance = {
             ...advance,
             status: "Unpaid" as const,
-            remainingUnpaid: advance.remainingUnpaid + amountToAdd,
+            remainingUnpaid: advance.amount, // Reset to full amount
           } as CashAdvance;
 
           // Update installment details if applicable
@@ -1294,10 +1589,9 @@ export class Payroll {
             updatedCashAdvance.paymentSchedule === "Installment" &&
             updatedCashAdvance.installmentDetails
           ) {
-            const amountPerPayment =
-              updatedCashAdvance.installmentDetails.amountPerPayment;
             updatedCashAdvance.installmentDetails.remainingPayments = Math.ceil(
-              updatedCashAdvance.remainingUnpaid / amountPerPayment
+              updatedCashAdvance.amount /
+                updatedCashAdvance.installmentDetails.amountPerPayment
             );
           }
 
@@ -1310,13 +1604,13 @@ export class Payroll {
           );
           await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
 
-          remainingAmountToReverse -= amountToAdd;
+          totalReversed += amountDeducted;
         }
       }
 
-      if (remainingAmountToReverse > 0) {
-        throw new Error(
-          `Could not fully reverse cash advance deduction. Remaining amount: ${remainingAmountToReverse}`
+      if (Math.abs(totalReversed - deductionAmount) > 0.01) {
+        console.warn(
+          `Reversed amount (${totalReversed}) differs from deduction amount (${deductionAmount})`
         );
       }
     } catch (error) {

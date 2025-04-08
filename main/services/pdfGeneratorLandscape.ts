@@ -89,18 +89,19 @@ export async function generatePayrollPDFLandscape(
       // Define columns structure with adjusted widths
       const columns = [
         { id: "no", header: "No.", width: 0.02 },
-        { id: "name", header: "NAME OF EMPLOYEE", width: 0.14 }, // Slightly reduced
+        { id: "name", header: "NAME OF EMPLOYEE", width: 0.14 },
         { id: "days", header: "DAYS", width: 0.03 },
         { id: "rate", header: "RATE", width: 0.05 },
         { id: "holiday", header: "HOLIDAY", width: 0.045 },
         { id: "ot", header: "OT", width: 0.045 },
         { id: "gross", header: "GROSS", width: 0.06 },
+        { id: "late", header: "LATE", width: 0.045 },
         { id: "ut", header: "UT", width: 0.045 },
         { id: "sss", header: "SSS", width: 0.045 },
-        { id: "philhealth", header: "PHILHEALTH", width: 0.055 }, // Increased
+        { id: "philhealth", header: "PHILHEALTH", width: 0.055 },
         { id: "pagibig", header: "PAG-IBIG", width: 0.045 },
         { id: "loan", header: "LOAN", width: 0.045 },
-        { id: "ca", header: "CA", width: 0.04 }, // Slightly reduced
+        { id: "ca", header: "CA", width: 0.04 },
         { id: "partial", header: "PARTIAL", width: 0.045 },
         { id: "others", header: "OTHERS", width: 0.045 },
         { id: "totalDeductions", header: "TOTAL DED.", width: 0.06 },
@@ -156,6 +157,12 @@ export async function generatePayrollPDFLandscape(
 
       // Draw rows
       const rowData = sortedPayrolls.map((payroll, index) => {
+        console.log("Processing row data for:", {
+          employeeName: payroll.employeeName,
+          deductions: payroll.deductions,
+          totalDeduction: payroll.deductions.totalDeduction,
+        });
+
         // Calculate values based on settings
         const grossPay = options.calculationSettings?.grossPay?.formula
           ? evaluateFormula(options.calculationSettings.grossPay.formula, {
@@ -163,6 +170,7 @@ export async function generatePayrollPDFLandscape(
               overtime: payroll.overtime,
               holidayBonus: payroll.holidayBonus || 0,
               undertimeDeduction: payroll.undertimeDeduction || 0,
+              lateDeduction: payroll.lateDeduction || 0,
               nightDifferentialPay: payroll.nightDifferentialPay || 0,
             })
           : payroll.grossPay;
@@ -172,22 +180,20 @@ export async function generatePayrollPDFLandscape(
               sssLoan: payroll.deductions.sssLoan || 0,
               pagibigLoan: payroll.deductions.pagibigLoan || 0,
               partial: payroll.deductions.partial || 0,
+              shorts: payroll.deductions.shortDeductions || 0,
+              lateDeduction: payroll.lateDeduction || 0,
             })
           : payroll.deductions.others;
 
-        const totalDeductions = options.calculationSettings?.totalDeductions
-          ?.formula
-          ? evaluateFormula(
-              options.calculationSettings.totalDeductions.formula,
-              {
-                sss: payroll.deductions.sss,
-                philHealth: payroll.deductions.philHealth,
-                pagIbig: payroll.deductions.pagIbig,
-                cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions,
-                others: others,
-              }
-            )
-          : payroll.deductions.totalDeduction;
+        // Use the totalDeduction directly from the payroll data
+        const totalDeductions = payroll.deductions.totalDeduction;
+
+        console.log("Row calculations:", {
+          grossPay,
+          others,
+          totalDeductions,
+          originalTotalDeduction: payroll.deductions.totalDeduction,
+        });
 
         return columns.map((column) => ({
           id: column.id,
@@ -207,6 +213,8 @@ export async function generatePayrollPDFLandscape(
               ? formatCurrency(payroll.overtime || 0)
               : column.id === "ut"
               ? formatCurrency(payroll.undertimeDeduction || 0)
+              : column.id === "late"
+              ? formatCurrency(payroll.lateDeduction || 0)
               : column.id === "gross"
               ? formatCurrency(grossPay)
               : column.id === "sss"
@@ -222,7 +230,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "partial"
               ? formatCurrency(0)
               : column.id === "others"
-              ? formatCurrency(others)
+              ? formatCurrency(others || 0)
               : column.id === "totalDeductions"
               ? formatCurrency(totalDeductions)
               : column.id === "netPay"
@@ -288,47 +296,28 @@ export async function generatePayrollPDFLandscape(
       // Calculate totals
       const totals = payrolls.reduce(
         (acc, curr) => {
-          const totalDeductions =
-            (curr.deductions.sss || 0) +
-            (curr.deductions.philHealth || 0) +
-            (curr.deductions.pagIbig || 0) +
-            (curr.deductions.cashAdvanceDeductions || 0) +
-            (curr.deductions.others || 0);
+          console.log("Processing payroll for totals:", {
+            employeeName: curr.employeeName,
+            deductions: curr.deductions,
+            totalDeduction: curr.deductions.totalDeduction,
+          });
 
-          // Use the netPay formula if available, otherwise use the default calculation
-          let netPay;
-          if (options.calculationSettings?.netPay?.formula) {
-            netPay = evaluateFormula(
-              options.calculationSettings.netPay.formula,
-              {
-                grossPay: curr.grossPay,
-                totalDeductions: totalDeductions,
-                // Add any other variables that might be needed for the formula
-                basicPay: curr.basicPay,
-                overtime: curr.overtime,
-                holidayBonus: curr.holidayBonus || 0,
-                undertimeDeduction: curr.undertimeDeduction || 0,
-                sss: curr.deductions.sss || 0,
-                philHealth: curr.deductions.philHealth || 0,
-                pagIbig: curr.deductions.pagIbig || 0,
-                cashAdvanceDeductions:
-                  curr.deductions.cashAdvanceDeductions || 0,
-                others: curr.deductions.others || 0,
-              }
-            );
-          } else {
-            // Default calculation
-            netPay =
-              curr.grossPay === 0 && totalDeductions > 0
-                ? totalDeductions // If no gross pay but has deductions, NET PAY should be positive deductions
-                : curr.grossPay - totalDeductions;
-          }
+          const others = options.calculationSettings?.others?.formula
+            ? evaluateFormula(options.calculationSettings.others.formula, {
+                sssLoan: curr.deductions.sssLoan || 0,
+                pagibigLoan: curr.deductions.pagibigLoan || 0,
+                partial: curr.deductions.partial || 0,
+                shorts: curr.deductions.shortDeductions || 0,
+              })
+            : curr.deductions.others;
 
           return {
             days: acc.days + curr.daysWorked,
+            rate: acc.rate + (curr.dailyRate || 0), // Add rate to totals
             holiday: acc.holiday + (curr.holidayBonus || 0),
             ot: acc.ot + (curr.overtime || 0),
             ut: acc.ut + (curr.undertimeDeduction || 0),
+            late: acc.late + (curr.lateDeduction || 0),
             gross: acc.gross + curr.grossPay,
             sss: acc.sss + (curr.deductions.sss || 0),
             philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
@@ -336,16 +325,19 @@ export async function generatePayrollPDFLandscape(
             loan: acc.loan + 0,
             ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
             partial: acc.partial + 0,
-            others: acc.others + (curr.deductions.others || 0),
-            totalDeductions: acc.totalDeductions + totalDeductions,
-            netPay: acc.netPay + netPay,
+            others: acc.others + (others || 0),
+            totalDeductions:
+              acc.totalDeductions + curr.deductions.totalDeduction,
+            netPay: acc.netPay + curr.netPay,
           };
         },
         {
           days: 0,
+          rate: 0, // Initialize rate in accumulator
           holiday: 0,
           ot: 0,
           ut: 0,
+          late: 0,
           gross: 0,
           sss: 0,
           philhealth: 0,
@@ -362,9 +354,11 @@ export async function generatePayrollPDFLandscape(
       // Format numbers to ensure consistent decimal places
       const formattedTotals = {
         ...totals,
+        rate: Number(totals.rate.toFixed(2)), // Format rate
         holiday: Number(totals.holiday.toFixed(2)),
         ot: Number(totals.ot.toFixed(2)),
         ut: Number(totals.ut.toFixed(2)),
+        late: Number(totals.late.toFixed(2)),
         gross: Number(totals.gross.toFixed(2)),
         sss: Number(totals.sss.toFixed(2)),
         philhealth: Number(totals.philhealth.toFixed(2)),
@@ -388,7 +382,7 @@ export async function generatePayrollPDFLandscape(
             : column.id === "days"
             ? formattedTotals.days.toString()
             : column.id === "rate"
-            ? ""
+            ? formatCurrency(formattedTotals.rate) // Add rate to total row
             : column.id === "holiday"
             ? formatCurrency(formattedTotals.holiday)
             : column.id === "ot"
@@ -397,6 +391,8 @@ export async function generatePayrollPDFLandscape(
             ? formatCurrency(formattedTotals.gross)
             : column.id === "ut"
             ? formatCurrency(formattedTotals.ut)
+            : column.id === "late"
+            ? formatCurrency(formattedTotals.late)
             : column.id === "sss"
             ? formatCurrency(formattedTotals.sss)
             : column.id === "philhealth"
@@ -527,6 +523,11 @@ function formatCurrency(amount: number): string {
 // Add a function to evaluate formulas
 function evaluateFormula(formula: string, data: any): number {
   try {
+    console.log("Formula evaluation:", {
+      formula,
+      variables: data,
+    });
+
     // Replace variable names with their values
     let evaluatedFormula = formula;
     for (const [key, value] of Object.entries(data)) {
@@ -538,10 +539,18 @@ function evaluateFormula(formula: string, data: any): number {
       }
     }
 
+    console.log("Processed formula:", evaluatedFormula);
+
     // Evaluate the formula
-    return eval(evaluatedFormula);
+    const result = eval(evaluatedFormula);
+    console.log("Formula result:", result);
+    return result;
   } catch (error) {
-    console.error("Error evaluating formula:", error);
+    console.error("Error evaluating formula:", {
+      error,
+      formula,
+      data,
+    });
     return 0;
   }
 }
@@ -560,6 +569,7 @@ function drawDataRows(
           overtime: payroll.overtime,
           holidayBonus: payroll.holidayBonus || 0,
           undertimeDeduction: payroll.undertimeDeduction || 0,
+          lateDeduction: payroll.lateDeduction || 0,
           nightDifferentialPay: payroll.nightDifferentialPay || 0,
         })
       : payroll.grossPay;
@@ -569,24 +579,28 @@ function drawDataRows(
           sssLoan: payroll.deductions.sssLoan || 0,
           pagibigLoan: payroll.deductions.pagibigLoan || 0,
           partial: payroll.deductions.partial || 0,
+          shorts: payroll.deductions.shortDeductions || 0,
+          lateDeduction: payroll.lateDeduction || 0,
         })
       : payroll.deductions.others;
 
     const totalDeductions = options.calculationSettings?.totalDeductions
       ?.formula
       ? evaluateFormula(options.calculationSettings.totalDeductions.formula, {
-          sss: payroll.deductions.sss,
-          philHealth: payroll.deductions.philHealth,
-          pagIbig: payroll.deductions.pagIbig,
-          cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions,
+          sss: payroll.deductions.sss || 0,
+          philHealth: payroll.deductions.philHealth || 0,
+          pagIbig: payroll.deductions.pagIbig || 0,
+          cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions || 0,
+          shorts: payroll.deductions.shortDeductions || 0,
+          lateDeduction: payroll.lateDeduction || 0,
           others: others,
         })
       : payroll.deductions.totalDeduction;
 
     // Update the text for each column
     const columnTexts: { [key: string]: string } = {
-      GROSS: grossPay.toFixed(2),
-      OTHERS: others.toFixed(2),
+      GROSS: grossPay?.toFixed(2) || "0.00",
+      OTHERS: others?.toFixed(2) || "0.00",
       "TOTAL DED.": totalDeductions.toFixed(2),
     };
   });

@@ -5,7 +5,12 @@ interface PayrollDeductions {
   philHealth: number;
   pagIbig: number;
   cashAdvanceDeductions: number;
-  others: number;
+  others?: number;
+  sssLoan?: number;
+  pagibigLoan?: number;
+  ca?: number;
+  partial?: number;
+  totalDeduction: number;
 }
 
 interface PayrollSummary {

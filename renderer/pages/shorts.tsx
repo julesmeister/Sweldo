@@ -26,8 +26,17 @@ export default function ShortsPage() {
     showAbove: boolean;
     caretLeft: number;
   } | null>(null);
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
-  const [storedYear, setStoredYear] = useState<string | null>(null);
+
+  // Initialize month/year from localStorage on first render
+  const [dateContext] = useState(() => {
+    const month =
+      localStorage.getItem("selectedMonth") || new Date().getMonth().toString();
+    const year =
+      localStorage.getItem("selectedYear") ||
+      new Date().getFullYear().toString();
+    return { month, year };
+  });
+
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
@@ -35,94 +44,59 @@ export default function ShortsPage() {
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
   const shortModel = useMemo(() => {
     if (!selectedEmployeeId || !dbPath) return null;
-    const month = storedMonth
-      ? parseInt(storedMonth, 10) + 1
-      : new Date().getMonth() + 1;
-    const year = storedYear
-      ? parseInt(storedYear, 10)
-      : new Date().getFullYear();
-    return createShortModel(dbPath, selectedEmployeeId, month, year);
-  }, [dbPath, selectedEmployeeId, storedMonth, storedYear]);
+    return createShortModel(
+      dbPath,
+      selectedEmployeeId,
+      parseInt(dateContext.month, 10) + 1,
+      parseInt(dateContext.year, 10)
+    );
+  }, [dbPath, selectedEmployeeId, dateContext]);
   const { hasAccess } = useAuthStore();
 
   const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const month = localStorage.getItem("selectedMonth");
-      const year = localStorage.getItem("selectedYear");
+    let mounted = true;
 
-      console.log("Initial month/year from localStorage:", { month, year });
-      setStoredMonth(month);
-      setStoredYear(year);
-    }
-  }, []);
-
-  useEffect(() => {
     const loadData = async () => {
-      // Validate required data
-      if (!selectedEmployeeId) {
-        console.log("No employee selected");
-        return;
-      }
-
-      if (!dbPath) {
-        toast.error("Database path is not set");
-        return;
-      }
-
-      if (!employeeModel || !shortModel) {
-        console.warn("Models not initialized:", {
-          employeeModel: !!employeeModel,
-          shortModel: !!shortModel,
-        });
+      if (!selectedEmployeeId || !dbPath || !employeeModel || !shortModel) {
         return;
       }
 
       setLoading(true);
       try {
-        // Load employee data
-        const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
+        const [emp, shortItems] = await Promise.all([
+          employeeModel.loadEmployeeById(selectedEmployeeId),
+          shortModel.loadShorts(selectedEmployeeId),
+        ]);
+
+        if (!mounted) return;
+
         if (emp !== null) setEmployee(emp);
-
-        // Load shorts
-        console.log("Loading shorts with params:", {
-          selectedEmployeeId,
-          storedMonth,
-          storedYear,
-          modelMonth: shortModel?.month,
-          modelYear: shortModel?.year,
-        });
-
-        const shortItems = await shortModel.loadShorts(selectedEmployeeId);
-        console.log("Loaded shorts:", {
-          count: shortItems.length,
-          shorts: shortItems,
-          storedMonth,
-          storedYear,
-        });
         setShorts(shortItems);
       } catch (error) {
         console.error("Error loading data:", error);
-        if (error instanceof Error) {
-          toast.error(`Failed to load data: ${error.message}`);
-        } else {
-          toast.error("Failed to load data");
+        if (mounted) {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to load data"
+          );
         }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (selectedEmployeeId !== null) {
-      loadData();
-    }
-  }, [selectedEmployeeId, dbPath, employeeModel, shortModel, setLoading]);
+    loadData();
 
-  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
-  const yearInt = storedYear
-    ? parseInt(storedYear, 10)
-    : new Date().getFullYear();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedEmployeeId, dbPath, employeeModel, shortModel]);
+
+  const storedMonthInt = parseInt(dateContext.month, 10) + 1;
+  const yearInt = parseInt(dateContext.year, 10);
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Paid":
@@ -292,30 +266,12 @@ export default function ShortsPage() {
   const filteredShorts = useMemo(() => {
     return shorts.filter((short) => {
       const shortDate = new Date(short.date);
-      const shortMonth = shortDate.getMonth();
-      const shortYear = shortDate.getFullYear();
-
-      console.log("Filtering short:", {
-        date: shortDate,
-        shortMonth,
-        shortYear,
-        storedMonth: parseInt(storedMonth || "0", 10),
-        storedYear: parseInt(storedYear || "", 10),
-      });
-
       return (
-        shortMonth === parseInt(storedMonth || "0", 10) &&
-        shortYear === parseInt(storedYear || "", 10)
+        shortDate.getMonth() === parseInt(dateContext.month, 10) &&
+        shortDate.getFullYear() === parseInt(dateContext.year, 10)
       );
     });
-  }, [shorts, storedMonth, storedYear]);
-
-  console.log("Rendering shorts:", {
-    totalShorts: shorts.length,
-    filteredShorts: filteredShorts.length,
-    storedMonth,
-    storedYear,
-  });
+  }, [shorts, dateContext]);
 
   return (
     <RootLayout>
@@ -398,11 +354,8 @@ export default function ShortsPage() {
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">
                               No shorts found for{" "}
                               {new Date(
-                                parseInt(
-                                  storedYear ||
-                                    new Date().getFullYear().toString()
-                                ),
-                                parseInt(storedMonth || "0"),
+                                parseInt(dateContext.year, 10),
+                                parseInt(dateContext.month, 10),
                                 1
                               ).toLocaleString("default", {
                                 month: "long",

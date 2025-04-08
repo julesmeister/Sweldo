@@ -26,6 +26,7 @@ interface DiscrepancyCalculation {
       philHealth: number;
       pagIbig: number;
       cashAdvance: number;
+      shortDeductions: number;
       others: number;
     };
   };
@@ -79,6 +80,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
       data.deductions.philHealth +
       data.deductions.pagIbig +
       data.deductions.cashAdvanceDeductions +
+      (data.deductions.shortDeductions || 0) +
       data.deductions.others; // Remove duplicate counting of late/undertime
     const expectedNetPay = data.grossPay - totalDeductions;
     if (Math.abs(data.netPay - expectedNetPay) >= 0.01) {
@@ -94,6 +96,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
             philHealth: data.deductions.philHealth,
             pagIbig: data.deductions.pagIbig,
             cashAdvance: data.deductions.cashAdvanceDeductions,
+            shortDeductions: data.deductions.shortDeductions || 0,
             others: data.deductions.others,
             // Remove these since they're included in others
             // late: data.lateDeduction || 0,
@@ -485,6 +488,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                             Number(data.deductions.philHealth) +
                             Number(data.deductions.pagIbig) +
                             Number(data.deductions.cashAdvanceDeductions) +
+                            Number(data.deductions.shortDeductions ?? 0) +
                             Number(data.deductions.others)
                         )}
                       </span>
@@ -492,71 +496,80 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                   </div>
                 </div>
               </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
-                    <div className="flex items-center mb-1">
-                      <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
-                      <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
-                        SSS
-                      </span>
-                    </div>
-                    <span className="text-2xl font-bold text-rose-600">
-                      ₱-{formatCurrency(data.deductions.sss)}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center mb-1">
+                    <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                    <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                      SSS
                     </span>
                   </div>
-                  <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
-                    <div className="flex items-center mb-1">
-                      <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
-                      <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
-                        PhilHealth
-                      </span>
-                    </div>
-                    <span className="text-2xl font-bold text-rose-600">
-                      ₱-{formatCurrency(data.deductions.philHealth)}
-                    </span>
-                  </div>
+                  <span className="text-2xl font-bold text-rose-600">
+                    ₱-{formatCurrency(data.deductions.sss)}
+                  </span>
                 </div>
-                <div className="space-y-3">
+                <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center mb-1">
+                    <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                    <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                      PhilHealth
+                    </span>
+                  </div>
+                  <span className="text-2xl font-bold text-rose-600">
+                    ₱-{formatCurrency(data.deductions.philHealth)}
+                  </span>
+                </div>
+                <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                  <div className="flex items-center mb-1">
+                    <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                    <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                      Pag-IBIG
+                    </span>
+                  </div>
+                  <span className="text-2xl font-bold text-rose-600">
+                    ₱-{formatCurrency(data.deductions.pagIbig)}
+                  </span>
+                </div>
+                {data.deductions.cashAdvanceDeductions > 0 && (
                   <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
                     <div className="flex items-center mb-1">
                       <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
                       <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
-                        Pag-IBIG
+                        Cash Advance
                       </span>
                     </div>
                     <span className="text-2xl font-bold text-rose-600">
-                      ₱-{formatCurrency(data.deductions.pagIbig)}
+                      ₱-{formatCurrency(data.deductions.cashAdvanceDeductions)}
                     </span>
                   </div>
-                  {data.deductions.cashAdvanceDeductions > 0 && (
-                    <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
-                      <div className="flex items-center mb-1">
-                        <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
-                        <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
-                          Cash Advance
-                        </span>
-                      </div>
-                      <span className="text-2xl font-bold text-rose-600">
-                        ₱-
-                        {formatCurrency(data.deductions.cashAdvanceDeductions)}
+                )}
+                {(data.deductions.shortDeductions ?? 0) > 0 && (
+                  <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                    <div className="flex items-center mb-1">
+                      <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                      <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                        Shorts
                       </span>
                     </div>
-                  )}
-                  {data.deductions.others > 0 && (
-                    <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
-                      <div className="flex items-center mb-1">
-                        <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
-                        <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
-                          Other Deductions
-                        </span>
-                      </div>
-                      <span className="text-2xl font-bold text-rose-600">
-                        ₱-{formatCurrency(data.deductions.others)}
+                    <span className="text-2xl font-bold text-rose-600">
+                      ₱-{formatCurrency(data.deductions.shortDeductions ?? 0)}
+                    </span>
+                  </div>
+                )}
+                {data.deductions.others > 0 && (
+                  <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                    <div className="flex items-center mb-1">
+                      <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                      <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                        Other Deductions
                       </span>
                     </div>
-                  )}
-                </div>
+                    <span className="text-2xl font-bold text-rose-600">
+                      ₱-{formatCurrency(data.deductions.others)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -623,7 +636,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                                 data.deductions.philHealth +
                                 data.deductions.pagIbig +
                                 data.deductions.cashAdvanceDeductions +
-                                data.deductions.others +
+                                (data.deductions.shortDeductions ?? 0) +
                                 (data.lateDeduction || 0) +
                                 (data.undertimeDeduction || 0)))
                         ) < 0.01

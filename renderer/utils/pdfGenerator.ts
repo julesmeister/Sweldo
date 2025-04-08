@@ -1,14 +1,8 @@
 import type {
   PayrollSummary,
   PayrollDeductions,
+  PDFGeneratorOptions,
 } from "@/renderer/types/payroll";
-
-export interface PDFGeneratorOptions {
-  outputPath: string;
-  logoPath?: string;
-  companyName: string;
-  dbPath: string; // Path to the database directory
-}
 
 // Re-export the type to ensure it's recognized
 export type { PDFGeneratorOptions as PDFOptions };

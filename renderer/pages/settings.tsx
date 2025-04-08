@@ -2289,6 +2289,10 @@ export default function SettingsPage() {
                             description: "Undertime Deduction",
                           },
                           {
+                            name: "lateDeduction",
+                            description: "Late Deduction",
+                          },
+                          {
                             name: "nightDifferentialPay",
                             description: "Night Differential",
                           },

@@ -30,8 +30,17 @@ export default function CashAdvancesPage() {
     showAbove: boolean;
     caretLeft: number;
   } | null>(null);
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
-  const [storedYear, setStoredYear] = useState<string | null>(null);
+
+  // Initialize month/year from localStorage on first render
+  const [dateContext] = useState(() => {
+    const month =
+      localStorage.getItem("selectedMonth") || new Date().getMonth().toString();
+    const year =
+      localStorage.getItem("selectedYear") ||
+      new Date().getFullYear().toString();
+    return { month, year };
+  });
+
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId } = useEmployeeStore();
@@ -39,95 +48,79 @@ export default function CashAdvancesPage() {
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
   const cashAdvanceModel = useMemo(() => {
     if (!selectedEmployeeId || !dbPath) return null;
-    const month = storedMonth
-      ? parseInt(storedMonth, 10) + 1
-      : new Date().getMonth() + 1;
-    const year = storedYear
-      ? parseInt(storedYear, 10)
-      : new Date().getFullYear();
-    return createCashAdvanceModel(dbPath, selectedEmployeeId, month, year);
-  }, [dbPath, selectedEmployeeId, storedMonth, storedYear]);
+    return createCashAdvanceModel(
+      dbPath,
+      selectedEmployeeId,
+      parseInt(dateContext.month, 10) + 1,
+      parseInt(dateContext.year, 10)
+    );
+  }, [dbPath, selectedEmployeeId, dateContext]);
   const { hasAccess } = useAuthStore();
 
   const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
 
+  // Load employee and cash advances data
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const month = localStorage.getItem("selectedMonth");
-      const year = localStorage.getItem("selectedYear");
+    let mounted = true;
 
-      console.log("Initial month/year from localStorage:", { month, year });
-      setStoredMonth(month);
-      setStoredYear(year);
-    }
-  }, []);
-
-  useEffect(() => {
     const loadData = async () => {
-      // Validate required data
-      if (!selectedEmployeeId) {
-        console.log("No employee selected");
-        return;
-      }
-
-      if (!dbPath) {
-        toast.error("Database path is not set");
-        return;
-      }
-
-      if (!employeeModel || !cashAdvanceModel) {
-        console.warn("Models not initialized:", {
-          employeeModel: !!employeeModel,
-          cashAdvanceModel: !!cashAdvanceModel,
-        });
+      if (
+        !selectedEmployeeId ||
+        !dbPath ||
+        !employeeModel ||
+        !cashAdvanceModel
+      ) {
         return;
       }
 
       setLoading(true);
       try {
-        // Load employee data
-        const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
+        const [emp, advances] = await Promise.all([
+          employeeModel.loadEmployeeById(selectedEmployeeId),
+          cashAdvanceModel.loadCashAdvances(selectedEmployeeId),
+        ]);
+
+        if (!mounted) return;
+
         if (emp !== null) setEmployee(emp);
-
-        // Load cash advances
-        console.log("Loading cash advances with params:", {
-          selectedEmployeeId,
-          storedMonth,
-          storedYear,
-          modelMonth: cashAdvanceModel?.month,
-          modelYear: cashAdvanceModel?.year,
-        });
-
-        const advances = await cashAdvanceModel.loadCashAdvances(
-          selectedEmployeeId
-        );
-        console.log("Loaded cash advances:", {
-          count: advances.length,
-          advances,
-          storedMonth,
-          storedYear,
-        });
         setCashAdvances(advances);
       } catch (error) {
         console.error("Error loading data:", error);
-        if (error instanceof Error) {
-          toast.error(`Failed to load data: ${error.message}`);
-        } else {
-          toast.error("Failed to load data");
+        if (mounted) {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to load data"
+          );
         }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (selectedEmployeeId !== null) {
-      loadData();
-    }
-  }, [selectedEmployeeId, dbPath, employeeModel, cashAdvanceModel, setLoading]);
+    loadData();
 
-  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
-  const yearInt = storedYear
-    ? parseInt(storedYear, 10)
+    return () => {
+      mounted = false;
+    };
+  }, [selectedEmployeeId, dbPath, employeeModel, cashAdvanceModel]);
+
+  // Filter advances based on month/year
+  const filteredAdvances = useMemo(() => {
+    return cashAdvances.filter((advance) => {
+      const advanceDate = new Date(advance.date);
+      return (
+        advanceDate.getMonth() === parseInt(dateContext.month, 10) &&
+        advanceDate.getFullYear() === parseInt(dateContext.year, 10)
+      );
+    });
+  }, [cashAdvances, dateContext]);
+
+  const storedMonthInt = dateContext.month
+    ? parseInt(dateContext.month, 10) + 1
+    : 0;
+  const yearInt = dateContext.year
+    ? parseInt(dateContext.year, 10)
     : new Date().getFullYear();
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -305,34 +298,6 @@ export default function CashAdvancesPage() {
     }
   }
 
-  const filteredAdvances = useMemo(() => {
-    return cashAdvances.filter((advance) => {
-      const advanceDate = new Date(advance.date);
-      const advanceMonth = advanceDate.getMonth();
-      const advanceYear = advanceDate.getFullYear();
-
-      console.log("Filtering advance:", {
-        date: advanceDate,
-        advanceMonth,
-        advanceYear,
-        storedMonth: parseInt(storedMonth || "0", 10),
-        storedYear: parseInt(storedYear || "", 10),
-      });
-
-      return (
-        advanceMonth === parseInt(storedMonth || "0", 10) &&
-        advanceYear === parseInt(storedYear || "", 10)
-      );
-    });
-  }, [cashAdvances, storedMonth, storedYear]);
-
-  console.log("Rendering cash advances:", {
-    totalAdvances: cashAdvances.length,
-    filteredAdvances: filteredAdvances.length,
-    storedMonth,
-    storedYear,
-  });
-
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -387,10 +352,10 @@ export default function CashAdvancesPage() {
                               No cash advances found for{" "}
                               {new Date(
                                 parseInt(
-                                  storedYear ||
+                                  dateContext.year ||
                                     new Date().getFullYear().toString()
                                 ),
-                                parseInt(storedMonth || "0"),
+                                parseInt(dateContext.month),
                                 1
                               ).toLocaleString("default", {
                                 month: "long",
@@ -409,37 +374,43 @@ export default function CashAdvancesPage() {
                             <tr>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
                               >
                                 Date
                               </th>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28"
                               >
                                 Amount
                               </th>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64"
+                              >
+                                Reason
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32"
                               >
                                 Payment Type
                               </th>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32"
                               >
                                 Approval Status
                               </th>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28"
                               >
                                 Remaining Payments
                               </th>
                               <th
                                 scope="col"
-                                className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                                className="relative py-3.5 pl-3 pr-4 sm:pr-6 w-24"
                               >
                                 <span className="sr-only">Actions</span>
                               </th>
@@ -457,6 +428,9 @@ export default function CashAdvancesPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   ₱{advance.amount.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500">
+                                  {advance.reason}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                   <span

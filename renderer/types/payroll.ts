@@ -3,11 +3,12 @@ export interface PayrollDeductions {
   philHealth: number;
   pagIbig: number;
   cashAdvanceDeductions: number;
-  others: number;
   sssLoan?: number;
   pagibigLoan?: number;
   ca?: number;
   partial?: number;
+  shortDeductions?: number;
+  others?: number;
   totalDeduction: number;
 }
 
@@ -19,6 +20,7 @@ export interface PayrollSummary {
   basicPay: number;
   dailyRate: number;
   undertimeDeduction?: number;
+  lateDeduction?: number;
   holidayBonus?: number;
   overtime: number;
   grossPay: number;
@@ -56,4 +58,29 @@ export interface PDFGeneratorOptions {
       description: string; // e.g., "Gross pay minus total deductions"
     };
   };
+}
+
+export interface PayrollSummaryModel {
+  employeeName: string;
+  startDate: string;
+  endDate: string;
+  daysWorked: number;
+  basicPay: number;
+  dailyRate: number;
+  overtime: number;
+  grossPay: number;
+  netPay: number;
+  sssDeduction: number;
+  philhealthDeduction: number;
+  pagibigDeduction: number;
+  cashAdvanceDeductions: number;
+  shortsDeductions: number;
+  otherDeductions: number;
+  lateDeduction: number;
+  undertimeDeduction: number;
+  holidayBonus?: number;
+  nightDifferentialPay?: number;
+  preparedBy?: string;
+  approvedBy?: string;
+  payslipNumber?: number;
 }

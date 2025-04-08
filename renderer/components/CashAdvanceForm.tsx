@@ -54,10 +54,10 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
       return;
     }
 
-    // Validate amount
+    // Validate remaining unpaid
     const parsedRemainingUnpaid = parseFloat(remainingUnpaid);
-    if (isNaN(parsedRemainingUnpaid) || parsedRemainingUnpaid <= 0) {
-      toast.error("Please enter a valid amount greater than 0");
+    if (isNaN(parsedRemainingUnpaid) || parsedRemainingUnpaid < 0) {
+      toast.error("Please enter a valid amount (0 or greater)");
       return;
     }
 

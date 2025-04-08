@@ -44,9 +44,7 @@ export default function RootLayout({
 
   // Initialize settings store
   useEffect(() => {
-    console.log("Initializing settings...");
     initialize().catch((error) => {
-      console.error("Failed to initialize settings:", error);
       setInitError("Failed to initialize settings. Please try again.");
     });
   }, [initialize]);
@@ -66,7 +64,6 @@ export default function RootLayout({
     const initializeAuth = async () => {
       // Wait for settings to be initialized
       if (!isInitialized) {
-        console.log("Waiting for settings to initialize...");
         return;
       }
 
@@ -75,8 +72,6 @@ export default function RootLayout({
         setIsCheckingRoles(false);
         return;
       }
-
-      console.log("Checking auth with dbPath:", dbPath);
 
       if (!dbPath) {
         setIsCheckingRoles(false);
@@ -95,7 +90,6 @@ export default function RootLayout({
         await window.electron.ensureDir(sweldoPath);
 
         const roles = await roleModel.getRoles();
-        console.log("Found roles:", roles.length);
 
         // If no roles exist, redirect to role creation page
         if (roles.length === 0) {
@@ -111,7 +105,6 @@ export default function RootLayout({
 
         hasCheckedRoles.current = true;
       } catch (error) {
-        console.error("Error checking roles:", error);
         setInitError(
           "Error checking roles. Please check your database path and try again."
         );

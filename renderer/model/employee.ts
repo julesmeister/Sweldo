@@ -122,7 +122,6 @@ export class EmployeeModel {
         return await window.electron.readFile(this.filePath);
       });
       if (!fileContent) {
-        console.log("[EmployeeModel] No file content found");
         return null;
       }
       const results = Papa.parse(fileContent, {
@@ -131,23 +130,6 @@ export class EmployeeModel {
       });
       const employees = results.data as Employee[];
       const employee = employees.find((emp) => emp.id === id) || null;
-
-      console.log("[EmployeeModel] Raw employee data from CSV:", {
-        employeeId: employee?.id,
-        lastPaymentPeriod: employee?.lastPaymentPeriod,
-        startType: isLastPaymentPeriod(employee?.lastPaymentPeriod)
-          ? typeof employee.lastPaymentPeriod.start
-          : "undefined",
-        endType: isLastPaymentPeriod(employee?.lastPaymentPeriod)
-          ? typeof employee.lastPaymentPeriod.end
-          : "undefined",
-        startValue: isLastPaymentPeriod(employee?.lastPaymentPeriod)
-          ? employee.lastPaymentPeriod.start
-          : undefined,
-        endValue: isLastPaymentPeriod(employee?.lastPaymentPeriod)
-          ? employee.lastPaymentPeriod.end
-          : undefined,
-      });
 
       if (employee) {
         const lastPaymentPeriod = employee.lastPaymentPeriod
@@ -170,7 +152,6 @@ export class EmployeeModel {
 
       return null;
     } catch (error) {
-      console.error("Error loading employee:", error);
       throw error;
     }
   }
@@ -232,22 +213,6 @@ export class EmployeeModel {
   public async updateEmployeeDetails(employee: Employee): Promise<void> {
     try {
       await this.ensureEmployeeFile();
-      console.log("[EmployeeModel] Updating employee details:", {
-        employeeId: employee.id,
-        lastPaymentPeriod: employee.lastPaymentPeriod,
-        startType: isLastPaymentPeriod(employee.lastPaymentPeriod)
-          ? typeof employee.lastPaymentPeriod.start
-          : "undefined",
-        endType: isLastPaymentPeriod(employee.lastPaymentPeriod)
-          ? typeof employee.lastPaymentPeriod.end
-          : "undefined",
-        startValue: isLastPaymentPeriod(employee.lastPaymentPeriod)
-          ? employee.lastPaymentPeriod.start
-          : undefined,
-        endValue: isLastPaymentPeriod(employee.lastPaymentPeriod)
-          ? employee.lastPaymentPeriod.end
-          : undefined,
-      });
 
       // Load current employees
       const currentEmployees = await this.loadEmployees();
@@ -257,34 +222,12 @@ export class EmployeeModel {
       );
       if (index === -1) {
         const error = `Employee with id ${employee.id} not found.`;
-        console.error(error);
         toast.error(error);
         return;
       }
 
       // Update the employee's details
       currentEmployees[index] = { ...currentEmployees[index], ...employee };
-
-      console.log("[EmployeeModel] Updated employee data before saving:", {
-        employeeId: currentEmployees[index].id,
-        lastPaymentPeriod: currentEmployees[index].lastPaymentPeriod,
-        startType: isLastPaymentPeriod(
-          currentEmployees[index].lastPaymentPeriod
-        )
-          ? typeof currentEmployees[index].lastPaymentPeriod.start
-          : "undefined",
-        endType: isLastPaymentPeriod(currentEmployees[index].lastPaymentPeriod)
-          ? typeof currentEmployees[index].lastPaymentPeriod.end
-          : "undefined",
-        startValue: isLastPaymentPeriod(
-          currentEmployees[index].lastPaymentPeriod
-        )
-          ? currentEmployees[index].lastPaymentPeriod.start
-          : undefined,
-        endValue: isLastPaymentPeriod(currentEmployees[index].lastPaymentPeriod)
-          ? currentEmployees[index].lastPaymentPeriod.end
-          : undefined,
-      });
 
       // Convert dates to ISO strings and stringify the lastPaymentPeriod object before saving to CSV
       const employeesToSave = currentEmployees.map((emp) => ({
@@ -297,11 +240,6 @@ export class EmployeeModel {
           : undefined,
       }));
 
-      console.log("[EmployeeModel] Data being saved to CSV:", {
-        employeeId: employeesToSave[index].id,
-        lastPaymentPeriod: employeesToSave[index].lastPaymentPeriod,
-      });
-
       // Save the updated employee list back to the CSV
       const csv = Papa.unparse(employeesToSave);
       await retryOperation(async () => {
@@ -310,7 +248,6 @@ export class EmployeeModel {
       toast.success(`Employee details updated.`);
     } catch (error) {
       const errorMessage = `Failed to update employee details: ${error}`;
-      console.error(errorMessage);
       toast.error(errorMessage);
       throw error;
     }

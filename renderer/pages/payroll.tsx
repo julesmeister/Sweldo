@@ -22,6 +22,7 @@ import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
 import { usePayrollDelete } from "@/renderer/hooks/usePayrollDelete";
 import { usePayrollStatistics } from "@/renderer/hooks/usePayrollStatistics";
 import { createStatisticsModel } from "@/renderer/model/statistics";
+import { PDFGeneratorOptions } from "@/renderer/types/payroll";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -86,12 +87,20 @@ export default function PayrollPage() {
 
   const handleDeletePayrollItem = useCallback(
     async (payrollId: string) => {
-      await deletePayroll(payrollId, payrolls);
-      setPayrolls((currentPayrolls) =>
-        currentPayrolls.filter((p) => p.id !== payrollId)
-      );
+      setLoading(true);
+      try {
+        await deletePayroll(payrollId, payrolls);
+        setPayrolls((currentPayrolls) =>
+          currentPayrolls.filter((p) => p.id !== payrollId)
+        );
+      } catch (error) {
+        console.error("Error deleting payroll:", error);
+        toast.error("Failed to delete payroll");
+      } finally {
+        setLoading(false);
+      }
     },
-    [deletePayroll, payrolls]
+    [deletePayroll, payrolls, setLoading]
   );
 
   // Then use the callbacks in useMemo
@@ -126,8 +135,6 @@ export default function PayrollPage() {
       !dbPath ||
       !selectedEmployeeId
     ) {
-      console.log("Missing required data for loading payrolls");
-      setPayrolls([]);
       return;
     }
 
@@ -173,12 +180,11 @@ export default function PayrollPage() {
 
       setPayrolls(formattedPayrolls);
     } catch (error) {
-      console.error("Error loading payrolls:", error);
       toast.error("Failed to load payroll data");
     } finally {
       setLoading(false);
     }
-  }, [dbPath, selectedEmployeeId, dateRange, setLoading]); // Removed refreshPayrolls from dependencies
+  }, [dbPath, selectedEmployeeId, dateRange, setLoading]);
 
   // Modify the refresh handling
   useEffect(() => {
@@ -266,6 +272,7 @@ export default function PayrollPage() {
     philHealth: number;
     pagIbig: number;
     cashAdvanceDeductions: number;
+    shortDeductions: number;
   }) => {
     if (!hasAccess("MANAGE_PAYROLL")) {
       toast.error("You don't have permission to modify payroll");
@@ -302,6 +309,7 @@ export default function PayrollPage() {
           philHealth: deductions.philHealth,
           pagIbig: deductions.pagIbig,
           cashAdvanceDeductions: deductions.cashAdvanceDeductions,
+          shortDeductions: deductions.shortDeductions,
         }
       );
 
@@ -322,7 +330,6 @@ export default function PayrollPage() {
 
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    console.log("Setting loading state to true");
     setLoading(true);
     setActiveLink(path);
     router.push(path);
@@ -371,44 +378,117 @@ export default function PayrollPage() {
               const summaryDate = new Date(summary.startDate);
               return summaryDate >= startDate && summaryDate <= endDate;
             })
-            .map((summary, index) => ({
-              ...summary,
-              startDate: summary.startDate.toISOString(),
-              endDate: summary.endDate.toISOString(),
-              employeeName: employee.name,
-              daysWorked: Number(summary.daysWorked) || 15,
-              basicPay: Number(summary.basicPay) || 0,
-              undertimeDeduction: Number(summary.undertimeDeduction) || 0,
-              holidayBonus: Number(summary.holidayBonus) || 0,
-              overtime: Number(summary.overtime) || 0,
-              grossPay: Number(summary.grossPay) || 0,
-              netPay: Number(summary.netPay) || 0,
-              dailyRate: Number(summary.dailyRate) || 0,
-              legalHoliday: 0,
-              specialHoliday: 0,
-              otPay: Number(summary.overtime) || 0,
-              deductions: {
+            .map((summary, index) => {
+              // Create variables object for formula evaluation
+              const variables = {
+                basicPay: Number(summary.basicPay) || 0,
+                overtime: Number(summary.overtime) || 0,
+                holidayBonus: Number(summary.holidayBonus) || 0,
+                undertimeDeduction: Number(summary.undertimeDeduction) || 0,
+                lateDeduction: Number(summary.lateDeduction) || 0,
+                nightDifferentialPay: Number(summary.nightDifferentialPay) || 0,
                 sss: Number(summary.deductions.sss) || 0,
                 philHealth: Number(summary.deductions.philHealth) || 0,
                 pagIbig: Number(summary.deductions.pagIbig) || 0,
                 cashAdvanceDeductions:
                   Number(summary.deductions.cashAdvanceDeductions) || 0,
+                shorts: Number(summary.deductions.shortDeductions) || 0,
                 others: Number(summary.deductions.others) || 0,
-                sssLoan: 0,
-                pagibigLoan: 0,
-                ca: Number(summary.deductions.cashAdvanceDeductions) || 0,
-                partial: 0,
-                totalDeduction:
-                  Number(summary.deductions.sss || 0) +
-                  Number(summary.deductions.philHealth || 0) +
-                  Number(summary.deductions.pagIbig || 0) +
-                  Number(summary.deductions.cashAdvanceDeductions || 0) +
-                  Number(summary.deductions.others || 0),
-              },
-              preparedBy: preparedBy || "",
-              approvedBy: approvedBy || "",
-              payslipNumber: index + 1,
-            }));
+              };
+
+              // Get settings store state
+              const settingsState = useSettingsStore.getState();
+              const { calculationSettings } = settingsState;
+
+              // Evaluate formulas
+              let grossPay = variables.basicPay;
+              let totalDeduction = 0;
+              let netPay = 0;
+
+              try {
+                if (calculationSettings?.grossPay?.formula) {
+                  // eslint-disable-next-line no-new-func
+                  const grossPayFn = new Function(
+                    ...Object.keys(variables),
+                    `return ${calculationSettings.grossPay.formula}`
+                  );
+                  grossPay = grossPayFn(...Object.values(variables));
+                }
+
+                if (calculationSettings?.totalDeductions?.formula) {
+                  // eslint-disable-next-line no-new-func
+                  const totalDeductionsFn = new Function(
+                    ...Object.keys(variables),
+                    `return ${calculationSettings.totalDeductions.formula}`
+                  );
+                  totalDeduction = totalDeductionsFn(
+                    ...Object.values(variables)
+                  );
+                } else {
+                  // Fallback to sum of all deductions
+                  totalDeduction =
+                    variables.sss +
+                    variables.philHealth +
+                    variables.pagIbig +
+                    variables.cashAdvanceDeductions +
+                    variables.shorts +
+                    variables.others;
+                }
+
+                if (calculationSettings?.netPay?.formula) {
+                  const netPayVariables = {
+                    ...variables,
+                    grossPay,
+                    totalDeductions: totalDeduction,
+                  };
+                  // eslint-disable-next-line no-new-func
+                  const netPayFn = new Function(
+                    ...Object.keys(netPayVariables),
+                    `return ${calculationSettings.netPay.formula}`
+                  );
+                  netPay = netPayFn(...Object.values(netPayVariables));
+                } else {
+                  netPay = grossPay - totalDeduction;
+                }
+              } catch (error) {
+                console.error("Error evaluating formulas:", error);
+                // Fallback to basic calculations
+                grossPay =
+                  variables.basicPay +
+                  variables.overtime +
+                  variables.holidayBonus -
+                  variables.undertimeDeduction;
+                netPay = grossPay - totalDeduction;
+              }
+
+              return {
+                ...summary,
+                startDate: summary.startDate.toISOString(),
+                endDate: summary.endDate.toISOString(),
+                employeeName: employee.name,
+                daysWorked: Number(summary.daysWorked) || 15,
+                basicPay: variables.basicPay,
+                undertimeDeduction: variables.undertimeDeduction,
+                lateDeduction: variables.lateDeduction,
+                holidayBonus: variables.holidayBonus,
+                overtime: variables.overtime,
+                grossPay,
+                netPay,
+                dailyRate: Number(summary.dailyRate) || 0,
+                deductions: {
+                  sss: variables.sss,
+                  philHealth: variables.philHealth,
+                  pagIbig: variables.pagIbig,
+                  cashAdvanceDeductions: variables.cashAdvanceDeductions,
+                  others: variables.others,
+                  shortDeductions: variables.shorts,
+                  totalDeduction: totalDeduction,
+                },
+                preparedBy: preparedBy || "",
+                approvedBy: approvedBy || "",
+                payslipNumber: index + 1,
+              };
+            });
         } catch (error) {
           console.log(
             `No payroll found for employee ${employee.name} (${employee.id})`
@@ -429,27 +509,41 @@ export default function PayrollPage() {
         return;
       }
 
+      console.log(
+        "Final payroll data for PDF:",
+        formattedPayrolls.map((p) => ({
+          employeeName: p.employeeName,
+          grossPay: p.grossPay,
+          deductions: p.deductions,
+          netPay: p.netPay,
+        }))
+      );
+
       // Get the output directory path
       const outputPath = await window.electron.getPath("documents");
       const pdfOutputPath = path.join(outputPath, "payroll_summaries.pdf");
 
       // Use logo from settings store
       if (!logoPath) {
-        console.warn("Logo path not set in settings");
+        // Skip warning about logo path
       }
+
+      // Get settings store state
+      const settingsState = useSettingsStore.getState();
 
       // Generate PDF with formatted payroll summaries
       const pdfPath = await window.electron.generatePDF(formattedPayrolls, {
         outputPath: pdfOutputPath,
         logoPath: logoPath || "",
+        companyName: settingsState.companyName,
+        calculationSettings: settingsState.calculationSettings,
         dbPath: dbPath,
-      });
+      } as PDFGeneratorOptions);
 
       // Open the generated PDF
       await window.electron.openPath(pdfPath);
       toast.success("PDF generated successfully!");
     } catch (error) {
-      console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF");
     } finally {
       setIsGeneratingPDF(false);
@@ -499,38 +593,203 @@ export default function PayrollPage() {
               const summaryDate = new Date(summary.startDate);
               return summaryDate >= startDate && summaryDate <= endDate;
             })
-            .map((summary, index) => ({
-              ...summary,
-              startDate: summary.startDate.toISOString(),
-              endDate: summary.endDate.toISOString(),
-              employeeName: employee.name,
-              // Include all the same fields as handleGeneratePDFForAll
-              daysWorked: Number(summary.daysWorked) || 15,
-              basicPay: Number(summary.basicPay) || 0,
-              undertimeDeduction: Number(summary.undertimeDeduction) || 0,
-              holidayBonus: Number(summary.holidayBonus) || 0,
-              overtime: Number(summary.overtime) || 0,
-              grossPay: Number(summary.grossPay) || 0,
-              netPay: Number(summary.netPay) || 0,
-              dailyRate: Number(summary.dailyRate) || 0,
-              deductions: {
+            .map((summary, index) => {
+              // Create variables object for formula evaluation
+              const variables = {
+                basicPay: Number(summary.basicPay) || 0,
+                overtime: Number(summary.overtime) || 0,
+                holidayBonus: Number(summary.holidayBonus) || 0,
+                undertimeDeduction: Number(summary.undertimeDeduction) || 0,
+                lateDeduction: Number(summary.lateDeduction) || 0,
+                nightDifferentialPay: Number(summary.nightDifferentialPay) || 0,
                 sss: Number(summary.deductions.sss) || 0,
                 philHealth: Number(summary.deductions.philHealth) || 0,
                 pagIbig: Number(summary.deductions.pagIbig) || 0,
                 cashAdvanceDeductions:
                   Number(summary.deductions.cashAdvanceDeductions) || 0,
+                shorts: Number(summary.deductions.shortDeductions) || 0,
                 others: Number(summary.deductions.others) || 0,
-                totalDeduction:
-                  Number(summary.deductions.sss || 0) +
-                  Number(summary.deductions.philHealth || 0) +
-                  Number(summary.deductions.pagIbig || 0) +
-                  Number(summary.deductions.cashAdvanceDeductions || 0) +
-                  Number(summary.deductions.others || 0),
-              },
-              preparedBy: preparedBy || "",
-              approvedBy: approvedBy || "",
-              payslipNumber: index + 1,
-            }));
+              };
+
+              // Get settings store state
+              const settingsState = useSettingsStore.getState();
+              const { calculationSettings } = settingsState;
+
+              console.log("Calculation settings:", {
+                totalDeductionsFormula:
+                  calculationSettings?.totalDeductions?.formula,
+                grossPayFormula: calculationSettings?.grossPay?.formula,
+                netPayFormula: calculationSettings?.netPay?.formula,
+              });
+
+              // Evaluate formulas
+              let grossPay = variables.basicPay;
+              let totalDeduction = 0;
+              let netPay = 0;
+
+              try {
+                if (calculationSettings?.grossPay?.formula) {
+                  // eslint-disable-next-line no-new-func
+                  const grossPayFn = new Function(
+                    ...Object.keys(variables),
+                    `return ${calculationSettings.grossPay.formula}`
+                  );
+                  grossPay = grossPayFn(...Object.values(variables));
+                } else {
+                  // Fallback calculation for gross pay
+                  grossPay =
+                    variables.basicPay +
+                    variables.overtime +
+                    variables.holidayBonus +
+                    variables.nightDifferentialPay -
+                    variables.undertimeDeduction -
+                    variables.lateDeduction;
+                }
+
+                console.log("Gross pay calculation:", {
+                  formula: calculationSettings?.grossPay?.formula || "fallback",
+                  result: grossPay,
+                  variables,
+                });
+
+                // Calculate total deductions using formula if available
+                if (calculationSettings?.totalDeductions?.formula) {
+                  const deductionVariables = {
+                    sss: variables.sss,
+                    philHealth: variables.philHealth,
+                    pagIbig: variables.pagIbig,
+                    cashAdvanceDeductions: variables.cashAdvanceDeductions,
+                    others: variables.shorts,
+                    lateDeduction: variables.lateDeduction,
+                    undertimeDeduction: variables.undertimeDeduction,
+                  };
+
+                  console.log("\n=== Deductions Breakdown ===");
+                  console.log(`Employee: ${employee.name}`);
+                  console.log("Individual Deductions:");
+                  console.log(`  SSS: ${deductionVariables.sss}`);
+                  console.log(`  PhilHealth: ${deductionVariables.philHealth}`);
+                  console.log(`  Pag-IBIG: ${deductionVariables.pagIbig}`);
+                  console.log(
+                    `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
+                  );
+                  console.log(
+                    `  Others (Shorts): ${deductionVariables.others}`
+                  );
+                  console.log(
+                    `  Late Deduction: ${deductionVariables.lateDeduction}`
+                  );
+                  console.log(
+                    `  Undertime: ${deductionVariables.undertimeDeduction}`
+                  );
+                  console.log(
+                    "\nFormula:",
+                    calculationSettings.totalDeductions.formula
+                  );
+
+                  // eslint-disable-next-line no-new-func
+                  const totalDeductionsFn = new Function(
+                    ...Object.keys(deductionVariables),
+                    `return ${calculationSettings.totalDeductions.formula}`
+                  );
+                  totalDeduction = totalDeductionsFn(
+                    ...Object.values(deductionVariables)
+                  );
+
+                  console.log("\nTotal Deduction Calculated:", totalDeduction);
+                  console.log("========================");
+                } else {
+                  // Fallback to sum of all deductions
+                  totalDeduction =
+                    variables.sss +
+                    variables.philHealth +
+                    variables.pagIbig +
+                    variables.cashAdvanceDeductions +
+                    variables.shorts +
+                    variables.lateDeduction +
+                    variables.undertimeDeduction;
+
+                  console.log("\n=== Deductions Breakdown (Fallback) ===");
+                  console.log(`Employee: ${employee.name}`);
+                  console.log("Individual Deductions:");
+                  console.log(`  SSS: ${variables.sss}`);
+                  console.log(`  PhilHealth: ${variables.philHealth}`);
+                  console.log(`  Pag-IBIG: ${variables.pagIbig}`);
+                  console.log(
+                    `  Cash Advance: ${variables.cashAdvanceDeductions}`
+                  );
+                  console.log(`  Others (Shorts): ${variables.shorts}`);
+                  console.log(`  Late Deduction: ${variables.lateDeduction}`);
+                  console.log(`  Undertime: ${variables.undertimeDeduction}`);
+                  console.log("\nTotal Deduction (Sum):", totalDeduction);
+                  console.log("========================");
+                }
+
+                // Calculate net pay using formula if available
+                if (calculationSettings?.netPay?.formula) {
+                  const netPayVariables = {
+                    ...variables,
+                    grossPay,
+                    totalDeductions: totalDeduction,
+                  };
+                  // eslint-disable-next-line no-new-func
+                  const netPayFn = new Function(
+                    ...Object.keys(netPayVariables),
+                    `return ${calculationSettings.netPay.formula}`
+                  );
+                  netPay = netPayFn(...Object.values(netPayVariables));
+                } else {
+                  netPay = grossPay - totalDeduction;
+                }
+
+                console.log("Final calculations:", {
+                  grossPay,
+                  totalDeduction,
+                  netPay,
+                });
+              } catch (error) {
+                console.error("Error evaluating formulas:", {
+                  error,
+                  calculationSettings,
+                  variables,
+                });
+                // Fallback to basic calculations
+                grossPay =
+                  variables.basicPay +
+                  variables.overtime +
+                  variables.holidayBonus -
+                  variables.undertimeDeduction;
+                netPay = grossPay - totalDeduction;
+              }
+
+              return {
+                ...summary,
+                startDate: summary.startDate.toISOString(),
+                endDate: summary.endDate.toISOString(),
+                employeeName: employee.name,
+                daysWorked: Number(summary.daysWorked) || 15,
+                basicPay: variables.basicPay,
+                undertimeDeduction: variables.undertimeDeduction,
+                lateDeduction: variables.lateDeduction,
+                holidayBonus: variables.holidayBonus,
+                overtime: variables.overtime,
+                grossPay,
+                netPay,
+                dailyRate: Number(summary.dailyRate) || 0,
+                deductions: {
+                  sss: variables.sss,
+                  philHealth: variables.philHealth,
+                  pagIbig: variables.pagIbig,
+                  cashAdvanceDeductions: variables.cashAdvanceDeductions,
+                  others: variables.others,
+                  shortDeductions: variables.shorts,
+                  totalDeduction: totalDeduction,
+                },
+                preparedBy: preparedBy || "",
+                approvedBy: approvedBy || "",
+                payslipNumber: index + 1,
+              };
+            });
         } catch (error) {
           console.log(
             `No payroll found for employee ${employee.name} (${employee.id})`
@@ -551,6 +810,16 @@ export default function PayrollPage() {
         return;
       }
 
+      console.log(
+        "Final payroll data for PDF:",
+        formattedPayrolls.map((p) => ({
+          employeeName: p.employeeName,
+          grossPay: p.grossPay,
+          deductions: p.deductions,
+          netPay: p.netPay,
+        }))
+      );
+
       // Get the output directory path
       const outputPath = await window.electron.getPath("documents");
       const pdfOutputPath = path.join(
@@ -558,14 +827,18 @@ export default function PayrollPage() {
         "payroll_summaries_landscape.pdf"
       );
 
+      // Get settings store state
+      const settingsState = useSettingsStore.getState();
+
       // Generate PDF with formatted payroll summaries
       const pdfPath = await window.electron.generatePDFLandscape(
         formattedPayrolls,
         {
           outputPath: pdfOutputPath,
           logoPath: logoPath || "",
-          companyName: useSettingsStore.getState().companyName,
-          columnColors: useSettingsStore.getState().columnColors,
+          companyName: settingsState.companyName,
+          columnColors: settingsState.columnColors,
+          calculationSettings: settingsState.calculationSettings,
           dbPath: dbPath,
         }
       );
@@ -577,7 +850,6 @@ export default function PayrollPage() {
       // Generate statistics after PDF is generated
       await generatePayrollStatistics(formattedPayrolls, dbPath);
     } catch (error) {
-      console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF");
     } finally {
       setIsGeneratingPDF(false);

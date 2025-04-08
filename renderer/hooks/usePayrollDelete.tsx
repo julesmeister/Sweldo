@@ -81,6 +81,7 @@ export const usePayrollDelete = ({
     } catch (error) {
       console.error("Error deleting payroll:", error);
       toast.error("Failed to delete payroll");
+      throw error; // Re-throw to be caught by the caller
     } finally {
       setIsDeleting(false);
     }
