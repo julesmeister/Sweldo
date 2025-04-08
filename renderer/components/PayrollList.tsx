@@ -12,6 +12,7 @@ import { MonthPicker } from "@/renderer/components/MonthPicker";
 import { PayrollSummary } from "@/renderer/components/PayrollSummary";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import { useAuthStore } from "@/renderer/stores/authStore";
+import { MagicCard } from "@/renderer/components/magicui/magic-card";
 
 interface PayrollListProps {
   payrolls: PayrollSummaryModel[];
@@ -320,113 +321,127 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     );
 
     return (
-      <div className="bg-white rounded-lg shadow overflow-visible z-10">
-        {selectedPayroll && (
-          <div className="relative z-10">
-            <PayrollSummary
-              data={{
-                ...selectedPayroll,
-                employeeName: employee?.name || "Unknown Employee",
-              }}
-              onClose={() => setSelectedPayroll(null)}
-              canEdit={canEdit}
-            />
-          </div>
-        )}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-medium text-gray-900 flex items-center">
-            {employee?.name || "Loading..."}'s Generated Payrolls
-          </h2>
-          <div className="flex items-center space-x-2">
-            {filterButtons}
-            <div className="relative overflow-visible" ref={monthPickerRef}>
-              <button
-                onClick={toggleMonthPicker}
-                className={`px-3 py-1.5 text-sm border rounded-md transition-colors duration-150 relative z-40 ${
-                  filterType === "custom"
-                    ? "bg-blue-100 text-blue-700 border-blue-200"
-                    : "border-gray-200 hover:bg-gray-100"
-                }`}
-              >
-                {filterType === "custom"
-                  ? month?.toLocaleDateString("en-US", {
-                      month: "long",
-                      year: "numeric",
-                    }) || "Select Month"
-                  : "Select Month"}
-              </button>
-              {filterType === "custom" && showMonthPicker && (
-                <div className="absolute right-0 mt-2 z-50">
-                  <MonthPicker
-                    selectedMonth={month}
-                    onMonthChange={handleMonthSelect}
-                  />
+      <div className="px-4 sm:px-0">
+        <MagicCard
+          className="p-0.5 rounded-lg col-span-2 overflow-hidden"
+          gradientSize={200}
+          gradientColor="#9E7AFF"
+          gradientOpacity={0.8}
+          gradientFrom="#9E7AFF"
+          gradientTo="#FE8BBB"
+        >
+          <div className="bg-white rounded-lg shadow overflow-hidden z-10">
+            {selectedPayroll && (
+              <div className="relative z-10">
+                <PayrollSummary
+                  data={{
+                    ...selectedPayroll,
+                    employeeName: employee?.name || "Unknown Employee",
+                  }}
+                  onClose={() => setSelectedPayroll(null)}
+                  canEdit={canEdit}
+                />
+              </div>
+            )}
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                {employee?.name || "Loading..."}'s Generated Payrolls
+              </h2>
+              <div className="flex items-center space-x-2">
+                {filterButtons}
+                <div className="relative overflow-visible" ref={monthPickerRef}>
+                  <button
+                    onClick={toggleMonthPicker}
+                    className={`px-3 py-1.5 text-sm border rounded-md transition-colors duration-150 relative z-40 ${
+                      filterType === "custom"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    {filterType === "custom"
+                      ? month?.toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        }) || "Select Month"
+                      : "Select Month"}
+                  </button>
+                  {filterType === "custom" && showMonthPicker && (
+                    <div className="absolute right-0 mt-2 z-50">
+                      <MonthPicker
+                        selectedMonth={month}
+                        onMonthChange={handleMonthSelect}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            </div>
+            <div className="overflow-x-auto relative">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Date Range
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Net Pay
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Payment Date
+                    </th>
+                    <th
+                      scope="col"
+                      className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                    >
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payrolls.length > 0 ? (
+                    payrollRows
+                  ) : (
+                    <tr>
+                      <td colSpan={4}>
+                        <div className="text-center py-12 px-4">
+                          <svg
+                            className="mx-auto h-12 w-12 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                          <h3 className="mt-4 text-lg font-medium text-gray-900">
+                            No payrolls generated yet
+                          </h3>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Select a date range and click 'Generate Payroll' to
+                            create a new payroll record.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-        <div className="overflow-x-auto relative">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Date Range
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Net Pay
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Payment Date
-                </th>
-                <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {payrolls.length > 0 ? (
-                payrollRows
-              ) : (
-                <tr>
-                  <td colSpan={4}>
-                    <div className="text-center py-12 px-4">
-                      <svg
-                        className="mx-auto h-12 w-12 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      <h3 className="mt-4 text-lg font-medium text-gray-900">
-                        No payrolls generated yet
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Select a date range and click 'Generate Payroll' to
-                        create a new payroll record.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        </MagicCard>
       </div>
     );
   },
