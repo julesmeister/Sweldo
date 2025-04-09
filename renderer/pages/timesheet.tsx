@@ -94,6 +94,8 @@ const TimesheetPage: React.FC = () => {
   const { dateRange, setDateRange } = useDateRangeStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showRecomputeDialog, setShowRecomputeDialog] = useState(false);
+  const [hasAttemptedInitialRefresh, setHasAttemptedInitialRefresh] =
+    useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -204,7 +206,9 @@ const TimesheetPage: React.FC = () => {
         try {
           setLoading(true);
           const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
-          if (emp !== null) setEmployee(emp);
+          if (emp !== null) {
+            setEmployee(emp);
+          }
         } catch (error) {
           toast.error("Error loading employee");
         } finally {
@@ -216,7 +220,46 @@ const TimesheetPage: React.FC = () => {
     loadEmployee();
   }, [selectedEmployeeId, dbPath, employeeModel, setLoading]);
 
-  // Second effect: Load and compute data when necessary dependencies change
+  const refreshTimesheetData = async (showToast: boolean = true) => {
+    if (!employee || !dbPath || !selectedEmployeeId) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const [attendanceData, compensationData] = await Promise.all([
+        attendanceModel.loadAttendancesById(
+          storedMonthInt,
+          year,
+          selectedEmployeeId
+        ),
+        compensationModel.loadRecords(storedMonthInt, year, selectedEmployeeId),
+      ]);
+
+      setTimesheetEntries(attendanceData);
+      setCompensationEntries(compensationData);
+      setValidEntriesCount(
+        compensationData.filter((comp) => comp.absence).length
+      );
+
+      if (attendanceData.length > 0 || compensationData.length > 0) {
+        await computeCompensations(attendanceData, compensationData);
+        if (showToast) {
+          toast.success("Records refreshed successfully");
+        }
+      } else if (showToast) {
+        toast.error("No timesheet entries found after refresh");
+      }
+    } catch (error) {
+      if (showToast) {
+        toast.error("Error refreshing records");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Second effect: Load and compute data when employee is loaded
   useEffect(() => {
     const loadData = async () => {
       if (!employee || !dbPath || !selectedEmployeeId) {
@@ -248,6 +291,9 @@ const TimesheetPage: React.FC = () => {
 
         if (attendanceData.length > 0 || compensationData.length > 0) {
           await computeCompensations(attendanceData, compensationData);
+        } else if (!hasAttemptedInitialRefresh) {
+          setHasAttemptedInitialRefresh(true);
+          await refreshTimesheetData(true);
         }
       } catch (error) {
         toast.error("Error loading timesheet data");
@@ -258,7 +304,7 @@ const TimesheetPage: React.FC = () => {
     };
 
     loadData();
-  }, [selectedEmployeeId, storedMonthInt, year]);
+  }, [employee, selectedEmployeeId, storedMonthInt, year]);
 
   // Find the employee's time tracking setting
   const employeeTimeSettings = useMemo(() => {
@@ -657,49 +703,7 @@ const TimesheetPage: React.FC = () => {
                   <div className="w-[480px]">
                     <DateRangePicker
                       variant="timesheet"
-                      onRefresh={async () => {
-                        if (!employee || !dbPath || !selectedEmployeeId) return;
-
-                        try {
-                          setLoading(true);
-                          const [attendanceData, compensationData] =
-                            await Promise.all([
-                              attendanceModel.loadAttendancesById(
-                                storedMonthInt,
-                                year,
-                                selectedEmployeeId
-                              ),
-                              compensationModel.loadRecords(
-                                storedMonthInt,
-                                year,
-                                selectedEmployeeId
-                              ),
-                            ]);
-
-                          setTimesheetEntries(attendanceData);
-                          setCompensationEntries(compensationData);
-                          setValidEntriesCount(
-                            compensationData.filter((comp) => comp.absence)
-                              .length
-                          );
-
-                          if (
-                            attendanceData.length > 0 ||
-                            compensationData.length > 0
-                          ) {
-                            await computeCompensations(
-                              attendanceData,
-                              compensationData
-                            );
-                          }
-
-                          toast.success("Records refreshed successfully");
-                        } catch (error) {
-                          toast.error("Error refreshing records");
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
+                      onRefresh={refreshTimesheetData}
                     />
                   </div>
                 )}
