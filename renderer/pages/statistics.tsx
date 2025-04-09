@@ -19,6 +19,9 @@ import { createStatisticsModel, Statistics } from "../model/statistics";
 import { useSettingsStore } from "../stores/settingsStore";
 import { toast } from "sonner";
 import { createEmployeeModel } from "../model/employee";
+import { Payroll, PayrollSummaryModel } from "../model/payroll";
+import { useDateSelectorStore } from "../components/DateSelector";
+import { usePayrollStatistics } from "../hooks/usePayrollStatistics";
 
 // Stat card component
 const StatCard = ({
@@ -232,17 +235,6 @@ const Timeline = ({
   );
 };
 
-// Add this helper function at the top level
-const generateYearOptions = () => {
-  const currentYear = new Date().getFullYear();
-  const startYear = 2025;
-  const years = [];
-  for (let year = currentYear; year >= startYear; year--) {
-    years.push(year);
-  }
-  return years;
-};
-
 // Add DeductionsTimeline component
 const DeductionsTimeline = ({
   data,
@@ -377,12 +369,95 @@ const DeductionsTimeline = ({
   );
 };
 
+// Add RefreshMonthDialog component
+const RefreshMonthDialog = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  month,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  month: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+
+      {/* Dialog */}
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div
+            className="relative bg-white rounded-2xl shadow-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                    <IoRefreshOutline className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Refresh Data for {month}
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    This will recalculate all payroll data for {month} using the
+                    latest information. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                onClick={() => {
+                  onConfirm();
+                  onClose();
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 export default function StatisticsPage() {
-  const [selectedYear, setSelectedYear] = useState(2025);
+  // Replace the local state with the DateSelector's store
+  const { selectedYear, setSelectedYear } = useDateSelectorStore();
   const [isLoading, setIsLoading] = useState(false);
   const [statisticsData, setStatisticsData] = useState<Statistics | null>(null);
-  const years = generateYearOptions();
+  const [refreshDialogOpen, setRefreshDialogOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState("");
+
+  // Get years from the DateSelector's logic
+  const years = Array.from(
+    { length: new Date().getFullYear() - 2024 + 1 },
+    (_, i) => 2024 + i
+  ).reverse();
+
   const { dbPath, isInitialized, initialize } = useSettingsStore();
+  const { updateMonthStatistics } = usePayrollStatistics();
 
   // Initialize settings store when component mounts
   useEffect(() => {
@@ -514,6 +589,48 @@ export default function StatisticsPage() {
     console.log("Filtered daily rate history:", filteredDailyRateHistory);
   }, [statisticsData, filteredDailyRateHistory]);
 
+  // Function to open the refresh dialog
+  const openRefreshDialog = (month: string) => {
+    setSelectedMonth(month);
+    setRefreshDialogOpen(true);
+  };
+
+  // Function to refresh data for a specific month
+  const handleRefreshMonth = async (monthName: string) => {
+    try {
+      // Load active employees
+      const employeeModel = createEmployeeModel(dbPath);
+      const employees = await employeeModel.loadActiveEmployees();
+
+      // Convert month name to number (1-12)
+      const monthIndex =
+        new Date(Date.parse(`${monthName} 1, 2000`)).getMonth() + 1;
+
+      // Collect all payrolls for the month
+      const allPayrolls: PayrollSummaryModel[] = [];
+      for (const employee of employees) {
+        const payrolls = await Payroll.loadPayrollSummaries(
+          dbPath,
+          employee.id,
+          selectedYear,
+          monthIndex
+        );
+        allPayrolls.push(...payrolls);
+      }
+
+      // Update statistics for the month
+      await updateMonthStatistics(allPayrolls, dbPath, monthName, selectedYear);
+
+      // Refresh the statistics display
+      await handleRefresh();
+
+      toast.success(`Statistics for ${monthName} refreshed successfully`);
+    } catch (error) {
+      console.error("Error refreshing month statistics:", error);
+      toast.error(`Failed to refresh statistics for ${monthName}`);
+    }
+  };
+
   // Show loading state
   if (isLoading) {
     return (
@@ -634,66 +751,70 @@ export default function StatisticsPage() {
                         Monthly Payroll Details
                       </h3>
                     </div>
-                    {statisticsData?.monthlyPayrolls.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 px-4">
-                        <div className="bg-blue-50 p-4 rounded-full mb-4">
-                          <IoCalendarOutline className="w-8 h-8 text-blue-500" />
-                        </div>
-                        <p className="text-lg font-medium text-gray-700 mb-2">
-                          No Monthly Payroll Data
-                        </p>
-                        <p className="text-gray-500 text-center max-w-md">
-                          There are no monthly payroll records for this year.
-                          Monthly payroll data will appear here when it is
-                          added.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto relative">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                    <div className="overflow-x-auto relative">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
+                              Month
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
+                              Amount
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
+                              Working Days
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
+                              Employees
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                            >
+                              Absences
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {statisticsData?.monthlyPayrolls.length === 0 ? (
                             <tr>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                              <td
+                                colSpan={5}
+                                className="px-6 py-4 text-center text-sm text-gray-500"
                               >
-                                Month
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
-                                Amount
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
-                                Working Days
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
-                                Employees
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
-                                Absences
-                              </th>
+                                No payroll data available for this year
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {statisticsData?.monthlyPayrolls.map(
+                          ) : (
+                            statisticsData?.monthlyPayrolls.map(
                               (item, index) => (
                                 <tr key={index} className="hover:bg-gray-50">
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {item.month}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 flex items-center">
                                     ₱{item.amount.toLocaleString()}
+                                    <button
+                                      onClick={() =>
+                                        openRefreshDialog(item.month)
+                                      }
+                                      className="ml-2 text-gray-400 hover:text-blue-500 transition-colors"
+                                      title={`Refresh data for ${item.month}`}
+                                    >
+                                      <IoRefreshOutline className="w-4 h-4" />
+                                    </button>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {item.days}
@@ -706,11 +827,11 @@ export default function StatisticsPage() {
                                   </td>
                                 </tr>
                               )
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -730,6 +851,14 @@ export default function StatisticsPage() {
           </div>
         </div>
       </MagicCard>
+
+      {/* Refresh Month Dialog */}
+      <RefreshMonthDialog
+        isOpen={refreshDialogOpen}
+        onClose={() => setRefreshDialogOpen(false)}
+        onConfirm={() => handleRefreshMonth(selectedMonth)}
+        month={selectedMonth}
+      />
     </main>
   );
 }

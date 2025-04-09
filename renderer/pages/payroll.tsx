@@ -77,8 +77,11 @@ export default function PayrollPage() {
     selectedEmployeeId: selectedEmployeeId!,
     onPayrollDeleted: () => setRefreshPayrolls(true),
   });
-  const { isGeneratingStatistics, generatePayrollStatistics } =
-    usePayrollStatistics();
+  const {
+    isGeneratingStatistics,
+    generatePayrollStatistics,
+    updateMonthStatistics,
+  } = usePayrollStatistics();
 
   // Move callback declarations to the top level
   const handlePayrollDeleted = useCallback(() => {
@@ -89,10 +92,10 @@ export default function PayrollPage() {
     async (payrollId: string) => {
       setLoading(true);
       try {
-      await deletePayroll(payrollId, payrolls);
-      setPayrolls((currentPayrolls) =>
-        currentPayrolls.filter((p) => p.id !== payrollId)
-      );
+        await deletePayroll(payrollId, payrolls);
+        setPayrolls((currentPayrolls) =>
+          currentPayrolls.filter((p) => p.id !== payrollId)
+        );
       } catch (error) {
         console.error("Error deleting payroll:", error);
         toast.error("Failed to delete payroll");
@@ -381,8 +384,8 @@ export default function PayrollPage() {
             .map((summary, index) => {
               // Create variables object for formula evaluation
               const variables = {
-              basicPay: Number(summary.basicPay) || 0,
-              overtime: Number(summary.overtime) || 0,
+                basicPay: Number(summary.basicPay) || 0,
+                overtime: Number(summary.overtime) || 0,
                 holidayBonus: Number(summary.holidayBonus) || 0,
                 undertimeDeduction: Number(summary.undertimeDeduction) || 0,
                 lateDeduction: Number(summary.lateDeduction) || 0,
@@ -483,10 +486,10 @@ export default function PayrollPage() {
                   others: variables.others,
                   shortDeductions: variables.shorts,
                   totalDeduction: totalDeduction,
-              },
-              preparedBy: preparedBy || "",
-              approvedBy: approvedBy || "",
-              payslipNumber: index + 1,
+                },
+                preparedBy: preparedBy || "",
+                approvedBy: approvedBy || "",
+                payslipNumber: index + 1,
               };
             });
         } catch (error) {
@@ -577,14 +580,19 @@ export default function PayrollPage() {
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
 
+      // Get the month and year from the start date
+      const monthIndex = startDate.getMonth() + 1;
+      const year = startDate.getFullYear();
+      const monthName = startDate.toLocaleString("default", { month: "long" });
+
       // Load and collect payroll data for each active employee
       const payrollPromises = activeEmployees.map(async (employee) => {
         try {
           const employeePayrolls = await Payroll.loadPayrollSummaries(
             dbPath,
             employee.id,
-            startDate.getFullYear(),
-            startDate.getMonth() + 1
+            year,
+            monthIndex
           );
 
           // Filter payrolls within date range
@@ -596,8 +604,8 @@ export default function PayrollPage() {
             .map((summary, index) => {
               // Create variables object for formula evaluation
               const variables = {
-              basicPay: Number(summary.basicPay) || 0,
-              overtime: Number(summary.overtime) || 0,
+                basicPay: Number(summary.basicPay) || 0,
+                overtime: Number(summary.overtime) || 0,
                 holidayBonus: Number(summary.holidayBonus) || 0,
                 undertimeDeduction: Number(summary.undertimeDeduction) || 0,
                 lateDeduction: Number(summary.lateDeduction) || 0,
@@ -784,10 +792,10 @@ export default function PayrollPage() {
                   others: variables.others,
                   shortDeductions: variables.shorts,
                   totalDeduction: totalDeduction,
-              },
-              preparedBy: preparedBy || "",
-              approvedBy: approvedBy || "",
-              payslipNumber: index + 1,
+                },
+                preparedBy: preparedBy || "",
+                approvedBy: approvedBy || "",
+                payslipNumber: index + 1,
               };
             });
         } catch (error) {
@@ -847,8 +855,20 @@ export default function PayrollPage() {
       await window.electron.openPath(pdfPath);
       toast.success("PDF generated successfully!");
 
-      // Generate statistics after PDF is generated
-      await generatePayrollStatistics(formattedPayrolls, dbPath);
+      // Convert string dates to Date objects for statistics update
+      const payrollsForStatistics = formattedPayrolls.map((payroll) => ({
+        ...payroll,
+        startDate: new Date(payroll.startDate),
+        endDate: new Date(payroll.endDate),
+      }));
+
+      // Update statistics for this month using the new hook function
+      await updateMonthStatistics(
+        payrollsForStatistics,
+        dbPath,
+        monthName,
+        year
+      );
     } catch (error) {
       toast.error("Failed to generate PDF");
     } finally {

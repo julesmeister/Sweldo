@@ -185,7 +185,7 @@ export class StatisticsModel {
 
       if (monthlyData.has(monthName)) {
         const monthData = monthlyData.get(monthName)!;
-        monthData.amount += payroll.grossPay || 0;
+        monthData.amount += payroll.netPay || 0;
         if (monthData.days === 0) {
           monthData.days = payroll.daysWorked || 0;
         }
