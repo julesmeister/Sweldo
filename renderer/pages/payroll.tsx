@@ -89,10 +89,10 @@ export default function PayrollPage() {
     async (payrollId: string) => {
       setLoading(true);
       try {
-        await deletePayroll(payrollId, payrolls);
-        setPayrolls((currentPayrolls) =>
-          currentPayrolls.filter((p) => p.id !== payrollId)
-        );
+      await deletePayroll(payrollId, payrolls);
+      setPayrolls((currentPayrolls) =>
+        currentPayrolls.filter((p) => p.id !== payrollId)
+      );
       } catch (error) {
         console.error("Error deleting payroll:", error);
         toast.error("Failed to delete payroll");
@@ -381,8 +381,8 @@ export default function PayrollPage() {
             .map((summary, index) => {
               // Create variables object for formula evaluation
               const variables = {
-                basicPay: Number(summary.basicPay) || 0,
-                overtime: Number(summary.overtime) || 0,
+              basicPay: Number(summary.basicPay) || 0,
+              overtime: Number(summary.overtime) || 0,
                 holidayBonus: Number(summary.holidayBonus) || 0,
                 undertimeDeduction: Number(summary.undertimeDeduction) || 0,
                 lateDeduction: Number(summary.lateDeduction) || 0,
@@ -483,10 +483,10 @@ export default function PayrollPage() {
                   others: variables.others,
                   shortDeductions: variables.shorts,
                   totalDeduction: totalDeduction,
-                },
-                preparedBy: preparedBy || "",
-                approvedBy: approvedBy || "",
-                payslipNumber: index + 1,
+              },
+              preparedBy: preparedBy || "",
+              approvedBy: approvedBy || "",
+              payslipNumber: index + 1,
               };
             });
         } catch (error) {
@@ -596,8 +596,8 @@ export default function PayrollPage() {
             .map((summary, index) => {
               // Create variables object for formula evaluation
               const variables = {
-                basicPay: Number(summary.basicPay) || 0,
-                overtime: Number(summary.overtime) || 0,
+              basicPay: Number(summary.basicPay) || 0,
+              overtime: Number(summary.overtime) || 0,
                 holidayBonus: Number(summary.holidayBonus) || 0,
                 undertimeDeduction: Number(summary.undertimeDeduction) || 0,
                 lateDeduction: Number(summary.lateDeduction) || 0,
@@ -784,10 +784,10 @@ export default function PayrollPage() {
                   others: variables.others,
                   shortDeductions: variables.shorts,
                   totalDeduction: totalDeduction,
-                },
-                preparedBy: preparedBy || "",
-                approvedBy: approvedBy || "",
-                payslipNumber: index + 1,
+              },
+              preparedBy: preparedBy || "",
+              approvedBy: approvedBy || "",
+              payslipNumber: index + 1,
               };
             });
         } catch (error) {

@@ -226,19 +226,42 @@ export class EmployeeModel {
         return;
       }
 
-      // Update the employee's details
+      // Update the employee's details while preserving existing lastPaymentPeriod for others
       currentEmployees[index] = { ...currentEmployees[index], ...employee };
 
       // Convert dates to ISO strings and stringify the lastPaymentPeriod object before saving to CSV
-      const employeesToSave = currentEmployees.map((emp) => ({
-        ...emp,
-        lastPaymentPeriod: isLastPaymentPeriod(emp.lastPaymentPeriod)
-          ? JSON.stringify({
-              start: emp.lastPaymentPeriod.start,
-              end: emp.lastPaymentPeriod.end,
-            })
-          : undefined,
-      }));
+      const employeesToSave = currentEmployees.map((emp) => {
+        // For the updated employee, use the new lastPaymentPeriod
+        if (
+          emp.id === employee.id &&
+          isLastPaymentPeriod(employee.lastPaymentPeriod)
+        ) {
+          return {
+            ...emp,
+            lastPaymentPeriod: JSON.stringify({
+              startDate: employee.lastPaymentPeriod.startDate,
+              endDate: employee.lastPaymentPeriod.endDate,
+              start: employee.lastPaymentPeriod.start,
+              end: employee.lastPaymentPeriod.end,
+            }),
+          };
+        }
+
+        // For other employees, preserve their existing lastPaymentPeriod
+        return {
+          ...emp,
+          lastPaymentPeriod: emp.lastPaymentPeriod
+            ? typeof emp.lastPaymentPeriod === "string"
+              ? emp.lastPaymentPeriod // Keep the existing JSON string
+              : JSON.stringify({
+                  startDate: emp.lastPaymentPeriod.startDate,
+                  endDate: emp.lastPaymentPeriod.endDate,
+                  start: emp.lastPaymentPeriod.start,
+                  end: emp.lastPaymentPeriod.end,
+                })
+            : null,
+        };
+      });
 
       // Save the updated employee list back to the CSV
       const csv = Papa.unparse(employeesToSave);
