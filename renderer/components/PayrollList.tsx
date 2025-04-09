@@ -13,6 +13,7 @@ import { PayrollSummary } from "@/renderer/components/PayrollSummary";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { MagicCard } from "@/renderer/components/magicui/magic-card";
+import { PayrollDeleteDialog } from "@/renderer/components/PayrollDeleteDialog";
 
 interface PayrollListProps {
   payrolls: PayrollSummaryModel[];
@@ -45,6 +46,8 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     const [payrolls, setPayrolls] = useState<PayrollSummaryModel[]>([]);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [selectedPayroll, setSelectedPayroll] =
+      useState<PayrollSummaryModel | null>(null);
+    const [payrollToDelete, setPayrollToDelete] =
       useState<PayrollSummaryModel | null>(null);
 
     // Add a ref to track if the initial load has happened
@@ -192,57 +195,29 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
       [onSelectPayroll]
     );
 
-    const handleDeletePayroll = async (payrollId: string) => {
-      if (!hasDeleteAccess) {
-        toast.error("You don't have permission to delete payroll records");
-        return;
-      }
+    const handleDeleteClick = (payroll: PayrollSummaryModel) => {
+      setPayrollToDelete({
+        ...payroll,
+        deductions: {
+          sss: payroll.deductions?.sss || 0,
+          philHealth: payroll.deductions?.philHealth || 0,
+          pagIbig: payroll.deductions?.pagIbig || 0,
+          cashAdvanceDeductions: payroll.deductions?.cashAdvanceDeductions || 0,
+          shortDeductions: payroll.deductions?.shortDeductions || 0,
+          others: payroll.deductions?.others || 0,
+        },
+      });
+    };
 
-      if (
-        window.confirm("Are you sure you want to delete this payroll record?")
-      ) {
-        try {
-          const payroll = payrolls.find(
-            (p) => p.id === payrollId // Change this to match by ID instead of date
-          );
+    const handleConfirmDelete = async () => {
+      if (!payrollToDelete) return;
 
-          if (!payroll) {
-            toast.error("Payroll record not found");
-            return;
-          }
-
-          console.log("Attempting to delete payroll:", {
-            id: payroll.id,
-            dbPath,
-            employeeId: selectedEmployeeId,
-            startDate: payroll.startDate,
-            endDate: payroll.endDate,
-          });
-
-          await Payroll.deletePayrollSummary(
-            dbPath,
-            selectedEmployeeId,
-            new Date(payroll.startDate),
-            new Date(payroll.endDate)
-          );
-
-          // Remove the deleted payroll from the local state
-          setPayrolls((currentPayrolls) =>
-            currentPayrolls.filter((p) => p.id !== payrollId)
-          );
-
-          // Notify parent component
-          onPayrollDeleted();
-          toast.success("Payroll record deleted successfully");
-          // Refresh will happen via onPayrollDeleted callback
-        } catch (error) {
-          console.error("Error deleting payroll:", error);
-          toast.error(
-            `Failed to delete payroll record: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`
-          );
-        }
+      try {
+        await onDeletePayroll?.(payrollToDelete.id);
+        setPayrollToDelete(null);
+      } catch (error) {
+        console.error("Error deleting payroll:", error);
+        toast.error("Failed to delete payroll record");
       }
     };
 
@@ -304,7 +279,7 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  await handleDeletePayroll(payroll.id);
+                  await handleDeleteClick(payroll);
                 }}
                 className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md ${
                   hasDeleteAccess
@@ -317,7 +292,7 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
             </td>
           </tr>
         )),
-      [payrolls, handlePayrollSelect, handleDeletePayroll, hasDeleteAccess]
+      [payrolls, handlePayrollSelect, handleDeleteClick, hasDeleteAccess]
     );
 
     return (
@@ -441,6 +416,26 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
               </table>
             </div>
           </div>
+          {payrollToDelete && (
+            <PayrollDeleteDialog
+              isOpen={!!payrollToDelete}
+              onClose={() => setPayrollToDelete(null)}
+              onConfirm={handleConfirmDelete}
+              payrollData={{
+                id: payrollToDelete?.id || "",
+                startDate: payrollToDelete?.startDate.toISOString() || "",
+                endDate: payrollToDelete?.endDate.toISOString() || "",
+                employeeName: payrollToDelete?.employeeName || "",
+                employeeId: payrollToDelete?.employeeId || "",
+                shortIDs: payrollToDelete?.shortIDs || [],
+                cashAdvanceIDs: payrollToDelete?.cashAdvanceIDs || [],
+                shortDeductions: payrollToDelete?.deductions?.shortDeductions,
+                cashAdvanceDeductions:
+                  payrollToDelete?.deductions?.cashAdvanceDeductions,
+              }}
+              dbPath={dbPath}
+            />
+          )}
         </MagicCard>
       </div>
     );
