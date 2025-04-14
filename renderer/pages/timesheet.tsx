@@ -47,6 +47,10 @@ import { useAuthStore } from "@/renderer/stores/authStore";
 import { DateRangePicker } from "@/renderer/components/DateRangePicker";
 import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
 import { RecomputeDialog } from "@/renderer/components/RecomputeDialog";
+import {
+  useSchedules,
+  shouldMarkAsAbsent,
+} from "@/renderer/hooks/utils/useSchedule";
 
 const formatName = (name: string): string => {
   if (!name) return "";
@@ -593,6 +597,25 @@ const TimesheetPage: React.FC = () => {
     return lookup;
   }, [compensationEntries]);
 
+  // Add this before the return statement
+  const employmentTypeObj = useMemo(
+    () =>
+      employmentTypes.find(
+        (type) =>
+          type.type.toLowerCase() === employee?.employmentType?.toLowerCase()
+      ) || null,
+    [employmentTypes, employee?.employmentType]
+  );
+
+  // Create dates array for all days
+  const dates = useMemo(
+    () => memoizedDays.map((day) => new Date(year, storedMonthInt - 1, day)),
+    [memoizedDays, year, storedMonthInt]
+  );
+
+  // Get schedule info for all days at once
+  const scheduleMap = useSchedules(employmentTypeObj, dates);
+
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
     return (
@@ -634,14 +657,11 @@ const TimesheetPage: React.FC = () => {
           </div>
         );
       case "dayType":
-        return new Date(year, storedMonthInt - 1, entry.day).toLocaleDateString(
-          "en-US",
-          {
-            weekday: "short",
-          }
-        ) === "Sun"
-          ? "Sunday"
-          : compensation?.dayType || "-";
+        const scheduleInfo = scheduleMap.get(entry.day);
+        if (scheduleInfo?.isRestDay) {
+          return "Day Off";
+        }
+        return compensation?.dayType || "Regular";
       case "hoursWorked":
         return compensation?.hoursWorked
           ? Math.round(compensation.hoursWorked)
@@ -689,6 +709,153 @@ const TimesheetPage: React.FC = () => {
       default:
         return "-";
     }
+  };
+
+  const renderRow = (
+    foundEntry: Attendance,
+    compensation: Compensation | null,
+    day: number
+  ) => {
+    const entryDate = new Date(year, storedMonthInt - 1, day);
+    const scheduleInfo = scheduleMap.get(day);
+    const hasTimeEntries = !!(foundEntry.timeIn || foundEntry.timeOut);
+
+    // Debug logs for day 6
+    if (day === 6) {
+      console.log("Debug Day 6:", {
+        date: entryDate.toISOString(),
+        employmentType: employmentTypeObj?.type,
+        scheduleInfo,
+        hasTimeEntries,
+        foundEntry,
+        compensation,
+      });
+    }
+
+    // Only mark as absent if there's a schedule and no time entries
+    const isAbsent =
+      scheduleInfo?.hasSchedule && !scheduleInfo.isRestDay && !hasTimeEntries;
+
+    if (day === 6) {
+      console.log("Day 6 Flags:", {
+        hasSchedule: scheduleInfo?.hasSchedule,
+        isRestDay: scheduleInfo?.isRestDay,
+        isAbsent,
+      });
+    }
+
+    const rowClass = `cursor-pointer ${
+      isAbsent
+        ? "bg-red-50 hover:bg-red-100"
+        : scheduleInfo?.isRestDay
+        ? "bg-gray-50/50 hover:bg-gray-100/50"
+        : "hover:bg-gray-50"
+    } ${selectedEntry?.entry.day === day ? "bg-indigo-50" : ""}`;
+
+    return (
+      <tr
+        key={day}
+        onClick={(event) => handleRowClick(foundEntry, compensation, event)}
+        className={rowClass}
+      >
+        {columns.map(
+          (column) =>
+            column.visible &&
+            (column.key === "timeIn" || column.key === "timeOut" ? (
+              employeeTimeSettings?.requiresTimeTracking ? (
+                hasAccess("MANAGE_ATTENDANCE") ? (
+                  <EditableCell
+                    key={column.key}
+                    value={
+                      column.key === "timeIn"
+                        ? foundEntry.timeIn || ""
+                        : foundEntry.timeOut || ""
+                    }
+                    column={column}
+                    rowData={foundEntry}
+                    onClick={(event) => event.stopPropagation()}
+                    onSave={async (value, rowData) =>
+                      handleTimesheetEdit(value.toString(), rowData, column.key)
+                    }
+                    employmentTypes={employmentTypes}
+                  />
+                ) : (
+                  <td
+                    key={column.key}
+                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                  >
+                    {column.key === "timeIn"
+                      ? foundEntry.timeIn || ""
+                      : foundEntry.timeOut || ""}
+                  </td>
+                )
+              ) : column.key === "timeIn" ? (
+                <td
+                  key={column.key}
+                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                >
+                  <div
+                    className="flex items-center justify-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {hasAccess("MANAGE_ATTENDANCE") ? (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={
+                            foundEntry?.timeIn === "present" &&
+                            foundEntry?.timeOut === "present"
+                          }
+                          onChange={(e) => handleCheckboxChange(e, foundEntry)}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <span
+                          className="ml-2 text-sm font-medium text-gray-700"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {!!(foundEntry.timeIn || foundEntry.timeOut)
+                            ? "Present"
+                            : scheduleInfo?.isRestDay
+                            ? "Rest Day"
+                            : "Absent"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-medium text-gray-700">
+                        {!!(foundEntry.timeIn || foundEntry.timeOut)
+                          ? "Present"
+                          : scheduleInfo?.isRestDay
+                          ? "Rest Day"
+                          : "Absent"}
+                      </span>
+                    )}
+                  </div>
+                </td>
+              ) : null
+            ) : (
+              <td
+                key={column.key}
+                className={`${
+                  column.key === "day" ? "sticky left-0 z-10" : ""
+                } px-6 py-4 whitespace-nowrap text-sm ${
+                  column.key === "day"
+                    ? new Date(
+                        year,
+                        storedMonthInt - 1,
+                        day
+                      ).toLocaleDateString("en-US", { weekday: "short" }) ===
+                      "Sun"
+                      ? "bg-yellow-100 font-medium text-gray-900"
+                      : "bg-white font-medium text-gray-900"
+                    : "text-gray-500"
+                }`}
+              >
+                {renderColumnContent(column.key, foundEntry, compensation)}
+              </td>
+            ))
+        )}
+      </tr>
+    );
   };
 
   return (
@@ -923,145 +1090,7 @@ const TimesheetPage: React.FC = () => {
                           return null;
                         }
 
-                        return (
-                          <tr
-                            key={day}
-                            onClick={(event) =>
-                              handleRowClick(foundEntry, compensation, event)
-                            }
-                            className={`cursor-pointer ${
-                              compensation?.absence
-                                ? "bg-red-50 hover:bg-red-100"
-                                : "hover:bg-gray-50"
-                            } ${
-                              selectedEntry?.entry.day === day
-                                ? "bg-indigo-50"
-                                : ""
-                            }`}
-                          >
-                            {columns.map(
-                              (column) =>
-                                column.visible &&
-                                (column.key === "timeIn" ||
-                                column.key === "timeOut" ? (
-                                  employeeTimeSettings?.requiresTimeTracking ? (
-                                    hasAccess("MANAGE_ATTENDANCE") ? (
-                                      <EditableCell
-                                        key={column.key}
-                                        value={
-                                          column.key === "timeIn"
-                                            ? foundEntry.timeIn || ""
-                                            : foundEntry.timeOut || ""
-                                        }
-                                        column={column}
-                                        rowData={foundEntry}
-                                        onClick={(event) =>
-                                          event.stopPropagation()
-                                        }
-                                        onSave={async (value, rowData) =>
-                                          handleTimesheetEdit(
-                                            value.toString(),
-                                            rowData,
-                                            column.key
-                                          )
-                                        }
-                                        employmentTypes={employmentTypes}
-                                      />
-                                    ) : (
-                                      <td
-                                        key={column.key}
-                                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                      >
-                                        {column.key === "timeIn"
-                                          ? foundEntry.timeIn || ""
-                                          : foundEntry.timeOut || ""}
-                                      </td>
-                                    )
-                                  ) : column.key === "timeIn" ? (
-                                    <td
-                                      key={column.key}
-                                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                    >
-                                      <div
-                                        className="flex items-center justify-center"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        {hasAccess("MANAGE_ATTENDANCE") ? (
-                                          <>
-                                            <input
-                                              type="checkbox"
-                                              checked={
-                                                foundEntry?.timeIn ===
-                                                  "present" &&
-                                                foundEntry?.timeOut ===
-                                                  "present"
-                                              }
-                                              onChange={(e) =>
-                                                handleCheckboxChange(
-                                                  e,
-                                                  foundEntry
-                                                )
-                                              }
-                                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                                            />
-                                            <span
-                                              className="ml-2 text-sm font-medium text-gray-700"
-                                              onClick={(e) =>
-                                                e.stopPropagation()
-                                              }
-                                            >
-                                              {!!(
-                                                foundEntry.timeIn ||
-                                                foundEntry.timeOut
-                                              )
-                                                ? "Present"
-                                                : "Absent"}
-                                            </span>
-                                          </>
-                                        ) : (
-                                          <span className="text-sm font-medium text-gray-700">
-                                            {!!(
-                                              foundEntry.timeIn ||
-                                              foundEntry.timeOut
-                                            )
-                                              ? "Present"
-                                              : "Absent"}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                  ) : null
-                                ) : (
-                                  <td
-                                    key={column.key}
-                                    className={`${
-                                      column.key === "day"
-                                        ? "sticky left-0 z-10"
-                                        : ""
-                                    } px-6 py-4 whitespace-nowrap text-sm ${
-                                      column.key === "day"
-                                        ? new Date(
-                                            year,
-                                            storedMonthInt - 1,
-                                            day
-                                          ).toLocaleDateString("en-US", {
-                                            weekday: "short",
-                                          }) === "Sun"
-                                          ? "bg-yellow-100 font-medium text-gray-900"
-                                          : "bg-white font-medium text-gray-900"
-                                        : "text-gray-500"
-                                    }`}
-                                  >
-                                    {renderColumnContent(
-                                      column.key,
-                                      foundEntry,
-                                      compensation
-                                    )}
-                                  </td>
-                                ))
-                            )}
-                          </tr>
-                        );
+                        return renderRow(foundEntry, compensation, day);
                       })
                     )}
                   </tbody>
