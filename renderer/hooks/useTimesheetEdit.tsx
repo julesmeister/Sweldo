@@ -40,6 +40,7 @@ interface UseTimesheetEditProps {
     newAttendance: Attendance[],
     newCompensations: Compensation[]
   ) => void;
+  hasEditAccess?: boolean;
 }
 
 export const useTimesheetEdit = ({
@@ -53,15 +54,57 @@ export const useTimesheetEdit = ({
   year,
   dbPath,
   onDataUpdate,
+  hasEditAccess = true,
 }: UseTimesheetEditProps) => {
+  const calculateCompensationMetrics = async (
+    timeMetrics: any,
+    employmentType: EmploymentType | null | undefined,
+    nightDiffHours?: number
+  ) => {
+    const attendanceSettings =
+      await attendanceSettingsModel.loadAttendanceSettings();
+    const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+    const standardHours = employmentType?.hoursOfWork || 8;
+    const hourlyRate = dailyRate / standardHours;
+
+    // Night differential calculation
+    const nightDiffMultiplier =
+      attendanceSettings?.nightDifferentialMultiplier || 0.1;
+    const NIGHT_DIFF_MIN_HOURS = 1;
+
+    let nightDifferentialHours =
+      nightDiffHours ?? timeMetrics?.nightDifferentialHours ?? 0;
+    let nightDifferentialPay = 0;
+
+    if (nightDifferentialHours >= NIGHT_DIFF_MIN_HOURS) {
+      nightDifferentialPay =
+        nightDifferentialHours * hourlyRate * nightDiffMultiplier;
+    } else {
+      nightDifferentialHours = 0;
+    }
+
+    // Overtime calculation
+    const overtimeHours = Math.floor((timeMetrics?.overtimeMinutes || 0) / 60);
+    const overtimePay =
+      overtimeHours *
+      hourlyRate *
+      (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+
+    return {
+      nightDifferentialHours,
+      nightDifferentialPay,
+      overtimePay,
+      hourlyRate,
+      attendanceSettings,
+    };
+  };
+
   const handleTimesheetEdit = async (
     value: string,
     foundEntry: Attendance,
     columnKey: string
   ) => {
     try {
-      console.log("Starting timesheet edit:", { value, foundEntry, columnKey });
-
       // Update attendance
       const updatedEntry = {
         ...foundEntry,
@@ -93,11 +136,8 @@ export const useTimesheetEdit = ({
             month,
             year
           );
-          console.log("Deleted missing time log:", missingLog);
         }
       }
-
-      console.log("Updated entry to save:", updatedEntry);
 
       await attendanceModel.saveOrUpdateAttendances(
         [updatedEntry],
@@ -105,16 +145,12 @@ export const useTimesheetEdit = ({
         year,
         selectedEmployeeId
       );
-      console.log("Attendance saved successfully");
 
       // Load settings for compensation calculation
       const timeSettings = await attendanceSettingsModel.loadTimeSettings();
-      const attendanceSettings =
-        await attendanceSettingsModel.loadAttendanceSettings();
       const employmentType = timeSettings.find(
         (type) => type.type === employee?.employmentType
       );
-      console.log("Loaded settings:", { employmentType, attendanceSettings });
 
       // Check for holidays
       const holidayModel = createHolidayModel(dbPath, year, month);
@@ -123,13 +159,11 @@ export const useTimesheetEdit = ({
         const entryDate = new Date(year, month - 1, foundEntry.day);
         return isHolidayDate(entryDate, h);
       });
-      console.log("Holiday check:", { holiday });
 
       // Find existing compensation
       const existingCompensation = compensationEntries.find(
         (c) => c.day === foundEntry.day
       );
-      console.log("Existing compensation:", existingCompensation);
 
       // Get schedule for the day
       const date = new Date(year, month - 1, foundEntry.day);
@@ -137,12 +171,8 @@ export const useTimesheetEdit = ({
         ? getScheduleForDate(employmentType, date)
         : null;
       if (!schedule || schedule.isOff) {
-        console.log("No schedule found for day or it's marked as off:", {
-          date,
-        });
         return;
       }
-      console.log("Schedule found:", schedule);
 
       // Create time objects and calculate metrics
       const { actual, scheduled } = createTimeObjects(
@@ -153,34 +183,23 @@ export const useTimesheetEdit = ({
         updatedEntry.timeOut ?? "",
         employmentType || null
       );
-      console.log("Time objects created:", { actual, scheduled });
 
       const timeMetrics = calculateTimeMetrics(
         actual,
         scheduled,
-        attendanceSettings,
+        await attendanceSettingsModel.loadAttendanceSettings(),
         employmentType || null
       );
-      console.log("Time metrics calculated:", timeMetrics);
+
+      const {
+        nightDifferentialHours,
+        nightDifferentialPay,
+        overtimePay,
+        hourlyRate,
+        attendanceSettings,
+      } = await calculateCompensationMetrics(timeMetrics, employmentType);
 
       const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
-      const hourlyRate = dailyRate / 8;
-      const overtimeHours = Math.floor(timeMetrics.overtimeMinutes / 60);
-      const overtimePay =
-        overtimeHours *
-        hourlyRate *
-        (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
-
-      const payMetrics = calculatePayMetrics(
-        timeMetrics,
-        attendanceSettings,
-        dailyRate,
-        holiday,
-        actual.timeIn,
-        actual.timeOut,
-        scheduled,
-        employmentType
-      );
 
       // Add this before creating compensation
       const isWorkday = !!schedule;
@@ -190,9 +209,6 @@ export const useTimesheetEdit = ({
 
       // For non-time-tracking employees or missing time entries
       if (!employmentType?.requiresTimeTracking || !hasTimeEntries) {
-        console.log(
-          "Creating base compensation for non-time-tracking employee"
-        );
         const compensation = createBaseCompensation(
           updatedEntry,
           employee,
@@ -206,7 +222,6 @@ export const useTimesheetEdit = ({
           !employmentType?.requiresTimeTracking &&
           (updatedEntry.timeIn === "present" ||
             updatedEntry.timeOut === "present");
-        const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
 
         compensation.absence = !isPresent && isAbsent;
         compensation.grossPay = isHoliday
@@ -223,9 +238,7 @@ export const useTimesheetEdit = ({
             year,
             selectedEmployeeId
           );
-          console.log("Base compensation saved successfully");
         } catch (saveError) {
-          console.error("Error saving base compensation:", saveError);
           throw saveError;
         }
 
@@ -238,10 +251,6 @@ export const useTimesheetEdit = ({
             ),
             compensationModel.loadRecords(month, year, selectedEmployeeId),
           ]);
-        console.log("Data reloaded:", {
-          attendanceCount: updatedAttendanceData.length,
-          compensationCount: updatedCompensationData.length,
-        });
 
         onDataUpdate(updatedAttendanceData, updatedCompensationData);
         return;
@@ -252,13 +261,21 @@ export const useTimesheetEdit = ({
         updatedEntry,
         employee,
         timeMetrics,
-        payMetrics,
+        await calculatePayMetrics(
+          timeMetrics,
+          attendanceSettings,
+          dailyRate,
+          holiday,
+          actual.timeIn,
+          actual.timeOut,
+          scheduled,
+          employmentType
+        ),
         month,
         year,
         holiday,
         existingCompensation
       );
-      console.log("Compensation record created:", compensation);
 
       // Save compensation
       try {
@@ -268,9 +285,7 @@ export const useTimesheetEdit = ({
           year,
           selectedEmployeeId
         );
-        console.log("Compensation saved successfully");
       } catch (saveError) {
-        console.error("Error saving compensation:", saveError);
         throw saveError;
       }
 
@@ -280,10 +295,6 @@ export const useTimesheetEdit = ({
           attendanceModel.loadAttendancesById(month, year, selectedEmployeeId),
           compensationModel.loadRecords(month, year, selectedEmployeeId),
         ]);
-      console.log("Final data reload:", {
-        attendanceCount: updatedAttendanceData.length,
-        compensationCount: updatedCompensationData.length,
-      });
 
       // Update parent component
       onDataUpdate(updatedAttendanceData, updatedCompensationData);
@@ -291,11 +302,59 @@ export const useTimesheetEdit = ({
       // Show success toast
       toast.success("Timesheet updated successfully");
     } catch (error) {
-      console.error("Error in handleTimesheetEdit:", error);
       toast.error("Failed to update timesheet");
       throw error;
     }
   };
 
-  return { handleTimesheetEdit };
+  const handleInputChange = async (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    formData: Compensation,
+    setFormData: React.Dispatch<React.SetStateAction<Compensation>>
+  ) => {
+    const { name, value } = e.target;
+
+    if (!hasEditAccess) {
+      toast.error("You do not have permission to edit compensation records");
+      return;
+    }
+
+    const isComputedField = [
+      "lateMinutes",
+      "undertimeMinutes",
+      "overtimeMinutes",
+      "hoursWorked",
+      "grossPay",
+      "deductions",
+      "netPay",
+      "overtimePay",
+      "undertimeDeduction",
+      "lateDeduction",
+      "holidayBonus",
+      "nightDifferentialHours",
+      "nightDifferentialPay",
+    ].includes(name);
+
+    if (isComputedField && !formData.manualOverride) {
+      toast.error("Enable manual override to edit computed fields");
+      return;
+    }
+
+    const numericValue = parseFloat(value) || 0;
+
+    setFormData((prev) => {
+      const newData = { ...prev };
+      const key = name as keyof Compensation;
+      (newData[key] as string | number) =
+        name.includes("Pay") ||
+        name.includes("Deduction") ||
+        name.includes("Hours") ||
+        name.includes("Minutes")
+          ? numericValue
+          : value;
+      return newData;
+    });
+  };
+
+  return { handleTimesheetEdit, handleInputChange };
 };

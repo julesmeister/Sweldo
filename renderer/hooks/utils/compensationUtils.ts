@@ -28,9 +28,19 @@ export const createDateString = (
 };
 
 // Helper function to calculate time difference in minutes
-// Returns positive value if time1 is after time2
+// Returns positive value if time1 is after time2, handles midnight crossing
 export const calculateTimeDifference = (time1: Date, time2: Date) => {
-  return Math.round((time1.getTime() - time2.getTime()) / (1000 * 60));
+  let diffInMinutes = Math.round(
+    (time1.getTime() - time2.getTime()) / (1000 * 60)
+  );
+
+  // If timeOut is earlier than timeIn, it means we crossed midnight
+  // In this case, add 24 hours worth of minutes (1440)
+  if (diffInMinutes < 0) {
+    diffInMinutes += 24 * 60; // Add 24 hours in minutes
+  }
+
+  return diffInMinutes;
 };
 
 // Helper function to calculate deduction minutes
@@ -57,54 +67,29 @@ const calculateNightDifferential = (
   const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
   const NIGHT_DIFF_MIN_HOURS = 1; // Minimum hours required for night differential
 
-  // Only calculate night differential for hours worked within schedule
-  const effectiveTimeIn =
-    actual.timeIn > scheduled.timeIn ? actual.timeIn : scheduled.timeIn;
-  const effectiveTimeOut =
-    actual.timeOut < scheduled.timeOut ? actual.timeOut : scheduled.timeOut;
+  // Calculate total hours between effective times
+  let totalHours = Math.ceil(
+    (actual.timeOut.getTime() - actual.timeIn.getTime()) / (1000 * 60 * 60)
+  );
 
-  // Convert times to hours for easier comparison
-  const timeInHour = effectiveTimeIn.getHours();
-  const timeOutHour = effectiveTimeOut.getHours();
-
-  // If the work period doesn't overlap with night differential hours at all, return 0
-  if (
-    // Case 1: Work period is completely outside night differential hours
-    // Example: If night diff is 10PM-6AM, this catches shifts like 7AM-4PM
-    // timeIn >= 6AM && timeOut <= 10PM
-    timeInHour >= endHour &&
-    timeOutHour <= startHour
-  ) {
-    return {
-      nightDifferentialHours: 0,
-      nightDifferentialPay: 0,
-    };
+  // Handle midnight crossing
+  if (totalHours < 0) {
+    totalHours += 24;
   }
 
   let nightHours = 0;
-  let currentTime = new Date(effectiveTimeIn);
+  let currentTime = new Date(actual.timeIn);
 
-  // Calculate total hours between effective times
-  const totalHours = Math.abs(
-    Math.ceil(
-      (effectiveTimeOut.getTime() - effectiveTimeIn.getTime()) /
-        (1000 * 60 * 60)
-    )
-  );
-
+  // Calculate night hours
   for (let i = 0; i < totalHours; i++) {
     const hour = currentTime.getHours();
     const isNightHour =
-      // Case 1: Hours between startHour and midnight (e.g., 22-23)
-      (hour >= startHour && hour < 24) ||
-      // Case 2: Hours between midnight and endHour (e.g., 0-5)
-      (hour >= 0 && hour < endHour);
+      (hour >= startHour && hour < 24) || (hour >= 0 && hour < endHour);
 
     if (isNightHour) {
       nightHours++;
     }
 
-    // Move to next hour
     currentTime.setHours(currentTime.getHours() + 1);
   }
 
@@ -132,56 +117,57 @@ export const calculateTimeMetrics = (
   attendanceSettings: AttendanceSettings,
   employmentType: EmploymentType | null
 ) => {
-  // If no schedule, return zero values for all metrics
+  const totalMinutesWorked = Math.abs(
+    calculateTimeDifference(actual.timeOut, actual.timeIn)
+  );
+  const standardHours = employmentType?.hoursOfWork || 8;
+  const standardMinutes = standardHours * 60;
+
+  // If no schedule, only calculate total hours and overtime
   if (!scheduled) {
+    const overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
     return {
       lateMinutes: 0,
       undertimeMinutes: 0,
-      overtimeMinutes: 0,
+      overtimeMinutes,
       lateDeductionMinutes: 0,
       undertimeDeductionMinutes: 0,
-      overtimeDeductionMinutes: 0,
-      hoursWorked: Math.abs(
-        calculateTimeDifference(actual.timeOut, actual.timeIn) / 60
+      overtimeDeductionMinutes: calculateDeductionMinutes(
+        overtimeMinutes,
+        attendanceSettings.overtimeThreshold
       ),
+      hoursWorked: totalMinutesWorked / 60,
     };
   }
 
+  // Calculate late minutes
   const lateMinutes =
     actual.timeIn > scheduled.timeIn
       ? calculateTimeDifference(actual.timeIn, scheduled.timeIn)
       : 0;
 
+  // Calculate undertime minutes
   const undertimeMinutes =
     actual.timeOut < scheduled.timeOut
       ? calculateTimeDifference(scheduled.timeOut, actual.timeOut)
       : 0;
 
-  // Calculate overtime based on hours of work
-  const standardHours = employmentType?.hoursOfWork || 8;
-  const standardMinutes = standardHours * 60;
-  const totalMinutesWorked = Math.abs(
-    calculateTimeDifference(actual.timeOut, actual.timeIn)
-  );
+  // Calculate overtime minutes - consider both total hours worked and extended hours
+  const earlyMinutes =
+    scheduled.timeIn > actual.timeIn
+      ? calculateTimeDifference(scheduled.timeIn, actual.timeIn)
+      : 0;
+  const lateOutMinutes =
+    actual.timeOut > scheduled.timeOut
+      ? calculateTimeDifference(actual.timeOut, scheduled.timeOut)
+      : 0;
 
-  // New overtime calculation logic
-  let overtimeMinutes = 0;
-  if (scheduled) {
-    const earlyMinutes =
-      scheduled.timeIn > actual.timeIn
-        ? calculateTimeDifference(scheduled.timeIn, actual.timeIn)
-        : 0;
-    const lateMinutes =
-      actual.timeOut > scheduled.timeOut
-        ? calculateTimeDifference(actual.timeOut, scheduled.timeOut)
-        : 0;
-
-    overtimeMinutes = attendanceSettings.countEarlyTimeInAsOvertime
-      ? earlyMinutes + lateMinutes
-      : lateMinutes;
-  } else {
-    overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
-  }
+  // Calculate overtime based on both total hours worked and schedule extension
+  const overtimeFromTotal = Math.max(0, totalMinutesWorked - standardMinutes);
+  const overtimeFromSchedule = attendanceSettings.countEarlyTimeInAsOvertime
+    ? earlyMinutes + lateOutMinutes
+    : lateOutMinutes;
+  const overtimeMinutes = Math.max(overtimeFromTotal, overtimeFromSchedule);
 
   const lateDeductionMinutes = calculateDeductionMinutes(
     lateMinutes,
@@ -193,14 +179,9 @@ export const calculateTimeMetrics = (
     attendanceSettings.undertimeGracePeriod
   );
 
-  // Apply overtime threshold to overtime minutes
   const overtimeDeductionMinutes = calculateDeductionMinutes(
     overtimeMinutes,
     attendanceSettings.overtimeThreshold
-  );
-
-  const hoursWorked = Math.abs(
-    calculateTimeDifference(actual.timeOut, actual.timeIn) / 60
   );
 
   return {
@@ -210,7 +191,7 @@ export const calculateTimeMetrics = (
     lateDeductionMinutes,
     undertimeDeductionMinutes,
     overtimeDeductionMinutes,
-    hoursWorked,
+    hoursWorked: totalMinutesWorked / 60,
   };
 };
 
@@ -226,74 +207,62 @@ export const calculatePayMetrics = (
   scheduled?: { timeIn: Date; timeOut: Date } | null,
   employmentType?: EmploymentType | null
 ) => {
-  const standardHours = employmentType?.hoursOfWork || 8; // Default to 8 hours if not specified
+  const standardHours = employmentType?.hoursOfWork || 8;
   const hourlyRate = dailyRate / standardHours;
   const overtimeHourlyRate =
-    hourlyRate * attendanceSettings.overtimeHourlyMultiplier;
+    hourlyRate * (attendanceSettings.overtimeHourlyMultiplier || 1.25);
 
-  // If no schedule, return base pay without any adjustments
-  if (!scheduled) {
-    return {
-      deductions: 0,
-      overtimePay: 0,
-      baseGrossPay: dailyRate,
-      holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
-      grossPay: holiday
-        ? dailyRate + dailyRate * holiday.multiplier
-        : dailyRate,
-      netPay: holiday ? dailyRate + dailyRate * holiday.multiplier : dailyRate,
-      lateDeduction: 0,
-      undertimeDeduction: 0,
-      nightDifferentialHours: 0,
-      nightDifferentialPay: 0,
-    };
+  // Calculate night differential if we have actual time data
+  let nightDifferential = {
+    nightDifferentialHours: 0,
+    nightDifferentialPay: 0,
+  };
+
+  if (actualTimeIn && actualTimeOut) {
+    nightDifferential = calculateNightDifferential(
+      { timeIn: actualTimeIn, timeOut: actualTimeOut },
+      { timeIn: actualTimeIn, timeOut: actualTimeOut }, // Use actual times as schedule to avoid time restriction
+      attendanceSettings,
+      hourlyRate
+    );
   }
 
-  const nightDifferential = calculateNightDifferential(
-    { timeIn: actualTimeIn!, timeOut: actualTimeOut! },
-    scheduled,
-    attendanceSettings,
-    hourlyRate
-  );
+  // Calculate deductions
+  const lateDeduction =
+    timeMetrics.lateDeductionMinutes *
+    (attendanceSettings.lateDeductionPerMinute || 0);
+  const undertimeDeduction =
+    timeMetrics.undertimeDeductionMinutes *
+    (attendanceSettings.undertimeDeductionPerMinute || 0);
+  const overtimePay =
+    (timeMetrics.overtimeDeductionMinutes / 60) * overtimeHourlyRate;
+  const totalDeductions = lateDeduction + undertimeDeduction;
 
-  const { lateDeductionMinutes, undertimeDeductionMinutes, overtimeMinutes } =
-    timeMetrics;
+  // Calculate holiday bonus if applicable
+  const holidayBonus = holiday ? dailyRate * (holiday.multiplier - 1) : 0;
 
-  const deductions = Math.round(
-    lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute +
-      undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute
-  );
+  // Calculate gross and net pay
+  const baseGrossPay = dailyRate;
+  const grossPay =
+    baseGrossPay +
+    overtimePay +
+    nightDifferential.nightDifferentialPay +
+    holidayBonus;
+  const netPay = grossPay - totalDeductions;
 
-  // Calculate overtime pay using the new hourly rate multiplier
-  const overtimePay = Math.round(
-    Math.floor(overtimeMinutes / 60) * overtimeHourlyRate
-  );
-  const baseGrossPay = dailyRate + overtimePay;
-  const holidayBonus = holiday ? Math.round(dailyRate * holiday.multiplier) : 0;
-  // Add night differential to the gross pay calculation
-  const grossPayWithNightDiff = holiday
-    ? baseGrossPay + holidayBonus + nightDifferential.nightDifferentialPay
-    : baseGrossPay + nightDifferential.nightDifferentialPay;
-
-  // Update net pay to include night differential
-  const netPay = grossPayWithNightDiff - deductions;
-
-  return {
-    deductions,
+  const result = {
+    deductions: totalDeductions,
     overtimePay,
     baseGrossPay,
     holidayBonus,
-    grossPay: grossPayWithNightDiff,
+    grossPay,
     netPay,
-    lateDeduction: Math.round(
-      lateDeductionMinutes * attendanceSettings.lateDeductionPerMinute
-    ),
-    undertimeDeduction: Math.round(
-      undertimeDeductionMinutes * attendanceSettings.undertimeDeductionPerMinute
-    ),
-    nightDifferentialHours: nightDifferential.nightDifferentialHours,
-    nightDifferentialPay: nightDifferential.nightDifferentialPay,
+    lateDeduction,
+    undertimeDeduction,
+    ...nightDifferential,
   };
+
+  return result;
 };
 
 // Helper function to create a complete compensation record
@@ -453,25 +422,46 @@ export const createTimeObjects = (
   const date = new Date(year, month - 1, day);
   const schedule = getEffectiveSchedule(employmentType, date);
 
-  if (!schedule) {
-    // Return null schedule to indicate no schedule was found
-    return {
-      actual: {
-        timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
-        timeOut: new Date(createDateString(year, month, day, actualTimeOut)),
-      },
-      scheduled: null,
-    };
+  // Create timeIn date
+  const timeInDate = new Date(createDateString(year, month, day, actualTimeIn));
+
+  // Create timeOut date - if timeOut is earlier than timeIn, it means we crossed midnight
+  let timeOutDate = new Date(createDateString(year, month, day, actualTimeOut));
+  const timeInHour = parseInt(actualTimeIn.split(":")[0]);
+  const timeOutHour = parseInt(actualTimeOut.split(":")[0]);
+
+  // If timeOut hour is less than timeIn hour, it means we crossed midnight
+  if (timeOutHour < timeInHour) {
+    timeOutDate.setDate(timeOutDate.getDate() + 1);
   }
 
   const actual = {
-    timeIn: new Date(createDateString(year, month, day, actualTimeIn)),
-    timeOut: new Date(createDateString(year, month, day, actualTimeOut)),
+    timeIn: timeInDate,
+    timeOut: timeOutDate,
   };
 
+  if (!schedule) {
+    return { actual, scheduled: null };
+  }
+
+  // Apply the same midnight crossing logic to scheduled times
+  const scheduledTimeIn = new Date(
+    createDateString(year, month, day, schedule.timeIn)
+  );
+  let scheduledTimeOut = new Date(
+    createDateString(year, month, day, schedule.timeOut)
+  );
+
+  const schedTimeInHour = parseInt(schedule.timeIn.split(":")[0]);
+  const schedTimeOutHour = parseInt(schedule.timeOut.split(":")[0]);
+
+  if (schedTimeOutHour < schedTimeInHour) {
+    scheduledTimeOut.setDate(scheduledTimeOut.getDate() + 1);
+  }
+
   const scheduled = {
-    timeIn: new Date(createDateString(year, month, day, schedule.timeIn)),
-    timeOut: new Date(createDateString(year, month, day, schedule.timeOut)),
+    timeIn: scheduledTimeIn,
+    timeOut: scheduledTimeOut,
   };
 
   return { actual, scheduled };

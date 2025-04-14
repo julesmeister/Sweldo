@@ -42,10 +42,6 @@ export class CompensationModel {
     year?: number,
     employeeId?: string
   ): Promise<Compensation[]> {
-    console.log(
-      `Loading compensation records from ${this.folderPath} with params:`,
-      { month, year, employeeId }
-    );
     try {
       const filePath = employeeId
         ? `${this.folderPath}/${employeeId}/${year}_${month}_compensation.csv`
@@ -53,16 +49,12 @@ export class CompensationModel {
 
       const fileContent = await window.electron.readFile(filePath);
       if (!fileContent) {
-        console.log(
-          `Compensation records file ${filePath} doesn't exist, returning empty array`
-        );
         return []; // Return empty array if file is empty or doesn't exist
       }
       const results = Papa.parse(fileContent, {
         header: true,
         skipEmptyLines: true,
       });
-      console.log(`Loaded ${results.data.length} compensation records`);
       return results.data.map((row: any) => ({
         employeeId: row.employeeId,
         month: parseInt(row.month, 10),
@@ -104,7 +96,6 @@ export class CompensationModel {
           : undefined,
       })) as Compensation[];
     } catch (error) {
-      console.error("Error reading compensation records:", error);
       return []; // Return empty array if there's an error
     }
   }
@@ -128,9 +119,7 @@ export class CompensationModel {
       const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_compensation.csv`;
       const csv = Papa.unparse(records);
       await window.electron.writeFile(filePath, csv);
-      console.log(`Compensation records saved successfully to ${filePath}`);
     } catch (error) {
-      console.error(`Failed to save compensation records: ${error}`);
       throw error;
     }
   }
@@ -187,7 +176,6 @@ export class CompensationModel {
       // Save all records
       await this.saveOrUpdateRecords(employeeId, year, month, updatedRecords);
     } catch (error) {
-      console.error(`Failed to save/update compensations: ${error}`);
       throw error;
     }
   }

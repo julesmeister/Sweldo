@@ -350,25 +350,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
     // Get the schedule for the specific day of the week
     const jsDay = entryDate.getDay(); // 0-6 (0 = Sunday)
-    // Convert JavaScript day (0-6) to your schedule format (1-7)
-    const scheduleDay = jsDay === 0 ? 7 : jsDay;
-
     const schedule = employmentType
       ? getScheduleForDate(employmentType, entryDate)
       : null;
-
-    // Log schedule information
-    console.log("[Night Differential] Schedule Info:", {
-      date: entryDate.toLocaleDateString(),
-      timeIn: timeIn,
-      timeOut: timeOut,
-      schedule: schedule
-        ? {
-            timeIn: schedule.timeIn,
-            timeOut: schedule.timeOut,
-          }
-        : "No schedule",
-    });
 
     // Separate checks for workday and holiday
     const isWorkday = !!schedule;
@@ -405,55 +389,55 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       employmentType
     );
 
-    // Log night differential calculation details
-    const NIGHT_DIFF_MIN_HOURS = 1; // Minimum hours threshold for night differential
-    const nightStartHour = 22; // 10 PM
-    const nightEndHour = 6; // 6 AM
-
-    // Calculate hours worked during night differential period
+    // Calculate night differential hours
     const calculateNightHours = (timeIn: Date, timeOut: Date) => {
       let nightHours = 0;
+      let timeInHour = timeIn.getHours() + timeIn.getMinutes() / 60;
+      let timeOutHour = timeOut.getHours() + timeOut.getMinutes() / 60;
 
-      // Convert times to hours for easier comparison
-      const timeInHour = timeIn.getHours() + timeIn.getMinutes() / 60;
-      const timeOutHour = timeOut.getHours() + timeOut.getMinutes() / 60;
-
-      // Check morning period (12 AM - 6 AM)
-      if (timeInHour < nightEndHour) {
-        nightHours += Math.min(
-          nightEndHour - timeInHour,
-          timeOutHour - timeInHour
-        );
+      // If timeOut is earlier than timeIn, it means we crossed midnight
+      if (timeOutHour < timeInHour) {
+        timeOutHour += 24;
       }
 
-      // Check night period (10 PM - 12 AM)
-      if (timeInHour >= nightStartHour || timeOutHour >= nightStartHour) {
-        nightHours += Math.min(
-          24 - Math.max(timeInHour, nightStartHour),
-          timeOutHour >= nightStartHour ? timeOutHour - nightStartHour : 0
-        );
+      const nightStartHour = 22; // 10 PM
+      const nightEndHour = 6; // 6 AM
+
+      // Calculate night hours in the evening (10 PM - midnight)
+      if (timeInHour < timeOutHour) {
+        if (timeInHour <= nightStartHour && timeOutHour > nightStartHour) {
+          // Started before 10 PM, ended after 10 PM
+          nightHours += Math.min(24, timeOutHour) - nightStartHour;
+        } else if (timeInHour >= nightStartHour) {
+          // Started after 10 PM
+          nightHours += Math.min(24, timeOutHour) - timeInHour;
+        }
+      }
+
+      // Calculate night hours in the morning (midnight - 6 AM)
+      if (timeOutHour > 24) {
+        // Shift crossed midnight
+        if (timeOutHour <= 24 + nightEndHour) {
+          // Ended before 6 AM
+          nightHours += timeOutHour - 24;
+        } else {
+          // Ended after 6 AM
+          nightHours += nightEndHour;
+        }
+      } else if (timeOutHour <= nightEndHour) {
+        // Shift ended before 6 AM on the same day
+        nightHours += timeOutHour;
       }
 
       return nightHours;
     };
 
     const nightHours = calculateNightHours(actual.timeIn, actual.timeOut);
-    const qualifiesForNightDiff = nightHours >= NIGHT_DIFF_MIN_HOURS;
-
-    console.log("[Night Differential] Time Analysis:", {
-      actualTimeIn: actual.timeIn.toLocaleTimeString(),
-      actualTimeOut: actual.timeOut.toLocaleTimeString(),
-      nightDiffStart: `${nightStartHour}:00`,
-      nightDiffEnd: `${nightEndHour}:00`,
-      hoursInNightDiff: nightHours.toFixed(2),
-      minimumHoursRequired: NIGHT_DIFF_MIN_HOURS,
-      qualifiesForNightDiff,
-      reason: !qualifiesForNightDiff
-        ? `Does not meet minimum ${NIGHT_DIFF_MIN_HOURS} hour threshold for night differential`
-        : `Qualifies with ${nightHours.toFixed(
-            2
-          )} hours during night differential period`,
-    });
+    const standardHours = employmentType?.hoursOfWork || 8;
+    const hourlyRate = dailyRate / standardHours;
+    const nightDiffMultiplier =
+      attendanceSettings?.nightDifferentialMultiplier || 0.1;
+    const nightDiffPay = nightHours * hourlyRate * nightDiffMultiplier;
 
     const timeMetrics = calculateTimeMetrics(
       actual,
@@ -462,7 +446,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       employmentType
     );
 
-    // Modify the pay metrics calculation to consider the threshold
     const payMetrics = calculatePayMetrics(
       timeMetrics,
       attendanceSettings,
@@ -473,43 +456,23 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       scheduled
     );
 
-    // Adjust night differential based on threshold
-    const adjustedPayMetrics = {
-      ...payMetrics,
-      nightDifferentialHours: qualifiesForNightDiff
-        ? payMetrics.nightDifferentialHours
-        : 0,
-      nightDifferentialPay: qualifiesForNightDiff
-        ? payMetrics.nightDifferentialPay
-        : 0,
-    };
-
-    // Log final night differential calculations
-    console.log("[Night Differential] Calculation Results:", {
-      qualifiesForNightDiff,
-      originalNightHours: payMetrics.nightDifferentialHours,
-      adjustedNightHours: adjustedPayMetrics.nightDifferentialHours,
-      originalNightPay: payMetrics.nightDifferentialPay,
-      adjustedNightPay: adjustedPayMetrics.nightDifferentialPay,
-      hourlyRate: dailyRate / (employmentType?.hoursOfWork || 8),
-      multiplier: attendanceSettings?.nightDifferentialMultiplier || 0.1,
-    });
+    // Calculate total gross pay including night differential
+    const totalGrossPay = payMetrics.grossPay + nightDiffPay;
+    // Calculate total net pay including night differential
+    const totalNetPay = totalGrossPay - payMetrics.deductions;
 
     return {
-      lateMinutes: timeMetrics.lateMinutes,
-      undertimeMinutes: timeMetrics.undertimeMinutes,
-      overtimeMinutes: timeMetrics.overtimeMinutes,
-      hoursWorked: timeMetrics.hoursWorked,
-      grossPay: adjustedPayMetrics.grossPay,
+      ...timeMetrics,
+      grossPay: totalGrossPay,
       dailyRate,
-      deductions: adjustedPayMetrics.deductions,
-      netPay: adjustedPayMetrics.netPay,
-      lateDeduction: adjustedPayMetrics.lateDeduction,
-      undertimeDeduction: adjustedPayMetrics.undertimeDeduction,
-      overtimeAddition: adjustedPayMetrics.overtimePay,
-      holidayBonus: adjustedPayMetrics.holidayBonus,
-      nightDifferentialHours: adjustedPayMetrics.nightDifferentialHours,
-      nightDifferentialPay: adjustedPayMetrics.nightDifferentialPay,
+      deductions: payMetrics.deductions,
+      netPay: totalNetPay,
+      lateDeduction: payMetrics.lateDeduction,
+      undertimeDeduction: payMetrics.undertimeDeduction,
+      overtimeAddition: payMetrics.overtimePay,
+      holidayBonus: payMetrics.holidayBonus,
+      nightDifferentialHours: nightHours,
+      nightDifferentialPay: nightDiffPay,
       manualOverride: false,
       absence: false,
     };
@@ -528,25 +491,41 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   useEffect(() => {
     // Only update formData with computed values if manualOverride is false
     if (computedValues && !formData.manualOverride) {
-      setFormData((prev) => ({
-        ...prev,
-        lateMinutes: computedValues.lateMinutes,
-        undertimeMinutes: computedValues.undertimeMinutes,
-        overtimeMinutes: computedValues.overtimeMinutes,
-        hoursWorked: Math.round(computedValues.hoursWorked),
-        grossPay: computedValues.grossPay,
-        deductions: computedValues.deductions,
-        netPay: computedValues.netPay,
-        overtimePay: computedValues.overtimeAddition,
-        undertimeDeduction: computedValues.undertimeDeduction,
-        lateDeduction: computedValues.lateDeduction,
-        holidayBonus: computedValues.holidayBonus,
-        nightDifferentialHours: computedValues.nightDifferentialHours,
-        nightDifferentialPay: computedValues.nightDifferentialPay,
-        absence: computedValues.absence,
-      }));
+      setFormData((prev) => {
+        // Calculate night differential first
+        const nightHours = computedValues.nightDifferentialHours;
+        const standardHours = employmentType?.hoursOfWork || 8;
+        const hourlyRate = (employee?.dailyRate || 0) / standardHours;
+        const nightDiffMultiplier =
+          attendanceSettings?.nightDifferentialMultiplier || 0.1;
+        const nightDiffPay = nightHours * hourlyRate * nightDiffMultiplier;
+
+        return {
+          ...prev,
+          lateMinutes: computedValues.lateMinutes,
+          undertimeMinutes: computedValues.undertimeMinutes,
+          overtimeMinutes: computedValues.overtimeMinutes,
+          hoursWorked: Math.round(computedValues.hoursWorked),
+          grossPay: computedValues.grossPay,
+          deductions: computedValues.deductions,
+          netPay: computedValues.netPay,
+          overtimePay: computedValues.overtimeAddition,
+          undertimeDeduction: computedValues.undertimeDeduction,
+          lateDeduction: computedValues.lateDeduction,
+          holidayBonus: computedValues.holidayBonus,
+          nightDifferentialHours: nightHours,
+          nightDifferentialPay: nightDiffPay,
+          absence: computedValues.absence,
+        };
+      });
     }
-  }, [computedValues, formData.manualOverride]);
+  }, [
+    computedValues,
+    formData.manualOverride,
+    employmentType,
+    employee?.dailyRate,
+    attendanceSettings,
+  ]);
 
   // Update formData when compensation prop changes
   useEffect(() => {
@@ -655,12 +634,17 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       } else if (name === "nightDifferentialHours" && formData.manualOverride) {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        const standardHours = employmentType?.hoursOfWork || 8;
-        const hourlyRate = (employee?.dailyRate || 0) / standardHours;
-        const nightDiffMultiplier =
-          attendanceSettings?.nightDifferentialMultiplier || 0.1;
-        newData.nightDifferentialPay =
-          numericValue * hourlyRate * nightDiffMultiplier;
+        // Set night differential pay to 0 if hours are 0
+        if (numericValue === 0) {
+          newData.nightDifferentialPay = 0;
+        } else {
+          const standardHours = employmentType?.hoursOfWork || 8;
+          const hourlyRate = (employee?.dailyRate || 0) / standardHours;
+          const nightDiffMultiplier =
+            attendanceSettings?.nightDifferentialMultiplier || 0.1;
+          newData.nightDifferentialPay =
+            numericValue * hourlyRate * nightDiffMultiplier;
+        }
         // Update gross pay and net pay
         newData.grossPay =
           (formData.dailyRate || 0) +

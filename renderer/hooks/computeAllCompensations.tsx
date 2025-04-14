@@ -59,16 +59,13 @@ export const useComputeAllCompensations = (
 
       // Get the last day of the month
       const lastDayOfMonth = new Date(year, month, 0).getDate();
-      console.log(
-        `Computing compensations for ${year}-${month}, days: 1-${lastDayOfMonth}`
-      );
 
       // Filter timesheet entries to only include valid days for this month
       const validTimesheetEntries = timesheetEntries.filter((entry) => {
         const entryDay = Number(entry.day);
         const isValidDay = entryDay >= 1 && entryDay <= lastDayOfMonth;
         if (!isValidDay) {
-          console.log(`Skipping invalid day ${entryDay} for month ${month}`);
+          return false;
         }
         return isValidDay;
       });
@@ -79,7 +76,6 @@ export const useComputeAllCompensations = (
 
         // Skip if the date is invalid
         if (isNaN(entryDate.getTime())) {
-          console.log(`Skipping invalid date: ${year}-${month}-${entryDay}`);
           continue;
         }
 
@@ -179,16 +175,24 @@ export const useComputeAllCompensations = (
           employmentType
         );
 
+        // Update total pay calculations to include night differential
+        const totalGrossPay = payMetrics.grossPay;
+        const totalNetPay = totalGrossPay - payMetrics.deductions;
+
         const newCompensation = createCompensationRecord(
           entry,
           employee,
           timeMetrics,
-          payMetrics,
+          {
+            ...payMetrics,
+            grossPay: totalGrossPay,
+            netPay: totalNetPay,
+          },
           month,
           year,
           holiday,
           undefined,
-          { ...schedule, dayOfWeek: entry.day } // Pass schedule with dayOfWeek to help determine absence
+          schedule
         );
 
         if (foundCompensation && recompute) {
@@ -200,21 +204,7 @@ export const useComputeAllCompensations = (
         } else {
           updatedCompensations.push(newCompensation);
         }
-
-        console.log(`Computed compensation for ${year}-${month}-${entryDay}:`, {
-          isWorkday: !!schedule,
-          isHoliday: !!holiday,
-          hasTimeEntries: !!(entry.timeIn && entry.timeOut),
-          isAbsent: isWorkday && !isHoliday && !hasTimeEntries,
-        });
       }
-
-      // Log summary before saving
-      console.log(`Compensation summary for ${year}-${month}:`, {
-        totalDays: lastDayOfMonth,
-        processedEntries: validTimesheetEntries.length,
-        computedCompensations: updatedCompensations.length,
-      });
 
       await compensationModel.saveOrUpdateRecords(
         employee.id,
@@ -225,7 +215,7 @@ export const useComputeAllCompensations = (
       onCompensationsComputed?.(updatedCompensations);
       return updatedCompensations;
     } catch (error) {
-      console.error("Error computing compensations:", error);
+      throw error;
     }
   };
 

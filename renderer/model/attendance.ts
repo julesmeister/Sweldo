@@ -45,9 +45,6 @@ export class AttendanceModel {
     try {
       const fileContent = await window.electron.readFile(this.folderPath);
       if (!fileContent || fileContent.trim().length === 0) {
-        console.log(
-          "Attendance file is empty or doesn't exist, returning empty array"
-        );
         return []; // Return empty array if file is empty or doesn't exist
       }
       const results = Papa.parse(fileContent, {
@@ -61,7 +58,6 @@ export class AttendanceModel {
         timeOut: row.timeOut ? row.timeOut : null,
       })) as Attendance[];
     } catch (error) {
-      console.error("Error reading attendance file:", error);
       return []; // Return empty array if there's an error
     }
   }
@@ -74,25 +70,16 @@ export class AttendanceModel {
   ): Promise<Attendance[]> {
     try {
       const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
-      console.log("[AttendanceModel] Loading attendances from:", filePath);
-
       const fileContent = await window.electron.readFile(filePath);
       if (!fileContent || fileContent.trim().length === 0) {
-        console.log(
-          "[AttendanceModel] No content found in file, returning empty array"
-        );
         return []; // Return empty array if file is empty or doesn't exist
       }
-
-      console.log("[AttendanceModel] File content:", fileContent);
 
       const results = Papa.parse(fileContent, {
         header: true,
         skipEmptyLines: true,
         transformHeader: (header) => header.trim(),
       });
-
-      console.log("[AttendanceModel] Parsed results:", results);
 
       return results.data.map((row: any) => ({
         employeeId: id || "",
@@ -109,7 +96,6 @@ export class AttendanceModel {
           : [],
       })) as Attendance[];
     } catch (error) {
-      console.error("[AttendanceModel] Error reading attendance file:", error);
       return []; // Return empty array if there's an error
     }
   }
@@ -156,7 +142,6 @@ export class AttendanceModel {
           }
         : null;
     } catch (error) {
-      console.error("[AttendanceModel] Error reading attendance file:", error);
       return null;
     }
   }
@@ -172,11 +157,7 @@ export class AttendanceModel {
       const filePath = `${this.folderPath}/${id}/${year}_${month}_attendance.csv`;
       const csv = Papa.unparse(attendances);
       await window.electron.writeFile(filePath, csv);
-      console.log(
-        `[AttendanceModel] Attendances saved successfully to ${filePath}`
-      );
     } catch (error) {
-      console.error(`[AttendanceModel] Failed to save attendances:`, error);
       throw error;
     }
   }
@@ -257,11 +238,7 @@ export class AttendanceModel {
 
       const csv = Papa.unparse(csvData);
       await window.electron.writeFile(filePath, csv);
-      console.log(
-        `[AttendanceModel] Successfully saved/updated attendances to ${filePath}`
-      );
     } catch (error) {
-      console.error(`[AttendanceModel] Failed to save attendances:`, error);
       throw error;
     }
   }

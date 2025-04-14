@@ -845,25 +845,42 @@ export class Payroll {
       const filePath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
       try {
-        await window.electron.ensureDir(
-          `${this.dbPath}/SweldoDB/payrolls/${employeeId}`
-        );
+        // Ensure directory exists
+        const dirPath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}`;
+        try {
+          await window.electron.ensureDir(dirPath);
+          console.info(`Directory ensured: ${dirPath}`);
+        } catch (error) {
+          console.error(`Failed to ensure directory: ${dirPath}`, error);
+          throw error;
+        }
 
         let csvContent = "";
         const fileExists = await window.electron.fileExists(filePath);
+        console.info(`File exists check for ${filePath}: ${fileExists}`);
 
         if (fileExists) {
+          console.info(`Reading existing content from ${filePath}`);
           const existingContent = await window.electron.readFile(filePath);
           const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
             header: true,
           });
+          console.info(
+            `Successfully parsed existing CSV data with ${parsedData.data.length} records`
+          );
           parsedData.data.push(payrollData);
           csvContent = Papa.unparse(parsedData.data);
+          console.info(
+            `Added new record. Total records: ${parsedData.data.length}`
+          );
         } else {
+          console.info(`Creating new CSV file with initial record`);
           csvContent = Papa.unparse([payrollData]);
         }
 
+        console.info(`Writing CSV content to ${filePath}`);
         await window.electron.writeFile(filePath, csvContent);
+        console.info(`Successfully wrote CSV content to file`);
       } catch (error: unknown) {
         // Log error but don't throw to allow process to continue
         const errorMessage =
