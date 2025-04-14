@@ -26,6 +26,7 @@ import {
 } from "@/renderer/hooks/utils/compensationUtils";
 import { toast } from "sonner";
 import { ComputationBreakdownButton } from "@/renderer/components/ComputationBreakdownButton";
+import { useSchedule, formatTime } from "@/renderer/hooks/utils/useSchedule";
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -275,6 +276,15 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     accessCodes.includes("MANAGE_PAYROLL") ||
     accessCodes.includes("MANAGE_ATTENDANCE");
 
+  const date = useMemo(
+    () => new Date(year, month - 1, day),
+    [year, month, day]
+  );
+  const { schedule, hasSchedule, isRestDay, formattedSchedule } = useSchedule(
+    employmentType,
+    date
+  );
+
   useEffect(() => {
     const loadSchedule = async () => {
       if (!dbPath) return;
@@ -287,18 +297,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         );
 
         if (employmentType) {
-          const date = new Date(year, month - 1, day);
-          const schedule = getScheduleForDate(employmentType, date);
-
-          if (schedule && !schedule.isOff) {
-            setFormData((prev) => ({
-              ...prev,
-              dayType: schedule.isOff ? "Rest Day" : prev.dayType,
-              hoursWorked: schedule.isOff
-                ? 0
-                : Math.round(prev.hoursWorked || 0),
-            }));
-          }
+          setFormData((prev) => ({
+            ...prev,
+            dayType: isRestDay ? "Rest Day" : prev.dayType,
+            hoursWorked: isRestDay ? 0 : Math.round(prev.hoursWorked || 0),
+          }));
         }
 
         setEmploymentType(employmentType || null);
@@ -312,7 +315,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     if (isOpen) {
       loadSchedule();
     }
-  }, [dbPath, employee?.employmentType, isOpen, year, month, day]);
+  }, [dbPath, employee?.employmentType, isOpen, year, month, day, isRestDay]);
 
   useEffect(() => {
     setFormData(compensation);
@@ -793,35 +796,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                     />
                   </svg>
                   {employmentType
-                    ? (() => {
-                        const schedule = getScheduleForDate(
-                          employmentType,
-                          new Date(
-                            compensation.year,
-                            compensation.month - 1,
-                            compensation.day
-                          )
-                        );
-                        return schedule
-                          ? `${schedule.timeIn.replace(
-                              /(\d{2}):(\d{2})/,
-                              (_, h, m) => {
-                                const hour = parseInt(h);
-                                return `${hour % 12 || 12}:${m}${
-                                  hour < 12 ? "AM" : "PM"
-                                }`;
-                              }
-                            )} - ${schedule.timeOut.replace(
-                              /(\d{2}):(\d{2})/,
-                              (_, h, m) => {
-                                const hour = parseInt(h);
-                                return `${hour % 12 || 12}:${m}${
-                                  hour < 12 ? "AM" : "PM"
-                                }`;
-                              }
-                            )}`
-                          : "Day Off";
-                      })()
+                    ? `${formattedSchedule || "Day Off"} based on ${
+                        employmentType.type
+                      }`
                     : "No Schedule"}
                 </span>
               </h3>
