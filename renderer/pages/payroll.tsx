@@ -15,7 +15,12 @@ import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import RootLayout from "@/renderer/components/layout";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
-import { IoShieldOutline } from "react-icons/io5";
+import {
+  IoShieldOutline,
+  IoInformationCircle,
+  IoPrintOutline,
+  IoWarningOutline,
+} from "react-icons/io5";
 import { toast } from "sonner";
 import path from "path";
 import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
@@ -23,6 +28,7 @@ import { usePayrollDelete } from "@/renderer/hooks/usePayrollDelete";
 import { usePayrollStatistics } from "@/renderer/hooks/usePayrollStatistics";
 import { createStatisticsModel } from "@/renderer/model/statistics";
 import { PDFGeneratorOptions } from "@/renderer/types/payroll";
+import { Tooltip } from "@/renderer/components/Tooltip";
 
 // Helper function for safe localStorage access
 const safeStorage = {
@@ -72,6 +78,7 @@ export default function PayrollPage() {
   const pathname = usePathname();
   const router = useRouter();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [potentialPayrollCount, setPotentialPayrollCount] = useState(0);
   const { deletePayroll, isDeleting } = usePayrollDelete({
     dbPath,
     selectedEmployeeId: selectedEmployeeId!,
@@ -82,6 +89,9 @@ export default function PayrollPage() {
     generatePayrollStatistics,
     updateMonthStatistics,
   } = usePayrollStatistics();
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [showSummaryTooltip, setShowSummaryTooltip] = useState(false);
+  const [showPayslipsTooltip, setShowPayslipsTooltip] = useState(false);
 
   // Move callback declarations to the top level
   const handlePayrollDeleted = useCallback(() => {
@@ -876,6 +886,68 @@ export default function PayrollPage() {
     }
   };
 
+  // Add a function to calculate potential payroll count
+  const calculatePotentialPayrollCount = useCallback(async () => {
+    if (!dateRange.startDate || !dateRange.endDate || !dbPath) {
+      setPotentialPayrollCount(0);
+      return;
+    }
+
+    try {
+      // Load all active employees
+      const employeeModel = createEmployeeModel(dbPath);
+      const allEmployees = await employeeModel.loadEmployees();
+      const activeEmployees = allEmployees.filter((e) => e.status === "active");
+
+      if (activeEmployees.length === 0) {
+        setPotentialPayrollCount(0);
+        return;
+      }
+
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+      const monthIndex = startDate.getMonth() + 1;
+      const year = startDate.getFullYear();
+
+      // Load and collect payroll data for each active employee
+      const payrollPromises = activeEmployees.map(async (employee) => {
+        try {
+          const employeePayrolls = await Payroll.loadPayrollSummaries(
+            dbPath,
+            employee.id,
+            year,
+            monthIndex
+          );
+
+          // Filter payrolls within date range
+          return employeePayrolls.filter((summary) => {
+            const summaryDate = new Date(summary.startDate);
+            return summaryDate >= startDate && summaryDate <= endDate;
+          });
+        } catch (error) {
+          console.log(
+            `No payroll found for employee ${employee.name} (${employee.id})`
+          );
+          return [];
+        }
+      });
+
+      // Wait for all payroll data to be collected
+      const payrollResults = await Promise.all(payrollPromises);
+      const totalPayrolls = payrollResults.flat().length;
+
+      setPotentialPayrollCount(totalPayrolls);
+    } catch (error) {
+      console.error("Error calculating potential payroll count:", error);
+      setPotentialPayrollCount(0);
+    }
+  }, [dbPath, dateRange]);
+
+  // Call the calculation function when date range changes
+  useEffect(() => {
+    calculatePotentialPayrollCount();
+  }, [calculatePotentialPayrollCount, dateRange]);
+
   // Check if user has basic access to view payroll
   if (!hasAccess("VIEW_REPORTS")) {
     return (
@@ -917,15 +989,105 @@ export default function PayrollPage() {
                 <>
                   <button
                     onClick={handleGeneratePayslipsForAll}
-                    className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="px-4 py-3 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 relative"
+                    onMouseEnter={() => setShowPayslipsTooltip(true)}
+                    onMouseLeave={() => setShowPayslipsTooltip(false)}
                   >
                     Generate Payslips PDF
+                    {/* Payslips Tooltip */}
+                    {showPayslipsTooltip && (
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 z-50 w-[340px]">
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100/20 p-4 relative">
+                          {/* Arrow pointing up */}
+                          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                            <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
+                          </div>
+
+                          <div className="space-y-3 text-left">
+                            <div className="flex items-start gap-2.5">
+                              <IoPrintOutline className="w-[18px] h-[18px] text-green-600 flex-shrink-0 mt-0.5" />
+                              <h4 className="text-[15px] font-semibold text-gray-900">
+                                Printing Requirements
+                              </h4>
+                            </div>
+                            <div className="space-y-2.5 ml-[26px]">
+                              <div className="flex gap-2.5 items-start">
+                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                <p className="text-[13px] text-gray-600 leading-normal">
+                                  Use{" "}
+                                  <span className="font-medium text-gray-900">
+                                    long bond paper (8.5" × 13")
+                                  </span>{" "}
+                                  for optimal printing results
+                                </p>
+                              </div>
+                              <div className="flex gap-2.5 items-start">
+                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                <p className="text-[13px] text-gray-600 leading-normal">
+                                  Each payslip is specifically formatted for
+                                  this paper size
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </button>
+
                   <button
                     onClick={handleGeneratePayrollSummariesPDFForAll}
-                    className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2 relative"
+                    onMouseEnter={() => setShowSummaryTooltip(true)}
+                    onMouseLeave={() => setShowSummaryTooltip(false)}
                   >
-                    Generate Summary PDF
+                    <span className="flex items-center gap-2">
+                      Generate Summary PDF For All Employees
+                      {potentialPayrollCount > 0 && (
+                        <span className="bg-blue-400 text-white text-xs font-medium rounded px-1.5 py-0.5">
+                          {potentialPayrollCount}
+                        </span>
+                      )}
+                    </span>
+
+                    {/* Summary Tooltip */}
+                    {showSummaryTooltip && (
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 z-50 w-[340px]">
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100/20 p-4 relative">
+                          {/* Arrow pointing up */}
+                          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                            <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
+                          </div>
+
+                          <div className="space-y-3 text-left">
+                            <div className="flex items-start gap-2.5">
+                              <IoInformationCircle className="w-[18px] h-[18px] text-blue-600 flex-shrink-0 mt-0.5" />
+                              <h4 className="text-[15px] font-semibold text-gray-900">
+                                Payroll Summary Information
+                              </h4>
+                            </div>
+                            <div className="space-y-2.5 ml-[26px]">
+                              <div className="flex gap-2.5 items-start">
+                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                <p className="text-[13px] text-gray-600 leading-normal">
+                                  Only includes employees with{" "}
+                                  <span className="font-medium text-gray-900">
+                                    existing payroll records
+                                  </span>
+                                </p>
+                              </div>
+                              <div className="flex gap-2.5 items-start">
+                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                <p className="text-[13px] text-gray-600 leading-normal">
+                                  Employees without payroll data will not appear
+                                  in the summary
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </button>
                 </>
               )}

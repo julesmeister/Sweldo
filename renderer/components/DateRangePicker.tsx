@@ -110,6 +110,24 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
   };
 
+  const handleEndDateChange = (date: Date | null) => {
+    try {
+      const validDate = date ? new Date(date) : null;
+      if (validDate && !isNaN(validDate.getTime())) {
+        setDateRange(startDate, validDate);
+        setIsEndDateOpen(false);
+      } else if (date === null) {
+        setDateRange(startDate, null);
+        setIsEndDateOpen(false);
+      } else {
+        console.error("Invalid end date selected");
+      }
+    } catch (error) {
+      console.error("Error handling end date change:", error);
+      setIsEndDateOpen(false);
+    }
+  };
+
   const handleRefresh = async () => {
     if (!onRefresh) return;
     setIsRefreshing(true);
@@ -172,30 +190,17 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <div className="relative z-50 flex-1">
           <DatePicker
             selected={endDate}
-            onChange={(date: Date | null) => {
-              try {
-                const validDate = date ? new Date(date) : null;
-                if (validDate && !isNaN(validDate.getTime())) {
-                  setDateRange(startDate, validDate);
-                  setIsEndDateOpen(false);
-                } else if (date === null) {
-                  setDateRange(startDate, null);
-                  setIsEndDateOpen(false);
-                } else {
-                  console.error("Invalid end date selected");
-                }
-              } catch (error) {
-                console.error("Error handling end date change:", error);
-                setIsEndDateOpen(false);
-              }
-            }}
+            onChange={handleEndDateChange}
             startDate={startDate}
             endDate={endDate}
             minDate={startDate || new Date()}
+            selectsEnd
+            showPopperArrow
             className="w-full bg-transparent focus:outline-none"
             placeholderText="End date"
             dateFormat="MMM d, yyyy"
             open={isEndDateOpen}
+            onCalendarOpen={() => setIsEndDateOpen(true)}
             onCalendarClose={() => setIsEndDateOpen(false)}
             customInput={
               <button type="button" className={buttonClass(endDate)}>
