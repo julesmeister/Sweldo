@@ -919,10 +919,18 @@ export default function PayrollPage() {
             monthIndex
           );
 
-          // Filter payrolls within date range
+          // Filter payrolls that exactly fit within date range
           return employeePayrolls.filter((summary) => {
-            const summaryDate = new Date(summary.startDate);
-            return summaryDate >= startDate && summaryDate <= endDate;
+            const summaryStartDate = new Date(summary.startDate);
+            const summaryEndDate = new Date(summary.endDate);
+
+            // Check if both start and end dates are within the selected range
+            return (
+              summaryStartDate >= startDate &&
+              summaryStartDate <= endDate &&
+              summaryEndDate >= startDate &&
+              summaryEndDate <= endDate
+            );
           });
         } catch (error) {
           console.log(
