@@ -544,8 +544,9 @@ export class Payroll {
       const content = await window.electron.readFile(settingsPath);
       return JSON.parse(content);
     } catch (error) {
-      console.error("Error loading calculation settings:", error);
-      return {};
+      throw new Error(
+        `Failed to load calculation settings: ${(error as any).message}`
+      );
     }
   }
 
@@ -562,12 +563,6 @@ export class Payroll {
     }
   ): Promise<PayrollSummaryModel> {
     try {
-      console.log("[generatePayrollSummary] Starting with deductions:", {
-        deductions,
-        startDate,
-        endDate,
-      });
-
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) throw new Error("Employee not found");
@@ -575,11 +570,6 @@ export class Payroll {
       const start = startDate instanceof Date ? startDate : new Date(startDate);
       const end = endDate instanceof Date ? endDate : new Date(endDate);
       const summary = await this.summarizeCompensations(employeeId, start, end);
-
-      console.log("[generatePayrollSummary] Loaded summary:", {
-        summaryDeductions: summary.deductions,
-        shortIDs: summary.shortIDs,
-      });
 
       const calculationSettings = await this.loadCalculationSettings();
 
@@ -601,8 +591,6 @@ export class Payroll {
         cashAdvanceDeductions: deductions?.cashAdvanceDeductions || 0,
       };
 
-      console.log("[generatePayrollSummary] Formula variables:", variables);
-
       // Calculate gross pay using formula if available
       let grossPayValue = summary.grossPay;
       if (calculationSettings.grossPay?.formula) {
@@ -612,8 +600,9 @@ export class Payroll {
             variables
           );
         } catch (error) {
-          console.error("Error evaluating gross pay formula:", error);
-          grossPayValue = summary.grossPay;
+          throw new Error(
+            `Failed to evaluate gross pay formula: ${(error as any).message}`
+          );
         }
       }
 
@@ -626,10 +615,9 @@ export class Payroll {
             variables
           );
         } catch (error) {
-          console.error("Error evaluating others formula:", error);
-          othersValue =
-            (summary.deductions.others || 0) -
-            (summary.deductions.shortDeductions || 0);
+          throw new Error(
+            `Failed to evaluate others formula: ${(error as any).message}`
+          );
         }
       } else {
         othersValue =
@@ -648,63 +636,17 @@ export class Payroll {
         undertimeDeduction: summary.undertimeDeduction ?? 0,
       };
 
-      // Clear console log formatting
-      console.log("\n=== Deductions Breakdown ===");
-      console.log(`Employee: ${employee.name}`);
-      console.log("Individual Deductions:");
-      console.log(`  SSS: ${deductionVariables.sss}`);
-      console.log(`  PhilHealth: ${deductionVariables.philHealth}`);
-      console.log(`  Pag-IBIG: ${deductionVariables.pagIbig}`);
-      console.log(
-        `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
-      );
-      console.log(`  Others (Shorts): ${deductionVariables.others}`); // Clarify that Others is Shorts
-      console.log(`  Late Deduction: ${deductionVariables.lateDeduction}`);
-      console.log(`  Undertime: ${deductionVariables.undertimeDeduction}`);
-
       let totalDeductions = 0;
       if (calculationSettings?.totalDeductions?.formula) {
         try {
-          console.log(
-            "\nFormula:",
-            calculationSettings.totalDeductions.formula
-          );
-
-          // Calculate total deductions
           totalDeductions = evaluateFormula(
             calculationSettings.totalDeductions.formula,
             deductionVariables
           );
-
-          console.log("\nVariables used in calculation:");
-          Object.entries(deductionVariables).forEach(([key, value]) => {
-            console.log(`  ${key}: ${value}`);
-          });
-
-          console.log("\nBreakdown of total:");
-          console.log(
-            `  Government Deductions: ${
-              deductionVariables.sss +
-              deductionVariables.philHealth +
-              deductionVariables.pagIbig
-            }`
-          );
-          console.log(
-            `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
-          );
-          console.log(`  Others (Shorts): ${deductionVariables.others}`);
-          console.log(`  Late Deduction: ${deductionVariables.lateDeduction}`);
-          console.log(`  Undertime: ${deductionVariables.undertimeDeduction}`);
-          console.log("\nTotal Deduction Calculated:", totalDeductions);
-          console.log("========================");
         } catch (error) {
-          console.error("Formula evaluation failed:", error);
-          // Fallback calculation if formula fails
-          totalDeductions = Object.values(deductionVariables).reduce(
-            (sum, val) => sum + (typeof val === "number" ? val : 0),
-            0
+          throw new Error(
+            `Formula evaluation failed: ${(error as any).message}`
           );
-          console.log("Fallback total deductions:", totalDeductions);
         }
       } else {
         // No formula available, sum all deductions
@@ -712,7 +654,6 @@ export class Payroll {
           (sum, val) => sum + (typeof val === "number" ? val : 0),
           0
         );
-        console.log("Total deductions (no formula):", totalDeductions);
       }
 
       // Calculate net pay using formula if available
@@ -726,8 +667,9 @@ export class Payroll {
             others: othersValue,
           });
         } catch (error) {
-          console.error("Error evaluating net pay formula:", error);
-          netPayValue = grossPayValue - totalDeductions;
+          throw new Error(
+            `Failed to evaluate net pay formula: ${(error as any).message}`
+          );
         }
       }
 
@@ -754,13 +696,6 @@ export class Payroll {
             : deductions?.shortDeductions ?? 0,
         others: othersValue,
       };
-
-      console.log("[generatePayrollSummary] Final calculations:", {
-        grossPay: grossPayValue,
-        totalDeductions,
-        netPay: netPayValue,
-        finalDeductions,
-      });
 
       const payrollData: PayrollCSVData = {
         id: `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`,
@@ -798,11 +733,6 @@ export class Payroll {
         ).toString(),
         nightDifferentialPay: (summary.nightDifferentialPay || 0).toString(),
       };
-
-      console.log("[generatePayrollSummary] PayrollData created:", {
-        shortDeductions: payrollData.shortDeductions,
-        shortIDs: payrollData.shortIDs,
-      });
 
       // Get all months between start and end date
       const months = [];
@@ -855,7 +785,6 @@ export class Payroll {
             }
 
             // Save the update
-            /*
             const cashAdvanceModel = createCashAdvanceModel(
               this.dbPath,
               employeeId,
@@ -863,7 +792,6 @@ export class Payroll {
               advance.date.getFullYear()
             );
             await cashAdvanceModel.updateCashAdvance(updatedAdvance);
-            */
           }
         }
       }
@@ -900,7 +828,6 @@ export class Payroll {
             } as Short;
 
             // Save the update
-            /*
             const shortModel = createShortModel(
               this.dbPath,
               employeeId,
@@ -908,7 +835,6 @@ export class Payroll {
               short.date.getFullYear()
             );
             await shortModel.updateShort(updatedShort);
-            */
           }
         }
       }
@@ -918,50 +844,53 @@ export class Payroll {
       const endYear = end.getFullYear();
       const filePath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
-      // Ensure directory exists
-      /*
-      await window.electron.ensureDir(
-        `${this.dbPath}/SweldoDB/payrolls/${employeeId}`
-      );
-
-      let csvContent = "";
-      const fileExists = await window.electron.fileExists(filePath);
-
-      if (fileExists) {
-        // Read existing content and append new row
-        const existingContent = await window.electron.readFile(filePath);
-        const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
-          header: true,
-        });
-        parsedData.data.push(payrollData);
-        csvContent = Papa.unparse(parsedData.data);
-      } else {
-        // Create new file with header and first row
-        csvContent = Papa.unparse([payrollData]);
-      }
-
       try {
-        await window.electron.writeFile(filePath, csvContent);
-      } catch (error) {
-        throw error;
-      }
-      */
+        await window.electron.ensureDir(
+          `${this.dbPath}/SweldoDB/payrolls/${employeeId}`
+        );
 
-      // Update employee's last payment period using the correct method name
-      /*
-      await employeeModel.updateEmployeeDetails({
-        ...employee,
-        lastPaymentPeriod: {
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-          start: start.toISOString(),
-          end: end.toISOString(),
-        },
-      });
-      */
+        let csvContent = "";
+        const fileExists = await window.electron.fileExists(filePath);
+
+        if (fileExists) {
+          const existingContent = await window.electron.readFile(filePath);
+          const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
+            header: true,
+          });
+          parsedData.data.push(payrollData);
+          csvContent = Papa.unparse(parsedData.data);
+        } else {
+          csvContent = Papa.unparse([payrollData]);
+        }
+
+        await window.electron.writeFile(filePath, csvContent);
+      } catch (error: unknown) {
+        // Log error but don't throw to allow process to continue
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to save payroll CSV: ${errorMessage}`);
+      }
+
+      // Update employee's last payment period
+      try {
+        await employeeModel.updateEmployeeDetails({
+          ...employee,
+          lastPaymentPeriod: {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            start: start.toISOString(),
+            end: end.toISOString(),
+          },
+        });
+      } catch (error: unknown) {
+        // Log error but don't throw to allow process to continue
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to update employee details: ${errorMessage}`);
+      }
 
       // Create the payroll summary object
-      const payrollSummary = {
+      const payrollSummary: PayrollSummaryModel = {
         ...summary,
         deductions: finalDeductions,
         netPay:
@@ -985,10 +914,15 @@ export class Payroll {
       };
 
       // Update statistics
-      /*
-      const statisticsModel = createStatisticsModel(this.dbPath, endYear);
-      await statisticsModel.updatePayrollStatistics([payrollSummary]);
-      */
+      try {
+        const statisticsModel = createStatisticsModel(this.dbPath, endYear);
+        await statisticsModel.updatePayrollStatistics([payrollSummary]);
+      } catch (error: unknown) {
+        // Log error but don't throw to allow process to continue
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to update statistics: ${errorMessage}`);
+      }
 
       return payrollSummary;
     } catch (error) {
@@ -1402,7 +1336,9 @@ export class Payroll {
       );
 
       if (paidAdvances.length === 0) {
-        throw new Error("No paid cash advances found to reverse");
+        // If no paid advances found, just return without throwing an error
+        // This handles cases where advances were already reversed
+        return;
       }
 
       // Calculate how much was deducted from each advance
@@ -1429,7 +1365,6 @@ export class Payroll {
           }
 
           // Save the update
-          /*
           const cashAdvanceModel = createCashAdvanceModel(
             dbPath,
             employeeId,
@@ -1437,14 +1372,14 @@ export class Payroll {
             advance.date.getFullYear()
           );
           await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
-          */
 
           totalReversed += amountDeducted;
         }
       }
 
       if (Math.abs(totalReversed - deductionAmount) > 0.01) {
-        console.warn(
+        // Log warning instead of throwing error
+        toast.warning(
           `Reversed amount (${totalReversed}) differs from deduction amount (${deductionAmount})`
         );
       }
@@ -1495,7 +1430,6 @@ export class Payroll {
           } as Short;
 
           // Save the update
-          /*
           const shortModel = createShortModel(
             dbPath,
             employeeId,
@@ -1503,12 +1437,12 @@ export class Payroll {
             short.date.getFullYear()
           );
           await shortModel.updateShort(updatedShort);
-          */
         }
       }
     } catch (error) {
-      console.error("Error reversing short deduction:", error);
-      throw error;
+      throw new Error(
+        `Failed to reverse short deduction: ${(error as any).message}`
+      );
     }
   }
 

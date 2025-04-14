@@ -55,6 +55,7 @@ const calculateNightDifferential = (
   const startHour = settings.nightDifferentialStartHour || 22; // Default to 10 PM
   const endHour = settings.nightDifferentialEndHour || 6; // Default to 6 AM
   const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
+  const NIGHT_DIFF_MIN_HOURS = 1; // Minimum hours required for night differential
 
   // Only calculate night differential for hours worked within schedule
   const effectiveTimeIn =
@@ -105,6 +106,14 @@ const calculateNightDifferential = (
 
     // Move to next hour
     currentTime.setHours(currentTime.getHours() + 1);
+  }
+
+  // Check if night hours meet the minimum threshold
+  if (nightHours < NIGHT_DIFF_MIN_HOURS) {
+    return {
+      nightDifferentialHours: 0,
+      nightDifferentialPay: 0,
+    };
   }
 
   const nightDifferentialPay = nightHours * hourlyRate * multiplier;

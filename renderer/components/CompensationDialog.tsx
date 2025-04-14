@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Compensation, DayType } from "@/renderer/model/compensation";
 import {
   AttendanceSettings,
@@ -75,6 +75,13 @@ const FormField: React.FC<FormFieldProps> = ({
   isComputedField = false,
   hasEditAccess = true,
 }) => {
+  const [showHoursDropdown, setShowHoursDropdown] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<"top" | "bottom">(
+    "bottom"
+  );
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+
   const isFieldReadOnly =
     readOnly || (isComputedField && !manualOverride) || !hasEditAccess;
   const fieldClassName = `w-full px-3 py-1.5 text-sm ${
@@ -104,6 +111,60 @@ const FormField: React.FC<FormFieldProps> = ({
         : value
       : value;
 
+  useEffect(() => {
+    if (showHoursDropdown && fieldRef.current) {
+      const rect = fieldRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceBelow = windowHeight - rect.bottom;
+      setDropdownPosition(spaceBelow < 200 ? "top" : "bottom");
+    }
+  }, [showHoursDropdown]);
+
+  const handleHourSelect = (hours: number) => {
+    const minutes = hours * 60;
+    onChange({
+      target: {
+        name,
+        value: minutes.toString(),
+      },
+    } as React.ChangeEvent<HTMLInputElement>);
+    setShowHoursDropdown(false);
+  };
+
+  const renderHoursDropdown = () => {
+    if (!showHoursDropdown || name !== "overtimeMinutes") return null;
+
+    const currentHours = Math.floor(Number(value) / 60);
+
+    return (
+      <div
+        className={`absolute ${
+          dropdownPosition === "bottom" ? "top-full" : "bottom-full"
+        } left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-50 p-2 mt-1 w-[300px]`}
+      >
+        <div className="grid grid-cols-5 gap-1">
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((hour) => (
+            <button
+              key={hour}
+              onClick={() => handleHourSelect(hour)}
+              className={`
+                px-2 py-1.5 text-sm rounded
+                transition-all duration-150
+                ${
+                  currentHours === hour
+                    ? "bg-blue-600 text-white font-medium"
+                    : "hover:bg-gray-800 text-gray-300"
+                }
+              `}
+            >
+              {hour}h
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -124,12 +185,27 @@ const FormField: React.FC<FormFieldProps> = ({
           ))}
         </select>
       ) : (
-        <div className="relative">
+        <div className="relative" ref={fieldRef}>
           <input
+            ref={inputRef}
             type="text"
             name={name}
             value={formattedValue}
             onChange={onChange}
+            onFocus={() => {
+              if (name === "overtimeMinutes" && !isFieldReadOnly) {
+                setShowHoursDropdown(true);
+              }
+            }}
+            onBlur={(e) => {
+              // Only hide if the click was outside our component
+              const isClickInside =
+                e.relatedTarget &&
+                fieldRef.current?.contains(e.relatedTarget as Node);
+              if (!isClickInside) {
+                setTimeout(() => setShowHoursDropdown(false), 200);
+              }
+            }}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
             disabled={!hasEditAccess || !manualOverride}
             min="0"
@@ -155,6 +231,7 @@ const FormField: React.FC<FormFieldProps> = ({
               ×
             </button>
           )}
+          {renderHoursDropdown()}
         </div>
       )}
     </div>
@@ -270,6 +347,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       manualOverride,
       absence,
     });
+
     // Get the schedule for the specific day of the week
     const jsDay = entryDate.getDay(); // 0-6 (0 = Sunday)
     // Convert JavaScript day (0-6) to your schedule format (1-7)
@@ -278,6 +356,19 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const schedule = employmentType
       ? getScheduleForDate(employmentType, entryDate)
       : null;
+
+    // Log schedule information
+    console.log("[Night Differential] Schedule Info:", {
+      date: entryDate.toLocaleDateString(),
+      timeIn: timeIn,
+      timeOut: timeOut,
+      schedule: schedule
+        ? {
+            timeIn: schedule.timeIn,
+            timeOut: schedule.timeOut,
+          }
+        : "No schedule",
+    });
 
     // Separate checks for workday and holiday
     const isWorkday = !!schedule;
@@ -314,12 +405,64 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       employmentType
     );
 
+    // Log night differential calculation details
+    const NIGHT_DIFF_MIN_HOURS = 1; // Minimum hours threshold for night differential
+    const nightStartHour = 22; // 10 PM
+    const nightEndHour = 6; // 6 AM
+
+    // Calculate hours worked during night differential period
+    const calculateNightHours = (timeIn: Date, timeOut: Date) => {
+      let nightHours = 0;
+
+      // Convert times to hours for easier comparison
+      const timeInHour = timeIn.getHours() + timeIn.getMinutes() / 60;
+      const timeOutHour = timeOut.getHours() + timeOut.getMinutes() / 60;
+
+      // Check morning period (12 AM - 6 AM)
+      if (timeInHour < nightEndHour) {
+        nightHours += Math.min(
+          nightEndHour - timeInHour,
+          timeOutHour - timeInHour
+        );
+      }
+
+      // Check night period (10 PM - 12 AM)
+      if (timeInHour >= nightStartHour || timeOutHour >= nightStartHour) {
+        nightHours += Math.min(
+          24 - Math.max(timeInHour, nightStartHour),
+          timeOutHour >= nightStartHour ? timeOutHour - nightStartHour : 0
+        );
+      }
+
+      return nightHours;
+    };
+
+    const nightHours = calculateNightHours(actual.timeIn, actual.timeOut);
+    const qualifiesForNightDiff = nightHours >= NIGHT_DIFF_MIN_HOURS;
+
+    console.log("[Night Differential] Time Analysis:", {
+      actualTimeIn: actual.timeIn.toLocaleTimeString(),
+      actualTimeOut: actual.timeOut.toLocaleTimeString(),
+      nightDiffStart: `${nightStartHour}:00`,
+      nightDiffEnd: `${nightEndHour}:00`,
+      hoursInNightDiff: nightHours.toFixed(2),
+      minimumHoursRequired: NIGHT_DIFF_MIN_HOURS,
+      qualifiesForNightDiff,
+      reason: !qualifiesForNightDiff
+        ? `Does not meet minimum ${NIGHT_DIFF_MIN_HOURS} hour threshold for night differential`
+        : `Qualifies with ${nightHours.toFixed(
+            2
+          )} hours during night differential period`,
+    });
+
     const timeMetrics = calculateTimeMetrics(
       actual,
       scheduled,
       attendanceSettings,
       employmentType
     );
+
+    // Modify the pay metrics calculation to consider the threshold
     const payMetrics = calculatePayMetrics(
       timeMetrics,
       attendanceSettings,
@@ -330,21 +473,43 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       scheduled
     );
 
+    // Adjust night differential based on threshold
+    const adjustedPayMetrics = {
+      ...payMetrics,
+      nightDifferentialHours: qualifiesForNightDiff
+        ? payMetrics.nightDifferentialHours
+        : 0,
+      nightDifferentialPay: qualifiesForNightDiff
+        ? payMetrics.nightDifferentialPay
+        : 0,
+    };
+
+    // Log final night differential calculations
+    console.log("[Night Differential] Calculation Results:", {
+      qualifiesForNightDiff,
+      originalNightHours: payMetrics.nightDifferentialHours,
+      adjustedNightHours: adjustedPayMetrics.nightDifferentialHours,
+      originalNightPay: payMetrics.nightDifferentialPay,
+      adjustedNightPay: adjustedPayMetrics.nightDifferentialPay,
+      hourlyRate: dailyRate / (employmentType?.hoursOfWork || 8),
+      multiplier: attendanceSettings?.nightDifferentialMultiplier || 0.1,
+    });
+
     return {
       lateMinutes: timeMetrics.lateMinutes,
       undertimeMinutes: timeMetrics.undertimeMinutes,
       overtimeMinutes: timeMetrics.overtimeMinutes,
       hoursWorked: timeMetrics.hoursWorked,
-      grossPay: payMetrics.grossPay,
+      grossPay: adjustedPayMetrics.grossPay,
       dailyRate,
-      deductions: payMetrics.deductions,
-      netPay: payMetrics.netPay,
-      lateDeduction: payMetrics.lateDeduction,
-      undertimeDeduction: payMetrics.undertimeDeduction,
-      overtimeAddition: payMetrics.overtimePay,
-      holidayBonus: payMetrics.holidayBonus,
-      nightDifferentialHours: payMetrics.nightDifferentialHours,
-      nightDifferentialPay: payMetrics.nightDifferentialPay,
+      deductions: adjustedPayMetrics.deductions,
+      netPay: adjustedPayMetrics.netPay,
+      lateDeduction: adjustedPayMetrics.lateDeduction,
+      undertimeDeduction: adjustedPayMetrics.undertimeDeduction,
+      overtimeAddition: adjustedPayMetrics.overtimePay,
+      holidayBonus: adjustedPayMetrics.holidayBonus,
+      nightDifferentialHours: adjustedPayMetrics.nightDifferentialHours,
+      nightDifferentialPay: adjustedPayMetrics.nightDifferentialPay,
       manualOverride: false,
       absence: false,
     };

@@ -39,7 +39,6 @@ const safeStorage = {
       }
       return null;
     } catch (e) {
-      console.warn("Failed to access localStorage:", e);
       return null;
     }
   },
@@ -49,7 +48,7 @@ const safeStorage = {
         localStorage.setItem(key, value);
       }
     } catch (e) {
-      console.warn("Failed to write to localStorage:", e);
+      // Removed console.warn
     }
   },
 };
@@ -108,7 +107,6 @@ export default function PayrollPage() {
           currentPayrolls.filter((p) => p.id !== payrollId)
         );
       } catch (error) {
-        console.error("Error deleting payroll:", error);
         toast.error("Failed to delete payroll");
       } finally {
         setLoading(false);
@@ -293,12 +291,6 @@ export default function PayrollPage() {
       return;
     }
 
-    console.log(
-      "[PayrollPage] Confirming deductions at",
-      new Date().toTimeString(),
-      ":",
-      deductions
-    );
     setShowDeductionsDialog(false);
     setLoading(true);
 
@@ -327,15 +319,8 @@ export default function PayrollPage() {
         }
       );
 
-      console.log(
-        "[PayrollPage] Payroll summary generated at",
-        new Date().toTimeString(),
-        ":",
-        summary
-      );
       setPayrollSummary(summary);
     } catch (error: any) {
-      console.error("[PayrollPage] Error generating payroll:", error);
       toast.error("Failed to generate payroll. Please try again.");
     } finally {
       setLoading(false);
@@ -465,7 +450,6 @@ export default function PayrollPage() {
                   netPay = grossPay - totalDeduction;
                 }
               } catch (error) {
-                console.error("Error evaluating formulas:", error);
                 // Fallback to basic calculations
                 grossPay =
                   variables.basicPay +
@@ -504,9 +488,6 @@ export default function PayrollPage() {
               };
             });
         } catch (error) {
-          console.log(
-            `No payroll found for employee ${employee.name} (${employee.id})`
-          );
           return [];
         }
       });
@@ -522,16 +503,6 @@ export default function PayrollPage() {
         toast.error("No payroll data found for the selected date range");
         return;
       }
-
-      console.log(
-        "Final payroll data for PDF:",
-        formattedPayrolls.map((p) => ({
-          employeeName: p.employeeName,
-          grossPay: p.grossPay,
-          deductions: p.deductions,
-          netPay: p.netPay,
-        }))
-      );
 
       // Get the output directory path
       const outputPath = await window.electron.getPath("documents");
@@ -634,13 +605,6 @@ export default function PayrollPage() {
               const settingsState = useSettingsStore.getState();
               const { calculationSettings } = settingsState;
 
-              console.log("Calculation settings:", {
-                totalDeductionsFormula:
-                  calculationSettings?.totalDeductions?.formula,
-                grossPayFormula: calculationSettings?.grossPay?.formula,
-                netPayFormula: calculationSettings?.netPay?.formula,
-              });
-
               // Evaluate formulas
               let grossPay = variables.basicPay;
               let totalDeduction = 0;
@@ -665,12 +629,6 @@ export default function PayrollPage() {
                     variables.lateDeduction;
                 }
 
-                console.log("Gross pay calculation:", {
-                  formula: calculationSettings?.grossPay?.formula || "fallback",
-                  result: grossPay,
-                  variables,
-                });
-
                 // Calculate total deductions using formula if available
                 if (calculationSettings?.totalDeductions?.formula) {
                   const deductionVariables = {
@@ -683,29 +641,6 @@ export default function PayrollPage() {
                     undertimeDeduction: variables.undertimeDeduction,
                   };
 
-                  console.log("\n=== Deductions Breakdown ===");
-                  console.log(`Employee: ${employee.name}`);
-                  console.log("Individual Deductions:");
-                  console.log(`  SSS: ${deductionVariables.sss}`);
-                  console.log(`  PhilHealth: ${deductionVariables.philHealth}`);
-                  console.log(`  Pag-IBIG: ${deductionVariables.pagIbig}`);
-                  console.log(
-                    `  Cash Advance: ${deductionVariables.cashAdvanceDeductions}`
-                  );
-                  console.log(
-                    `  Others (Shorts): ${deductionVariables.others}`
-                  );
-                  console.log(
-                    `  Late Deduction: ${deductionVariables.lateDeduction}`
-                  );
-                  console.log(
-                    `  Undertime: ${deductionVariables.undertimeDeduction}`
-                  );
-                  console.log(
-                    "\nFormula:",
-                    calculationSettings.totalDeductions.formula
-                  );
-
                   // eslint-disable-next-line no-new-func
                   const totalDeductionsFn = new Function(
                     ...Object.keys(deductionVariables),
@@ -714,9 +649,6 @@ export default function PayrollPage() {
                   totalDeduction = totalDeductionsFn(
                     ...Object.values(deductionVariables)
                   );
-
-                  console.log("\nTotal Deduction Calculated:", totalDeduction);
-                  console.log("========================");
                 } else {
                   // Fallback to sum of all deductions
                   totalDeduction =
@@ -727,21 +659,6 @@ export default function PayrollPage() {
                     variables.shorts +
                     variables.lateDeduction +
                     variables.undertimeDeduction;
-
-                  console.log("\n=== Deductions Breakdown (Fallback) ===");
-                  console.log(`Employee: ${employee.name}`);
-                  console.log("Individual Deductions:");
-                  console.log(`  SSS: ${variables.sss}`);
-                  console.log(`  PhilHealth: ${variables.philHealth}`);
-                  console.log(`  Pag-IBIG: ${variables.pagIbig}`);
-                  console.log(
-                    `  Cash Advance: ${variables.cashAdvanceDeductions}`
-                  );
-                  console.log(`  Others (Shorts): ${variables.shorts}`);
-                  console.log(`  Late Deduction: ${variables.lateDeduction}`);
-                  console.log(`  Undertime: ${variables.undertimeDeduction}`);
-                  console.log("\nTotal Deduction (Sum):", totalDeduction);
-                  console.log("========================");
                 }
 
                 // Calculate net pay using formula if available
@@ -760,18 +677,7 @@ export default function PayrollPage() {
                 } else {
                   netPay = grossPay - totalDeduction;
                 }
-
-                console.log("Final calculations:", {
-                  grossPay,
-                  totalDeduction,
-                  netPay,
-                });
               } catch (error) {
-                console.error("Error evaluating formulas:", {
-                  error,
-                  calculationSettings,
-                  variables,
-                });
                 // Fallback to basic calculations
                 grossPay =
                   variables.basicPay +
@@ -810,9 +716,6 @@ export default function PayrollPage() {
               };
             });
         } catch (error) {
-          console.log(
-            `No payroll found for employee ${employee.name} (${employee.id})`
-          );
           return [];
         }
       });
@@ -828,16 +731,6 @@ export default function PayrollPage() {
         toast.error("No payroll data found for the selected date range");
         return;
       }
-
-      console.log(
-        "Final payroll data for PDF:",
-        formattedPayrolls.map((p) => ({
-          employeeName: p.employeeName,
-          grossPay: p.grossPay,
-          deductions: p.deductions,
-          netPay: p.netPay,
-        }))
-      );
 
       // Get the output directory path
       const outputPath = await window.electron.getPath("documents");
@@ -934,9 +827,6 @@ export default function PayrollPage() {
             );
           });
         } catch (error) {
-          console.log(
-            `No payroll found for employee ${employee.name} (${employee.id})`
-          );
           return [];
         }
       });
@@ -947,7 +837,6 @@ export default function PayrollPage() {
 
       setPotentialPayrollCount(totalPayrolls);
     } catch (error) {
-      console.error("Error calculating potential payroll count:", error);
       setPotentialPayrollCount(0);
     }
   }, [dbPath, dateRange]);

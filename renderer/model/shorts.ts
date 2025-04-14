@@ -30,18 +30,12 @@ export class ShortModel {
     try {
       const employeePath = `${this.filePath}`;
       await window.electron.ensureDir(employeePath);
-      console.log(`Ensured directory exists: ${employeePath}`);
     } catch (error) {
-      console.error(`Failed to ensure directory exists: ${error}`);
       throw error;
     }
   }
 
   async createShort(short: Short): Promise<void> {
-    console.log("Creating new short:", {
-      employeeId: short.employeeId,
-      amount: short.amount,
-    });
     try {
       const formattedDate = `${this.month}/${short.date.getDate()}/${
         this.year
@@ -62,7 +56,6 @@ export class ShortModel {
         ].join(",") + "\n";
 
       const filePath = `${this.filePath}/${this.year}_${this.month}_shorts.csv`;
-      console.log("Saving to file:", filePath);
 
       // Define headers for new files
       const headers =
@@ -83,9 +76,7 @@ export class ShortModel {
       let existingData = "";
       try {
         existingData = await window.electron.readFile(filePath);
-        console.log("Appending to existing file");
       } catch (error) {
-        console.log("Creating new file with headers");
         existingData = headers;
       }
 
@@ -93,27 +84,19 @@ export class ShortModel {
         ? existingData.trim() + "\n" + csvData
         : headers + csvData;
       await window.electron.writeFile(filePath, newData);
-      console.log("Short created successfully");
     } catch (error) {
-      console.error("Error creating short:", error as any);
       throw new Error(`Failed to create short: ${(error as any).message}`);
     }
   }
 
   async updateShort(short: Short): Promise<void> {
-    console.log("Updating short:", {
-      id: short.id,
-      employeeId: short.employeeId,
-    });
     try {
       const filePath = `${this.filePath}/${this.year}_${this.month}_shorts.csv`;
-      console.log("Reading file:", filePath);
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
       } catch (error) {
-        console.error("Error reading file for update:", error as any);
         throw new Error(
           `Failed to read shorts file: ${(error as any).message}`
         );
@@ -155,7 +138,6 @@ export class ShortModel {
       });
 
       if (!found) {
-        console.warn("Short not found for update");
         throw new Error("Short not found");
       }
 
@@ -173,43 +155,30 @@ export class ShortModel {
         short.remainingUnpaid,
       ].join(",");
 
-      console.log("Saving updated short");
       await window.electron.writeFile(filePath, lines.join("\n") + "\n");
-      console.log("Short updated successfully");
     } catch (error) {
-      console.error("Error updating short:", error);
       throw error;
     }
   }
 
   async loadShorts(employeeId: string): Promise<Short[]> {
     try {
-      console.log("Loading shorts file path", this.filePath);
       const filePath = `${this.filePath}/${this.year}_${this.month}_shorts.csv`;
-
-      console.log("Attempting to read file:", filePath);
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
-        console.log("Successfully loaded file");
       } catch (error) {
         // If file doesn't exist, create it with headers
         if ((error as any)?.message?.includes("no such file")) {
-          console.log(
-            "File not found, will be created when first short is added"
-          );
           return [];
         }
-        console.error("Error reading file:", error);
         throw new Error(
           `Failed to read shorts file: ${(error as any).message}`
         );
       }
 
-      console.log("Processing shorts data...");
       const lines = data.split("\n").filter((line) => line.trim());
-      console.log("Found lines:", lines);
 
       // Skip header row
       const dataLines = lines.slice(1);
@@ -217,7 +186,6 @@ export class ShortModel {
       const shorts = dataLines
         .map((line, index) => {
           const fields = line.split(",");
-          console.log(`Processing line ${index + 1}:`, fields);
 
           try {
             const [
@@ -241,7 +209,6 @@ export class ShortModel {
 
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount)) {
-              console.warn(`Invalid amount on line ${index + 1}:`, amount);
               return null;
             }
 
@@ -260,51 +227,36 @@ export class ShortModel {
 
             // Double check the status matches the remaining amount
             if (shortItem.remainingUnpaid > 0 && shortItem.status === "Paid") {
-              console.warn(
-                "Inconsistent state: Short marked as Paid but has remaining unpaid amount"
-              );
               shortItem.status = "Unpaid";
             } else if (
               shortItem.remainingUnpaid === 0 &&
               shortItem.status === "Unpaid"
             ) {
-              console.warn(
-                "Inconsistent state: Short marked as Unpaid but has no remaining amount"
-              );
               shortItem.status = "Paid";
             }
 
             return shortItem;
           } catch (err) {
-            console.error(`Error parsing line ${index + 1}:`, err, {
-              line,
-              fields,
-            });
             return null;
           }
         })
         .filter((short): short is Short => short !== null)
         .filter((short) => short.employeeId === employeeId);
 
-      console.log(`Found ${shorts.length} shorts for employee`);
       return shorts;
     } catch (error) {
-      console.error("Unexpected error loading shorts:", error as any);
       throw new Error(`Failed to load shorts: ${(error as any).message}`);
     }
   }
 
   async deleteShort(id: string): Promise<void> {
-    console.log("Deleting short with ID:", id);
     try {
       const filePath = `${this.filePath}/${this.year}_${this.month}_shorts.csv`;
-      console.log("Reading file:", filePath);
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
       } catch (error) {
-        console.error("Error reading file for deletion:", error as any);
         throw new Error(
           `Failed to read shorts file: ${(error as any).message}`
         );
@@ -323,15 +275,11 @@ export class ShortModel {
       const newCount = updatedLines.length;
 
       if (originalCount === newCount) {
-        console.warn("Short not found for deletion, ID:", id);
         throw new Error("Short not found");
       }
 
-      console.log("Saving updated file");
       await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
-      console.log("Short deleted successfully");
     } catch (error) {
-      console.error("Error deleting short:", error);
       throw error;
     }
   }
@@ -344,10 +292,6 @@ export const createShortModel = (
   month?: number,
   year?: number
 ): ShortModel => {
-  console.log(
-    `Creating short model for employee ${employeeId} with folder path:`,
-    dbPath
-  );
   const folderPath = `${dbPath}/SweldoDB/shorts/${employeeId}`;
   return new ShortModel(folderPath, employeeId, month, year);
 };
