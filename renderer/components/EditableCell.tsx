@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { EmploymentType } from "@/renderer/model/settings";
-import { FaCheck, FaSun, FaMoon, FaTimes } from "react-icons/fa"; // Added moon icon for evening times and times icon
+import { FaCheck, FaSun, FaMoon, FaTimes, FaEraser } from "react-icons/fa"; // Added moon icon for evening times and times icon
 import { BsFillSunsetFill } from "react-icons/bs"; // Added sunset icon for afternoon
 import { toast } from "sonner";
 
@@ -182,6 +182,22 @@ export const EditableCell: React.FC<EditableCellProps> = ({
     setEditValue(localValue?.toString() || "");
   };
 
+  const handleClear = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditValue("");
+    try {
+      await onSave("", rowData);
+      setIsEditing(false);
+      setIsHovered(false);
+      setShowAlternatives(false);
+      setLocalValue("");
+    } catch (error) {
+      console.error("Error clearing:", error);
+      toast.error("Failed to clear value");
+      setEditValue(localValue?.toString() || "");
+    }
+  };
+
   const renderTimeOptions = () => {
     if (!rowData.alternativeTimeIns || rowData.alternativeTimeIns.length === 0)
       return null;
@@ -222,14 +238,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                           handleAlternativeClick(time);
                         }}
                         className={`
-                        px-2.5 py-1.5 text-xs rounded
-                        transition-all duration-150
-                        ${
-                          editValue === time
-                            ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
-                            : "hover:bg-white/80 text-gray-700 hover:shadow-sm"
-                        }
-                      `}
+                          px-2.5 py-1.5 text-xs rounded
+                          transition-all duration-150
+                          ${
+                            editValue === time
+                              ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
+                              : "hover:bg-white/80 text-gray-700 hover:shadow-sm"
+                          }
+                        `}
                       >
                         {formatTime(time)}
                       </button>
@@ -240,26 +256,33 @@ export const EditableCell: React.FC<EditableCellProps> = ({
             )}
           </div>
 
-          <div className="grid grid-rows-2 gap-2 pl-2 border-l border-gray-200 w-[100px]">
+          <div className="grid grid-rows-3 gap-2 pl-2 border-l border-gray-200 w-[100px]">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleSave();
               }}
-              className="flex flex-col items-center justify-center gap-1 p-4 bg-gray-50 hover:bg-green-50 text-gray-700 hover:text-green-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-green-200"
+              className="flex flex-col items-center justify-center gap-1 p-3 bg-gray-50 hover:bg-green-50 text-gray-700 hover:text-green-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-green-200"
             >
-              <FaCheck className="w-5 h-5" />
-              <span className="font-medium text-sm">Save</span>
+              <FaCheck className="w-4 h-4" />
+              <span className="font-medium text-xs">Save</span>
+            </button>
+            <button
+              onClick={handleClear}
+              className="flex flex-col items-center justify-center gap-1 p-3 bg-gray-50 hover:bg-yellow-50 text-gray-700 hover:text-yellow-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-yellow-200"
+            >
+              <FaEraser className="w-4 h-4" />
+              <span className="font-medium text-xs">Clear</span>
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleCancel();
               }}
-              className="flex flex-col items-center justify-center gap-1 p-4 bg-gray-50 hover:bg-red-50 text-gray-700 hover:text-red-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-red-200"
+              className="flex flex-col items-center justify-center gap-1 p-3 bg-gray-50 hover:bg-red-50 text-gray-700 hover:text-red-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-red-200"
             >
               <FaTimes className="w-4 h-4" />
-              <span className="font-medium text-sm">Cancel</span>
+              <span className="font-medium text-xs">Cancel</span>
             </button>
           </div>
         </div>
