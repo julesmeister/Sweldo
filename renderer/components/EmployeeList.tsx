@@ -98,14 +98,7 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
 
       try {
         const loadedEmployees = await employeeModel.loadActiveEmployees();
-        console.log(
-          "[EmployeeList] Loaded employees:",
-          loadedEmployees.map((emp) => ({
-            id: emp.id,
-            lastPaymentPeriod: emp.lastPaymentPeriod,
-            rawLastPaymentPeriod: JSON.stringify(emp.lastPaymentPeriod),
-          }))
-        );
+        
         setEmployees(loadedEmployees);
       } catch (error) {
         console.error("Error loading employees:", error);

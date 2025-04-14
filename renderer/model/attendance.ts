@@ -7,6 +7,13 @@ export interface Attendance {
   year: number;
   timeIn: string | null;
   timeOut: string | null;
+  alternativeTimeIns?: string[]; // Additional time in entries
+  alternativeTimeOuts?: string[]; // Additional time out entries
+  schedule?: {
+    timeIn: string;
+    timeOut: string;
+    dayOfWeek: number;
+  } | null; // Schedule information for the day
 }
 
 export interface ExcelData {
@@ -94,6 +101,12 @@ export class AttendanceModel {
         year: year || 0,
         timeIn: row.timeIn ? row.timeIn : null,
         timeOut: row.timeOut ? row.timeOut : null,
+        alternativeTimeIns: row.alternativeTimeIns
+          ? JSON.parse(row.alternativeTimeIns)
+          : [],
+        alternativeTimeOuts: row.alternativeTimeOuts
+          ? JSON.parse(row.alternativeTimeOuts)
+          : [],
       })) as Attendance[];
     } catch (error) {
       console.error("[AttendanceModel] Error reading attendance file:", error);
@@ -118,6 +131,7 @@ export class AttendanceModel {
         day: string;
         timeIn: string;
         timeOut: string;
+        alternativeTimeIns: string;
       };
 
       const results = Papa.parse<AttendanceRow>(fileContent, {
@@ -136,6 +150,9 @@ export class AttendanceModel {
             year,
             timeIn: attendance.timeIn ? attendance.timeIn : null,
             timeOut: attendance.timeOut ? attendance.timeOut : null,
+            alternativeTimeIns: attendance.alternativeTimeIns
+              ? JSON.parse(attendance.alternativeTimeIns)
+              : [],
           }
         : null;
     } catch (error) {
@@ -169,6 +186,8 @@ export class AttendanceModel {
     attendances: (Omit<Attendance, "timeIn" | "timeOut"> & {
       timeIn?: string | null;
       timeOut?: string | null;
+      alternativeTimeIns?: string[];
+      alternativeTimeOuts?: string[];
     })[],
     month: number,
     year: number,
@@ -201,6 +220,14 @@ export class AttendanceModel {
               newAttendance.timeOut !== undefined
                 ? newAttendance.timeOut
                 : existingAttendance.timeOut,
+            alternativeTimeIns:
+              newAttendance.alternativeTimeIns ||
+              existingAttendance.alternativeTimeIns ||
+              [],
+            alternativeTimeOuts:
+              newAttendance.alternativeTimeOuts ||
+              existingAttendance.alternativeTimeOuts ||
+              [],
           };
 
           const index = existingAttendances.findIndex(
@@ -213,11 +240,22 @@ export class AttendanceModel {
             ...newAttendance,
             timeIn: newAttendance.timeIn ?? null,
             timeOut: newAttendance.timeOut ?? null,
+            alternativeTimeIns: newAttendance.alternativeTimeIns || [],
+            alternativeTimeOuts: newAttendance.alternativeTimeOuts || [],
           });
         }
       }
 
-      const csv = Papa.unparse(existingAttendances);
+      // Convert arrays to JSON strings for CSV storage
+      const csvData = existingAttendances.map((attendance) => ({
+        ...attendance,
+        alternativeTimeIns: JSON.stringify(attendance.alternativeTimeIns || []),
+        alternativeTimeOuts: JSON.stringify(
+          attendance.alternativeTimeOuts || []
+        ),
+      }));
+
+      const csv = Papa.unparse(csvData);
       await window.electron.writeFile(filePath, csv);
       console.log(
         `[AttendanceModel] Successfully saved/updated attendances to ${filePath}`

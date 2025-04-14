@@ -35,11 +35,6 @@ export default function MissingTimeLogs() {
 
   const loadMissingLogs = async () => {
     if (!dbPath || !storedMonth || !storedYear) {
-      console.log("[MissingTimeLogs] Missing required data:", {
-        dbPath,
-        storedMonth,
-        storedYear,
-      });
       return;
     }
 
@@ -50,7 +45,6 @@ export default function MissingTimeLogs() {
         parseInt(storedMonth) + 1,
         parseInt(storedYear)
       );
-      console.log("[MissingTimeLogs] All logs loaded:", logs.length);
 
       // Load all employees to check their status
       const employeeModel = createEmployeeModel(dbPath);
@@ -63,14 +57,9 @@ export default function MissingTimeLogs() {
       const filteredLogs = logs.filter((log) =>
         activeEmployeeIds.has(log.employeeId)
       );
-      console.log(
-        "[MissingTimeLogs] Filtered to active employees:",
-        filteredLogs.length
-      );
 
       setMissingLogs(filteredLogs);
     } catch (error) {
-      console.error("[MissingTimeLogs] Error loading missing logs:", error);
       toast.error("Failed to load missing time logs");
     }
   };
@@ -91,7 +80,7 @@ export default function MissingTimeLogs() {
         );
         setSelectedEmployee(employee);
       } catch (error) {
-        console.error("Error loading employee:", error);
+        // Error loading employee
       }
     };
 
@@ -134,7 +123,6 @@ export default function MissingTimeLogs() {
   useEffect(() => {
     const loadActiveEmployees = async () => {
       if (!dbPath) {
-        console.warn("[MissingTimeLogs] Database path not set");
         return;
       }
 
@@ -143,10 +131,6 @@ export default function MissingTimeLogs() {
         const employees = await employeeModel.loadActiveEmployees();
         setActiveEmployees(employees.map((e) => e.id));
       } catch (error) {
-        console.error(
-          "[MissingTimeLogs] Error loading active employees:",
-          error
-        );
         setActiveEmployees([]);
       }
     };
@@ -179,7 +163,7 @@ export default function MissingTimeLogs() {
       setSelectedLog(null);
       setDialogPosition(null);
     } catch (error: any) {
-      console.error("Error in handleTimeEdit:", error);
+      // Error in handleTimeEdit
     }
   };
 
@@ -205,7 +189,6 @@ export default function MissingTimeLogs() {
       );
       await loadMissingLogs();
     } catch (error) {
-      console.error("Error deleting missing time log:", error);
       toast.error("Failed to remove missing time log");
     }
   };

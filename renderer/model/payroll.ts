@@ -22,6 +22,7 @@ import { createShortModel, Short } from "./shorts";
 import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 import { evaluateFormula } from "../utils/formula";
+import { processTimeEntries } from "../utils/timeProcessor";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -195,8 +196,6 @@ export class Payroll {
     // Process employee data
     for (let i = 4; i < rows.length; i += 2) {
       const timeList = rows[i + 1]?.map((value) => value?.toString());
-      const attendances: Attendance[] = [];
-      const missingTimeLogs: MissingTimeLog[] = [];
 
       // Get employee ID and load employee data
       const employeeId = this.processColumn(rows[i], "ID:");
@@ -220,194 +219,16 @@ export class Payroll {
         });
       }
 
-      timeList?.forEach((timeString, j) => {
-        if (!timeString) {
-          attendances.push({
-            employeeId,
-            day: j + 1,
-            month: this.dateRange.start.getMonth() + 1,
-            year: this.dateRange.start.getFullYear(),
-            timeIn: null,
-            timeOut: null,
-          });
-          return;
-        }
-
-        // Get employee type and schedule from employee data
-        const employeeType = employee?.employmentType;
-
-        const employmentType = this.employmentTypes.find(
-          (type) => type.type === employeeType
-        );
-
-        let schedule = null;
-        if (employmentType) {
-          const dayOfWeek = new Date(
-            this.dateRange.start.getFullYear(),
-            this.dateRange.start.getMonth(),
-            j + 1
-          ).getDay();
-          const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-
-          schedule = employmentType.schedules
-            ? employmentType.schedules.find(
-                (s: any) => s.dayOfWeek === scheduleDay
-              )
-            : null;
-        }
-
-        // Parse times from current cell
-        const timeRegex = /(\d{2}:\d{2})/g;
-        const times = timeString.match(timeRegex) || [];
-        const uniqueTimes = [...new Set(times)] as string[];
-
-        let timeIn: string | null = null;
-        let timeOut: string | null = null;
-
-        if (schedule && schedule.timeIn && schedule.timeOut) {
-          const [schedInHour] = schedule.timeIn.split(":").map(Number);
-          const isNightShift = schedInHour >= 18;
-
-          if (isNightShift) {
-            // For night shifts, find the latest PM time from current cell
-            const currentCellTimes = (uniqueTimes as string[]).map(
-              (time: string) => {
-                const [hour] = time.split(":").map(Number);
-                return { time, hour };
-              }
-            );
-
-            // Get PM times (17:00 onwards) from current cell for time in
-            const pmTimes = currentCellTimes
-              .filter((t: { time: string; hour: number }) => t.hour >= 17)
-              .sort(
-                (a: { hour: number }, b: { hour: number }) => b.hour - a.hour
-              );
-
-            // Get next day's cell for time out
-            const nextDayString = timeList[j + 1];
-
-            if (nextDayString) {
-              const nextDayTimes = (
-                (nextDayString.match(timeRegex) || []) as string[]
-              )
-                .map((time: string) => {
-                  const [hour] = time.split(":").map(Number);
-                  return { time, hour };
-                })
-                .filter((t: { time: string; hour: number }) => t.hour <= 11)
-                .sort(
-                  (a: { hour: number }, b: { hour: number }) => a.hour - b.hour
-                );
-
-              // Set time in from current day's PM time
-              if (pmTimes.length > 0) {
-                timeIn = pmTimes[0].time as string;
-              }
-
-              // Set time out from next day's AM time, but only if it's not too close to time in
-              if (nextDayTimes.length > 0) {
-                const [timeInHour, timeInMinute] = timeIn
-                  ?.split(":")
-                  .map(Number) || [0, 0];
-                const [timeOutHour, timeOutMinute] = nextDayTimes[0].time
-                  .split(":")
-                  .map(Number);
-
-                // Calculate time difference in minutes
-                const timeInMinutes = timeInHour * 60 + timeInMinute;
-                const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
-                const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
-
-                // Only set time out if it's more than 5 minutes away from time in
-                if (timeDiff > 5) {
-                  timeOut = nextDayTimes[0].time as string;
-                }
-              }
-            } else {
-              // If it's the last day, only set time in if we have a PM time
-              if (pmTimes.length > 0) {
-                timeIn = pmTimes[0].time as string;
-              }
-            }
-          } else {
-            // Regular shift logic
-            if (uniqueTimes.length > 0) {
-              timeIn = uniqueTimes[0] as string;
-              // Only set time out if it's more than 5 minutes away from time in
-              if (uniqueTimes.length > 1) {
-                const [timeInHour, timeInMinute] = timeIn
-                  .split(":")
-                  .map(Number);
-                const [timeOutHour, timeOutMinute] = uniqueTimes[
-                  uniqueTimes.length - 1
-                ]
-                  .split(":")
-                  .map(Number);
-
-                // Calculate time difference in minutes
-                const timeInMinutes = timeInHour * 60 + timeInMinute;
-                const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
-                const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
-
-                // Only set time out if it's more than 5 minutes away from time in
-                if (timeDiff > 5) {
-                  timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
-                }
-              }
-            }
-          }
-        } else {
-          // No schedule - use first and last times, but check time difference
-          if (uniqueTimes.length > 0) {
-            timeIn = uniqueTimes[0] as string;
-            if (uniqueTimes.length > 1) {
-              const [timeInHour, timeInMinute] = timeIn.split(":").map(Number);
-              const [timeOutHour, timeOutMinute] = uniqueTimes[
-                uniqueTimes.length - 1
-              ]
-                .split(":")
-                .map(Number);
-
-              // Calculate time difference in minutes
-              const timeInMinutes = timeInHour * 60 + timeInMinute;
-              const timeOutMinutes = timeOutHour * 60 + timeOutMinute;
-              const timeDiff = Math.abs(timeOutMinutes - timeInMinutes);
-
-              // Only set time out if it's more than 5 minutes away from time in
-              if (timeDiff > 5) {
-                timeOut = uniqueTimes[uniqueTimes.length - 1] as string;
-              }
-            }
-          }
-        }
-
-        // Push to attendances in the correct format
-        const attendance = {
-          employeeId,
-          day: j + 1,
-          month: this.dateRange.start.getMonth() + 1,
-          year: this.dateRange.start.getFullYear(),
-          timeIn: timeIn || null,
-          timeOut: timeOut || null,
-        };
-        attendances.push(attendance);
-
-        // Check for missing time out with processed times
-        if (timeIn && !timeOut) {
-          missingTimeLogs.push({
-            id: crypto.randomUUID(),
-            employeeId,
-            employeeName: employee?.name || "",
-            day: (j + 1).toString(),
-            month: this.dateRange.start.getMonth() + 1,
-            year: this.dateRange.start.getFullYear(),
-            missingType: "timeOut",
-            employmentType: employeeType || "Unknown",
-            createdAt: new Date().toISOString(),
-          });
-        }
-      });
+      // Process time entries using the utility function
+      const { attendances, missingTimeLogs } = processTimeEntries(
+        timeList || [],
+        employeeId,
+        employee?.name || "Unknown",
+        employee?.employmentType,
+        this.employmentTypes,
+        this.dateRange.start.getMonth() + 1,
+        this.dateRange.start.getFullYear()
+      );
 
       if (employee) {
         // Save attendances for each employee
@@ -432,6 +253,8 @@ export class Payroll {
         }
       }
     }
+
+    // Save employees
     let model = createEmployeeModel(this.dbPath);
     await model.saveOnlyNewEmployees(this.employees);
   }
@@ -1032,6 +855,7 @@ export class Payroll {
             }
 
             // Save the update
+            /*
             const cashAdvanceModel = createCashAdvanceModel(
               this.dbPath,
               employeeId,
@@ -1039,6 +863,7 @@ export class Payroll {
               advance.date.getFullYear()
             );
             await cashAdvanceModel.updateCashAdvance(updatedAdvance);
+            */
           }
         }
       }
@@ -1075,6 +900,7 @@ export class Payroll {
             } as Short;
 
             // Save the update
+            /*
             const shortModel = createShortModel(
               this.dbPath,
               employeeId,
@@ -1082,6 +908,7 @@ export class Payroll {
               short.date.getFullYear()
             );
             await shortModel.updateShort(updatedShort);
+            */
           }
         }
       }
@@ -1092,6 +919,7 @@ export class Payroll {
       const filePath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
 
       // Ensure directory exists
+      /*
       await window.electron.ensureDir(
         `${this.dbPath}/SweldoDB/payrolls/${employeeId}`
       );
@@ -1117,8 +945,10 @@ export class Payroll {
       } catch (error) {
         throw error;
       }
+      */
 
       // Update employee's last payment period using the correct method name
+      /*
       await employeeModel.updateEmployeeDetails({
         ...employee,
         lastPaymentPeriod: {
@@ -1128,6 +958,7 @@ export class Payroll {
           end: end.toISOString(),
         },
       });
+      */
 
       // Create the payroll summary object
       const payrollSummary = {
@@ -1154,8 +985,10 @@ export class Payroll {
       };
 
       // Update statistics
+      /*
       const statisticsModel = createStatisticsModel(this.dbPath, endYear);
       await statisticsModel.updatePayrollStatistics([payrollSummary]);
+      */
 
       return payrollSummary;
     } catch (error) {
@@ -1596,6 +1429,7 @@ export class Payroll {
           }
 
           // Save the update
+          /*
           const cashAdvanceModel = createCashAdvanceModel(
             dbPath,
             employeeId,
@@ -1603,6 +1437,7 @@ export class Payroll {
             advance.date.getFullYear()
           );
           await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
+          */
 
           totalReversed += amountDeducted;
         }
@@ -1660,6 +1495,7 @@ export class Payroll {
           } as Short;
 
           // Save the update
+          /*
           const shortModel = createShortModel(
             dbPath,
             employeeId,
@@ -1667,6 +1503,7 @@ export class Payroll {
             short.date.getFullYear()
           );
           await shortModel.updateShort(updatedShort);
+          */
         }
       }
     } catch (error) {

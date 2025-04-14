@@ -46,7 +46,7 @@ interface CopiedMonthSchedule {
   sourceYear: number;
 }
 
-// Move these utility functions outside both components, at the top of the file
+// Move these utility functions outside both components
 const getDaysInMonth = (date: Date) => {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -59,49 +59,86 @@ const getDayOfWeek = (date: Date) => {
   return day === 0 ? 7 : day; // Convert Sunday from 0 to 7
 };
 
-const getScheduleColor = (
-  timeIn: string,
-  timeOut: string,
-  isOff?: boolean,
-  existingSchedules?: { timeIn: string; timeOut: string }[]
-) => {
-  if (isOff) return "bg-gray-50 border-gray-200";
-  if (!timeIn || !timeOut) return "bg-white border-gray-200";
-
-  // Create a unique key for this time combination
-  const timeKey = `${timeIn}-${timeOut}`;
-
-  // Find existing combinations
-  const existingCombinations = new Set(
-    existingSchedules?.map((s) => `${s.timeIn}-${s.timeOut}`) || []
-  );
-
-  // Base color schemes
-  const colorSchemes = [
-    "bg-blue-50 border-blue-200 hover:border-blue-300",
+// Add this before the MonthScheduleView component
+const globalColorMap = {
+  colorSchemes: [
+    // Original colors
     "bg-green-50 border-green-200 hover:border-green-300",
-    "bg-orange-50 border-orange-200 hover:border-orange-300",
+    "bg-blue-50 border-blue-200 hover:border-blue-300",
     "bg-purple-50 border-purple-200 hover:border-purple-300",
+    "bg-orange-50 border-orange-200 hover:border-orange-300",
     "bg-indigo-50 border-indigo-200 hover:border-indigo-300",
     "bg-rose-50 border-rose-200 hover:border-rose-300",
     "bg-yellow-50 border-yellow-200 hover:border-yellow-300",
     "bg-teal-50 border-teal-200 hover:border-teal-300",
-  ];
+    "bg-cyan-50 border-cyan-200 hover:border-cyan-300",
+    "bg-emerald-50 border-emerald-200 hover:border-emerald-300",
+    "bg-lime-50 border-lime-200 hover:border-lime-300",
+    "bg-amber-50 border-amber-200 hover:border-amber-300",
+    "bg-sky-50 border-sky-200 hover:border-sky-300",
+    "bg-fuchsia-50 border-fuchsia-200 hover:border-fuchsia-300",
+    "bg-pink-50 border-pink-200 hover:border-pink-300",
+    "bg-violet-50 border-violet-200 hover:border-violet-300",
+    // Additional lighter shades
+    "bg-red-50 border-red-200 hover:border-red-300",
+    "bg-slate-50 border-slate-200 hover:border-slate-300",
+    "bg-zinc-50 border-zinc-200 hover:border-zinc-300",
+    "bg-neutral-50 border-neutral-200 hover:border-neutral-300",
+    "bg-stone-50 border-stone-200 hover:border-stone-300",
+    // Slightly darker variations
+    "bg-green-100 border-green-300 hover:border-green-400",
+    "bg-blue-100 border-blue-300 hover:border-blue-400",
+    "bg-purple-100 border-purple-300 hover:border-purple-400",
+    "bg-orange-100 border-orange-300 hover:border-orange-400",
+    "bg-indigo-100 border-indigo-300 hover:border-indigo-400",
+    "bg-rose-100 border-rose-300 hover:border-rose-400",
+    "bg-yellow-100 border-yellow-300 hover:border-yellow-400",
+    "bg-teal-100 border-teal-300 hover:border-teal-400",
+    "bg-cyan-100 border-cyan-300 hover:border-cyan-400",
+    "bg-emerald-100 border-emerald-300 hover:border-emerald-400",
+    // Even more variations
+    "bg-lime-100 border-lime-300 hover:border-lime-400",
+    "bg-amber-100 border-amber-300 hover:border-amber-400",
+    "bg-sky-100 border-sky-300 hover:border-sky-400",
+    "bg-fuchsia-100 border-fuchsia-300 hover:border-fuchsia-400",
+    "bg-pink-100 border-pink-300 hover:border-pink-400",
+    "bg-violet-100 border-violet-300 hover:border-violet-400",
+    // Super light pastels
+    "bg-red-50/70 border-red-200 hover:border-red-300",
+    "bg-blue-50/70 border-blue-200 hover:border-blue-300",
+    "bg-green-50/70 border-green-200 hover:border-green-300",
+    "bg-yellow-50/70 border-yellow-200 hover:border-yellow-300",
+    "bg-purple-50/70 border-purple-200 hover:border-purple-300",
+    // Mixed variations
+    "bg-indigo-50/80 border-indigo-200 hover:border-indigo-300",
+    "bg-teal-50/80 border-teal-200 hover:border-teal-300",
+    "bg-rose-50/80 border-rose-200 hover:border-rose-300",
+    "bg-cyan-50/80 border-cyan-200 hover:border-cyan-300",
+    "bg-emerald-50/80 border-emerald-200 hover:border-emerald-300",
+    // Additional mixed variations
+    "bg-lime-50/80 border-lime-200 hover:border-lime-300",
+    "bg-amber-50/80 border-amber-200 hover:border-amber-300",
+    "bg-sky-50/80 border-sky-200 hover:border-sky-300",
+    "bg-fuchsia-50/80 border-fuchsia-200 hover:border-fuchsia-300",
+    "bg-pink-50/80 border-pink-200 hover:border-pink-300",
+    "bg-violet-50/80 border-violet-200 hover:border-violet-300",
+  ],
+  mappings: new Map(),
+  nextColorIndex: 0,
+  getColor(timeKey: string): string {
+    if (!timeKey || timeKey === "-") return "bg-white border-gray-200";
 
-  // Get index for this combination
-  const combinationIndex = Array.from(existingCombinations).indexOf(timeKey);
-  if (combinationIndex >= 0) {
-    return colorSchemes[combinationIndex % colorSchemes.length];
-  }
-
-  // Fallback to time-based coloring
-  const [inHour] = timeIn.split(":").map(Number);
-  let timeRange = Math.floor(inHour / 3); // Divide day into 8 ranges
-  return colorSchemes[timeRange % colorSchemes.length];
+    if (!this.mappings.has(timeKey)) {
+      const color = this.colorSchemes[this.nextColorIndex];
+      this.mappings.set(timeKey, color);
+      this.nextColorIndex =
+        (this.nextColorIndex + 1) % this.colorSchemes.length;
+    }
+    return this.mappings.get(timeKey) || "bg-white border-gray-200";
+  },
 };
 
-// 1. First, move MonthScheduleView outside of the main component
-// Place this before the ScheduleSettings component
+// MonthScheduleView component definition with getScheduleColor inside it
 const MonthScheduleView = React.memo(
   ({
     type,
@@ -130,6 +167,45 @@ const MonthScheduleView = React.memo(
       [typeId: string]: { [yearMonth: string]: MonthSchedule };
     };
   }) => {
+    // Remove the reset effect and replace with initialization effect
+    React.useEffect(() => {
+      // Pre-populate colors for all existing schedules in this month
+      const yearMonth = selectedMonth.toISOString().slice(0, 7);
+      const monthData = monthSchedules[type.type]?.[yearMonth] || {};
+
+      // Get all unique time combinations first
+      const uniqueCombinations = new Set();
+      Object.values(monthData).forEach((schedule) => {
+        if (schedule.timeIn && schedule.timeOut && !schedule.isOff) {
+          uniqueCombinations.add(`${schedule.timeIn}-${schedule.timeOut}`);
+        }
+      });
+
+      // Assign colors to all unique combinations
+      uniqueCombinations.forEach((timeKey) => {
+        globalColorMap.getColor(timeKey as string);
+      });
+    }, [selectedMonth, type.type, monthSchedules]);
+
+    const getScheduleColor = (
+      timeIn: string,
+      timeOut: string,
+      isOff?: boolean
+    ) => {
+      if (isOff) return "bg-gray-50 border-gray-200";
+      if (
+        !timeIn ||
+        !timeOut ||
+        timeIn.trim() === "" ||
+        timeOut.trim() === ""
+      ) {
+        return "bg-white border-gray-200";
+      }
+
+      const timeKey = `${timeIn}-${timeOut}`;
+      return globalColorMap.getColor(timeKey);
+    };
+
     const days = getDaysInMonth(selectedMonth);
     const firstDayOfMonth = new Date(
       selectedMonth.getFullYear(),
@@ -296,7 +372,7 @@ const MonthScheduleView = React.memo(
             );
             const schedule = getScheduleForDate(type.type, date);
 
-            // Get all unique schedules for this month
+            // Update how we get currentMonthSchedules
             const currentMonthSchedules = Object.values(
               monthSchedules[type.type]?.[date.toISOString().slice(0, 7)] || {}
             ).filter(
@@ -304,16 +380,13 @@ const MonthScheduleView = React.memo(
                 typeof s === "object" &&
                 s !== null &&
                 "timeIn" in s &&
-                "timeOut" in s &&
-                !!s.timeIn &&
-                !!s.timeOut
+                "timeOut" in s
             );
 
             const scheduleColor = getScheduleColor(
               schedule.timeIn,
               schedule.timeOut,
-              schedule.isOff,
-              currentMonthSchedules
+              schedule.isOff
             );
 
             return (
@@ -874,15 +947,6 @@ export default function ScheduleSettings({
       value
     );
   };
-
-  // Add debug for employment type changes
-  React.useEffect(() => {
-    console.log("Employment Types Changed:", {
-      types: employmentTypes,
-      selectedTab: selectedTypeTab,
-      currentMode: scheduleMode,
-    });
-  }, [employmentTypes, selectedTypeTab, scheduleMode]);
 
   React.useEffect(() => {
     console.log("[DEBUG] Schedule mode changed to:", scheduleMode);
