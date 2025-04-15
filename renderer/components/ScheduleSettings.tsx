@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import {
   IoWalletOutline,
   IoAddOutline,
@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { EmploymentType } from "../model/settings";
 import { Tooltip } from "./Tooltip";
 import { useSchedulePrint } from "../hooks/useSchedulePrint";
+import { Employee, createEmployeeModel } from "@/renderer/model/employee";
+import { useSettingsStore } from "../stores/settingsStore";
 
 interface ScheduleSettingsProps {
   employmentTypes: EmploymentType[];
@@ -901,32 +903,46 @@ export default function ScheduleSettings({
     const dateStr = formatDate(date);
     const yearMonth = date.toISOString().slice(0, 7);
 
-    // Ensure the schedule structure exists
-    if (!monthSchedules[typeId]) {
-      console.log("Creating new type schedule for:", typeId);
-      setMonthSchedules((prev) => ({
-        ...prev,
-        [typeId]: { [yearMonth]: {} },
-      }));
+    // Return empty schedule if structure doesn't exist
+    if (!monthSchedules[typeId] || !monthSchedules[typeId][yearMonth]) {
       return { timeIn: "", timeOut: "", isOff: false };
     }
 
-    if (!monthSchedules[typeId][yearMonth]) {
-      console.log("Creating new month schedule for:", yearMonth);
-      setMonthSchedules((prev) => ({
-        ...prev,
-        [typeId]: {
-          ...prev[typeId],
-          [yearMonth]: {},
-        },
-      }));
-      return { timeIn: "", timeOut: "", isOff: false };
-    }
-
-    const schedule = monthSchedules[typeId][yearMonth][dateStr];
-
-    return schedule || { timeIn: "", timeOut: "", isOff: false };
+    return (
+      monthSchedules[typeId][yearMonth][dateStr] || {
+        timeIn: "",
+        timeOut: "",
+        isOff: false,
+      }
+    );
   };
+
+  // Initialize month schedules structure when needed
+  const initializeMonthSchedule = React.useCallback(
+    (typeId: string, yearMonth: string) => {
+      setMonthSchedules((prev) => {
+        // If structure already exists, don't update
+        if (prev[typeId]?.[yearMonth]) return prev;
+
+        return {
+          ...prev,
+          [typeId]: {
+            ...prev[typeId],
+            [yearMonth]: {},
+          },
+        };
+      });
+    },
+    []
+  );
+
+  // Effect to initialize schedules when type or month changes
+  React.useEffect(() => {
+    employmentTypes.forEach((type) => {
+      const yearMonth = selectedMonth.toISOString().slice(0, 7);
+      initializeMonthSchedule(type.type, yearMonth);
+    });
+  }, [employmentTypes, selectedMonth, initializeMonthSchedule]);
 
   // Move these functions outside the render
   const handleMonthChange = React.useCallback((newDate: Date) => {
@@ -958,6 +974,44 @@ export default function ScheduleSettings({
     getScheduleForDate,
     getDaysInMonth,
   });
+
+  const [employeesMap, setEmployeesMap] = useState<{
+    [type: string]: Employee[];
+  }>({});
+  const { dbPath } = useSettingsStore();
+  const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
+
+  // Add effect to load employees
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) {
+        console.warn("Database path not set");
+        return;
+      }
+
+      try {
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+
+        // Group employees by employment type
+        const groupedEmployees = loadedEmployees.reduce((acc, employee) => {
+          const type =
+            employee.employmentType?.toLowerCase().replace(/\s+/g, "-") || "";
+          if (!acc[type]) {
+            acc[type] = [];
+          }
+          acc[type].push(employee);
+          return acc;
+        }, {} as { [type: string]: Employee[] });
+
+        setEmployeesMap(groupedEmployees);
+      } catch (error) {
+        console.error("Error loading employees:", error);
+        setEmployeesMap({});
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath, employeeModel]);
 
   return (
     <div className="space-y-8">
@@ -1066,20 +1120,39 @@ export default function ScheduleSettings({
                           <button
                             key={index}
                             onClick={() => setSelectedTypeTab(index)}
-                            className={`group relative min-w-[140px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm transition-all duration-200 ${
+                            className={`group relative min-w-[180px] flex flex-col items-start justify-center gap-2 p-3 rounded-xl font-medium text-sm transition-all duration-200 ${
                               selectedTypeTab === index
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-                                : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+                                ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                                : "bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-sm hover:shadow-md border border-gray-200/50"
                             }`}
                           >
-                            <div className="relative">
-                              <span className="relative z-10 flex items-center gap-2">
-                                {type.type || `Type ${index + 1}`}
+                            <div className="relative w-full">
+                              <div className="relative z-10 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`p-1.5 rounded-lg ${
+                                      selectedTypeTab === index
+                                        ? "bg-white/10"
+                                        : "bg-blue-50"
+                                    }`}
+                                  >
+                                    <IoWalletOutline
+                                      className={`w-4 h-4 ${
+                                        selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-blue-500"
+                                      }`}
+                                    />
+                                  </div>
+                                  <span className="font-semibold">
+                                    {type.type || `Type ${index + 1}`}
+                                  </span>
+                                </div>
                                 <span
-                                  className={`px-2 py-0.5 text-xs rounded-full transition-all duration-200 ${
+                                  className={`px-2 py-0.5 text-[11px] rounded-full transition-all duration-200 font-medium ${
                                     selectedTypeTab === index
-                                      ? "bg-white/20 text-white"
-                                      : "bg-gray-100 text-gray-600 group-hover:bg-gray-200"
+                                      ? "bg-white/10 text-white"
+                                      : "bg-blue-50 text-blue-600"
                                   }`}
                                 >
                                   {scheduleMode === "weekly"
@@ -1103,9 +1176,80 @@ export default function ScheduleSettings({
                                         0
                                       ).getDate()}`}
                                 </span>
-                              </span>
-                              {selectedTypeTab === index && (
-                                <div className="absolute inset-0 bg-blue-500 rounded-lg transition-all duration-200 animate-pulse opacity-50 blur-xl" />
+                              </div>
+                            </div>
+                            <div
+                              className={`w-full flex items-center gap-2 text-xs ${
+                                selectedTypeTab === index
+                                  ? "text-white/90"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {employeesMap[type.type]?.length === 1 ? (
+                                <span className="flex items-center gap-2">
+                                  <div
+                                    className={`h-6 w-6 rounded-full ${
+                                      selectedTypeTab === index
+                                        ? "bg-white/10 ring-2 ring-white/20"
+                                        : "bg-gray-100 ring-2 ring-white"
+                                    } flex items-center justify-center shadow-sm`}
+                                  >
+                                    <span
+                                      className={`text-xs font-medium ${
+                                        selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-gray-600"
+                                      }`}
+                                    >
+                                      {employeesMap[type.type][0].name
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`font-medium ${
+                                      selectedTypeTab === index
+                                        ? "text-white/90"
+                                        : "text-gray-900"
+                                    }`}
+                                  >
+                                    {employeesMap[type.type][0].name}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-2">
+                                  <div
+                                    className={`px-2 py-1 rounded-md text-xs ${
+                                      selectedTypeTab === index
+                                        ? "bg-white/10"
+                                        : "bg-gray-100"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`font-medium ${
+                                        selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-gray-900"
+                                      }`}
+                                    >
+                                      {employeesMap[type.type]?.length || 0}
+                                    </span>
+                                    <span
+                                      className={
+                                        selectedTypeTab === index
+                                          ? "text-white/70"
+                                          : "text-gray-500"
+                                      }
+                                    >
+                                      {" "}
+                                      employee
+                                      {employeesMap[type.type]?.length !== 1
+                                        ? "s"
+                                        : ""}
+                                    </span>
+                                  </div>
+                                </span>
                               )}
                             </div>
                           </button>
@@ -1482,6 +1626,44 @@ export default function ScheduleSettings({
                               monthSchedules={monthSchedules}
                             />
                           )}
+
+                          {/* Add employee list section */}
+                          <div className="col-span-2 bg-white p-6 rounded-xl border border-gray-200/50 shadow-sm">
+                            <h4 className="text-sm font-medium text-gray-700 mb-4">
+                              Employees Using This Type:
+                            </h4>
+                            <div className="space-y-2">
+                              {employeesMap[type.type]?.length > 0 ? (
+                                employeesMap[type.type].map((employee) => (
+                                  <div
+                                    key={employee.id}
+                                    className="flex items-center gap-3 p-2 rounded-lg bg-gray-50"
+                                  >
+                                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                      <span className="text-sm font-medium text-indigo-600">
+                                        {employee.name
+                                          .split(" ")
+                                          .map((n) => n[0])
+                                          .join("")}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {employee.name}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        {employee.position || "No position set"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500 italic">
+                                  No employees currently using this type
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
