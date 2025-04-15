@@ -361,21 +361,59 @@ export default function PayrollPage() {
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
 
+      // Get all months between start and end date
+      const months: { month: number; year: number }[] = [];
+      const currentDate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        1
+      );
+      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+      while (currentDate <= endMonth) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+
       // Load and collect payroll data for each active employee
       const payrollPromises = activeEmployees.map(async (employee) => {
         try {
-          const employeePayrolls = await Payroll.loadPayrollSummaries(
-            dbPath,
-            employee.id,
-            startDate.getFullYear(),
-            startDate.getMonth() + 1
+          // Load payrolls for all relevant months
+          const monthlyPayrollPromises = months.map(({ month, year }) =>
+            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
           );
+
+          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
+          const employeePayrolls = monthlyPayrolls.flat();
 
           // Filter payrolls within date range
           return employeePayrolls
             .filter((summary) => {
-              const summaryDate = new Date(summary.startDate);
-              return summaryDate >= startDate && summaryDate <= endDate;
+              const summaryStartDate = new Date(summary.startDate);
+              const summaryEndDate = new Date(summary.endDate);
+
+              // Normalize all dates to start of day in local timezone
+              const normalizedStartDate = new Date(startDate);
+              normalizedStartDate.setHours(0, 0, 0, 0);
+
+              const normalizedEndDate = new Date(endDate);
+              normalizedEndDate.setHours(23, 59, 59, 999);
+
+              const normalizedSummaryStart = new Date(summaryStartDate);
+              normalizedSummaryStart.setHours(0, 0, 0, 0);
+
+              const normalizedSummaryEnd = new Date(summaryEndDate);
+              normalizedSummaryEnd.setHours(23, 59, 59, 999);
+
+              return (
+                normalizedSummaryStart >= normalizedStartDate &&
+                normalizedSummaryStart <= normalizedEndDate &&
+                normalizedSummaryEnd >= normalizedStartDate &&
+                normalizedSummaryEnd <= normalizedEndDate
+              );
             })
             .map((summary, index) => {
               // Create variables object for formula evaluation
@@ -528,6 +566,31 @@ export default function PayrollPage() {
       // Open the generated PDF
       await window.electron.openPath(pdfPath);
       toast.success("PDF generated successfully!");
+
+      // Convert string dates to Date objects for statistics update
+      const payrollsForStatistics = formattedPayrolls.map((payroll) => ({
+        ...payroll,
+        startDate: new Date(payroll.startDate),
+        endDate: new Date(payroll.endDate),
+      }));
+
+      // Update statistics for each month in the range
+      for (const { month, year } of months) {
+        const monthName = new Date(year, month - 1, 1).toLocaleString(
+          "default",
+          { month: "long" }
+        );
+        await updateMonthStatistics(
+          payrollsForStatistics.filter((payroll) => {
+            const payrollMonth = payroll.startDate.getMonth() + 1;
+            const payrollYear = payroll.startDate.getFullYear();
+            return payrollMonth === month && payrollYear === year;
+          }),
+          dbPath,
+          monthName,
+          year
+        );
+      }
     } catch (error) {
       toast.error("Failed to generate PDF");
     } finally {
@@ -562,26 +625,59 @@ export default function PayrollPage() {
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
 
-      // Get the month and year from the start date
-      const monthIndex = startDate.getMonth() + 1;
-      const year = startDate.getFullYear();
-      const monthName = startDate.toLocaleString("default", { month: "long" });
+      // Get all months between start and end date
+      const months: { month: number; year: number }[] = [];
+      const currentDate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        1
+      );
+      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+      while (currentDate <= endMonth) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
 
       // Load and collect payroll data for each active employee
       const payrollPromises = activeEmployees.map(async (employee) => {
         try {
-          const employeePayrolls = await Payroll.loadPayrollSummaries(
-            dbPath,
-            employee.id,
-            year,
-            monthIndex
+          // Load payrolls for all relevant months
+          const monthlyPayrollPromises = months.map(({ month, year }) =>
+            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
           );
+
+          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
+          const employeePayrolls = monthlyPayrolls.flat();
 
           // Filter payrolls within date range
           return employeePayrolls
             .filter((summary) => {
-              const summaryDate = new Date(summary.startDate);
-              return summaryDate >= startDate && summaryDate <= endDate;
+              const summaryStartDate = new Date(summary.startDate);
+              const summaryEndDate = new Date(summary.endDate);
+
+              // Normalize all dates to start of day in local timezone
+              const normalizedStartDate = new Date(startDate);
+              normalizedStartDate.setHours(0, 0, 0, 0);
+
+              const normalizedEndDate = new Date(endDate);
+              normalizedEndDate.setHours(23, 59, 59, 999);
+
+              const normalizedSummaryStart = new Date(summaryStartDate);
+              normalizedSummaryStart.setHours(0, 0, 0, 0);
+
+              const normalizedSummaryEnd = new Date(summaryEndDate);
+              normalizedSummaryEnd.setHours(23, 59, 59, 999);
+
+              return (
+                normalizedSummaryStart >= normalizedStartDate &&
+                normalizedSummaryStart <= normalizedEndDate &&
+                normalizedSummaryEnd >= normalizedStartDate &&
+                normalizedSummaryEnd <= normalizedEndDate
+              );
             })
             .map((summary, index) => {
               // Create variables object for formula evaluation
@@ -766,13 +862,23 @@ export default function PayrollPage() {
         endDate: new Date(payroll.endDate),
       }));
 
-      // Update statistics for this month using the new hook function
-      await updateMonthStatistics(
-        payrollsForStatistics,
-        dbPath,
-        monthName,
-        year
-      );
+      // Update statistics for each month in the range
+      for (const { month, year } of months) {
+        const monthName = new Date(year, month - 1, 1).toLocaleString(
+          "default",
+          { month: "long" }
+        );
+        await updateMonthStatistics(
+          payrollsForStatistics.filter((payroll) => {
+            const payrollMonth = payroll.startDate.getMonth() + 1;
+            const payrollYear = payroll.startDate.getFullYear();
+            return payrollMonth === month && payrollYear === year;
+          }),
+          dbPath,
+          monthName,
+          year
+        );
+      }
     } catch (error) {
       toast.error("Failed to generate PDF");
     } finally {
@@ -800,32 +906,63 @@ export default function PayrollPage() {
 
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
-      const monthIndex = startDate.getMonth() + 1;
-      const year = startDate.getFullYear();
+
+      // Get all months between start and end date
+      const months: { month: number; year: number }[] = [];
+      const currentDate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        1
+      );
+      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+      while (currentDate <= endMonth) {
+        months.push({
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        });
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
 
       // Load and collect payroll data for each active employee
       const payrollPromises = activeEmployees.map(async (employee) => {
         try {
-          const employeePayrolls = await Payroll.loadPayrollSummaries(
-            dbPath,
-            employee.id,
-            year,
-            monthIndex
+          // Load payrolls for all relevant months
+          const monthlyPayrollPromises = months.map(({ month, year }) =>
+            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
           );
 
+          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
+          const employeePayrolls = monthlyPayrolls.flat();
+
           // Filter payrolls that exactly fit within date range
-          return employeePayrolls.filter((summary) => {
+          const filteredPayrolls = employeePayrolls.filter((summary) => {
             const summaryStartDate = new Date(summary.startDate);
             const summaryEndDate = new Date(summary.endDate);
 
+            // Normalize all dates to start of day in local timezone
+            const normalizedStartDate = new Date(startDate);
+            normalizedStartDate.setHours(0, 0, 0, 0);
+
+            const normalizedEndDate = new Date(endDate);
+            normalizedEndDate.setHours(23, 59, 59, 999);
+
+            const normalizedSummaryStart = new Date(summaryStartDate);
+            normalizedSummaryStart.setHours(0, 0, 0, 0);
+
+            const normalizedSummaryEnd = new Date(summaryEndDate);
+            normalizedSummaryEnd.setHours(23, 59, 59, 999);
+
             // Check if both start and end dates are within the selected range
             return (
-              summaryStartDate >= startDate &&
-              summaryStartDate <= endDate &&
-              summaryEndDate >= startDate &&
-              summaryEndDate <= endDate
+              normalizedSummaryStart >= normalizedStartDate &&
+              normalizedSummaryStart <= normalizedEndDate &&
+              normalizedSummaryEnd >= normalizedStartDate &&
+              normalizedSummaryEnd <= normalizedEndDate
             );
           });
+
+          return filteredPayrolls;
         } catch (error) {
           return [];
         }

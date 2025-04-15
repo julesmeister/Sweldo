@@ -20,10 +20,57 @@ export const usePayrollDelete = ({
     payrollId: string,
     payrolls: PayrollSummaryModel[]
   ) => {
-    const payroll = payrolls.find((p) => p.id === payrollId);
-    if (!payroll) {
-      toast.error("Payroll record not found");
+    // Extract employeeId, startDate, and endDate from the payrollId
+    // Format is: employeeId_startDateTimestamp_endDateTimestamp
+    const parts = payrollId.split("_");
+    if (parts.length !== 3) {
+      toast.error("Invalid payroll ID format");
       return;
+    }
+
+    const employeeId = parts[0];
+    const startDateTimestamp = parseInt(parts[1]);
+    const endDateTimestamp = parseInt(parts[2]);
+
+    if (isNaN(startDateTimestamp) || isNaN(endDateTimestamp)) {
+      toast.error("Invalid payroll ID format");
+      return;
+    }
+
+    const startDate = new Date(startDateTimestamp);
+    const endDate = new Date(endDateTimestamp);
+
+    // Try to find the payroll in the provided array first
+    let payroll = payrolls.find((p) => p.id === payrollId);
+
+    // If not found in the array but we have valid data from the ID, create a minimal payroll object
+    if (!payroll) {
+      payroll = {
+        id: payrollId,
+        employeeId,
+        employeeName: "Unknown", // We don't have this info from just the ID
+        startDate,
+        endDate,
+        dailyRate: 0,
+        basicPay: 0,
+        overtime: 0,
+        grossPay: 0,
+        allowances: 0,
+        deductions: {
+          sss: 0,
+          philHealth: 0,
+          pagIbig: 0,
+          cashAdvanceDeductions: 0,
+          shortDeductions: 0,
+          others: 0,
+        },
+        netPay: 0,
+        paymentDate: endDate.toISOString(),
+        daysWorked: 0,
+        absences: 0,
+        cashAdvanceIDs: [],
+        shortIDs: [],
+      };
     }
 
     setIsDeleting(true);
@@ -47,6 +94,7 @@ export const usePayrollDelete = ({
           const advances = await cashAdvanceModel.loadCashAdvances(
             selectedEmployeeId
           );
+
           const advance = advances.find((a) => a.id === advanceId);
 
           if (advance) {
@@ -79,7 +127,6 @@ export const usePayrollDelete = ({
 
       toast.success("Payroll deleted successfully");
     } catch (error) {
-      console.error("Error deleting payroll:", error);
       toast.error("Failed to delete payroll");
       throw error; // Re-throw to be caught by the caller
     } finally {

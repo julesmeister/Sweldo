@@ -279,8 +279,13 @@ export class Payroll {
     const months: { month: number; year: number }[] = [];
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate instanceof Date ? endDate : new Date(endDate);
-    const currentDate = new Date(start);
-    while (currentDate <= end) {
+
+    // Create a new date object for iteration to avoid modifying the original
+    const currentDate = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    // Keep adding months while currentDate is less than or equal to endMonth
+    while (currentDate <= endMonth) {
       months.push({
         month: currentDate.getMonth() + 1,
         year: currentDate.getFullYear(),
@@ -289,11 +294,12 @@ export class Payroll {
     }
 
     // Fetch all compensations for the date range from all relevant months
-    const allCompensations = await Promise.all(
+    const compensationResults = await Promise.all(
       months.map(({ month, year }) =>
         compensationModel.loadRecords(month, year, employeeId)
       )
-    ).then((results) => results.flat());
+    );
+    const allCompensations = compensationResults.flat();
 
     // Filter records to only include those within the exact date range
     const filteredCompensations = allCompensations.filter((comp) => {
@@ -311,11 +317,12 @@ export class Payroll {
     });
 
     // Load attendance records from all months in the period
-    const allAttendanceRecords = await Promise.all(
+    const attendanceResults = await Promise.all(
       months.map(({ month, year }) =>
         attendance.loadAttendancesById(month, year, employeeId)
       )
-    ).then((results) => results.flat());
+    );
+    const allAttendanceRecords = attendanceResults.flat();
 
     // Filter attendance records to only include those within the exact date range
     const filteredAttendanceRecords = allAttendanceRecords.filter((record) => {
@@ -849,43 +856,31 @@ export class Payroll {
         const dirPath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}`;
         try {
           await window.electron.ensureDir(dirPath);
-          console.info(`Directory ensured: ${dirPath}`);
         } catch (error) {
-          console.error(`Failed to ensure directory: ${dirPath}`, error);
           throw error;
         }
 
         let csvContent = "";
         const fileExists = await window.electron.fileExists(filePath);
-        console.info(`File exists check for ${filePath}: ${fileExists}`);
 
         if (fileExists) {
-          console.info(`Reading existing content from ${filePath}`);
           const existingContent = await window.electron.readFile(filePath);
           const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
             header: true,
           });
-          console.info(
-            `Successfully parsed existing CSV data with ${parsedData.data.length} records`
-          );
           parsedData.data.push(payrollData);
           csvContent = Papa.unparse(parsedData.data);
-          console.info(
-            `Added new record. Total records: ${parsedData.data.length}`
-          );
         } else {
-          console.info(`Creating new CSV file with initial record`);
           csvContent = Papa.unparse([payrollData]);
         }
 
-        console.info(`Writing CSV content to ${filePath}`);
         await window.electron.writeFile(filePath, csvContent);
-        console.info(`Successfully wrote CSV content to file`);
       } catch (error: unknown) {
-        // Log error but don't throw to allow process to continue
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        toast.error(`Failed to save payroll CSV: ${errorMessage}`);
+        toast.error(
+          `Failed to save payroll CSV: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       }
 
       // Update employee's last payment period
@@ -900,10 +895,11 @@ export class Payroll {
           },
         });
       } catch (error: unknown) {
-        // Log error but don't throw to allow process to continue
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        toast.error(`Failed to update employee details: ${errorMessage}`);
+        toast.error(
+          `Failed to update employee details: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       }
 
       // Create the payroll summary object
@@ -935,10 +931,11 @@ export class Payroll {
         const statisticsModel = createStatisticsModel(this.dbPath, endYear);
         await statisticsModel.updatePayrollStatistics([payrollSummary]);
       } catch (error: unknown) {
-        // Log error but don't throw to allow process to continue
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        toast.error(`Failed to update statistics: ${errorMessage}`);
+        toast.error(
+          `Failed to update statistics: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       }
 
       return payrollSummary;
@@ -961,12 +958,14 @@ export class Payroll {
 
       // Check if file exists
       const fileExists = await window.electron.fileExists(filePath);
+
       if (!fileExists) {
         throw new Error(`Payroll file not found: ${filePath}`);
       }
 
       // Read the file content
       const content = await window.electron.readFile(filePath);
+
       const parsedData = Papa.parse<PayrollCSVData>(content, { header: true });
 
       // Find the exact record to delete using the ID
@@ -977,7 +976,43 @@ export class Payroll {
         (row: any) => row.id === payrollId
       );
 
+      // If not found with exact ID, try a more flexible approach
       if (!payrollToDelete) {
+        // Try to find by employee ID and date range
+        const alternativeMatch = parsedData.data.find((row: any) => {
+          const rowStartDate = new Date(row.startDate);
+          const rowEndDate = new Date(row.endDate);
+
+          // Check if dates match (within a day to account for timezone differences)
+          const startDateMatch =
+            Math.abs(rowStartDate.getTime() - startDate.getTime()) < 86400000; // 24 hours in ms
+          const endDateMatch =
+            Math.abs(rowEndDate.getTime() - endDate.getTime()) < 86400000; // 24 hours in ms
+
+          return (
+            row.employeeId === employeeId && startDateMatch && endDateMatch
+          );
+        });
+
+        if (alternativeMatch) {
+          // Use this ID instead
+          const alternativeId = alternativeMatch.id;
+
+          // Filter out the matching record
+          const filteredData = parsedData.data.filter((row: any) => {
+            const rowId = row.id?.toString();
+            return rowId !== alternativeId;
+          });
+
+          // Convert back to CSV
+          const updatedContent = Papa.unparse(filteredData);
+
+          // Write the updated content back to the file
+          await window.electron.writeFile(filePath, updatedContent);
+
+          return;
+        }
+
         throw new Error("Payroll record not found");
       }
 
@@ -985,6 +1020,7 @@ export class Payroll {
       const cashAdvanceDeductions = parseFloat(
         payrollToDelete.cashAdvanceDeductions || "0"
       );
+
       if (cashAdvanceDeductions > 0) {
         await Payroll.reverseCashAdvanceDeduction(
           dbPath,
@@ -998,6 +1034,7 @@ export class Payroll {
       const shortIDs = payrollToDelete.shortIDs
         ? payrollToDelete.shortIDs.split("|")
         : [];
+
       if (shortIDs.length > 0) {
         await Payroll.reverseShortDeduction(
           dbPath,

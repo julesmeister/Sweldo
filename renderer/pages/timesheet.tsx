@@ -720,18 +720,6 @@ const TimesheetPage: React.FC = () => {
     const scheduleInfo = scheduleMap.get(day);
     const hasTimeEntries = !!(foundEntry.timeIn || foundEntry.timeOut);
 
-    // Debug logs for day 6
-    if (day === 6) {
-      console.log("Debug Day 6:", {
-        date: entryDate.toISOString(),
-        employmentType: employmentTypeObj?.type,
-        scheduleInfo,
-        hasTimeEntries,
-        foundEntry,
-        compensation,
-      });
-    }
-
     // Only mark as absent if there's a schedule and no time entries
     const isAbsent =
       scheduleInfo?.hasSchedule && !scheduleInfo.isRestDay && !hasTimeEntries;

@@ -213,7 +213,30 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
       if (!payrollToDelete) return;
 
       try {
-        await onDeletePayroll?.(payrollToDelete.id);
+        console.log(
+          "Attempting to delete payroll with ID:",
+          payrollToDelete.id
+        );
+        console.log("Payroll to delete details:", {
+          id: payrollToDelete.id,
+          startDate: payrollToDelete.startDate,
+          endDate: payrollToDelete.endDate,
+          employeeId: payrollToDelete.employeeId,
+        });
+
+        // Make sure we're passing the correct ID format
+        // The ID should be in the format: employeeId_startDateTimestamp_endDateTimestamp
+        const startDateTimestamp = new Date(
+          payrollToDelete.startDate
+        ).getTime();
+        const endDateTimestamp = new Date(payrollToDelete.endDate).getTime();
+        const formattedId = `${payrollToDelete.employeeId}_${startDateTimestamp}_${endDateTimestamp}`;
+
+        console.log("Formatted ID for deletion:", formattedId);
+
+        await onDeletePayroll?.(formattedId);
+        console.log("Delete operation completed successfully");
+
         setPayrollToDelete(null);
       } catch (error) {
         console.error("Error deleting payroll:", error);
