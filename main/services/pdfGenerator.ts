@@ -80,6 +80,9 @@ export async function generatePayrollPDF(
           const y = outerMargin + row * basePayslipHeight;
 
           // Define table data first
+          const totalDeductions =
+            (payroll.lateDeduction || 0) + (payroll.undertimeDeduction || 0);
+
           const deductions = [
             ["SSS", formatCurrency(payroll.deductions.sss)],
             ["PhilHealth", formatCurrency(payroll.deductions.philHealth)],
@@ -91,12 +94,17 @@ export async function generatePayrollPDF(
             ],
             ["Cash Advance", formatCurrency(payroll.deductions.ca || 0)],
             ["Partial", formatCurrency(payroll.deductions.partial || 0)],
-            ["Others", formatCurrency(payroll.deductions.others || 0)],
-            [
-              "Total Deductions",
-              formatCurrency(payroll.deductions.totalDeduction),
-            ],
+            ["Others", formatCurrency(totalDeductions)], // Late + Undertime deductions
+            ["Total Deductions", formatCurrency(totalDeductions)],
           ];
+
+          const grossPay =
+            payroll.basicPay +
+            (payroll.overtime || 0) +
+            (payroll.holidayBonus || 0) +
+            (payroll.nightDifferentialPay || 0);
+
+          const netPay = grossPay - totalDeductions;
 
           const earnings = [
             ["Daily Rate", formatCurrency(payroll.dailyRate)],
@@ -105,12 +113,9 @@ export async function generatePayrollPDF(
             ["Legal Holiday", formatCurrency(payroll.holidayBonus || 0)],
             ["OT Pay", formatCurrency(payroll.overtime || 0)],
             ["Night Diff", formatCurrency(payroll.nightDifferentialPay || 0)],
-            ["Gross Pay", formatCurrency(payroll.grossPay)],
-            [
-              "Less: Deductions",
-              formatCurrency(payroll.deductions.totalDeduction),
-            ],
-            ["Net Pay", formatCurrency(payroll.netPay)],
+            ["Gross Pay", formatCurrency(grossPay)],
+            ["Less: Deductions", formatCurrency(totalDeductions)],
+            ["Net Pay", formatCurrency(netPay)],
           ];
 
           // Calculate positions for content

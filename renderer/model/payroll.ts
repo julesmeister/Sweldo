@@ -756,31 +756,90 @@ export class Payroll {
       const cashAdvanceDeductionAmount = deductions?.cashAdvanceDeductions || 0;
       const cashAdvanceIDsToUpdate = summary.cashAdvanceIDs || [];
       if (cashAdvanceDeductionAmount > 0 && cashAdvanceIDsToUpdate.length > 0) {
+        console.log(
+          `[Payroll] Processing cash advance deductions. Total amount to deduct: ${cashAdvanceDeductionAmount}`
+        );
+
         // Load all cash advances from relevant months
         const allAdvances: CashAdvance[] = [];
-        for (const { month, year } of months) {
+
+        // Get the current month and year from the payroll end date
+        const currentMonth = end.getMonth() + 1;
+        const currentYear = end.getFullYear();
+
+        // Check current month and previous month to catch recent advances
+        for (let monthOffset = 0; monthOffset <= 1; monthOffset++) {
+          let targetMonth = currentMonth - monthOffset;
+          let targetYear = currentYear;
+
+          // Handle year boundary
+          if (targetMonth < 1) {
+            targetMonth = 12 + targetMonth;
+            targetYear--;
+          }
+
+          console.log(
+            `[Payroll] Loading cash advances for ${targetYear}-${targetMonth}`
+          );
           const cashAdvanceModel = createCashAdvanceModel(
             this.dbPath,
             employeeId,
-            month,
-            year
+            targetMonth,
+            targetYear
           );
           const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
           allAdvances.push(...advances);
         }
 
-        // Filter advances by the IDs in the summary
-        const advancesToUpdate = allAdvances.filter((advance) =>
-          cashAdvanceIDsToUpdate.includes(advance.id)
+        // Filter advances by the IDs in the summary and sort by date (oldest first)
+        const advancesToUpdate = allAdvances
+          .filter((advance) => {
+            const isMatch = cashAdvanceIDsToUpdate.includes(advance.id);
+            console.log(
+              `[Payroll] Checking advance ${advance.id}: ${
+                isMatch ? "matches" : "no match"
+              }`
+            );
+            return isMatch;
+          })
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        console.log(
+          `[Payroll] Found ${advancesToUpdate.length} cash advances to update`
         );
+
+        // Calculate how much to deduct from each advance
+        let remainingDeduction = cashAdvanceDeductionAmount;
 
         // Update each cash advance
         for (const advance of advancesToUpdate) {
-          if (advance.status !== "Paid") {
+          if (advance.status !== "Paid" && remainingDeduction > 0) {
+            console.log(
+              `[Payroll] Processing advance ID: ${advance.id}, Current remaining: ${advance.remainingUnpaid}`
+            );
+
+            // Calculate how much we can deduct from this advance
+            const deductionForThisAdvance = Math.min(
+              advance.remainingUnpaid,
+              remainingDeduction
+            );
+
+            const newRemainingUnpaid = Math.max(
+              0,
+              advance.remainingUnpaid - deductionForThisAdvance
+            );
+
+            console.log(
+              `[Payroll] Deducting ${deductionForThisAdvance} from advance. New remaining: ${newRemainingUnpaid}`
+            );
+
             const updatedAdvance = {
               ...advance,
-              status: "Paid" as const,
-              remainingUnpaid: 0,
+              status:
+                newRemainingUnpaid <= 0
+                  ? ("Paid" as const)
+                  : ("Unpaid" as const),
+              remainingUnpaid: newRemainingUnpaid,
             } as CashAdvance;
 
             // Update installment details if applicable
@@ -788,7 +847,15 @@ export class Payroll {
               updatedAdvance.paymentSchedule === "Installment" &&
               updatedAdvance.installmentDetails
             ) {
-              updatedAdvance.installmentDetails.remainingPayments = 0;
+              const paymentsLeft = Math.ceil(
+                updatedAdvance.amount /
+                  updatedAdvance.installmentDetails.amountPerPayment
+              );
+              updatedAdvance.installmentDetails.remainingPayments =
+                paymentsLeft;
+              console.log(
+                `[Payroll] Updated installment payments left: ${paymentsLeft}`
+              );
             }
 
             // Save the update
@@ -799,7 +866,22 @@ export class Payroll {
               advance.date.getFullYear()
             );
             await cashAdvanceModel.updateCashAdvance(updatedAdvance);
+            console.log(
+              `[Payroll] Saved updated cash advance status: ${updatedAdvance.status}`
+            );
+
+            // Update remaining deduction amount
+            remainingDeduction -= deductionForThisAdvance;
+            console.log(
+              `[Payroll] Remaining deduction amount: ${remainingDeduction}`
+            );
           }
+        }
+
+        if (remainingDeduction > 0) {
+          console.warn(
+            `[Payroll] Warning: Not all deductions were applied. Remaining: ${remainingDeduction}`
+          );
         }
       }
 

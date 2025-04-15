@@ -10,10 +10,10 @@ export async function generatePayrollPDFLandscape(
     try {
       // Create a new PDF document in landscape orientation
       const doc = new PDFDocument({
-        size: [576, 936], // Long bond paper (8" x 13") in landscape
-        margin: 0, // Remove default margins
+        size: [612, 936], // Long bond paper (8.5" x 13") in portrait first
+        margin: 20,
         bufferPages: true,
-        layout: "landscape",
+        layout: "landscape", // This will automatically swap the dimensions to 936x612
       });
 
       // Create write stream
@@ -34,13 +34,14 @@ export async function generatePayrollPDFLandscape(
       doc.pipe(writeStream);
 
       // Constants for layout
-      const pageWidth = 576; // Long bond paper height in landscape (8")
-      const pageHeight = 936; // Long bond paper width in landscape (13")
+      const pageWidth = 936; // Long bond paper width in landscape (13")
+      const pageHeight = 612; // Long bond paper height in landscape (8.5")
 
       // Calculate margins to center content
-      const desiredTableWidth = 900;
-      const leftMargin = (pageHeight - desiredTableWidth) / 2;
-      const topMargin = 30;
+      const leftMargin = 15; // Reduced left margin
+      const rightMargin = 15; // Added right margin
+      const topMargin = 40; // Top margin for header
+      const desiredTableWidth = pageWidth - (leftMargin + rightMargin); // Adjust table width based on margins
 
       // Calculate table column widths based on centered content width
       const tableWidth = desiredTableWidth;
@@ -54,31 +55,32 @@ export async function generatePayrollPDFLandscape(
         .font("Helvetica-Bold")
         .fontSize(12)
         .text(options.companyName || "PAYROLL", 0, topMargin, {
-          width: pageHeight,
+          width: pageWidth, // Changed from pageHeight to pageWidth
           align: "center",
         });
 
-      doc.fontSize(8).text(
-        `${new Date(
-          payrolls[0]?.startDate || ""
-        ).toLocaleDateString()} - ${new Date(
-          payrolls[0]?.endDate || ""
-        ).toLocaleDateString()}`,
-        0,
-        topMargin + 15, // Reduced from +20
-        {
-          width: pageHeight,
-          align: "center",
-        }
-      );
+      doc
+        .fontSize(8)
+        .text(
+          `${new Date(
+            payrolls[0]?.startDate || ""
+          ).toLocaleDateString()} - ${new Date(
+            payrolls[0]?.endDate || ""
+          ).toLocaleDateString()}`,
+          0,
+          topMargin + 15,
+          {
+            width: pageWidth, // Changed from pageHeight to pageWidth
+            align: "center",
+          }
+        );
 
       // Add PAYROLL text
       doc
         .font("Helvetica-Bold")
         .fontSize(8)
         .text("PAYROLL", 0, topMargin + 25, {
-          // Reduced from +35
-          width: pageHeight,
+          width: pageWidth, // Changed from pageHeight to pageWidth
           align: "center",
         });
 
@@ -89,24 +91,25 @@ export async function generatePayrollPDFLandscape(
       // Define columns structure with adjusted widths
       const columns = [
         { id: "no", header: "No.", width: 0.02 },
-        { id: "name", header: "NAME OF EMPLOYEE", width: 0.14 },
-        { id: "days", header: "DAYS", width: 0.03 },
-        { id: "rate", header: "RATE", width: 0.05 },
-        { id: "holiday", header: "HOLIDAY", width: 0.045 },
-        { id: "ot", header: "OT", width: 0.045 },
-        { id: "gross", header: "GROSS", width: 0.06 },
-        { id: "late", header: "LATE", width: 0.045 },
-        { id: "ut", header: "UT", width: 0.045 },
-        { id: "sss", header: "SSS", width: 0.045 },
-        { id: "philhealth", header: "PHILHEALTH", width: 0.055 },
-        { id: "pagibig", header: "PAG-IBIG", width: 0.045 },
-        { id: "loan", header: "LOAN", width: 0.045 },
-        { id: "ca", header: "CA", width: 0.04 },
-        { id: "partial", header: "PARTIAL", width: 0.045 },
-        { id: "others", header: "OTHERS", width: 0.045 },
-        { id: "totalDeductions", header: "TOTAL DED.", width: 0.06 },
-        { id: "netPay", header: "NET PAY", width: 0.06 },
-        { id: "signature", header: "SIGNATURE", width: 0.12 },
+        { id: "name", header: "NAME OF EMPLOYEE", width: 0.12 },
+        { id: "days", header: "DAYS", width: 0.025 },
+        { id: "rate", header: "RATE", width: 0.04 },
+        { id: "holiday", header: "HOLIDAY", width: 0.04 },
+        { id: "ot", header: "OT", width: 0.04 },
+        { id: "nd", header: "ND", width: 0.04 },
+        { id: "gross", header: "GROSS", width: 0.055 },
+        { id: "late", header: "LATE", width: 0.04 },
+        { id: "ut", header: "UT", width: 0.04 },
+        { id: "sss", header: "SSS", width: 0.04 },
+        { id: "philhealth", header: "PHILHEALTH", width: 0.045 },
+        { id: "pagibig", header: "PAG-IBIG", width: 0.04 },
+        { id: "loan", header: "LOAN", width: 0.04 },
+        { id: "ca", header: "CA", width: 0.035 },
+        { id: "partial", header: "PARTIAL", width: 0.04 },
+        { id: "others", header: "OTHERS", width: 0.04 },
+        { id: "totalDeductions", header: "TOTAL DED.", width: 0.055 },
+        { id: "netPay", header: "NET PAY", width: 0.055 },
+        { id: "signature", header: "SIGNATURE", width: 0.15 }, // Increased signature width
       ];
 
       // Draw table headers with adjusted vertical positioning
@@ -164,16 +167,11 @@ export async function generatePayrollPDFLandscape(
         });
 
         // Calculate values based on settings
-        const grossPay = options.calculationSettings?.grossPay?.formula
-          ? evaluateFormula(options.calculationSettings.grossPay.formula, {
-              basicPay: payroll.basicPay,
-              overtime: payroll.overtime,
-              holidayBonus: payroll.holidayBonus || 0,
-              undertimeDeduction: payroll.undertimeDeduction || 0,
-              lateDeduction: payroll.lateDeduction || 0,
-              nightDifferentialPay: payroll.nightDifferentialPay || 0,
-            })
-          : payroll.grossPay;
+        const grossPay =
+          payroll.basicPay +
+          (payroll.overtime || 0) +
+          (payroll.holidayBonus || 0) +
+          (payroll.nightDifferentialPay || 0);
 
         const others = options.calculationSettings?.others?.formula
           ? evaluateFormula(options.calculationSettings.others.formula, {
@@ -185,8 +183,9 @@ export async function generatePayrollPDFLandscape(
             })
           : payroll.deductions.others;
 
-        // Use the totalDeduction directly from the payroll data
-        const totalDeductions = payroll.deductions.totalDeduction;
+        // Calculate total deductions including late and undertime
+        const totalDeductions =
+          (payroll.lateDeduction || 0) + (payroll.undertimeDeduction || 0);
 
         console.log("Row calculations:", {
           grossPay,
@@ -211,6 +210,8 @@ export async function generatePayrollPDFLandscape(
               ? formatCurrency(payroll.holidayBonus || 0)
               : column.id === "ot"
               ? formatCurrency(payroll.overtime || 0)
+              : column.id === "nd"
+              ? formatCurrency(payroll.nightDifferentialPay || 0)
               : column.id === "ut"
               ? formatCurrency(payroll.undertimeDeduction || 0)
               : column.id === "late"
@@ -234,7 +235,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "totalDeductions"
               ? formatCurrency(totalDeductions)
               : column.id === "netPay"
-              ? formatCurrency(payroll.netPay)
+              ? formatCurrency(grossPay - totalDeductions)
               : "",
           align:
             column.id === "name"
@@ -242,7 +243,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "no" || column.id === "days"
               ? "center"
               : "right",
-          color: options.columnColors?.[column.id] || "#000000", // Default color
+          color: options.columnColors?.[column.id] || "#000000",
         }));
       });
 
@@ -296,46 +297,42 @@ export async function generatePayrollPDFLandscape(
       // Calculate totals
       const totals = payrolls.reduce(
         (acc, curr) => {
-          console.log("Processing payroll for totals:", {
-            employeeName: curr.employeeName,
-            deductions: curr.deductions,
-            totalDeduction: curr.deductions.totalDeduction,
-          });
+          const grossPay =
+            curr.basicPay +
+            (curr.overtime || 0) +
+            (curr.holidayBonus || 0) +
+            (curr.nightDifferentialPay || 0);
 
-          const others = options.calculationSettings?.others?.formula
-            ? evaluateFormula(options.calculationSettings.others.formula, {
-                sssLoan: curr.deductions.sssLoan || 0,
-                pagibigLoan: curr.deductions.pagibigLoan || 0,
-                partial: curr.deductions.partial || 0,
-                shorts: curr.deductions.shortDeductions || 0,
-              })
-            : curr.deductions.others;
+          const totalDeductions =
+            (curr.lateDeduction || 0) + (curr.undertimeDeduction || 0);
 
           return {
             days: acc.days + curr.daysWorked,
-            rate: acc.rate + (curr.dailyRate || 0), // Add rate to totals
+            rate: acc.rate + (curr.dailyRate || 0),
             holiday: acc.holiday + (curr.holidayBonus || 0),
             ot: acc.ot + (curr.overtime || 0),
+            nightDifferential:
+              acc.nightDifferential + (curr.nightDifferentialPay || 0),
             ut: acc.ut + (curr.undertimeDeduction || 0),
             late: acc.late + (curr.lateDeduction || 0),
-            gross: acc.gross + curr.grossPay,
+            gross: acc.gross + grossPay,
             sss: acc.sss + (curr.deductions.sss || 0),
             philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
             pagibig: acc.pagibig + (curr.deductions.pagIbig || 0),
             loan: acc.loan + 0,
             ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
             partial: acc.partial + 0,
-            others: acc.others + (others || 0),
-            totalDeductions:
-              acc.totalDeductions + curr.deductions.totalDeduction,
-            netPay: acc.netPay + curr.netPay,
+            others: acc.others + 0,
+            totalDeductions: acc.totalDeductions + totalDeductions,
+            netPay: acc.netPay + (grossPay - totalDeductions),
           };
         },
         {
           days: 0,
-          rate: 0, // Initialize rate in accumulator
+          rate: 0,
           holiday: 0,
           ot: 0,
+          nightDifferential: 0,
           ut: 0,
           late: 0,
           gross: 0,
@@ -357,6 +354,7 @@ export async function generatePayrollPDFLandscape(
         rate: Number(totals.rate.toFixed(2)), // Format rate
         holiday: Number(totals.holiday.toFixed(2)),
         ot: Number(totals.ot.toFixed(2)),
+        nightDifferential: Number(totals.nightDifferential.toFixed(2)),
         ut: Number(totals.ut.toFixed(2)),
         late: Number(totals.late.toFixed(2)),
         gross: Number(totals.gross.toFixed(2)),
@@ -382,11 +380,13 @@ export async function generatePayrollPDFLandscape(
             : column.id === "days"
             ? formattedTotals.days.toString()
             : column.id === "rate"
-            ? formatCurrency(formattedTotals.rate) // Add rate to total row
+            ? formatCurrency(formattedTotals.rate)
             : column.id === "holiday"
             ? formatCurrency(formattedTotals.holiday)
             : column.id === "ot"
             ? formatCurrency(formattedTotals.ot)
+            : column.id === "nd"
+            ? formatCurrency(formattedTotals.nightDifferential || 0)
             : column.id === "gross"
             ? formatCurrency(formattedTotals.gross)
             : column.id === "ut"
@@ -477,8 +477,8 @@ export async function generatePayrollPDFLandscape(
       doc.font("Helvetica");
 
       // Update signature lines positioning
-      const bottomMargin = 100;
-      const signatureY = pageWidth - bottomMargin;
+      const bottomMargin = 80;
+      const signatureY = pageHeight - bottomMargin;
       const signatureWidth = Math.floor(desiredTableWidth / 3);
       const signatureStartX = leftMargin;
 
@@ -491,7 +491,7 @@ export async function generatePayrollPDFLandscape(
             width: signatureWidth,
             align: "left",
           })
-          .text("_".repeat(35), x, signatureY + 20, {
+          .text("_".repeat(40), x, signatureY + 20, {
             width: signatureWidth - 20,
             align: "left",
           });
@@ -563,16 +563,11 @@ function drawDataRows(
 ) {
   payrolls.forEach((payroll, index) => {
     // Calculate values based on settings
-    const grossPay = options.calculationSettings?.grossPay?.formula
-      ? evaluateFormula(options.calculationSettings.grossPay.formula, {
-          basicPay: payroll.basicPay,
-          overtime: payroll.overtime,
-          holidayBonus: payroll.holidayBonus || 0,
-          undertimeDeduction: payroll.undertimeDeduction || 0,
-          lateDeduction: payroll.lateDeduction || 0,
-          nightDifferentialPay: payroll.nightDifferentialPay || 0,
-        })
-      : payroll.grossPay;
+    const grossPay =
+      payroll.basicPay +
+      (payroll.overtime || 0) +
+      (payroll.holidayBonus || 0) +
+      (payroll.nightDifferentialPay || 0);
 
     const others = options.calculationSettings?.others?.formula
       ? evaluateFormula(options.calculationSettings.others.formula, {
@@ -584,24 +579,21 @@ function drawDataRows(
         })
       : payroll.deductions.others;
 
-    const totalDeductions = options.calculationSettings?.totalDeductions
-      ?.formula
-      ? evaluateFormula(options.calculationSettings.totalDeductions.formula, {
-          sss: payroll.deductions.sss || 0,
-          philHealth: payroll.deductions.philHealth || 0,
-          pagIbig: payroll.deductions.pagIbig || 0,
-          cashAdvanceDeductions: payroll.deductions.cashAdvanceDeductions || 0,
-          shorts: payroll.deductions.shortDeductions || 0,
-          lateDeduction: payroll.lateDeduction || 0,
-          others: others,
-        })
-      : payroll.deductions.totalDeduction;
+    const totalDeductions =
+      (payroll.deductions.sss || 0) +
+      (payroll.deductions.philHealth || 0) +
+      (payroll.deductions.pagIbig || 0) +
+      (payroll.deductions.cashAdvanceDeductions || 0) +
+      (payroll.deductions.shortDeductions || 0) +
+      (payroll.lateDeduction || 0) +
+      (payroll.undertimeDeduction || 0);
 
     // Update the text for each column
     const columnTexts: { [key: string]: string } = {
       GROSS: grossPay?.toFixed(2) || "0.00",
       OTHERS: others?.toFixed(2) || "0.00",
       "TOTAL DED.": totalDeductions.toFixed(2),
+      "NET PAY": (grossPay - totalDeductions).toFixed(2),
     };
   });
 }

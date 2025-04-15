@@ -50,7 +50,7 @@ interface CompensationDialogProps {
 interface FormFieldProps {
   label: string;
   name: string;
-  value: string | number;
+  value: any;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => void;
@@ -61,6 +61,7 @@ interface FormFieldProps {
   manualOverride?: boolean;
   isComputedField?: boolean;
   hasEditAccess?: boolean;
+  enableHoursDropdown?: boolean;
 }
 
 const FormField: React.FC<FormFieldProps> = ({
@@ -75,8 +76,9 @@ const FormField: React.FC<FormFieldProps> = ({
   manualOverride = false,
   isComputedField = false,
   hasEditAccess = true,
+  enableHoursDropdown = false,
 }) => {
-  const [showHoursDropdown, setShowHoursDropdown] = useState(false);
+  const [isHoursDropdownOpen, setIsHoursDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<"top" | "bottom">(
     "bottom"
   );
@@ -113,29 +115,36 @@ const FormField: React.FC<FormFieldProps> = ({
       : value;
 
   useEffect(() => {
-    if (showHoursDropdown && fieldRef.current) {
+    if (isHoursDropdownOpen && fieldRef.current) {
       const rect = fieldRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
       const spaceBelow = windowHeight - rect.bottom;
       setDropdownPosition(spaceBelow < 200 ? "top" : "bottom");
     }
-  }, [showHoursDropdown]);
+  }, [isHoursDropdownOpen]);
 
   const handleHourSelect = (hours: number) => {
-    const minutes = hours * 60;
+    const value = name === "overtimeMinutes" ? hours * 60 : hours;
     onChange({
       target: {
         name,
-        value: minutes.toString(),
+        value: value.toString(),
       },
     } as React.ChangeEvent<HTMLInputElement>);
-    setShowHoursDropdown(false);
+    setIsHoursDropdownOpen(false);
   };
 
   const renderHoursDropdown = () => {
-    if (!showHoursDropdown || name !== "overtimeMinutes") return null;
+    if (
+      !isHoursDropdownOpen ||
+      (name !== "overtimeMinutes" && name !== "nightDifferentialHours")
+    )
+      return null;
 
-    const currentHours = Math.floor(Number(value) / 60);
+    const currentHours =
+      name === "overtimeMinutes"
+        ? Math.floor(Number(value) / 60)
+        : Math.floor(Number(value));
 
     return (
       <div
@@ -194,8 +203,12 @@ const FormField: React.FC<FormFieldProps> = ({
             value={formattedValue}
             onChange={onChange}
             onFocus={() => {
-              if (name === "overtimeMinutes" && !isFieldReadOnly) {
-                setShowHoursDropdown(true);
+              if (
+                (name === "overtimeMinutes" ||
+                  name === "nightDifferentialHours") &&
+                !isFieldReadOnly
+              ) {
+                setIsHoursDropdownOpen(true);
               }
             }}
             onBlur={(e) => {
@@ -204,7 +217,7 @@ const FormField: React.FC<FormFieldProps> = ({
                 e.relatedTarget &&
                 fieldRef.current?.contains(e.relatedTarget as Node);
               if (!isClickInside) {
-                setTimeout(() => setShowHoursDropdown(false), 200);
+                setTimeout(() => setIsHoursDropdownOpen(false), 200);
               }
             }}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
@@ -1122,6 +1135,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
+                enableHoursDropdown={true}
               />
 
               <FormField

@@ -196,6 +196,14 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     );
 
     const handleDeleteClick = (payroll: PayrollSummaryModel) => {
+      console.log("[PayrollList] Setting up payroll for deletion:", {
+        id: payroll.id,
+        cashAdvanceIDs: payroll.cashAdvanceIDs,
+        cashAdvanceDeductions: payroll.deductions?.cashAdvanceDeductions,
+        shortIDs: payroll.shortIDs,
+        shortDeductions: payroll.deductions?.shortDeductions,
+      });
+
       setPayrollToDelete({
         ...payroll,
         deductions: {
@@ -206,6 +214,8 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
           shortDeductions: payroll.deductions?.shortDeductions || 0,
           others: payroll.deductions?.others || 0,
         },
+        cashAdvanceIDs: payroll.cashAdvanceIDs || [],
+        shortIDs: payroll.shortIDs || [],
       });
     };
 
@@ -213,33 +223,35 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
       if (!payrollToDelete) return;
 
       try {
-        console.log(
-          "Attempting to delete payroll with ID:",
-          payrollToDelete.id
-        );
-        console.log("Payroll to delete details:", {
+        console.log("[PayrollList] Attempting to delete payroll:", {
           id: payrollToDelete.id,
           startDate: payrollToDelete.startDate,
           endDate: payrollToDelete.endDate,
           employeeId: payrollToDelete.employeeId,
+          cashAdvanceIDs: payrollToDelete.cashAdvanceIDs,
+          cashAdvanceDeductions:
+            payrollToDelete.deductions?.cashAdvanceDeductions,
+          shortIDs: payrollToDelete.shortIDs,
+          shortDeductions: payrollToDelete.deductions?.shortDeductions,
         });
 
         // Make sure we're passing the correct ID format
-        // The ID should be in the format: employeeId_startDateTimestamp_endDateTimestamp
         const startDateTimestamp = new Date(
           payrollToDelete.startDate
         ).getTime();
         const endDateTimestamp = new Date(payrollToDelete.endDate).getTime();
         const formattedId = `${payrollToDelete.employeeId}_${startDateTimestamp}_${endDateTimestamp}`;
 
-        console.log("Formatted ID for deletion:", formattedId);
-
         await onDeletePayroll?.(formattedId);
-        console.log("Delete operation completed successfully");
+
+        // Refresh the payrolls list after successful deletion
+        initialLoadComplete.current = false;
+        loadPayrolls();
 
         setPayrollToDelete(null);
+        onPayrollDeleted();
       } catch (error) {
-        console.error("Error deleting payroll:", error);
+        console.error("[PayrollList] Error deleting payroll:", error);
         toast.error("Failed to delete payroll record");
       }
     };

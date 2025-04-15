@@ -57,27 +57,91 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
           payrollData.shortIDs &&
           payrollData.shortIDs.length > 0
         ) {
-          const shortModel = createShortModel(
+          console.log("[PayrollDeleteDialog] Loading shorts for reversal:", {
+            shortIDs: payrollData.shortIDs,
+            deductionAmount: payrollData.shortDeductions,
+          });
+
+          // Load shorts from both current and next month
+          const currentMonth = startDate.getMonth() + 1;
+          const currentYear = startDate.getFullYear();
+
+          // Calculate next month/year
+          let nextMonth = currentMonth + 1;
+          let nextYear = currentYear;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+
+          // Create models for both months
+          const currentMonthModel = createShortModel(
             dbPath,
             payrollData.employeeId,
-            startDate.getMonth() + 1,
-            startDate.getFullYear()
+            currentMonth,
+            currentYear
           );
 
-          const shortsData = await shortModel.loadShorts(
-            payrollData.employeeId
+          const nextMonthModel = createShortModel(
+            dbPath,
+            payrollData.employeeId,
+            nextMonth,
+            nextYear
           );
+
+          console.log("[PayrollDeleteDialog] Checking months for shorts:", {
+            current: `${currentYear}-${currentMonth}`,
+            next: `${nextYear}-${nextMonth}`,
+            shortIDs: payrollData.shortIDs,
+          });
+
+          // Load shorts from both months
+          const [currentShorts, nextShorts] = await Promise.all([
+            currentMonthModel.loadShorts(payrollData.employeeId),
+            nextMonthModel.loadShorts(payrollData.employeeId),
+          ]);
+
+          const allShorts = [...currentShorts, ...nextShorts];
+          console.log("[PayrollDeleteDialog] Loaded shorts:", {
+            total: allShorts.length,
+            current: currentShorts.length,
+            next: nextShorts.length,
+            shortIDs: payrollData.shortIDs,
+          });
+
           if (isMounted) {
-            const filteredShorts = shortsData
-              .filter((short) => payrollData.shortIDs?.includes(short.id))
+            const filteredShorts = allShorts
+              .filter((short) => {
+                const matches = payrollData.shortIDs?.includes(short.id);
+                console.log("[PayrollDeleteDialog] Checking short:", {
+                  id: short.id,
+                  matches,
+                  amount: short.amount,
+                  date: short.date,
+                  shortIDs: payrollData.shortIDs,
+                });
+                return matches;
+              })
               .map((short) => ({
                 id: short.id,
                 amount: short.amount,
                 date: short.date.toISOString(),
               }));
+
+            console.log("[PayrollDeleteDialog] Filtered shorts:", {
+              shorts: filteredShorts,
+              count: filteredShorts.length,
+              shortIDs: payrollData.shortIDs,
+            });
             setShorts(filteredShorts);
           }
         } else {
+          console.log("[PayrollDeleteDialog] No shorts to load:", {
+            hasDeductions: !!payrollData.shortDeductions,
+            deductionAmount: payrollData.shortDeductions,
+            hasIDs: !!payrollData.shortIDs,
+            idCount: payrollData.shortIDs?.length,
+          });
           if (isMounted) {
             setShorts([]);
           }
@@ -90,27 +154,94 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
           payrollData.cashAdvanceIDs &&
           payrollData.cashAdvanceIDs.length > 0
         ) {
-          const cashAdvanceModel = createCashAdvanceModel(
-            dbPath,
-            payrollData.employeeId,
-            startDate.getMonth() + 1,
-            startDate.getFullYear()
+          console.log(
+            "[PayrollDeleteDialog] Loading cash advances for reversal:",
+            {
+              cashAdvanceIDs: payrollData.cashAdvanceIDs,
+              deductionAmount: payrollData.cashAdvanceDeductions,
+            }
           );
 
-          const cashAdvancesData = await cashAdvanceModel.loadCashAdvances(
-            payrollData.employeeId
+          // Load cash advances from both current and next month
+          const currentMonth = startDate.getMonth() + 1;
+          const currentYear = startDate.getFullYear();
+
+          // Calculate next month/year
+          let nextMonth = currentMonth + 1;
+          let nextYear = currentYear;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+
+          // Create models for both months
+          const currentMonthModel = createCashAdvanceModel(
+            dbPath,
+            payrollData.employeeId,
+            currentMonth,
+            currentYear
           );
+
+          const nextMonthModel = createCashAdvanceModel(
+            dbPath,
+            payrollData.employeeId,
+            nextMonth,
+            nextYear
+          );
+
+          console.log("[PayrollDeleteDialog] Checking months:", {
+            current: `${currentYear}-${currentMonth}`,
+            next: `${nextYear}-${nextMonth}`,
+            cashAdvanceIDs: payrollData.cashAdvanceIDs,
+          });
+
+          // Load advances from both months
+          const [currentAdvances, nextAdvances] = await Promise.all([
+            currentMonthModel.loadCashAdvances(payrollData.employeeId),
+            nextMonthModel.loadCashAdvances(payrollData.employeeId),
+          ]);
+
+          const allAdvances = [...currentAdvances, ...nextAdvances];
+          console.log("[PayrollDeleteDialog] Loaded advances:", {
+            total: allAdvances.length,
+            current: currentAdvances.length,
+            next: nextAdvances.length,
+            cashAdvanceIDs: payrollData.cashAdvanceIDs,
+          });
+
           if (isMounted) {
-            const filteredCashAdvances = cashAdvancesData
-              .filter((ca) => payrollData.cashAdvanceIDs?.includes(ca.id))
+            const filteredCashAdvances = allAdvances
+              .filter((ca) => {
+                const matches = payrollData.cashAdvanceIDs?.includes(ca.id);
+                console.log("[PayrollDeleteDialog] Checking advance:", {
+                  id: ca.id,
+                  matches,
+                  amount: ca.amount,
+                  date: ca.date,
+                  cashAdvanceIDs: payrollData.cashAdvanceIDs,
+                });
+                return matches;
+              })
               .map((ca) => ({
                 id: ca.id,
                 amount: ca.amount,
                 date: ca.date.toISOString(),
               }));
+
+            console.log("[PayrollDeleteDialog] Filtered advances:", {
+              advances: filteredCashAdvances,
+              count: filteredCashAdvances.length,
+              cashAdvanceIDs: payrollData.cashAdvanceIDs,
+            });
             setCashAdvances(filteredCashAdvances);
           }
         } else {
+          console.log("[PayrollDeleteDialog] No cash advances to load:", {
+            hasDeductions: !!payrollData.cashAdvanceDeductions,
+            deductionAmount: payrollData.cashAdvanceDeductions,
+            hasIDs: !!payrollData.cashAdvanceIDs,
+            idCount: payrollData.cashAdvanceIDs?.length,
+          });
           if (isMounted) {
             setCashAdvances([]);
           }

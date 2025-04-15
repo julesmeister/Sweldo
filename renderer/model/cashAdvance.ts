@@ -31,22 +31,31 @@ export class CashAdvanceModel {
     this.employeeId = employeeId;
     this.month = month || new Date().getMonth() + 1;
     this.year = year || new Date().getFullYear();
+
+    console.log("[CashAdvanceModel] Initialized with:", {
+      filePath: this.filePath,
+      employeeId: this.employeeId,
+      month: this.month,
+      year: this.year,
+    });
   }
 
   private async ensureDirectoryExists(): Promise<void> {
     try {
-      const employeePath = `${this.filePath}`;
-      await window.electron.ensureDir(employeePath);
+      await window.electron.ensureDir(this.filePath);
     } catch (error) {
+      console.error("[CashAdvanceModel] Failed to create directory:", error);
       throw error;
     }
   }
 
   async createCashAdvance(cashAdvance: CashAdvance): Promise<void> {
     try {
-      const formattedDate = `${this.month}/${cashAdvance.date.getDate()}/${
-        this.year
-      }`;
+      await this.ensureDirectoryExists();
+
+      const formattedDate = `${
+        cashAdvance.date.getMonth() + 1
+      }/${cashAdvance.date.getDate()}/${cashAdvance.date.getFullYear()}`;
       // Generate a unique ID for the new cash advance
       const id = crypto.randomUUID();
 
@@ -65,6 +74,7 @@ export class CashAdvanceModel {
         ].join(",") + "\n";
 
       const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
+      console.log("[CashAdvanceModel] Creating cash advance at:", filePath);
 
       // Define headers for new files
       const headers =
@@ -80,14 +90,13 @@ export class CashAdvanceModel {
           "remainingUnpaid",
         ].join(",") + "\n";
 
-      // Ensure directory exists before saving
-      await this.ensureDirectoryExists();
-
       // Append to file if it exists, create if it doesn't
       let existingData = "";
       try {
         existingData = await window.electron.readFile(filePath);
+        console.log("[CashAdvanceModel] Existing file found");
       } catch (error) {
+        console.log("[CashAdvanceModel] Creating new file with headers");
         existingData = headers;
       }
 
@@ -95,7 +104,9 @@ export class CashAdvanceModel {
         ? existingData.trim() + "\n" + csvData
         : headers + csvData;
       await window.electron.writeFile(filePath, newData);
+      console.log("[CashAdvanceModel] Successfully saved cash advance");
     } catch (error) {
+      console.error("[CashAdvanceModel] Failed to create cash advance:", error);
       throw new Error(
         `Failed to create cash advance: ${(error as any).message}`
       );
@@ -105,11 +116,13 @@ export class CashAdvanceModel {
   async updateCashAdvance(cashAdvance: CashAdvance): Promise<void> {
     try {
       const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
+      console.log("[CashAdvanceModel] Updating cash advance at:", filePath);
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
       } catch (error) {
+        console.error("[CashAdvanceModel] Failed to read file:", error);
         throw new Error(
           `Failed to read cash advances file: ${(error as any).message}`
         );
@@ -120,8 +133,17 @@ export class CashAdvanceModel {
       let lineIndex = -1;
 
       // Check if first line is header
-      const hasHeader = lines[0]?.toLowerCase().includes("date,amount,reason");
+      const hasHeader = lines[0]
+        ?.toLowerCase()
+        .includes("id,employeeid,date,amount");
       const dataStartIndex = hasHeader ? 1 : 0;
+
+      console.log("[CashAdvanceModel] Processing file:", {
+        totalLines: lines.length,
+        hasHeader,
+        dataStartIndex,
+        targetId: cashAdvance.id,
+      });
 
       // First, find the line with matching ID by parsing each line into a cash advance
       const cashAdvances = lines.slice(dataStartIndex).map((line, index) => {
@@ -137,38 +159,42 @@ export class CashAdvanceModel {
           status,
           remainingUnpaid,
         ] = fields;
-        const parsedAmount = parseFloat(amount);
-        const parsedDate = new Date(date);
-
-        const advance = {
-          id,
-          employeeId,
-          date: parsedDate,
-          amount: parsedAmount,
-          remainingUnpaid: parseFloat(remainingUnpaid || amount),
-          reason,
-          approvalStatus: approvalStatus as "Pending" | "Approved" | "Rejected",
-          status: (status || "Unpaid") as "Paid" | "Unpaid",
-          paymentSchedule: paymentSchedule as "One-time" | "Installment",
-        } as CashAdvance;
 
         // If this is the line we want to update
         if (id === cashAdvance.id) {
           found = true;
           lineIndex = index + dataStartIndex; // Adjust for header if present
+          console.log(
+            "[CashAdvanceModel] Found target advance at line:",
+            lineIndex
+          );
         }
 
-        return advance;
+        return {
+          id,
+          employeeId,
+          date: new Date(date),
+          amount: parseFloat(amount),
+          remainingUnpaid: parseFloat(remainingUnpaid || amount),
+          reason,
+          approvalStatus,
+          status: status || "Unpaid",
+          paymentSchedule,
+        };
       });
 
       if (!found) {
+        console.error(
+          "[CashAdvanceModel] Cash advance not found:",
+          cashAdvance.id
+        );
         throw new Error("Cash advance not found");
       }
 
       // Update the line with all fields
-      const formattedDate = `${this.month}/${cashAdvance.date.getDate()}/${
-        this.year
-      }`;
+      const formattedDate = `${
+        cashAdvance.date.getMonth() + 1
+      }/${cashAdvance.date.getDate()}/${cashAdvance.date.getFullYear()}`;
       lines[lineIndex] = [
         cashAdvance.id,
         cashAdvance.employeeId,
@@ -181,8 +207,15 @@ export class CashAdvanceModel {
         cashAdvance.remainingUnpaid,
       ].join(",");
 
+      console.log("[CashAdvanceModel] Saving updated cash advance:", {
+        id: cashAdvance.id,
+        status: cashAdvance.status,
+        remainingUnpaid: cashAdvance.remainingUnpaid,
+      });
+
       await window.electron.writeFile(filePath, lines.join("\n") + "\n");
     } catch (error) {
+      console.error("[CashAdvanceModel] Update failed:", error);
       throw error;
     }
   }
@@ -190,28 +223,50 @@ export class CashAdvanceModel {
   async loadCashAdvances(employeeId: string): Promise<CashAdvance[]> {
     try {
       const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
+      console.log("[CashAdvanceModel] Attempting to load file:", {
+        filePath,
+        employeeId,
+        month: this.month,
+        year: this.year,
+      });
 
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
+        console.log(
+          "[CashAdvanceModel] File contents loaded, length:",
+          data.length
+        );
       } catch (error) {
-        // If file doesn't exist, create it with headers
         if ((error as any)?.message?.includes("no such file")) {
+          console.log("[CashAdvanceModel] File does not exist:", filePath);
           return [];
         }
+        console.error("[CashAdvanceModel] Error reading file:", error);
         throw new Error(
           `Failed to read cash advances file: ${(error as any).message}`
         );
       }
 
       const lines = data.split("\n").filter((line) => line.trim());
+      console.log("[CashAdvanceModel] Processing all lines:", lines);
 
-      // Skip header row
-      const dataLines = lines.slice(1);
-
-      const advances = dataLines
+      const advances = lines
         .map((line, index) => {
           const fields = line.split(",");
+          console.log("[CashAdvanceModel] Processing line:", {
+            lineIndex: index,
+            fields,
+          });
+
+          // Skip if this is a header row (exact match for header line)
+          if (
+            line.trim() ===
+            "id,employeeId,date,amount,reason,approvalStatus,paymentSchedule,status,remainingUnpaid"
+          ) {
+            console.log("[CashAdvanceModel] Skipping header row");
+            return null;
+          }
 
           try {
             const [
@@ -226,17 +281,24 @@ export class CashAdvanceModel {
               remainingUnpaid,
             ] = fields;
 
-            const parsedDate = new Date(date);
-            // Filter by month and year
-            if (
-              parsedDate.getMonth() + 1 !== this.month ||
-              parsedDate.getFullYear() !== this.year
-            ) {
+            // Parse date more reliably by splitting the components
+            const [month, day, year] = date.split("/").map(Number);
+            const parsedDate = new Date(year, month - 1, day);
+
+            console.log("[CashAdvanceModel] Parsed date:", {
+              original: date,
+              parsed: parsedDate,
+              isValid: !isNaN(parsedDate.getTime()),
+            });
+
+            if (isNaN(parsedDate.getTime())) {
+              console.log("[CashAdvanceModel] Invalid date, skipping record");
               return null;
             }
 
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount)) {
+              console.log("[CashAdvanceModel] Invalid amount, skipping record");
               return null;
             }
 
@@ -256,11 +318,10 @@ export class CashAdvanceModel {
                 | "Rejected",
               status: (status || "Unpaid") as "Paid" | "Unpaid",
               paymentSchedule: paymentSchedule as "One-time" | "Installment",
-              // Add installment details if it's an installment payment
               installmentDetails:
                 paymentSchedule === "Installment"
                   ? {
-                      numberOfPayments: 3, // Default to 3 payments
+                      numberOfPayments: 3,
                       amountPerPayment: Math.ceil(parsedAmount / 3),
                       remainingPayments: Math.ceil(
                         parsedRemainingUnpaid / (parsedAmount / 3)
@@ -269,26 +330,31 @@ export class CashAdvanceModel {
                   : undefined,
             } as CashAdvance;
 
-            // Double check the status matches the remaining amount
-            if (advance.remainingUnpaid > 0 && advance.status === "Paid") {
-              advance.status = "Unpaid";
-            } else if (
-              advance.remainingUnpaid === 0 &&
-              advance.status === "Unpaid"
-            ) {
-              advance.status = "Paid";
-            }
-
+            console.log("[CashAdvanceModel] Created advance:", advance);
             return advance;
           } catch (err) {
+            console.error("[CashAdvanceModel] Error processing line:", err);
             return null;
           }
         })
         .filter((advance): advance is CashAdvance => advance !== null)
-        .filter((advance) => advance.employeeId === employeeId);
+        .filter((advance) => advance.employeeId === employeeId)
+        .filter((advance) => {
+          const isApproved = advance.approvalStatus === "Approved";
+          console.log("[CashAdvanceModel] Filtering advance:", {
+            id: advance.id,
+            isApproved,
+            approvalStatus: advance.approvalStatus,
+            remainingUnpaid: advance.remainingUnpaid,
+            status: advance.status,
+          });
+          return isApproved; // Only filter by approval status, show both paid and unpaid
+        });
 
+      console.log("[CashAdvanceModel] Final advances:", advances);
       return advances;
     } catch (error) {
+      console.error("[CashAdvanceModel] Load error:", error);
       throw new Error(
         `Failed to load cash advances: ${(error as any).message}`
       );
@@ -338,6 +404,11 @@ export const createCashAdvanceModel = (
   month?: number,
   year?: number
 ): CashAdvanceModel => {
-  const folderPath = `${dbPath}/SweldoDB/cashAdvances/${employeeId}`;
+  // If dbPath doesn't include SweldoDB, append it
+  const normalizedPath = dbPath.includes("SweldoDB")
+    ? dbPath
+    : `${dbPath}/SweldoDB`;
+  const folderPath = `${normalizedPath}/cashAdvances/${employeeId}`;
+  console.log("[createCashAdvanceModel] Creating model with path:", folderPath);
   return new CashAdvanceModel(folderPath, employeeId, month, year);
 };

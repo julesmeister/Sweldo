@@ -724,13 +724,6 @@ const TimesheetPage: React.FC = () => {
     const isAbsent =
       scheduleInfo?.hasSchedule && !scheduleInfo.isRestDay && !hasTimeEntries;
 
-    if (day === 6) {
-      console.log("Day 6 Flags:", {
-        hasSchedule: scheduleInfo?.hasSchedule,
-        isRestDay: scheduleInfo?.isRestDay,
-        isAbsent,
-      });
-    }
 
     const rowClass = `cursor-pointer ${
       isAbsent

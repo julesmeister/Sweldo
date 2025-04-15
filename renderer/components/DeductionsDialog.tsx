@@ -353,7 +353,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     }, [employeeId, dbPath, memoizedStartDate]);
 
     const loadUnpaidAdvances = useCallback(async () => {
-      // Prevent reloading if we already have the advances and the dialog is open
       if (hasLoadedAdvances && isOpen) {
         console.log("Skipping reload - advances already loaded");
         return;
@@ -370,25 +369,27 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
       setIsLoading(true);
       try {
-        if (!employeeId || !dbPath || !memoizedCashAdvanceModel) {
+        if (!employeeId || !dbPath) {
           console.log("Missing required data for loading advances");
           return;
         }
 
         // Get all months between start and end date
-        const months = [];
+        const months = new Set<string>();
         let currentDate = new Date(memoizedStartDate);
         while (currentDate <= memoizedEndDate) {
-          months.push({
-            month: currentDate.getMonth() + 1,
-            year: currentDate.getFullYear(),
-          });
-          currentDate.setMonth(currentDate.getMonth() + 1);
+          months.add(
+            `${currentDate.getFullYear()}_${currentDate.getMonth() + 1}`
+          );
+          currentDate.setDate(currentDate.getDate() + 1);
         }
+
+        console.log("Loading advances for months:", Array.from(months));
 
         // Load cash advances from all relevant months
         const allAdvances: CashAdvance[] = [];
-        for (const { month, year } of months) {
+        for (const monthKey of months) {
+          const [year, month] = monthKey.split("_").map(Number);
           const cashAdvanceModel = createCashAdvanceModel(
             dbPath,
             employeeId,
@@ -400,27 +401,31 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           allAdvances.push(...advances);
         }
 
-        // Filter unpaid advances
-        const unpaid = allAdvances.filter((advance) => {
-          const isApproved = advance.approvalStatus === "Approved";
-          const hasRemaining = advance.remainingUnpaid > 0;
-          return isApproved && hasRemaining;
+        // Filter advances by date range
+        const filteredAdvances = allAdvances.filter((advance) => {
+          const advanceDate = new Date(advance.date);
+          return (
+            advanceDate >= memoizedStartDate && advanceDate <= memoizedEndDate
+          );
         });
 
+        console.log("Filtered advances:", filteredAdvances);
+
         // Sort by date (oldest first)
-        unpaid.sort(
+        filteredAdvances.sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
         const initialDeductions: Record<string, number> = {};
-        unpaid.forEach((advance) => {
+        filteredAdvances.forEach((advance) => {
           initialDeductions[advance.id] =
             advance.paymentSchedule === "Installment"
               ? advance.installmentDetails?.amountPerPayment || 0
               : advance.remainingUnpaid;
         });
+
         setDeductionAmounts(initialDeductions);
-        setUnpaidAdvances(unpaid);
+        setUnpaidAdvances(filteredAdvances);
         setHasLoadedAdvances(true);
       } catch (error) {
         console.error("Error loading unpaid advances:", error);
@@ -432,7 +437,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       dbPath,
       memoizedStartDate,
       memoizedEndDate,
-      memoizedCashAdvanceModel,
       hasLoadedAdvances,
       isOpen,
     ]);
