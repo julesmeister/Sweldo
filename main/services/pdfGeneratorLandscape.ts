@@ -185,7 +185,13 @@ export async function generatePayrollPDFLandscape(
 
         // Calculate total deductions including late and undertime
         const totalDeductions =
-          (payroll.lateDeduction || 0) + (payroll.undertimeDeduction || 0);
+          (payroll.lateDeduction || 0) +
+          (payroll.undertimeDeduction || 0) +
+          (payroll.deductions.sss || 0) +
+          (payroll.deductions.philHealth || 0) +
+          (payroll.deductions.pagIbig || 0) +
+          (payroll.deductions.cashAdvanceDeductions || 0) +
+          (payroll.deductions.shortDeductions || 0);
 
         console.log("Row calculations:", {
           grossPay,
@@ -304,7 +310,13 @@ export async function generatePayrollPDFLandscape(
             (curr.nightDifferentialPay || 0);
 
           const totalDeductions =
-            (curr.lateDeduction || 0) + (curr.undertimeDeduction || 0);
+            (curr.lateDeduction || 0) +
+            (curr.undertimeDeduction || 0) +
+            (curr.deductions.sss || 0) +
+            (curr.deductions.philHealth || 0) +
+            (curr.deductions.pagIbig || 0) +
+            (curr.deductions.cashAdvanceDeductions || 0) +
+            (curr.deductions.others || 0);
 
           return {
             days: acc.days + curr.daysWorked,

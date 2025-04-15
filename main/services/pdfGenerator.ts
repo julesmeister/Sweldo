@@ -81,7 +81,16 @@ export async function generatePayrollPDF(
 
           // Define table data first
           const totalDeductions =
-            (payroll.lateDeduction || 0) + (payroll.undertimeDeduction || 0);
+            (payroll.lateDeduction || 0) +
+            (payroll.undertimeDeduction || 0) +
+            (payroll.deductions.sss || 0) +
+            (payroll.deductions.philHealth || 0) +
+            (payroll.deductions.pagIbig || 0) +
+            (payroll.deductions.sssLoan || 0) +
+            (payroll.deductions.pagibigLoan || 0) +
+            (payroll.deductions.cashAdvanceDeductions || 0) +
+            (payroll.deductions.partial || 0) +
+            (payroll.deductions.shortDeductions || 0);
 
           const deductions = [
             ["SSS", formatCurrency(payroll.deductions.sss)],
@@ -92,9 +101,18 @@ export async function generatePayrollPDF(
               "Pag-IBIG Loan",
               formatCurrency(payroll.deductions.pagibigLoan || 0),
             ],
-            ["Cash Advance", formatCurrency(payroll.deductions.ca || 0)],
+            [
+              "Cash Advance",
+              formatCurrency(payroll.deductions.cashAdvanceDeductions || 0),
+            ],
             ["Partial", formatCurrency(payroll.deductions.partial || 0)],
-            ["Others", formatCurrency(totalDeductions)], // Late + Undertime deductions
+            [
+              "Late/UT",
+              formatCurrency(
+                (payroll.lateDeduction || 0) + (payroll.undertimeDeduction || 0)
+              ),
+            ],
+            ["Others", formatCurrency(payroll.deductions.shortDeductions || 0)],
             ["Total Deductions", formatCurrency(totalDeductions)],
           ];
 
