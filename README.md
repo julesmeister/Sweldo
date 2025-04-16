@@ -644,6 +644,7 @@ The compensation calculation system follows these relationships between fields:
      - Where:
        - `hourlyRate = dailyRate / 8`
        - `overtimeHourlyMultiplier` defaults to 1.25 if not set in settings
+     - **Note**: The system has a 1-hour threshold for overtime calculations in the UI, meaning overtime is only counted in full hour increments when manually entered through the CompensationDialog.
    - `undertimeMinutes` → `undertimeDeduction`
      - Calculated using: `undertimeMinutes * undertimeDeductionPerMinute`
    - `lateMinutes` → `lateDeduction`

@@ -125,17 +125,19 @@ export const calculateTimeMetrics = (
 
   // If no schedule, only calculate total hours and overtime
   if (!scheduled) {
-    const overtimeMinutes = Math.max(0, totalMinutesWorked - standardMinutes);
+    const rawOvertimeMinutes = Math.max(
+      0,
+      totalMinutesWorked - standardMinutes
+    );
+    // Enforce 1-hour threshold for overtime
+    const overtimeMinutes = Math.floor(rawOvertimeMinutes / 60) * 60;
     return {
       lateMinutes: 0,
       undertimeMinutes: 0,
       overtimeMinutes,
       lateDeductionMinutes: 0,
       undertimeDeductionMinutes: 0,
-      overtimeDeductionMinutes: calculateDeductionMinutes(
-        overtimeMinutes,
-        attendanceSettings.overtimeThreshold
-      ),
+      overtimeDeductionMinutes: overtimeMinutes,
       hoursWorked: totalMinutesWorked / 60,
     };
   }
@@ -167,7 +169,9 @@ export const calculateTimeMetrics = (
   const overtimeFromSchedule = attendanceSettings.countEarlyTimeInAsOvertime
     ? earlyMinutes + lateOutMinutes
     : lateOutMinutes;
-  const overtimeMinutes = Math.max(overtimeFromTotal, overtimeFromSchedule);
+  const rawOvertimeMinutes = Math.max(overtimeFromTotal, overtimeFromSchedule);
+  // Enforce 1-hour threshold for overtime
+  const overtimeMinutes = Math.floor(rawOvertimeMinutes / 60) * 60;
 
   const lateDeductionMinutes = calculateDeductionMinutes(
     lateMinutes,
@@ -179,10 +183,7 @@ export const calculateTimeMetrics = (
     attendanceSettings.undertimeGracePeriod
   );
 
-  const overtimeDeductionMinutes = calculateDeductionMinutes(
-    overtimeMinutes,
-    attendanceSettings.overtimeThreshold
-  );
+  const overtimeDeductionMinutes = overtimeMinutes;
 
   return {
     lateMinutes,
