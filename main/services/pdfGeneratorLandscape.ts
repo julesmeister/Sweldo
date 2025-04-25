@@ -191,6 +191,7 @@ export async function generatePayrollPDFLandscape(
           (payroll.deductions.philHealth || 0) +
           (payroll.deductions.pagIbig || 0) +
           (payroll.deductions.cashAdvanceDeductions || 0) +
+          (payroll.deductions.partial || 0) +
           (payroll.deductions.shortDeductions || 0);
 
         console.log("Row calculations:", {
@@ -303,24 +304,39 @@ export async function generatePayrollPDFLandscape(
       // Calculate totals
       const totals = payrolls.reduce(
         (acc, curr) => {
+          // Calculate gross pay for the current employee (needed for net pay)
           const grossPay =
             curr.basicPay +
             (curr.overtime || 0) +
             (curr.holidayBonus || 0) +
             (curr.nightDifferentialPay || 0);
 
-          const totalDeductions =
+          // Calculate 'others' based on formula if applicable, otherwise use the value from deductions
+          // Note: Ensure this logic matches the row calculation if 'others' affects total deductions
+          const othersValue = options.calculationSettings?.others?.formula
+            ? evaluateFormula(options.calculationSettings.others.formula, {
+                sssLoan: curr.deductions.sssLoan || 0,
+                pagibigLoan: curr.deductions.pagibigLoan || 0,
+                partial: curr.deductions.partial || 0,
+                shorts: curr.deductions.shortDeductions || 0,
+                lateDeduction: curr.lateDeduction || 0,
+              })
+            : curr.deductions.others || 0;
+
+          // Directly use the pre-calculated total deductions for the current employee
+          const currentTotalDeductions = 
             (curr.lateDeduction || 0) +
             (curr.undertimeDeduction || 0) +
             (curr.deductions.sss || 0) +
             (curr.deductions.philHealth || 0) +
             (curr.deductions.pagIbig || 0) +
             (curr.deductions.cashAdvanceDeductions || 0) +
-            (curr.deductions.others || 0);
+            (curr.deductions.partial || 0) +
+            (curr.deductions.shortDeductions || 0);
 
           return {
             days: acc.days + curr.daysWorked,
-            rate: acc.rate + (curr.dailyRate || 0),
+            rate: acc.rate + (curr.dailyRate || 0), // Summing daily rates might not be meaningful, consider removing or clarifying purpose
             holiday: acc.holiday + (curr.holidayBonus || 0),
             ot: acc.ot + (curr.overtime || 0),
             nightDifferential:
@@ -331,12 +347,12 @@ export async function generatePayrollPDFLandscape(
             sss: acc.sss + (curr.deductions.sss || 0),
             philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
             pagibig: acc.pagibig + (curr.deductions.pagIbig || 0),
-            loan: acc.loan + 0,
+            loan: acc.loan + (curr.deductions.sssLoan || 0) + (curr.deductions.pagibigLoan || 0), // Sum loans if they should be part of the total row
             ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
-            partial: acc.partial + 0,
-            others: acc.others + 0,
-            totalDeductions: acc.totalDeductions + totalDeductions,
-            netPay: acc.netPay + (grossPay - totalDeductions),
+            partial: acc.partial + (curr.deductions.partial || 0), // Sum partial if needed in total
+            others: acc.others + othersValue, // Sum the calculated 'others' value
+            totalDeductions: acc.totalDeductions + currentTotalDeductions, // Directly sum the employee's total deductions
+            netPay: acc.netPay + (grossPay - currentTotalDeductions), // Use the same total deductions for net pay calculation
           };
         },
         {
