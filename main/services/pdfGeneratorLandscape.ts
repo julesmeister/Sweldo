@@ -324,7 +324,7 @@ export async function generatePayrollPDFLandscape(
             : curr.deductions.others || 0;
 
           // Directly use the pre-calculated total deductions for the current employee
-          const currentTotalDeductions = 
+          const currentTotalDeductions =
             (curr.lateDeduction || 0) +
             (curr.undertimeDeduction || 0) +
             (curr.deductions.sss || 0) +
@@ -347,7 +347,10 @@ export async function generatePayrollPDFLandscape(
             sss: acc.sss + (curr.deductions.sss || 0),
             philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
             pagibig: acc.pagibig + (curr.deductions.pagIbig || 0),
-            loan: acc.loan + (curr.deductions.sssLoan || 0) + (curr.deductions.pagibigLoan || 0), // Sum loans if they should be part of the total row
+            loan:
+              acc.loan +
+              (curr.deductions.sssLoan || 0) +
+              (curr.deductions.pagibigLoan || 0), // Sum loans if they should be part of the total row
             ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
             partial: acc.partial + (curr.deductions.partial || 0), // Sum partial if needed in total
             others: acc.others + othersValue, // Sum the calculated 'others' value
