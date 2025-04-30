@@ -720,7 +720,7 @@ export default function SettingsPage() {
     },
     {
       key: "types",
-      title: "Employment Types",
+      title: "Schedules",
       icon: <IoWalletOutline className="w-5 h-5" />,
       requiredAccess: "MANAGE_SETTINGS",
       content: (
