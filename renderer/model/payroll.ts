@@ -320,16 +320,15 @@ export class Payroll {
       throw new Error("Employee not found");
     }
 
-    // --- MODIFIED LOGIC START ---
+    // --- REFINED LOGIC START ---
 
-    // Create a set of dates with compensation records for quick lookup
-    const compensationDates = new Set(
-      filteredCompensations.map(comp => {
+    // Create a map for quick lookup of compensation records by date timestamp
+    const compensationMap = new Map<number, Compensation>();
+    filteredCompensations.forEach(comp => {
         const compDate = new Date(comp.year, comp.month - 1, comp.day);
         compDate.setHours(0, 0, 0, 0);
-        return compDate.getTime(); // Store time value for easy comparison
-      })
-    );
+        compensationMap.set(compDate.getTime(), comp);
+    });
 
     let calculatedDaysWorked = 0;
     let calculatedAbsences = 0;
@@ -340,17 +339,35 @@ export class Payroll {
         currentDay.setDate(start.getDate() + i);
         currentDay.setHours(0, 0, 0, 0);
         const currentDayTime = currentDay.getTime();
+        const isRestDay = currentDay.getDay() === 0; // Assuming Sunday is rest day
 
-        // Check if there's a compensation record for this day
-        if (compensationDates.has(currentDayTime)) {
-            calculatedDaysWorked++;
+        const compensationRecord = compensationMap.get(currentDayTime);
+
+        if (compensationRecord) {
+            // Compensation record exists for this day
+            const netPay = compensationRecord.netPay ?? 0; // Treat null/undefined netPay as 0
+            const dayType = compensationRecord.dayType;
+
+            if (netPay > 0) {
+                // If there's net pay, it's a worked day (or paid leave/holiday)
+                calculatedDaysWorked++;
+            } else if (dayType !== "Regular") {  
+              // If there's no net pay but it's not a Regular day, it's a leave/holiday
+              calculatedAbsences = calculatedAbsences; // stay the same
+            } else {
+                 // Record exists, netPay is 0, and it's a Regular day (or other non-paid type) -> Absence
+                 // Only count as absence if it's not a designated rest day
+                 if (!isRestDay) {
+                    calculatedAbsences++;
+                 }
+            }
         } else {
-            // If no compensation record, check if it's a rest day (e.g., Sunday)
-            // Assuming Sunday (getDay() === 0) is the rest day
-            if (currentDay.getDay() !== 0) {
+            // No compensation record for this day
+            // If it's not a rest day, count as absence
+            if (!isRestDay) {
                 calculatedAbsences++;
             }
-            // Else, it's a rest day without compensation, don't count as absence or worked
+            // Else, it's a rest day without compensation, do nothing
         }
     }
 
@@ -358,10 +375,10 @@ export class Payroll {
     const daysWorked = calculatedDaysWorked;
     const totalAbsences = calculatedAbsences;
 
-    console.log(`[Payroll Summary] Calculated Days Worked: ${daysWorked}`);
-    console.log(`[Payroll Summary] Calculated Absences: ${totalAbsences}`);
+    console.log(`[Payroll Summary] Refined Calculated Days Worked: ${daysWorked}`);
+    console.log(`[Payroll Summary] Refined Calculated Absences: ${totalAbsences}`);
 
-    // --- MODIFIED LOGIC END ---
+    // --- REFINED LOGIC END ---
 
 
     // Calculate totals from pre-computed compensation records
@@ -405,14 +422,13 @@ export class Payroll {
 
     // Calculate total gross pay for the period (using the recalculated basicPay)
     // Gross Pay = Basic Pay + Overtime + Holiday Bonus + Leave Pay + Night Diff - Undertime - Late
-    totalGrossPay =
-      totalBasicPay + // Use the recalculated basic pay
-      totalOvertime +
-      totalHolidayBonus +
-      totalLeavePay +
-      totalNightDifferentialPay;
-
-    console.log(`[Payroll Summary] Calculated Gross Pay: ${totalGrossPay}`);
+     totalGrossPay =
+       totalBasicPay + // Use the recalculated basic pay
+       totalOvertime +
+       totalHolidayBonus +
+       totalLeavePay +
+       totalNightDifferentialPay;
+     console.log(`[Payroll Summary] Calculated Gross Pay: ${totalGrossPay}`);
 
     // Calculate final net pay (This part seems okay, uses grossPay - deductions)
     // Note: The 'totalDeductions' summed from compensation records might need review
