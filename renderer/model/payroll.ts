@@ -231,14 +231,37 @@ export class Payroll {
       );
 
       if (employee) {
-        // Save attendances for each employee
         const attendanceModel = createAttendanceModel(this.dbPath);
-        await attendanceModel.saveOrUpdateAttendances(
-          attendances,
+
+        // 1. Load existing attendance for the month/year
+        const existingAttendances = await attendanceModel.loadAttendancesById(
           this.dateRange.start.getMonth() + 1,
           this.dateRange.start.getFullYear(),
           employee.id
         );
+        const existingDays = new Set(existingAttendances.map((att) => att.day));
+
+        // 2. Filter processed entries to find only new ones
+        const newAttendancesToSave = attendances.filter(
+          (att) => !existingDays.has(att.day)
+        );
+
+        // 3. Save only if there are new entries to add
+        if (newAttendancesToSave.length > 0) {
+          console.log(
+            `[Payroll] Saving ${newAttendancesToSave.length} new attendance entries for employee ${employee.id}`
+          );
+          await attendanceModel.saveOrUpdateAttendances(
+            newAttendancesToSave, // Pass only the new entries
+            this.dateRange.start.getMonth() + 1,
+            this.dateRange.start.getFullYear(),
+            employee.id
+          );
+        } else {
+          console.log(
+            `[Payroll] No new attendance entries to save for employee ${employee.id}, existing data preserved.`
+          );
+        }
 
         // Save missing time logs
         const missingTimeModel = MissingTimeModel.createMissingTimeModel(
@@ -324,62 +347,66 @@ export class Payroll {
 
     // Create a map for quick lookup of compensation records by date timestamp
     const compensationMap = new Map<number, Compensation>();
-    filteredCompensations.forEach(comp => {
-        const compDate = new Date(comp.year, comp.month - 1, comp.day);
-        compDate.setHours(0, 0, 0, 0);
-        compensationMap.set(compDate.getTime(), comp);
+    filteredCompensations.forEach((comp) => {
+      const compDate = new Date(comp.year, comp.month - 1, comp.day);
+      compDate.setHours(0, 0, 0, 0);
+      compensationMap.set(compDate.getTime(), comp);
     });
 
     let calculatedDaysWorked = 0;
     let calculatedAbsences = 0;
-    const totalDaysInPeriod = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDaysInPeriod =
+      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     for (let i = 0; i < totalDaysInPeriod; i++) {
-        const currentDay = new Date(start);
-        currentDay.setDate(start.getDate() + i);
-        currentDay.setHours(0, 0, 0, 0);
-        const currentDayTime = currentDay.getTime();
-        const isRestDay = currentDay.getDay() === 0; // Assuming Sunday is rest day
+      const currentDay = new Date(start);
+      currentDay.setDate(start.getDate() + i);
+      currentDay.setHours(0, 0, 0, 0);
+      const currentDayTime = currentDay.getTime();
+      const isRestDay = currentDay.getDay() === 0; // Assuming Sunday is rest day
 
-        const compensationRecord = compensationMap.get(currentDayTime);
+      const compensationRecord = compensationMap.get(currentDayTime);
 
-        if (compensationRecord) {
-            // Compensation record exists for this day
-            const netPay = compensationRecord.netPay ?? 0; // Treat null/undefined netPay as 0
-            const dayType = compensationRecord.dayType;
+      if (compensationRecord) {
+        // Compensation record exists for this day
+        const netPay = compensationRecord.netPay ?? 0; // Treat null/undefined netPay as 0
+        const dayType = compensationRecord.dayType;
 
-            if (netPay > 0) {
-                // If there's net pay, it's a worked day (or paid leave/holiday)
-                calculatedDaysWorked++;
-            } else if (dayType !== "Regular") {  
-              // If there's no net pay but it's not a Regular day, it's a leave/holiday
-              calculatedAbsences = calculatedAbsences; // stay the same
-            } else {
-                 // Record exists, netPay is 0, and it's a Regular day (or other non-paid type) -> Absence
-                 // Only count as absence if it's not a designated rest day
-                 if (!isRestDay) {
-                    calculatedAbsences++;
-                 }
-            }
+        if (netPay > 0) {
+          // If there's net pay, it's a worked day (or paid leave/holiday)
+          calculatedDaysWorked++;
+        } else if (dayType !== "Regular") {
+          // If there's no net pay but it's not a Regular day, it's a leave/holiday
+          calculatedAbsences = calculatedAbsences; // stay the same
         } else {
-            // No compensation record for this day
-            // If it's not a rest day, count as absence
-            if (!isRestDay) {
-                calculatedAbsences++;
-            }
-            // Else, it's a rest day without compensation, do nothing
+          // Record exists, netPay is 0, and it's a Regular day (or other non-paid type) -> Absence
+          // Only count as absence if it's not a designated rest day
+          if (!isRestDay) {
+            calculatedAbsences++;
+          }
         }
+      } else {
+        // No compensation record for this day
+        // If it's not a rest day, count as absence
+        if (!isRestDay) {
+          calculatedAbsences++;
+        }
+        // Else, it's a rest day without compensation, do nothing
+      }
     }
 
     // Use the newly calculated counts
     const daysWorked = calculatedDaysWorked;
     const totalAbsences = calculatedAbsences;
 
-    console.log(`[Payroll Summary] Refined Calculated Days Worked: ${daysWorked}`);
-    console.log(`[Payroll Summary] Refined Calculated Absences: ${totalAbsences}`);
+    console.log(
+      `[Payroll Summary] Refined Calculated Days Worked: ${daysWorked}`
+    );
+    console.log(
+      `[Payroll Summary] Refined Calculated Absences: ${totalAbsences}`
+    );
 
     // --- REFINED LOGIC END ---
-
 
     // Calculate totals from pre-computed compensation records
     let totalBasicPay = 0;
@@ -401,8 +428,9 @@ export class Payroll {
 
     // Calculate basic pay for the period using the NEW daysWorked count
     totalBasicPay = dailyRate * daysWorked;
-    console.log(`[Payroll Summary] Calculated Basic Pay (Rate * Days Worked): ${dailyRate} * ${daysWorked} = ${totalBasicPay}`);
-
+    console.log(
+      `[Payroll Summary] Calculated Basic Pay (Rate * Days Worked): ${dailyRate} * ${daysWorked} = ${totalBasicPay}`
+    );
 
     // Sum up all pre-computed values from compensation records
     for (const comp of filteredCompensations) {
@@ -422,13 +450,13 @@ export class Payroll {
 
     // Calculate total gross pay for the period (using the recalculated basicPay)
     // Gross Pay = Basic Pay + Overtime + Holiday Bonus + Leave Pay + Night Diff - Undertime - Late
-     totalGrossPay =
-       totalBasicPay + // Use the recalculated basic pay
-       totalOvertime +
-       totalHolidayBonus +
-       totalLeavePay +
-       totalNightDifferentialPay;
-     console.log(`[Payroll Summary] Calculated Gross Pay: ${totalGrossPay}`);
+    totalGrossPay =
+      totalBasicPay + // Use the recalculated basic pay
+      totalOvertime +
+      totalHolidayBonus +
+      totalLeavePay +
+      totalNightDifferentialPay;
+    console.log(`[Payroll Summary] Calculated Gross Pay: ${totalGrossPay}`);
 
     // Calculate final net pay (This part seems okay, uses grossPay - deductions)
     // Note: The 'totalDeductions' summed from compensation records might need review
@@ -596,7 +624,11 @@ export class Payroll {
     }
   ): Promise<PayrollSummaryModel> {
     try {
-      console.log(`[Payroll] Generating summary for Employee ID: ${employeeId}, Period: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+      console.log(
+        `[Payroll] Generating summary for Employee ID: ${employeeId}, Period: ${
+          startDate.toISOString().split("T")[0]
+        } to ${endDate.toISOString().split("T")[0]}`
+      );
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) throw new Error("Employee not found");
@@ -628,27 +660,35 @@ export class Payroll {
       };
       console.log("[Payroll] Variables for Formula Evaluation:", variables);
 
-
       // Calculate gross pay using formula if available
       let grossPayValue = summary.grossPay;
-      console.log(`[Payroll] Initial Gross Pay (from summary): ${grossPayValue}`);
+      console.log(
+        `[Payroll] Initial Gross Pay (from summary): ${grossPayValue}`
+      );
       if (calculationSettings.grossPay?.formula) {
         try {
           grossPayValue = evaluateFormula(
             calculationSettings.grossPay.formula,
             variables
           );
-          console.log(`[Payroll] Calculated Gross Pay (using formula): ${grossPayValue}`);
+          console.log(
+            `[Payroll] Calculated Gross Pay (using formula): ${grossPayValue}`
+          );
         } catch (error) {
-          console.error(`[Payroll] Error evaluating gross pay formula: ${(error as any).message}`);
+          console.error(
+            `[Payroll] Error evaluating gross pay formula: ${
+              (error as any).message
+            }`
+          );
           throw new Error(
             `Failed to evaluate gross pay formula: ${(error as any).message}`
           );
         }
       } else {
-         console.log("[Payroll] No Gross Pay formula found, using summary value.");
+        console.log(
+          "[Payroll] No Gross Pay formula found, using summary value."
+        );
       }
-
 
       // Calculate others using formula if available
       let othersValue = 0;
@@ -658,9 +698,15 @@ export class Payroll {
             calculationSettings.others.formula,
             variables
           );
-           console.log(`[Payroll] Calculated Others Value (using formula): ${othersValue}`);
+          console.log(
+            `[Payroll] Calculated Others Value (using formula): ${othersValue}`
+          );
         } catch (error) {
-          console.error(`[Payroll] Error evaluating others formula: ${(error as any).message}`);
+          console.error(
+            `[Payroll] Error evaluating others formula: ${
+              (error as any).message
+            }`
+          );
           throw new Error(
             `Failed to evaluate others formula: ${(error as any).message}`
           );
@@ -669,7 +715,11 @@ export class Payroll {
         othersValue =
           (summary.deductions.others || 0) -
           (summary.deductions.shortDeductions || 0);
-        console.log(`[Payroll] Calculated Others Value (manual): ${othersValue} (Summary Others: ${summary.deductions.others || 0}, Summary Shorts: ${summary.deductions.shortDeductions || 0})`);
+        console.log(
+          `[Payroll] Calculated Others Value (manual): ${othersValue} (Summary Others: ${
+            summary.deductions.others || 0
+          }, Summary Shorts: ${summary.deductions.shortDeductions || 0})`
+        );
       }
 
       // Calculate total deductions using formula if available
@@ -682,20 +732,30 @@ export class Payroll {
         lateDeduction: summary.lateDeduction ?? 0,
         undertimeDeduction: summary.undertimeDeduction ?? 0,
       };
-      console.log("[Payroll] Variables for Total Deductions:", deductionVariables);
-
+      console.log(
+        "[Payroll] Variables for Total Deductions:",
+        deductionVariables
+      );
 
       let totalDeductions = 0;
       if (calculationSettings?.totalDeductions?.formula) {
-        console.log(`[Payroll] Using Total Deductions Formula: ${calculationSettings.totalDeductions.formula}`);
+        console.log(
+          `[Payroll] Using Total Deductions Formula: ${calculationSettings.totalDeductions.formula}`
+        );
         try {
           totalDeductions = evaluateFormula(
             calculationSettings.totalDeductions.formula,
             deductionVariables
           );
-          console.log(`[Payroll] Calculated Total Deductions (using formula): ${totalDeductions}`);
+          console.log(
+            `[Payroll] Calculated Total Deductions (using formula): ${totalDeductions}`
+          );
         } catch (error) {
-          console.error(`[Payroll] Error evaluating total deductions formula: ${(error as any).message}`);
+          console.error(
+            `[Payroll] Error evaluating total deductions formula: ${
+              (error as any).message
+            }`
+          );
           throw new Error(
             `Formula evaluation failed: ${(error as any).message}`
           );
@@ -706,34 +766,53 @@ export class Payroll {
           (sum, val) => sum + (typeof val === "number" ? val : 0),
           0
         );
-        console.log(`[Payroll] Calculated Total Deductions (summing variables): ${totalDeductions}`);
+        console.log(
+          `[Payroll] Calculated Total Deductions (summing variables): ${totalDeductions}`
+        );
       }
 
       // Calculate net pay using formula if available
       let netPayValue = grossPayValue - totalDeductions;
-      console.log(`[Payroll] Initial Net Pay (Gross - Total Deductions): ${grossPayValue} - ${totalDeductions} = ${netPayValue}`);
+      console.log(
+        `[Payroll] Initial Net Pay (Gross - Total Deductions): ${grossPayValue} - ${totalDeductions} = ${netPayValue}`
+      );
       if (calculationSettings.netPay?.formula) {
-        console.log(`[Payroll] Using Net Pay Formula: ${calculationSettings.netPay.formula}`);
+        console.log(
+          `[Payroll] Using Net Pay Formula: ${calculationSettings.netPay.formula}`
+        );
         const netPayVariables = {
-            ...variables,
-            grossPay: grossPayValue,
-            totalDeductions,
-            others: othersValue, // Ensure 'others' used here matches the calculated 'othersValue'
-          };
-        console.log("[Payroll] Variables for Net Pay Formula:", netPayVariables);
+          ...variables,
+          grossPay: grossPayValue,
+          totalDeductions,
+          others: othersValue, // Ensure 'others' used here matches the calculated 'othersValue'
+        };
+        console.log(
+          "[Payroll] Variables for Net Pay Formula:",
+          netPayVariables
+        );
         try {
-          netPayValue = evaluateFormula(calculationSettings.netPay.formula, netPayVariables);
-          console.log(`[Payroll] Calculated Net Pay (using formula): ${netPayValue}`);
+          netPayValue = evaluateFormula(
+            calculationSettings.netPay.formula,
+            netPayVariables
+          );
+          console.log(
+            `[Payroll] Calculated Net Pay (using formula): ${netPayValue}`
+          );
         } catch (error) {
-          console.error(`[Payroll] Error evaluating net pay formula: ${(error as any).message}`);
+          console.error(
+            `[Payroll] Error evaluating net pay formula: ${
+              (error as any).message
+            }`
+          );
           throw new Error(
             `Failed to evaluate net pay formula: ${(error as any).message}`
           );
         }
       } else {
-        console.log("[Payroll] No Net Pay formula found, using Gross - Total Deductions.");
+        console.log(
+          "[Payroll] No Net Pay formula found, using Gross - Total Deductions."
+        );
       }
-
 
       const finalDeductions = {
         sss:
@@ -1368,85 +1447,117 @@ export class Payroll {
       if (parsedData.errors.length > 0) {
         // Filter out the 'UndetectableDelimiter' warning if it's the only one,
         // as it often defaults correctly but can be noisy.
-        const criticalErrors = parsedData.errors.filter(e => e.code !== 'UndetectableDelimiter');
+        const criticalErrors = parsedData.errors.filter(
+          (e) => e.code !== "UndetectableDelimiter"
+        );
         if (criticalErrors.length > 0) {
-            console.error("Critical CSV Parsing Errors:", criticalErrors);
-            toast.error(`Error parsing payroll CSV for ${employeeId} (${year}-${month}). Check console for details.`);
-            return []; // Return empty on critical error
+          console.error("Critical CSV Parsing Errors:", criticalErrors);
+          toast.error(
+            `Error parsing payroll CSV for ${employeeId} (${year}-${month}). Check console for details.`
+          );
+          return []; // Return empty on critical error
         } else {
-            console.warn("CSV Parsing Warnings (non-critical):", parsedData.errors);
+          console.warn(
+            "CSV Parsing Warnings (non-critical):",
+            parsedData.errors
+          );
         }
       }
 
       // Add a try-catch within the map for more granular error checking
-      const payrolls: PayrollSummaryModel[] = parsedData.data.map((row, index) => {
-        try {
-          // **Add check for essential data before processing the row**
-          // If employeeId is missing or empty, assume it's a bad/empty row and skip it.
-          if (!row.employeeId || row.employeeId.trim() === "") {
-            console.warn(`Skipping row ${index + 1} due to missing employeeId:`, row);
-            return null;
+      const payrolls: PayrollSummaryModel[] = parsedData.data
+        .map((row, index) => {
+          try {
+            // **Add check for essential data before processing the row**
+            // If employeeId is missing or empty, assume it's a bad/empty row and skip it.
+            if (!row.employeeId || row.employeeId.trim() === "") {
+              console.warn(
+                `Skipping row ${index + 1} due to missing employeeId:`,
+                row
+              );
+              return null;
+            }
+
+            // Ensure dates are properly parsed
+            const startDate = new Date(row.startDate);
+            const endDate = new Date(row.endDate);
+            const paymentDate = new Date(row.paymentDate);
+
+            // Validate date parsing
+            if (
+              isNaN(startDate.getTime()) ||
+              isNaN(endDate.getTime()) ||
+              isNaN(paymentDate.getTime())
+            ) {
+              console.warn(`Invalid date format in row ${index + 1}:`, row);
+              // Skip this row by returning null and filtering later
+              return null;
+            }
+
+            return {
+              id: row.id,
+              employeeId: row.employeeId,
+              employeeName: row.employeeName,
+              startDate,
+              endDate,
+              dailyRate: parseFloat(row.dailyRate || "0"),
+              basicPay: parseFloat(row.basicPay || "0"),
+              overtime: parseFloat(row.overtimePay || "0"),
+              overtimeMinutes: parseInt(row.overtimeMinutes || "0"),
+              undertimeDeduction: parseFloat(row.undertimeDeduction || "0"),
+              undertimeMinutes: parseInt(row.undertimeMinutes || "0"),
+              lateDeduction: parseFloat(row.lateDeduction || "0"),
+              lateMinutes: parseInt(row.lateMinutes || "0"),
+              holidayBonus: parseFloat(row.holidayBonus || "0"),
+              grossPay: parseFloat(row.grossPay || "0"),
+              allowances: parseFloat(row.allowances || "0"),
+              deductions: {
+                sss: parseFloat(row.sssDeduction || "0"),
+                philHealth: parseFloat(row.philHealthDeduction || "0"),
+                pagIbig: parseFloat(row.pagIbigDeduction || "0"),
+                cashAdvanceDeductions: parseFloat(
+                  row.cashAdvanceDeductions || "0"
+                ),
+                shortDeductions: parseFloat(row.shortDeductions || "0"),
+                others: parseFloat(row.otherDeductions || "0"),
+              },
+              netPay: parseFloat(row.netPay || "0"),
+              paymentDate: paymentDate.toISOString(),
+              daysWorked: parseInt(row.daysWorked || "0"),
+              absences: parseInt(row.absences || "0"),
+              nightDifferentialHours: parseFloat(
+                row.nightDifferentialHours || "0"
+              ),
+              nightDifferentialPay: parseFloat(row.nightDifferentialPay || "0"),
+              cashAdvanceIDs: row.cashAdvanceIDs
+                ? row.cashAdvanceIDs.split("|").filter((id) => id) // Filter out empty strings if split results in them
+                : [],
+              shortIDs: row.shortIDs
+                ? row.shortIDs.split("|").filter((id) => id)
+                : [], // Filter out empty strings
+            };
+          } catch (mapError) {
+            console.error(
+              `Error processing payroll row ${index + 1}:`,
+              mapError,
+              row
+            );
+            toast.error(
+              `Error processing payroll data for row ${
+                index + 1
+              }. Check console.`
+            );
+            return null; // Return null for rows that cause errors
           }
-
-          // Ensure dates are properly parsed
-          const startDate = new Date(row.startDate);
-          const endDate = new Date(row.endDate);
-          const paymentDate = new Date(row.paymentDate);
-
-          // Validate date parsing
-          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || isNaN(paymentDate.getTime())) {
-            console.warn(`Invalid date format in row ${index + 1}:`, row);
-            // Skip this row by returning null and filtering later
-            return null;
-          }
-
-          return {
-            id: row.id,
-            employeeId: row.employeeId,
-            employeeName: row.employeeName,
-            startDate,
-            endDate,
-            dailyRate: parseFloat(row.dailyRate || "0"),
-            basicPay: parseFloat(row.basicPay || "0"),
-            overtime: parseFloat(row.overtimePay || "0"),
-            overtimeMinutes: parseInt(row.overtimeMinutes || "0"),
-            undertimeDeduction: parseFloat(row.undertimeDeduction || "0"),
-            undertimeMinutes: parseInt(row.undertimeMinutes || "0"),
-            lateDeduction: parseFloat(row.lateDeduction || "0"),
-            lateMinutes: parseInt(row.lateMinutes || "0"),
-            holidayBonus: parseFloat(row.holidayBonus || "0"),
-            grossPay: parseFloat(row.grossPay || "0"),
-            allowances: parseFloat(row.allowances || "0"),
-            deductions: {
-              sss: parseFloat(row.sssDeduction || "0"),
-              philHealth: parseFloat(row.philHealthDeduction || "0"),
-              pagIbig: parseFloat(row.pagIbigDeduction || "0"),
-              cashAdvanceDeductions: parseFloat(row.cashAdvanceDeductions || "0"),
-              shortDeductions: parseFloat(row.shortDeductions || "0"),
-              others: parseFloat(row.otherDeductions || "0"),
-            },
-            netPay: parseFloat(row.netPay || "0"),
-            paymentDate: paymentDate.toISOString(),
-            daysWorked: parseInt(row.daysWorked || "0"),
-            absences: parseInt(row.absences || "0"),
-            nightDifferentialHours: parseFloat(row.nightDifferentialHours || "0"),
-            nightDifferentialPay: parseFloat(row.nightDifferentialPay || "0"),
-            cashAdvanceIDs: row.cashAdvanceIDs
-              ? row.cashAdvanceIDs.split("|").filter(id => id) // Filter out empty strings if split results in them
-              : [],
-            shortIDs: row.shortIDs ? row.shortIDs.split("|").filter(id => id) : [], // Filter out empty strings
-          };
-        } catch (mapError) {
-           console.error(`Error processing payroll row ${index + 1}:`, mapError, row);
-           toast.error(`Error processing payroll data for row ${index + 1}. Check console.`);
-           return null; // Return null for rows that cause errors
-        }
-      }).filter(payroll => payroll !== null) as PayrollSummaryModel[]; // Filter out nulls
+        })
+        .filter((payroll) => payroll !== null) as PayrollSummaryModel[]; // Filter out nulls
 
       return payrolls;
     } catch (error) {
       console.error("Error loading payroll summaries:", error);
-      toast.error("An unexpected error occurred while loading payroll summaries.");
+      toast.error(
+        "An unexpected error occurred while loading payroll summaries."
+      );
       // Re-throw or handle as appropriate for your application
       throw error;
     }

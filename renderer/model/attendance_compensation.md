@@ -17,6 +17,8 @@ Attendance and compensation data are stored in separate files organized by emplo
 
 This model handles reading and writing daily attendance records (time in/out) and shared alternative time options.
 
+**Important Note on Payroll Import:** As implemented in `renderer/model/payroll.ts`, when processing attendance data derived from imported payroll files (like Excel), the system first checks if an attendance record already exists for a given day. If a record exists, the data from the payroll import for that day is **skipped**, and the existing record is **not updated**. New attendance records are only created for days that had no previous entry during this specific import process. Manual edits or other processes using `saveOrUpdateAttendances` directly may still update existing records as described below.
+
 ### Loading Data
 
 1.  **`loadAttendancesById(month, year, employeeId)`**:

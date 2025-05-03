@@ -194,6 +194,20 @@ const TimesheetPage: React.FC = () => {
     onDataUpdate: onDataUpdateHandler, // Use the shared handler
   });
 
+  // Instantiate the checkbox hook
+  const { handleCheckboxChange } = useTimesheetCheckbox({
+    attendanceModel,
+    compensationModel,
+    attendanceSettingsModel,
+    employee,
+    selectedEmployeeId: selectedEmployeeId!,
+    compensationEntries,
+    month: storedMonthInt,
+    year,
+    dbPath,
+    onDataUpdate: onDataUpdateHandler,
+  });
+
   // Use the renamed hook and pass additional props
   const {
     handleSwapTimes,
