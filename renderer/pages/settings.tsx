@@ -33,6 +33,7 @@ import { MagicCard } from "../components/magicui/magic-card";
 import ScheduleSettings from "../components/ScheduleSettings";
 import RoleManagement from "../components/RoleManagement";
 import DataMigrationSettings from "../components/DataMigrationSettings";
+import DatabaseManagementSettings from "../components/DatabaseManagementSettings"; // Import the new component
 import { RoleModelImpl } from "../model/role";
 import { Switch } from "@headlessui/react";
 
@@ -135,7 +136,7 @@ export default function SettingsPage() {
   const [isCheckingLogo, setIsCheckingLogo] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [selected, setSelected] = React.useState<string>("attendance");
-  const [currentPath, setCurrentPath] = useState(dbPath);
+  const [currentPath, setCurrentPath] = useState<string | null>(dbPath); // Explicitly type useState
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
   const [activeEmployees, setActiveEmployees] = useState<Employee[]>([]);
   const [inactiveEmployees, setInactiveEmployees] = useState<Employee[]>([]);
@@ -2664,108 +2665,14 @@ export default function SettingsPage() {
       icon: <MdOutlineDataset className="h-5 w-5" />,
       requiredAccess: "MANAGE_SETTINGS",
       content: (
-        <div className="">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-2">Database Location</h2>
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-blue-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
-                    <span className="font-medium">Important Note:</span> Select
-                    the directory where your database (CSV) files will be
-                    stored.
-                    <br />
-                    <span className="text-xs italic">
-                      A folder named 'SweldoDB' will be created here if it
-                      doesn't already exist and will contain CSV files and
-                      folders with employee and payroll data.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <input
-                type="text"
-                value={currentPath}
-                readOnly
-                className="flex-1 p-2 border rounded-md bg-gray-50"
-                placeholder="Select database directory..."
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                {...({ webkitdirectory: "true" } as any)}
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const files = e.target.files;
-                  if (files && files.length > 0) {
-                    const file = files[0];
-                    const relativePath = file.webkitRelativePath;
-                    if (relativePath) {
-                      setDbPath(relativePath);
-                      setCurrentPath(relativePath);
-                    }
-                  }
-                }}
-              />
-              <button
-                onClick={async () => {
-                  const folderPath = await window.electron.openFolderDialog();
-                  if (folderPath) {
-                    try {
-                      await setDbPath(folderPath);
-                      setCurrentPath(folderPath);
-                      // Ensure the path is properly persisted in localStorage
-                      const persistedState =
-                        localStorage.getItem("settings-storage");
-                      if (persistedState) {
-                        const parsed = JSON.parse(persistedState);
-                        parsed.state.dbPath = folderPath;
-                        localStorage.setItem(
-                          "settings-storage",
-                          JSON.stringify(parsed)
-                        );
-                      } else {
-                        // Initialize storage if it doesn't exist
-                        localStorage.setItem(
-                          "settings-storage",
-                          JSON.stringify({
-                            state: { dbPath: folderPath, logoPath: "" },
-                            version: 0,
-                          })
-                        );
-                      }
-                      // Reload only after ensuring persistence
-                      window.location.reload();
-                    } catch (error) {
-                      console.error("Error setting database path:", error);
-                      toast.error(
-                        "Failed to set database path. Please try again."
-                      );
-                    }
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Browse
-              </button>
-            </div>
-          </div>
-        </div>
+        // Replace the inline content with the new component
+        <DatabaseManagementSettings
+          dbPath={dbPath}
+          setDbPath={setDbPath}
+          currentPath={currentPath}
+          setCurrentPath={setCurrentPath}
+          companyName={companyName} // Pass companyName
+        />
       ),
     },
     {
@@ -3118,44 +3025,14 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h2 className="text-lg font-semibold mb-2">
-                    Initial Database Setup
-                  </h2>
-                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 flex items-center gap-2 border border-yellow-300">
-                    <IoInformationCircleOutline className="w-6 h-6 text-yellow-900" />
-                    <p className="text-sm text-gray-800 font-light">
-                      Welcome to Sweldo! Before you can start using the
-                      application, please select a directory where your database
-                      files will be stored. A folder named 'SweldoDB' will be
-                      created in this location.
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <input
-                      type="text"
-                      value={currentPath}
-                      readOnly
-                      className="flex-1 p-2 border rounded-md bg-gray-50"
-                      placeholder="Select database directory..."
-                    />
-                    <button
-                      onClick={async () => {
-                        const folderPath =
-                          await window.electron.openFolderDialog();
-                        if (folderPath) {
-                          setDbPath(folderPath);
-                          setCurrentPath(folderPath);
-                          // Reload the page after setting the path
-                          window.location.reload();
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      Browse
-                    </button>
-                  </div>
-                </div>
+                {/* Use the new component for the initial setup */}
+                <DatabaseManagementSettings
+                  dbPath={dbPath}
+                  setDbPath={setDbPath}
+                  currentPath={currentPath}
+                  setCurrentPath={setCurrentPath}
+                  companyName={companyName} // Pass companyName
+                />
               </div>
             </div>
           </div>
