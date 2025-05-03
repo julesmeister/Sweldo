@@ -998,33 +998,121 @@ async function migrateBackupFile(
   month: number,
   onProgress?: (message: string) => void
 ): Promise<void> {
+  // Force direct console output regardless of progress callback
+  const logMsg = (msg: string) => {
+    console.log(`[MIGRATION DEBUG] ${msg}`);
+    onProgress?.(msg);
+  };
+
   try {
+    console.log(
+      `[MIGRATION DEBUG] Starting migration for backup file: ${backupCsvPath}`
+    );
     // Read the backup CSV file
     const backupContent = await window.electron.readFile(backupCsvPath);
     if (!backupContent || backupContent.trim().length === 0) {
-      onProgress?.(`    - Skipping backup migration: Backup file is empty`);
+      logMsg(`    - Skipping backup migration: Backup file is empty`);
       return;
     }
 
-    // Parse CSV backup data
-    const backupResults = Papa.parse(backupContent, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim(),
-    });
+    logMsg(
+      `    - [DEBUG] Raw backup file content length: ${backupContent.length} characters`
+    );
 
-    // Create a map to organize backups by timestamp
+    // Process the file directly line by line
+    const lines = backupContent
+      .split("\n")
+      .filter((line) => line.trim() !== "");
+    logMsg(`    - [DEBUG] Found ${lines.length} non-empty lines in file`);
+
+    // Group lines by timestamp - find all lines that start with a timestamp
     const backupsByTimestamp = new Map<string, any[]>();
+    let currentTimestamp: string | null = null;
 
-    backupResults.data.forEach((row: any) => {
-      const timestamp = row.timestamp;
-      if (!timestamp) return;
+    lines.forEach((line, index) => {
+      // Try to extract a timestamp from the beginning of the line
+      const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}T[^,]+)/);
 
-      if (!backupsByTimestamp.has(timestamp)) {
-        backupsByTimestamp.set(timestamp, []);
+      if (timestampMatch) {
+        // This line starts with a timestamp, set it as the current one
+        currentTimestamp = timestampMatch[1];
+        logMsg(
+          `    - [DEBUG] Found timestamp in line ${
+            index + 1
+          }: ${currentTimestamp}`
+        );
+
+        if (!backupsByTimestamp.has(currentTimestamp)) {
+          backupsByTimestamp.set(currentTimestamp, []);
+        }
       }
-      backupsByTimestamp.get(timestamp)?.push(row);
+
+      if (currentTimestamp) {
+        // Try to extract a record from this line
+        // Format should be: timestamp,employeeId,day,month,year,timeIn,timeOut
+        const parts = line.split(",");
+
+        // We need at least 6 parts to have a valid record (last field might be empty)
+        if (parts.length >= 6) {
+          // Extract day, month, year, timeIn, timeOut from the line
+          // The timestamp is already known (currentTimestamp)
+
+          // Find employeeId, day, month, year indices
+          let dataStartIndex = 0;
+          if (timestampMatch) {
+            // If this line starts with a timestamp, data starts after it
+            dataStartIndex = 1; // Skip the timestamp part
+          }
+
+          // Extract the fields we need
+          const extractedEmployeeId = parts[dataStartIndex] || employeeId;
+          const day = parts[dataStartIndex + 1] || "";
+          const extractedMonth = parts[dataStartIndex + 2] || month.toString();
+          const extractedYear = parts[dataStartIndex + 3] || year.toString();
+          const timeIn = parts[dataStartIndex + 4] || "";
+          const timeOut = parts[dataStartIndex + 5] || "";
+
+          // Check if this looks like valid data
+          if (
+            day &&
+            !isNaN(parseInt(day)) &&
+            parseInt(day) > 0 &&
+            parseInt(day) <= 31
+          ) {
+            const record = {
+              timestamp: currentTimestamp,
+              employeeId: extractedEmployeeId,
+              day,
+              month: extractedMonth,
+              year: extractedYear,
+              timeIn,
+              timeOut,
+            };
+
+            backupsByTimestamp.get(currentTimestamp)?.push(record);
+            logMsg(
+              `    - [DEBUG] Added record for day ${day} with timeIn=${timeIn}, timeOut=${timeOut}`
+            );
+          }
+        }
+      }
     });
+
+    // Display what we found
+    const timestamps = Array.from(backupsByTimestamp.keys());
+    logMsg(`    - [DEBUG] Found ${timestamps.length} unique timestamps`);
+
+    if (timestamps.length > 0) {
+      logMsg(
+        `    - [DEBUG] First 5 timestamps: ${timestamps.slice(0, 5).join(", ")}`
+      );
+
+      for (const [timestamp, records] of backupsByTimestamp.entries()) {
+        logMsg(
+          `    - [DEBUG] Timestamp ${timestamp} has ${records.length} records`
+        );
+      }
+    }
 
     // Create the JSON backup structure
     const backupJsonData: BackupJsonMonth = {
@@ -1034,22 +1122,123 @@ async function migrateBackupFile(
       backups: [],
     };
 
-    // Convert each timestamp group to a backup entry
-    backupsByTimestamp.forEach((rows, timestamp) => {
-      const changes = rows.map((row) => {
-        return {
-          day: parseInt(row.day),
-          field: row.timeIn !== undefined ? "timeIn" : "timeOut",
-          oldValue: null, // We don't have the old value in the current backup format
-          newValue: row.timeIn !== undefined ? row.timeIn : row.timeOut,
+    logMsg(`    - Processing ${timestamps.length} unique timestamps`);
+
+    // Process each timestamp separately
+    timestamps.forEach((timestamp, index) => {
+      const records = backupsByTimestamp.get(timestamp) || [];
+      logMsg(
+        `    - [DEBUG] Processing timestamp ${timestamp} with ${records.length} records`
+      );
+
+      if (records.length === 0) {
+        logMsg(
+          `    - [DEBUG] No records found for timestamp ${timestamp}, skipping`
+        );
+        return;
+      }
+
+      const changes: {
+        day: number;
+        field: string;
+        oldValue: string | null;
+        newValue: string | null;
+      }[] = [];
+
+      // Process each record in this timestamp group
+      records.forEach((record) => {
+        const day = parseInt(record.day);
+        if (isNaN(day)) {
+          logMsg(
+            `    - [DEBUG] Skipping record with invalid day: ${record.day}`
+          );
+          return;
+        }
+
+        // Helper function to clean time values
+        const cleanTimeValue = (
+          value: string | null | undefined
+        ): string | null => {
+          if (!value) return null;
+
+          // Extract just the HH:MM part, assuming time is in the format HH:MM
+          const timePattern = /(\d{1,2}:\d{2})/;
+          const match = value.match(timePattern);
+          if (match) {
+            return match[1];
+          }
+
+          return value.trim() || null;
         };
+
+        // Add timeIn change if it exists
+        if (record.timeIn !== undefined) {
+          const cleanedTimeIn = cleanTimeValue(record.timeIn);
+          changes.push({
+            day: day,
+            field: "timeIn",
+            oldValue: null, // The old CSV format doesn't track old values
+            newValue: cleanedTimeIn,
+          });
+          logMsg(
+            `    - [DEBUG] Added timeIn change for day ${day}: ${record.timeIn} → ${cleanedTimeIn}`
+          );
+        }
+
+        // Add timeOut change if it exists
+        if (record.timeOut !== undefined) {
+          const cleanedTimeOut = cleanTimeValue(record.timeOut);
+          changes.push({
+            day: day,
+            field: "timeOut",
+            oldValue: null, // The old CSV format doesn't track old values
+            newValue: cleanedTimeOut,
+          });
+          logMsg(
+            `    - [DEBUG] Added timeOut change for day ${day}: ${record.timeOut} → ${cleanedTimeOut}`
+          );
+        }
       });
 
-      backupJsonData.backups.push({
-        timestamp,
-        changes,
-      });
+      // Only add backup entry if there are changes
+      if (changes.length > 0) {
+        backupJsonData.backups.push({
+          timestamp,
+          changes,
+        });
+        logMsg(
+          `    - [DEBUG] Added backup entry for timestamp ${timestamp} with ${changes.length} changes`
+        );
+      } else {
+        logMsg(
+          `    - [DEBUG] No changes found for timestamp ${timestamp}, skipping`
+        );
+      }
+
+      if (index % 10 === 0 || index === timestamps.length - 1) {
+        logMsg(
+          `    - Processed ${index + 1}/${timestamps.length} backup entries`
+        );
+      }
     });
+
+    logMsg(
+      `    - Total backup entries processed: ${backupJsonData.backups.length}`
+    );
+
+    // Debug: Show first few entries in final JSON
+    if (backupJsonData.backups.length > 0) {
+      const firstEntry = backupJsonData.backups[0];
+      logMsg(
+        `    - [DEBUG] First backup entry: timestamp=${firstEntry.timestamp}, changes=${firstEntry.changes.length}`
+      );
+      if (backupJsonData.backups.length > 1) {
+        const secondEntry = backupJsonData.backups[1];
+        logMsg(
+          `    - [DEBUG] Second backup entry: timestamp=${secondEntry.timestamp}, changes=${secondEntry.changes.length}`
+        );
+      }
+    }
 
     // Create JSON backup file path
     const backupJsonPath = `${employeePath}/${year}_${month}_attendance_backup.json`;
@@ -1060,10 +1249,12 @@ async function migrateBackupFile(
       JSON.stringify(backupJsonData, null, 2)
     );
 
-    onProgress?.(`    - Created backup JSON file: ${backupJsonPath}`);
+    logMsg(
+      `    - Created backup JSON file: ${backupJsonPath} with ${backupJsonData.backups.length} entries`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    onProgress?.(`    - Error migrating backup file: ${message}`);
+    logMsg(`    - Error migrating backup file: ${message}`);
   }
 }
 
@@ -1300,4 +1491,186 @@ export function calculateTotalPay(
   const regularPay = calculateRegularPay(hoursWorked, hourlyRate, settings);
   const overtimePay = calculateOvertimePay(hoursWorked, hourlyRate, settings);
   return regularPay + overtimePay;
+}
+
+/**
+ * Specifically migrates attendance backup files from CSV to JSON format
+ * @param dbPath The base path to the SweldoDB directory
+ * @param onProgress Optional callback to report progress
+ */
+export async function migrateBackupCsvToJson(
+  dbPath: string,
+  onProgress?: (message: string) => void
+): Promise<void> {
+  const attendancesBasePath = `${dbPath}/SweldoDB/attendances`;
+  let totalFilesProcessed = 0;
+
+  try {
+    console.log(
+      `[MIGRATION] Starting backup CSV to JSON migration in: ${attendancesBasePath}`
+    );
+    onProgress?.(
+      `Starting backup CSV to JSON migration in: ${attendancesBasePath}`
+    );
+
+    // First, try to process specific test file in backups directory
+    try {
+      const testBackupPath = `${dbPath}/backups/2025_4_attendance_backup.csv`;
+    
+      const testBackupExists = await window.electron.fileExists(testBackupPath);
+
+      if (testBackupExists) {
+      
+        onProgress?.(`Found test backup file: ${testBackupPath}`);
+
+        const testEmployeePath = `${dbPath}/backups`;
+        await migrateBackupFile(
+          testBackupPath,
+          testEmployeePath,
+          "2", // Assuming employeeId 2 based on your CSV sample
+          2025, // Year from filename
+          4, // Month from filename
+          onProgress
+        );
+
+        totalFilesProcessed++;
+        onProgress?.(`Test backup file processed successfully`);
+      } else {
+        console.log(
+          `[MIGRATION] Test backup file not found at ${testBackupPath}`
+        );
+      }
+    } catch (testError) {
+      console.error(
+        `[MIGRATION] Error processing test backup file:`,
+        testError
+      );
+      onProgress?.(`Error processing test backup file: ${String(testError)}`);
+    }
+
+    // Now proceed with normal processing
+    const employeeDirs = await window.electron.readDir(attendancesBasePath);
+   
+
+    for (const dirEntry of employeeDirs) {
+      if (dirEntry.isDirectory) {
+        const employeeId = dirEntry.name;
+        const employeePath = `${attendancesBasePath}/${employeeId}`;
+        onProgress?.(`Processing employee: ${employeeId}`);
+
+        try {
+          const filesInEmployeeDir = await window.electron.readDir(
+            employeePath
+          );
+          const backupCsvFilesToMigrate: string[] = [];
+
+          // Find all attendance backup CSV files for this employee
+          for (const fileEntry of filesInEmployeeDir) {
+            if (
+              fileEntry.isFile &&
+              fileEntry.name.endsWith("_attendance_backup.csv")
+            ) {
+              backupCsvFilesToMigrate.push(fileEntry.name);
+            }
+          }
+
+          onProgress?.(
+            `Found ${backupCsvFilesToMigrate.length} backup CSV files to migrate for employee ${employeeId}`
+          );
+
+          for (const backupCsvFileName of backupCsvFilesToMigrate) {
+            try {
+              // Parse year and month from filename
+              const fileNameMatch = backupCsvFileName.match(
+                /(\d+)_(\d+)_attendance_backup\.csv/
+              );
+              if (!fileNameMatch) {
+                
+                onProgress?.(
+                  `  - Skipping ${backupCsvFileName}: Invalid filename format`
+                );
+                continue;
+              }
+
+              const year = parseInt(fileNameMatch[1]);
+              const month = parseInt(fileNameMatch[2]);
+              const backupCsvFilePath = `${employeePath}/${backupCsvFileName}`;
+
+              onProgress?.(
+                `  - Processing ${backupCsvFileName} for ${year}-${month}`
+              );
+
+              // Process backup file
+              const backupExists = await window.electron.fileExists(
+                backupCsvFilePath
+              );
+
+              if (backupExists) {
+               
+                onProgress?.(
+                  `  - Processing backup file: ${backupCsvFileName}`
+                );
+                await migrateBackupFile(
+                  backupCsvFilePath,
+                  employeePath,
+                  employeeId,
+                  year,
+                  month,
+                  onProgress
+                );
+                totalFilesProcessed++;
+              } else {
+                console.log(
+                  `[MIGRATION] Backup file doesn't exist: ${backupCsvFilePath}`
+                );
+                onProgress?.(
+                  `  - Backup file doesn't exist: ${backupCsvFilePath}`
+                );
+              }
+            } catch (fileError) {
+              const message =
+                fileError instanceof Error
+                  ? fileError.message
+                  : String(fileError);
+              console.error(`[MIGRATION] Error processing file: ${message}`);
+              onProgress?.(
+                `  - Error processing backup file ${backupCsvFileName}: ${message}`
+              );
+            }
+          }
+        } catch (employeeError) {
+          const message =
+            employeeError instanceof Error
+              ? employeeError.message
+              : String(employeeError);
+          console.error(
+            `[MIGRATION] Error reading employee directory: ${message}`
+          );
+          onProgress?.(
+            `  - Error reading employee directory ${employeePath}: ${message}`
+          );
+        }
+      }
+    }
+
+    if (totalFilesProcessed === 0) {
+
+      onProgress?.(
+        `WARNING: No backup files were processed. Please check file paths and permissions.`
+      );
+    } else {
+      console.log(
+        `[MIGRATION] Successfully processed ${totalFilesProcessed} backup files.`
+      );
+    }
+
+    onProgress?.(
+      `Backup CSV to JSON migration process completed successfully. Files processed: ${totalFilesProcessed}`
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[MIGRATION] Backup migration failed: ${message}`);
+    onProgress?.(`Backup migration failed: ${message}`);
+    throw error;
+  }
 }

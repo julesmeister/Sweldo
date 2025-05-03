@@ -31,6 +31,28 @@ This document outlines our general approach for migrating data storage from CSV 
    - Provide clear feedback during migration process
    - Handle errors gracefully
 
+## Migration UI Layout
+
+The Data Migration Settings UI is organized in a two-column layout:
+
+1. **Left Column: Data Structure Migrations**
+   - Contains migrations that change data structure organization
+   - Currently includes the Attendance Alternatives migration
+
+2. **Right Column: CSV to JSON Format Migrations**
+   - Contains all CSV to JSON migration buttons for various data models
+   - Each model gets its own migration button
+   - Progress feedback displayed beneath the buttons
+   - Current migrations:
+     - Attendance CSV to JSON
+     - Compensation CSV to JSON
+
+When adding new model migrations, follow this pattern:
+- Add the migration button in the right column
+- Use a unique color for each model's button
+- Provide clear status indicators and logs 
+- Include appropriate error handling
+
 ## Completed Migrations
 
 ### Attendance Model
@@ -65,6 +87,51 @@ The Attendance model was migrated from CSV to JSON with the following changes:
        "2": {
          "timeIn": "08:15",
          "timeOut": "17:45"
+       }
+     }
+   }
+   ```
+
+4. **Migration Function**
+   - Added `migrateCsvToJson` function
+   - Added UI button in `DataMigrationSettings.tsx`
+   - Progress reporting via callback
+
+### Compensation Model
+
+The Compensation model was migrated from CSV to JSON with the following changes:
+
+1. **File Renaming**
+   - Original `compensation.ts` → `compensation_old.ts`
+   - New JSON implementation created as `compensation.ts`
+
+2. **Interface Maintenance**
+   - All public interfaces (`Compensation`, etc.) preserved
+   - Factory function (`createCompensationModel`) maintained
+
+3. **Storage Format**
+   - CSV: One row per day with columns for properties
+   - JSON: Object with metadata and days as key-value pairs
+   ```json
+   {
+     "meta": {
+       "employeeId": "123456",
+       "year": 2023,
+       "month": 5,
+       "lastModified": "2023-05-31T12:00:00Z"
+     },
+     "days": {
+       "1": {
+         "dayType": "Regular",
+         "dailyRate": 500,
+         "hoursWorked": 8,
+         "overtimeMinutes": 30,
+         // other compensation fields...
+       },
+       "2": {
+         "dayType": "Regular",
+         "dailyRate": 500,
+         // other compensation fields...
        }
      }
    }

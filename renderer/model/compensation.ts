@@ -960,7 +960,7 @@ export async function migrateCsvToJson(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     onProgress?.(`Migration failed: ${message}`);
-    console.error("Migration Error:", error);
+    onProgress?.(`Error details: ${error}`);
     throw error;
   }
 }
@@ -984,26 +984,6 @@ async function migrateBackupFile(
       return;
     }
 
-    // Parse CSV backup data
-    const backupResults = Papa.parse(backupContent, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim(),
-    });
-
-    // Create a map to organize backups by timestamp
-    const backupsByTimestamp = new Map<string, any[]>();
-
-    backupResults.data.forEach((row: any) => {
-      const timestamp = row.timestamp;
-      if (!timestamp) return;
-
-      if (!backupsByTimestamp.has(timestamp)) {
-        backupsByTimestamp.set(timestamp, []);
-      }
-      backupsByTimestamp.get(timestamp)?.push(row);
-    });
-
     // Create the JSON backup structure
     const backupJsonData: BackupJsonMonth = {
       employeeId,
@@ -1012,51 +992,83 @@ async function migrateBackupFile(
       backups: [],
     };
 
-    // Convert each timestamp group to a backup entry
-    backupsByTimestamp.forEach((rows, timestamp) => {
-      const changes: {
-        day: number;
-        field: string;
-        oldValue: any;
-        newValue: any;
-      }[] = [];
+    // Process the file line by line instead of using Papa.parse on the entire file
+    const lines = backupContent.split("\n");
 
-      // Group changes by day
-      const rowsByDay = new Map<number, any[]>();
+    // Get headers from the first line
+    const headers = lines[0].split(",");
 
-      rows.forEach((row: any) => {
-        const day = parseInt(row.day);
-        if (!rowsByDay.has(day)) {
-          rowsByDay.set(day, []);
-        }
-        rowsByDay.get(day)?.push(row);
-      });
+    // Keep track of processed timestamps to group records by timestamp
+    const processedTimestamps = new Map<
+      string,
+      {
+        timestamp: string;
+        changes: { day: number; field: string; oldValue: any; newValue: any }[];
+      }
+    >();
 
-      // For each day, create separate change entries for each field
-      rowsByDay.forEach((dayRows, day) => {
-        // Extract every field except timestamp, day, month, year, employeeId
-        const fieldNames = Object.keys(dayRows[0]).filter(
-          (key) =>
-            !["timestamp", "day", "month", "year", "employeeId"].includes(key)
-        );
+    // Process each line after the header
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue; // Skip empty lines
 
-        fieldNames.forEach((field) => {
-          const value = dayRows[0][field];
-          if (value !== undefined && value !== null && value !== "") {
-            changes.push({
-              day,
-              field,
-              oldValue: null, // We don't have the old value in the current backup format
-              newValue: value,
-            });
-          }
+      // Parse this line manually
+      const values = Papa.parse(line, { delimiter: ",", header: false })
+        .data[0] as string[];
+
+      // Skip if we don't have enough values
+      if (!values || values.length < 4) continue;
+
+      // Create a record object from the values
+      const record: any = {};
+      for (let j = 0; j < headers.length && j < values.length; j++) {
+        record[headers[j]] = values[j];
+      }
+
+      // Skip records without timestamp or day
+      const timestamp = record.timestamp;
+      const day = parseInt(record.day);
+      if (!timestamp || isNaN(day)) continue;
+
+      // Get or create entry for this timestamp
+      if (!processedTimestamps.has(timestamp)) {
+        processedTimestamps.set(timestamp, {
+          timestamp,
+          changes: [],
         });
-      });
+      }
 
-      backupJsonData.backups.push({
-        timestamp,
-        changes,
+      // Get the current entry
+      const entry = processedTimestamps.get(timestamp)!;
+
+      // Extract every field except timestamp, day, month, year, employeeId
+      const fieldNames = Object.keys(record).filter(
+        (key) =>
+          !["timestamp", "day", "month", "year", "employeeId"].includes(key)
+      );
+
+      // Add each field as a change
+      fieldNames.forEach((field) => {
+        const value = record[field];
+        if (value !== undefined && value !== null && value !== "") {
+          entry.changes.push({
+            day,
+            field,
+            oldValue: null, // We don't have the old value in the backup format
+            newValue: value,
+          });
+        }
       });
+    }
+
+    // Add all processed entries to the backup data
+    processedTimestamps.forEach((entry) => {
+      if (entry.changes.length > 0) {
+        backupJsonData.backups.push({
+          timestamp: entry.timestamp,
+          changes: entry.changes,
+        });
+      }
     });
 
     // Create JSON backup file path
@@ -1068,9 +1080,165 @@ async function migrateBackupFile(
       JSON.stringify(backupJsonData, null, 2)
     );
 
-    onProgress?.(`    - Created backup JSON file: ${backupJsonPath}`);
+    onProgress?.(
+      `    - Created backup JSON file: ${backupJsonPath} with ${backupJsonData.backups.length} entries`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     onProgress?.(`    - Error migrating backup file: ${message}`);
+  }
+}
+
+/**
+ * Specifically migrates compensation backup files from CSV to JSON format
+ * This is a dedicated function similar to the one in attendance.ts
+ * @param dbPath The base path to the SweldoDB directory
+ * @param onProgress Optional callback to report progress
+ */
+export async function migrateBackupCsvToJson(
+  dbPath: string,
+  onProgress?: (message: string) => void
+): Promise<void> {
+  const compensationsBasePath = `${dbPath}/SweldoDB/attendances`;
+  let totalFilesProcessed = 0;
+
+  try {
+    onProgress?.(
+      `Starting compensation backup CSV to JSON migration in: ${compensationsBasePath}`
+    );
+
+    // First, try to process specific test file in backups directory if it exists
+    try {
+      const testBackupPath = `${dbPath}/backups/2025_4_compensation_backup.csv`;
+      const testBackupExists = await window.electron.fileExists(testBackupPath);
+
+      if (testBackupExists) {
+        onProgress?.(`Found test backup file: ${testBackupPath}`);
+
+        const testEmployeePath = `${dbPath}/backups`;
+        await migrateBackupFile(
+          testBackupPath,
+          testEmployeePath,
+          "2", // Assuming employeeId 2 based on your CSV sample
+          2025, // Year from filename
+          4, // Month from filename
+          onProgress
+        );
+
+        totalFilesProcessed++;
+        onProgress?.(`Test backup file processed successfully`);
+      }
+    } catch (testError) {
+      onProgress?.(`Error processing test backup file: ${String(testError)}`);
+    }
+
+    // Now proceed with normal processing
+    const employeeDirs = await window.electron.readDir(compensationsBasePath);
+
+    for (const dirEntry of employeeDirs) {
+      if (dirEntry.isDirectory) {
+        const employeeId = dirEntry.name;
+        const employeePath = `${compensationsBasePath}/${employeeId}`;
+        onProgress?.(`Processing employee: ${employeeId}`);
+
+        try {
+          const filesInEmployeeDir = await window.electron.readDir(
+            employeePath
+          );
+          const backupCsvFilesToMigrate: string[] = [];
+
+          // Find all compensation backup CSV files for this employee
+          for (const fileEntry of filesInEmployeeDir) {
+            if (
+              fileEntry.isFile &&
+              fileEntry.name.endsWith("_compensation_backup.csv")
+            ) {
+              backupCsvFilesToMigrate.push(fileEntry.name);
+            }
+          }
+
+          onProgress?.(
+            `Found ${backupCsvFilesToMigrate.length} backup CSV files to migrate for employee ${employeeId}`
+          );
+
+          for (const backupCsvFileName of backupCsvFilesToMigrate) {
+            try {
+              // Parse year and month from filename
+              const fileNameMatch = backupCsvFileName.match(
+                /(\d+)_(\d+)_compensation_backup\.csv/
+              );
+              if (!fileNameMatch) {
+                onProgress?.(
+                  `  - Skipping ${backupCsvFileName}: Invalid filename format`
+                );
+                continue;
+              }
+
+              const year = parseInt(fileNameMatch[1]);
+              const month = parseInt(fileNameMatch[2]);
+              const backupCsvFilePath = `${employeePath}/${backupCsvFileName}`;
+
+              onProgress?.(
+                `  - Processing ${backupCsvFileName} for ${year}-${month}`
+              );
+
+              // Process backup file
+              const backupExists = await window.electron.fileExists(
+                backupCsvFilePath
+              );
+
+              if (backupExists) {
+                onProgress?.(
+                  `  - Processing backup file: ${backupCsvFileName}`
+                );
+                await migrateBackupFile(
+                  backupCsvFilePath,
+                  employeePath,
+                  employeeId,
+                  year,
+                  month,
+                  onProgress
+                );
+                totalFilesProcessed++;
+              } else {
+                onProgress?.(
+                  `  - Backup file doesn't exist: ${backupCsvFilePath}`
+                );
+              }
+            } catch (fileError) {
+              const message =
+                fileError instanceof Error
+                  ? fileError.message
+                  : String(fileError);
+              onProgress?.(
+                `  - Error processing backup file ${backupCsvFileName}: ${message}`
+              );
+            }
+          }
+        } catch (employeeError) {
+          const message =
+            employeeError instanceof Error
+              ? employeeError.message
+              : String(employeeError);
+          onProgress?.(
+            `  - Error reading employee directory ${employeePath}: ${message}`
+          );
+        }
+      }
+    }
+
+    if (totalFilesProcessed === 0) {
+      onProgress?.(
+        `WARNING: No compensation backup files were processed. Please check file paths and permissions.`
+      );
+    }
+
+    onProgress?.(
+      `Compensation backup CSV to JSON migration process completed successfully. Files processed: ${totalFilesProcessed}`
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    onProgress?.(`Compensation backup migration failed: ${message}`);
+    throw error;
   }
 }

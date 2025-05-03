@@ -36,11 +36,14 @@ const authStateFilePath = (dbPath: string): string =>
   `${dbPath}/SweldoDB/settings/auth_state.json`;
 
 export const useAuthStore = create<AuthState>()((set, get) => {
+  // Track last saved state to avoid unnecessary writes
+  let lastSavedState: string = "";
+
   // Internal helper to save auth state to file
   const _saveAuthState = async () => {
     const dbPath = useSettingsStore.getState().dbPath;
     if (!dbPath) {
-      console.warn("Cannot save auth state: dbPath is not set.");
+      // Don't save without a valid dbPath
       return;
     }
 
@@ -52,6 +55,13 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       lastActivity: state.lastActivity,
     };
 
+    // Only save if state has actually changed
+    const stateJson = JSON.stringify(stateToSave);
+    if (stateJson === lastSavedState) {
+      return;
+    }
+
+    lastSavedState = stateJson;
     const filePath = authStateFilePath(dbPath);
     const dirPath = `${dbPath}/SweldoDB/settings`;
 
@@ -61,10 +71,8 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         filePath,
         JSON.stringify(stateToSave, null, 2)
       );
-      console.log("Auth state saved to:", filePath);
     } catch (error) {
-      console.error("Failed to save auth state to file:", filePath, error);
-      // toast.error("Failed to save session state.");
+      console.error("Failed to save auth state to file:", error);
     }
   };
 
@@ -73,9 +81,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     isAuthInitialized: false,
 
     initializeAuth: async () => {
-      // console.log(`[AuthStore Init] Attempting initialization. Already initialized: ${get().isAuthInitialized}`);
       if (get().isAuthInitialized) {
-        // console.log("[AuthStore Init] Skipping, already initialized.");
         return;
       }
 
@@ -111,6 +117,14 @@ export const useAuthStore = create<AuthState>()((set, get) => {
 
         set({ ...loadedState, isAuthInitialized: true });
 
+        // Set initial saved state to avoid unnecessary writes
+        lastSavedState = JSON.stringify({
+          currentRole: loadedState.currentRole,
+          isAuthenticated: loadedState.isAuthenticated,
+          accessCodes: loadedState.accessCodes,
+          lastActivity: loadedState.lastActivity,
+        });
+
         await _saveAuthState();
       } catch (initError) {
         console.error(
@@ -125,11 +139,8 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const { lastActivity, isAuthenticated, logout, isAuthInitialized } =
         get();
 
-      // console.log(`[checkSession] Running: isAuthInitialized=${isAuthInitialized}, isAuthenticated=${isAuthenticated}`);
-
       // Important: Don't check session if store hasn't been initialized from file yet
       if (!isAuthInitialized || !isAuthenticated) {
-        // console.log(`[checkSession] Returning false (init=${isAuthInitialized}, auth=${isAuthenticated})`);
         return false;
       }
 
@@ -137,22 +148,24 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const timeSinceLastActivity = now - lastActivity;
       const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
 
-      // console.log(`[checkSession] Time check: now=${now}, lastActivity=${lastActivity}, diff=${timeSinceLastActivity}, timeout=${SESSION_TIMEOUT}, valid=${isSessionValid}`);
-
       if (!isSessionValid) {
-        // console.log("[checkSession] Returning false (Session expired)");
         console.log("Session expired during checkSession, logging out.");
         setTimeout(logout, 0);
         return false;
       }
 
-      // console.log("[checkSession] Returning true (Session valid)");
       return true;
     },
 
     updateLastActivity: () => {
-      set({ lastActivity: Date.now() });
-      _saveAuthState();
+      const currentLastActivity = get().lastActivity;
+      const now = Date.now();
+
+      // Only update if time has changed significantly (more than 1 minute)
+      if (now - currentLastActivity > 60000) {
+        set({ lastActivity: now });
+        _saveAuthState();
+      }
     },
 
     login: async (pinToMatch: string) => {
@@ -224,8 +237,6 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         return false;
       }
 
-      // Directly use the accessCodes from the state (set during login)
-      // console.log(`Checking access for '${requiredCode}'. Current role: ${currentRole?.name}. Available codes:`, accessCodes);
       return accessCodes.includes(requiredCode);
     },
   };

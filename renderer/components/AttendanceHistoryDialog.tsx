@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useCallback } from "react";
-import Papa from "papaparse";
 import {
   IoClose,
   IoWarningOutline,
@@ -10,7 +9,7 @@ import { FaUndo } from "react-icons/fa";
 import { toast } from "sonner";
 import { Tooltip } from "@/renderer/components/Tooltip";
 
-// Interface for backup entries (matches CSV structure + timestamp)
+// Interface for backup entries (JSON structure)
 interface AttendanceBackupEntry {
   timestamp: string;
   employeeId: string;
@@ -62,6 +61,22 @@ interface DisplayEntry {
   compensationData?: CompensationBackupEntry;
 }
 
+// New interface for the backup file format
+interface BackupFile {
+  employeeId: string;
+  year: number;
+  month: number;
+  backups: {
+    timestamp: string;
+    changes: {
+      day: number;
+      field: string;
+      oldValue: any;
+      newValue: any;
+    }[];
+  }[];
+}
+
 interface AttendanceHistoryDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -105,7 +120,7 @@ export const AttendanceHistoryDialog: React.FC<
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper function to parse attendance CSV content
+  // Helper function to parse attendance backup JSON content
   const parseAttendanceBackup = (
     content: string,
     defaultEmployeeId: string,
@@ -114,40 +129,80 @@ export const AttendanceHistoryDialog: React.FC<
   ): AttendanceBackupEntry[] => {
     if (!content || content.trim().length === 0) return [];
 
-    const results = Papa.parse<any>(content, {
-      skipEmptyLines: true,
-      newline: "\n",
-    });
+    try {
+      // Try to parse as the new format first
+      const data = JSON.parse(content);
 
-    if (results.errors.length > 0) {
-      console.error("Parsing attendance errors:", results.errors);
-      // Decide if we should return empty or throw based on error severity?
-      // For now, log and continue, might return partial data.
+      // Check if it matches the new format with backups array
+      if (data.backups && Array.isArray(data.backups)) {
+        console.log("[AttendanceHistoryDialog] Detected new backup format");
+
+        // Process the backups array
+        const entries: AttendanceBackupEntry[] = [];
+
+        for (const backup of data.backups) {
+          // Create a map to collect changes by day
+          const dayChanges = new Map<number, Map<string, any>>();
+
+          // Process each change in this backup
+          for (const change of backup.changes) {
+            if (!dayChanges.has(change.day)) {
+              dayChanges.set(change.day, new Map<string, any>());
+            }
+
+            // Store the new value for this field
+            dayChanges.get(change.day)!.set(change.field, change.newValue);
+          }
+
+          // Create attendance entries for each day that has changes
+          for (const [dayNum, changes] of dayChanges) {
+            if (changes.has("timeIn") || changes.has("timeOut")) {
+              entries.push({
+                timestamp: backup.timestamp,
+                employeeId: data.employeeId || defaultEmployeeId,
+                day: dayNum,
+                month: data.month || defaultMonth,
+                year: data.year || defaultYear,
+                timeIn: changes.get("timeIn") || null,
+                timeOut: changes.get("timeOut") || null,
+              });
+            }
+          }
+        }
+
+        return entries;
+      }
+
+      // If not new format, try the previous format (array of entries)
+      if (Array.isArray(data)) {
+        console.log("[AttendanceHistoryDialog] Processing as array format");
+        return data
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            if (!entry.day || !entry.timestamp) return null;
+
+            return {
+              timestamp: entry.timestamp || "",
+              employeeId: entry.employeeId || defaultEmployeeId,
+              day: parseInt(entry.day, 10),
+              month: parseInt(entry.month, 10) || defaultMonth,
+              year: parseInt(entry.year, 10) || defaultYear,
+              timeIn: entry.timeIn || null,
+              timeOut: entry.timeOut || null,
+            } as AttendanceBackupEntry;
+          })
+          .filter((entry): entry is AttendanceBackupEntry => entry !== null);
+      }
+
+      console.warn("[AttendanceHistoryDialog] Unknown backup format", data);
+      return [];
+    } catch (e) {
+      console.error("Error parsing attendance backup JSON:", e);
+      return [];
     }
-
-    if (results.data.length < 2) return []; // No data rows
-
-    const dataRows = results.data.slice(1); // Skip header
-    return dataRows
-      .map((row) => {
-        // Basic validation for row structure could be added here
-        if (!Array.isArray(row) || row.length < 7) return null;
-        const day = parseInt(row[2], 10);
-        if (isNaN(day)) return null; // Skip rows with invalid day
-        return {
-          timestamp: row[0] || "",
-          employeeId: row[1] || defaultEmployeeId,
-          day,
-          month: parseInt(row[3], 10) || defaultMonth,
-          year: parseInt(row[4], 10) || defaultYear,
-          timeIn: row[5] || null,
-          timeOut: row[6] || null,
-        } as AttendanceBackupEntry;
-      })
-      .filter((entry): entry is AttendanceBackupEntry => entry !== null);
   };
 
-  // Helper function to parse compensation CSV content
+  // Helper function to parse compensation backup JSON content
   const parseCompensationBackup = (
     content: string,
     defaultEmployeeId: string,
@@ -156,62 +211,141 @@ export const AttendanceHistoryDialog: React.FC<
   ): CompensationBackupEntry[] => {
     if (!content || content.trim().length === 0) return [];
 
-    const results = Papa.parse<any>(content, {
-      skipEmptyLines: true,
-      newline: "\n",
-    });
+    try {
+      // Try to parse as the new format first
+      const data = JSON.parse(content);
 
-    if (results.errors.length > 0) {
-      console.error("Parsing compensation errors:", results.errors);
+      // Check if it matches the new format with backups array
+      if (data.backups && Array.isArray(data.backups)) {
+        console.log(
+          "[AttendanceHistoryDialog] Detected new compensation backup format"
+        );
+
+        // Process the backups array
+        const entries: CompensationBackupEntry[] = [];
+
+        for (const backup of data.backups) {
+          // Create a map to collect changes by day
+          const dayChanges = new Map<number, Map<string, any>>();
+
+          // Process each change in this backup
+          for (const change of backup.changes) {
+            if (!dayChanges.has(change.day)) {
+              dayChanges.set(change.day, new Map<string, any>());
+            }
+
+            // Store the new value for this field
+            const value = change.newValue;
+            // Try to parse numeric values
+            const parsedValue =
+              typeof value === "string" && !isNaN(Number(value))
+                ? Number(value)
+                : value;
+
+            dayChanges.get(change.day)!.set(change.field, parsedValue);
+          }
+
+          // Create compensation entries for each day that has changes
+          for (const [dayNum, changes] of dayChanges) {
+            // Check if this change includes compensation-related fields
+            // We consider it a compensation entry if at least one key compensation field exists
+            const hasCompensationFields =
+              changes.has("grossPay") ||
+              changes.has("netPay") ||
+              changes.has("dayType") ||
+              changes.has("dailyRate");
+
+            if (hasCompensationFields) {
+              entries.push({
+                timestamp: backup.timestamp,
+                employeeId: data.employeeId || defaultEmployeeId,
+                day: dayNum,
+                month: data.month || defaultMonth,
+                year: data.year || defaultYear,
+                grossPay: changes.get("grossPay") || null,
+                netPay: changes.get("netPay") || null,
+                hoursWorked: changes.get("hoursWorked") || null,
+                dayType: changes.get("dayType") || null,
+                absence:
+                  changes.get("absence") === "true" ||
+                  changes.get("absence") === true ||
+                  null,
+                deductions: changes.get("deductions") || null,
+                dailyRate: changes.get("dailyRate") || null,
+                overtimeMinutes: changes.get("overtimeMinutes") || null,
+                overtimePay: changes.get("overtimePay") || null,
+                undertimeMinutes: changes.get("undertimeMinutes") || null,
+                undertimeDeduction: changes.get("undertimeDeduction") || null,
+                lateMinutes: changes.get("lateMinutes") || null,
+                lateDeduction: changes.get("lateDeduction") || null,
+                holidayBonus: changes.get("holidayBonus") || null,
+                leaveType: changes.get("leaveType") || null,
+                leavePay: changes.get("leavePay") || null,
+                manualOverride:
+                  changes.get("manualOverride") === "true" ||
+                  changes.get("manualOverride") === true ||
+                  null,
+                notes: changes.get("notes") || null,
+                nightDifferentialHours:
+                  changes.get("nightDifferentialHours") || null,
+                nightDifferentialPay:
+                  changes.get("nightDifferentialPay") || null,
+              });
+            }
+          }
+        }
+
+        return entries;
+      }
+
+      // If not new format, try the previous format (array of entries)
+      if (Array.isArray(data)) {
+        console.log("[AttendanceHistoryDialog] Processing as array format");
+        return data
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            if (!entry.day) return null;
+
+            return {
+              timestamp: entry.timestamp || "",
+              employeeId: entry.employeeId || defaultEmployeeId,
+              day: parseInt(entry.day, 10),
+              month: parseInt(entry.month, 10) || defaultMonth,
+              year: parseInt(entry.year, 10) || defaultYear,
+              grossPay: entry.grossPay,
+              netPay: entry.netPay,
+              hoursWorked: entry.hoursWorked,
+              dayType: entry.dayType,
+              absence: entry.absence,
+              deductions: entry.deductions,
+              dailyRate: entry.dailyRate,
+              overtimeMinutes: entry.overtimeMinutes,
+              overtimePay: entry.overtimePay,
+              undertimeMinutes: entry.undertimeMinutes,
+              undertimeDeduction: entry.undertimeDeduction,
+              lateMinutes: entry.lateMinutes,
+              lateDeduction: entry.lateDeduction,
+              holidayBonus: entry.holidayBonus,
+              leaveType: entry.leaveType,
+              leavePay: entry.leavePay,
+              manualOverride: entry.manualOverride,
+              notes: entry.notes,
+              nightDifferentialHours: entry.nightDifferentialHours,
+              nightDifferentialPay: entry.nightDifferentialPay,
+            } as CompensationBackupEntry;
+          })
+          .filter((entry): entry is CompensationBackupEntry => entry !== null);
+      }
+
+      console.warn(
+        "[AttendanceHistoryDialog] Unknown compensation backup format",
+        data
+      );
+      return [];
+    } catch (e) {
+      console.error("Error parsing compensation backup JSON:", e);
+      return [];
     }
-
-    if (results.data.length < 2) return [];
-
-    const dataRows = results.data.slice(1);
-    return dataRows
-      .map((row) => {
-        // Basic validation
-        if (!Array.isArray(row) || row.length < 25) return null; // Check expected column count
-        const day = parseInt(row[4], 10);
-        if (isNaN(day)) return null;
-
-        const getFloatOrNull = (val: any) => (val ? parseFloat(val) : null);
-        const getBoolOrNull = (val: any) =>
-          val === "true" || val === "1"
-            ? true
-            : val === "false" || val === "0"
-            ? false
-            : null;
-
-        return {
-          timestamp: row[0] || "",
-          employeeId: row[1] || defaultEmployeeId,
-          day,
-          month: parseInt(row[2], 10) || defaultMonth,
-          year: parseInt(row[3], 10) || defaultYear,
-          grossPay: getFloatOrNull(row[17]),
-          netPay: getFloatOrNull(row[19]),
-          hoursWorked: getFloatOrNull(row[7]),
-          dayType: row[5] || null,
-          absence: getBoolOrNull(row[22]),
-          deductions: getFloatOrNull(row[18]),
-          dailyRate: getFloatOrNull(row[6]),
-          overtimeMinutes: getFloatOrNull(row[8]),
-          overtimePay: getFloatOrNull(row[9]),
-          undertimeMinutes: getFloatOrNull(row[10]),
-          undertimeDeduction: getFloatOrNull(row[11]),
-          lateMinutes: getFloatOrNull(row[12]),
-          lateDeduction: getFloatOrNull(row[13]),
-          holidayBonus: getFloatOrNull(row[14]),
-          leaveType: row[15] || null,
-          leavePay: getFloatOrNull(row[16]),
-          manualOverride: getBoolOrNull(row[20]),
-          notes: row[21] || null,
-          nightDifferentialHours: getFloatOrNull(row[23]),
-          nightDifferentialPay: getFloatOrNull(row[24]),
-        } as CompensationBackupEntry;
-      })
-      .filter((entry): entry is CompensationBackupEntry => entry !== null);
   };
 
   useEffect(() => {
@@ -226,19 +360,31 @@ export const AttendanceHistoryDialog: React.FC<
       setCombinedEntries([]);
 
       const baseBackupDir = `${dbPath}/SweldoDB/attendances/${employeeId}`;
-      const attendanceBackupFilePath = `${baseBackupDir}/${year}_${month}_attendance_backup.csv`;
-      const compensationBackupFilePath = `${baseBackupDir}/${year}_${month}_compensation_backup.csv`;
+      const attendanceBackupFilePath = `${baseBackupDir}/${year}_${month}_attendance_backup.json`;
+      const compensationBackupFilePath = `${baseBackupDir}/${year}_${month}_compensation_backup.json`;
 
       console.log(
         `[AttendanceHistoryDialog] Backup directory: ${baseBackupDir}`
       );
 
       try {
-        // Load attendance backup content
-        const attendanceContent = await window.electron
+        // First try to load JSON backup files
+        let attendanceContent = await window.electron
           .readFile(attendanceBackupFilePath)
           .catch(() => null);
-        // Parse using helper
+
+        // Fallback to CSV if JSON doesn't exist
+        if (!attendanceContent) {
+          const csvFilePath = `${baseBackupDir}/${year}_${month}_attendance_backup.csv`;
+          console.log(
+            `[AttendanceHistoryDialog] JSON not found, trying CSV: ${csvFilePath}`
+          );
+          attendanceContent = await window.electron
+            .readFile(csvFilePath)
+            .catch(() => null);
+        }
+
+        // Parse attendance data
         const attendanceData = parseAttendanceBackup(
           attendanceContent || "",
           employeeId,
@@ -246,17 +392,29 @@ export const AttendanceHistoryDialog: React.FC<
           year
         );
 
-        // Load compensation backup content
-        const compensationContent = await window.electron
+        // First try to load JSON backup files for compensation
+        let compensationContent = await window.electron
           .readFile(compensationBackupFilePath)
           .catch((err) => {
             console.error(
-              `[AttendanceHistoryDialog] Error reading compensation file:`,
+              `[AttendanceHistoryDialog] Error reading compensation JSON file:`,
               err
             );
             return null;
           });
-        // Parse using helper
+
+        // Fallback to CSV if JSON doesn't exist
+        if (!compensationContent) {
+          const csvFilePath = `${baseBackupDir}/${year}_${month}_compensation_backup.csv`;
+          console.log(
+            `[AttendanceHistoryDialog] JSON not found, trying CSV: ${csvFilePath}`
+          );
+          compensationContent = await window.electron
+            .readFile(csvFilePath)
+            .catch(() => null);
+        }
+
+        // Parse compensation data
         const compensationData = parseCompensationBackup(
           compensationContent || "",
           employeeId,
@@ -264,7 +422,7 @@ export const AttendanceHistoryDialog: React.FC<
           year
         );
 
-        // Filter for the specific day (remains the same)
+        // Filter for the specific day
         const filteredAttendanceData = attendanceData.filter(
           (entry) => entry.day === day
         );
@@ -277,7 +435,7 @@ export const AttendanceHistoryDialog: React.FC<
           compensationCount: filteredCompensationData.length,
         });
 
-        // Create display entries (remains the same)
+        // Create display entries
         const attendanceDisplayEntries: DisplayEntry[] =
           filteredAttendanceData.map((entry) => ({
             timestamp: entry.timestamp,
@@ -295,7 +453,7 @@ export const AttendanceHistoryDialog: React.FC<
             compensationData: entry,
           }));
 
-        // Combine and sort (remains the same)
+        // Combine and sort
         const allDisplayEntries = [
           ...attendanceDisplayEntries,
           ...compensationDisplayEntries,

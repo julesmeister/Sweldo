@@ -1,0 +1,24 @@
+{
+  "employeeId": "2",
+  "year": 2025,
+  "month": 4,
+  "backups": [
+    {
+      "timestamp": "2025-05-03T10:16:03.367Z",
+      "changes": [
+        {
+          "day": 20,
+          "field": "timeIn",
+          "oldValue": null,
+          "newValue": "22:10"
+        },
+        {
+          "day": 20,
+          "field": "timeOut",
+          "oldValue": null,
+          "newValue": "06:13"
+        }
+      ]
+    }
+  ]
+}

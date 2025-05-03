@@ -1,8 +1,15 @@
 "use client";
 import React, { useState, useCallback } from "react";
 import { migrateAttendanceAlternatives } from "@/renderer/model/attendance_old";
-import { migrateCsvToJson } from "@/renderer/model/migration";
-import { migrateCsvToJson as migrateCompensationCsvToJson } from "@/renderer/model/compensation";
+import {
+  migrateCsvToJson as migrateAttendanceCsvToJson,
+  migrateBackupCsvToJson as migrateAttendanceBackupCsvToJson,
+} from "@/renderer/model/attendance";
+import {
+  migrateCsvToJson as migrateCompensationCsvToJson,
+  migrateBackupCsvToJson as migrateCompensationBackupCsvToJson,
+} from "@/renderer/model/compensation";
+import { migrateCsvToJson as migrateEmployeeCsvToJson } from "@/renderer/model/employee";
 import { toast } from "sonner";
 import {
   IoSyncOutline,
@@ -10,6 +17,9 @@ import {
   IoAlertCircleOutline,
   IoSwapHorizontalOutline,
   IoServerOutline,
+  IoPeopleOutline,
+  IoCloudUploadOutline,
+  IoTrashOutline,
 } from "react-icons/io5";
 
 interface DataMigrationSettingsProps {
@@ -40,6 +50,15 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     string | null
   >(null);
 
+  const [employeeMigrationStatus, setEmployeeMigrationStatus] =
+    useState<MigrationStatus>("idle");
+  const [employeeProgressMessages, setEmployeeProgressMessages] = useState<
+    string[]
+  >([]);
+  const [employeeErrorDetails, setEmployeeErrorDetails] = useState<
+    string | null
+  >(null);
+
   const handleMigration = useCallback(async () => {
     if (!dbPath) {
       toast.error("Database path is not set. Please configure it first.");
@@ -56,7 +75,6 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
 
     try {
       await migrateAttendanceAlternatives(dbPath, (message) => {
-        console.log("Migration Progress:", message);
         setProgressMessages((prev) => [...prev, message]);
       });
       setStatus("success");
@@ -69,7 +87,6 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("Migration failed:", error);
       setStatus("error");
       setErrorDetails(message);
       toast.error(`Migration failed: ${message}`);
@@ -92,10 +109,22 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     setJsonErrorDetails(null);
 
     try {
-      await migrateCsvToJson(dbPath, (message) => {
-        console.log("CSV to JSON Migration Progress:", message);
+      // Step 1: Migrate regular attendance files
+      await migrateAttendanceCsvToJson(dbPath, (message) => {
         setJsonProgressMessages((prev) => [...prev, message]);
       });
+
+      // Step 2: Now also migrate backup files
+      setJsonProgressMessages((prev) => [
+        ...prev,
+        "Starting backup files migration...",
+      ]);
+
+      await migrateAttendanceBackupCsvToJson(dbPath, (message) => {
+        setJsonProgressMessages((prev) => [...prev, message]);
+      });
+
+      // Success for both
       setJsonMigrationStatus("success");
       toast.success("CSV to JSON migration completed successfully!");
       setJsonProgressMessages((prev) => [
@@ -104,7 +133,6 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("CSV to JSON migration failed:", error);
       setJsonMigrationStatus("error");
       setJsonErrorDetails(message);
       toast.error(`CSV to JSON migration failed: ${message}`);
@@ -132,10 +160,21 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     setCompensationErrorDetails(null);
 
     try {
+      // Step 1: Migrate regular compensation files
       await migrateCompensationCsvToJson(dbPath, (message) => {
-        console.log("Compensation CSV to JSON Migration Progress:", message);
         setCompensationProgressMessages((prev) => [...prev, message]);
       });
+
+      // Step 2: Now also migrate backup files
+      setCompensationProgressMessages((prev) => [
+        ...prev,
+        "Starting compensation backup files migration...",
+      ]);
+
+      await migrateCompensationBackupCsvToJson(dbPath, (message) => {
+        setCompensationProgressMessages((prev) => [...prev, message]);
+      });
+
       setCompensationMigrationStatus("success");
       toast.success(
         "Compensation CSV to JSON migration completed successfully!"
@@ -146,7 +185,6 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("Compensation CSV to JSON migration failed:", error);
       setCompensationMigrationStatus("error");
       setCompensationErrorDetails(message);
       toast.error(`Compensation CSV to JSON migration failed: ${message}`);
@@ -156,6 +194,58 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       ]);
     }
   }, [dbPath, compensationMigrationStatus]);
+
+  const handleEmployeeCsvToJsonMigration = useCallback(async () => {
+    if (!dbPath) {
+      toast.error("Database path is not set. Please configure it first.");
+      return;
+    }
+    if (employeeMigrationStatus === "running") {
+      toast.info("Employee CSV to JSON migration is already in progress.");
+      return;
+    }
+
+    setEmployeeMigrationStatus("running");
+    setEmployeeProgressMessages(["Starting employee CSV to JSON migration..."]);
+    setEmployeeErrorDetails(null);
+
+    try {
+      await migrateEmployeeCsvToJson(dbPath, (message) => {
+        setEmployeeProgressMessages((prev) => [...prev, message]);
+      });
+      setEmployeeMigrationStatus("success");
+      toast.success("Employee CSV to JSON migration completed successfully!");
+      setEmployeeProgressMessages((prev) => [
+        ...prev,
+        "Employee CSV to JSON migration completed successfully!",
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setEmployeeMigrationStatus("error");
+      setEmployeeErrorDetails(message);
+      toast.error(`Employee CSV to JSON migration failed: ${message}`);
+      setEmployeeProgressMessages((prev) => [
+        ...prev,
+        `Migration failed: ${message}`,
+      ]);
+    }
+  }, [dbPath, employeeMigrationStatus]);
+
+  const clearAlternativesProgressMessages = useCallback(() => {
+    setProgressMessages([]);
+  }, []);
+
+  const clearJsonProgressMessages = useCallback(() => {
+    setJsonProgressMessages([]);
+  }, []);
+
+  const clearCompensationProgressMessages = useCallback(() => {
+    setCompensationProgressMessages([]);
+  }, []);
+
+  const clearEmployeeProgressMessages = useCallback(() => {
+    setEmployeeProgressMessages([]);
+  }, []);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -226,7 +316,16 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
           status === "success" ||
           status === "error") && (
           <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
-            <h4 className="font-medium text-gray-700 mb-2">Migration Log:</h4>
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-medium text-gray-700">Migration Log:</h4>
+              <button
+                onClick={clearAlternativesProgressMessages}
+                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                title="Clear log"
+              >
+                <IoTrashOutline className="w-4 h-4" />
+              </button>
+            </div>
             <ul className="space-y-1 text-xs text-gray-600">
               {progressMessages.map((msg, index) => (
                 <li key={index} className="font-mono">
@@ -317,7 +416,7 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
           <button
             onClick={handleCompensationCsvToJsonMigration}
             disabled={compensationMigrationStatus === "running"}
-            className={`inline-flex items-center justify-center gap-2 px-6 py-3 w-full border border-transparent rounded-lg text-sm font-medium text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 shadow
+            className={`inline-flex items-center justify-center gap-2 px-6 py-3 w-full border border-transparent rounded-lg text-sm font-medium text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 shadow mb-3
                   ${
                     compensationMigrationStatus === "running"
                       ? "bg-gray-400 cursor-not-allowed"
@@ -357,22 +456,78 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
             )}
           </button>
 
+          {/* Employee CSV to JSON Button */}
+          <button
+            onClick={handleEmployeeCsvToJsonMigration}
+            disabled={employeeMigrationStatus === "running"}
+            className={`inline-flex items-center justify-center gap-2 px-6 py-3 w-full border border-transparent rounded-lg text-sm font-medium text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 shadow
+                  ${
+                    employeeMigrationStatus === "running"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  }
+                `}
+          >
+            {employeeMigrationStatus === "running" ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Converting Employees to JSON...
+              </>
+            ) : (
+              <>
+                <IoPeopleOutline className="w-5 h-5" />
+                Convert Employee CSV to JSON
+              </>
+            )}
+          </button>
+
           {/* JSON Migration Logs */}
           {(jsonMigrationStatus === "running" ||
             jsonMigrationStatus === "success" ||
             jsonMigrationStatus === "error" ||
             compensationMigrationStatus === "running" ||
             compensationMigrationStatus === "success" ||
-            compensationMigrationStatus === "error") && (
+            compensationMigrationStatus === "error" ||
+            employeeMigrationStatus === "running" ||
+            employeeMigrationStatus === "success" ||
+            employeeMigrationStatus === "error") && (
             <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
               {/* Attendance JSON Migration Log */}
               {(jsonMigrationStatus === "running" ||
                 jsonMigrationStatus === "success" ||
                 jsonMigrationStatus === "error") && (
                 <>
-                  <h4 className="font-medium text-gray-700 mb-2">
-                    Attendance JSON Migration Log:
-                  </h4>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-700">
+                      Attendance JSON Migration Log:
+                    </h4>
+                    <button
+                      onClick={clearJsonProgressMessages}
+                      className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                      title="Clear log"
+                    >
+                      <IoTrashOutline className="w-4 h-4" />
+                    </button>
+                  </div>
                   <ul className="space-y-1 text-xs text-gray-600 mb-3">
                     {jsonProgressMessages.map((msg, index) => (
                       <li key={index} className="font-mono">
@@ -404,9 +559,18 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
                 compensationMigrationStatus === "success" ||
                 compensationMigrationStatus === "error") && (
                 <>
-                  <h4 className="font-medium text-gray-700 mb-2">
-                    Compensation JSON Migration Log:
-                  </h4>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-700">
+                      Compensation JSON Migration Log:
+                    </h4>
+                    <button
+                      onClick={clearCompensationProgressMessages}
+                      className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                      title="Clear log"
+                    >
+                      <IoTrashOutline className="w-4 h-4" />
+                    </button>
+                  </div>
                   <ul className="space-y-1 text-xs text-gray-600">
                     {compensationProgressMessages.map((msg, index) => (
                       <li key={index} className="font-mono">
@@ -429,6 +593,50 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
                         <span className="font-medium">
                           Compensation JSON Migration Failed:{" "}
                           {compensationErrorDetails}
+                        </span>
+                      </div>
+                    )}
+                </>
+              )}
+
+              {/* Employee JSON Migration Log */}
+              {(employeeMigrationStatus === "running" ||
+                employeeMigrationStatus === "success" ||
+                employeeMigrationStatus === "error") && (
+                <>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-700">
+                      Employee JSON Migration Log:
+                    </h4>
+                    <button
+                      onClick={clearEmployeeProgressMessages}
+                      className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                      title="Clear log"
+                    >
+                      <IoTrashOutline className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <ul className="space-y-1 text-xs text-gray-600">
+                    {employeeProgressMessages.map((msg, index) => (
+                      <li key={index} className="font-mono">
+                        {msg}
+                      </li>
+                    ))}
+                  </ul>
+                  {employeeMigrationStatus === "success" && (
+                    <div className="mt-3 flex items-center gap-2 text-green-600">
+                      <IoCheckmarkCircleOutline className="w-5 h-5" />
+                      <span className="font-medium">
+                        Employee JSON Migration Successful
+                      </span>
+                    </div>
+                  )}
+                  {employeeMigrationStatus === "error" &&
+                    employeeErrorDetails && (
+                      <div className="mt-3 flex items-center gap-2 text-red-600">
+                        <IoAlertCircleOutline className="w-5 h-5" />
+                        <span className="font-medium">
+                          Employee JSON Migration Failed: {employeeErrorDetails}
                         </span>
                       </div>
                     )}
