@@ -22,7 +22,11 @@ interface UseTimesheetCoreLoaderReturn {
   setCompensationEntries: React.Dispatch<React.SetStateAction<Compensation[]>>;
   validEntriesCount: number;
   isLoadingData: boolean;
-  refreshTimesheetData: (showToast?: boolean) => Promise<void>;
+  refreshTimesheetData: (showToast?: boolean) => Promise<{
+    shouldCompute: boolean;
+    attendanceData: Attendance[];
+    compensationData: Compensation[];
+  }>;
 }
 
 export const useTimesheetCoreLoader = ({
