@@ -53,6 +53,7 @@ import {
 } from "@/renderer/hooks/utils/useSchedule";
 import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
 import { useAttendanceOperations } from "@/renderer/hooks/useAttendanceOperations";
+import { useTimesheetHistoryOperations } from "@/renderer/hooks/useTimesheetHistoryOperations";
 
 const formatName = (name: string): string => {
   if (!name) return "";
@@ -162,25 +163,23 @@ const TimesheetPage: React.FC = () => {
     }
   );
 
-  const { handleCheckboxChange } = useTimesheetCheckbox({
-    attendanceModel,
-    compensationModel,
-    attendanceSettingsModel,
-    employee,
-    selectedEmployeeId: selectedEmployeeId!,
-    compensationEntries,
-    month: storedMonthInt,
-    year,
-    dbPath,
-    onDataUpdate: (newAttendance, newCompensations) => {
-      if (!hasAccess("MANAGE_ATTENDANCE")) {
-        toast.error("You don't have permission to modify attendance records");
-        return;
-      }
-      setTimesheetEntries(newAttendance);
-      setCompensationEntries(newCompensations);
-    },
-  });
+  const onDataUpdateHandler = async (
+    newAttendance: Attendance[],
+    newCompensations: Compensation[]
+  ) => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You don't have permission to modify attendance records");
+      return;
+    }
+    // Update both states immediately
+    setTimesheetEntries(newAttendance);
+    setCompensationEntries(newCompensations);
+    // Recompute compensations ONLY if attendance potentially changed?
+    // Or always recompute after any edit/revert?
+    // For simplicity and safety, let's recompute if the function is called.
+    // The hook calling this might need adjustment if recompute isn't always desired.
+    // await computeCompensations(newAttendance, newCompensations);
+  };
 
   const { handleTimesheetEdit } = useTimesheetEdit({
     attendanceModel,
@@ -192,30 +191,25 @@ const TimesheetPage: React.FC = () => {
     month: storedMonthInt,
     year,
     dbPath,
-    onDataUpdate: async (newAttendance, newCompensations) => {
-      if (!hasAccess("MANAGE_ATTENDANCE")) {
-        toast.error("You don't have permission to modify attendance records");
-        return;
-      }
-
-      // Update both states immediately
-      setTimesheetEntries(newAttendance);
-      setCompensationEntries(newCompensations);
-
-      // Recompute compensations to ensure everything is in sync
-      await computeCompensations(newAttendance, newCompensations);
-    },
+    onDataUpdate: onDataUpdateHandler, // Use the shared handler
   });
 
-  // Use the new hooks for specialized attendance operations
-  const { handleSwapTimes, handleRevertToHistory } = useAttendanceOperations({
+  // Use the renamed hook and pass additional props
+  const {
+    handleSwapTimes,
+    handleRevertAttendanceToHistory,
+    handleRevertCompensationToHistory,
+  } = useTimesheetHistoryOperations({
     hasAccess,
-    handleTimesheetEdit,
-    timesheetEntries,
+    handleTimesheetEdit, // Still needed for attendance revert
+    compensationModel, // Pass compensation model
+    timesheetEntries, // Pass current attendance state
+    compensationEntries, // Pass current compensation state
     storedMonthInt,
     year,
     selectedEmployeeId,
     employee,
+    onDataUpdate: onDataUpdateHandler, // Use the shared handler
   });
 
   // First effect: Load employee only
@@ -1246,7 +1240,8 @@ const TimesheetPage: React.FC = () => {
             month={storedMonthInt}
             day={selectedHistoryDay}
             dbPath={dbPath}
-            onRevert={handleRevertToHistory}
+            onRevertAttendance={handleRevertAttendanceToHistory}
+            onRevertCompensation={handleRevertCompensationToHistory}
           />
         )}
       </main>

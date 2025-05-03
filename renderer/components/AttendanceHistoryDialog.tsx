@@ -8,6 +8,7 @@ import {
 import { ImSpinner9 } from "react-icons/im";
 import { FaUndo } from "react-icons/fa";
 import { toast } from "sonner";
+import { Tooltip } from "@/renderer/components/Tooltip";
 
 // Interface for backup entries (matches CSV structure + timestamp)
 interface AttendanceBackupEntry {
@@ -33,23 +34,32 @@ interface CompensationBackupEntry {
   dayType: string | null;
   absence: boolean | null;
   deductions: number | null;
+  dailyRate: number | null;
+  overtimeMinutes: number | null;
+  overtimePay: number | null;
+  undertimeMinutes: number | null;
+  undertimeDeduction: number | null;
+  lateMinutes: number | null;
+  lateDeduction: number | null;
+  holidayBonus: number | null;
+  leaveType: string | null;
+  leavePay: number | null;
+  manualOverride: boolean | null;
+  notes: string | null;
+  nightDifferentialHours: number | null;
+  nightDifferentialPay: number | null;
 }
 
-// Combined backup for display
-interface CombinedBackupEntry {
+// Define structure for individual display entries
+interface DisplayEntry {
   timestamp: string;
-  attendanceData: {
+  type: "attendance" | "compensation";
+  // Include data for both types, but only one will be populated per entry
+  attendanceData?: {
     timeIn: string | null;
     timeOut: string | null;
   };
-  compensationData: {
-    grossPay: number | null;
-    netPay: number | null;
-    hoursWorked: number | null;
-    dayType: string | null;
-    absence: boolean | null;
-    deductions: number | null;
-  } | null;
+  compensationData?: CompensationBackupEntry;
 }
 
 interface AttendanceHistoryDialogProps {
@@ -60,25 +70,37 @@ interface AttendanceHistoryDialogProps {
   month: number;
   day: number; // Specific day to show history for
   dbPath: string;
-  onRevert: (
+  onRevertAttendance: (
     day: number,
     timeIn: string | null,
     timeOut: string | null
+  ) => Promise<void>;
+  onRevertCompensation: (
+    day: number,
+    backupCompensationData: any // Pass the specific backup data object
   ) => Promise<void>;
 }
 
 export const AttendanceHistoryDialog: React.FC<
   AttendanceHistoryDialogProps
-> = ({ isOpen, onClose, employeeId, year, month, day, dbPath, onRevert }) => {
+> = ({
+  isOpen,
+  onClose,
+  employeeId,
+  year,
+  month,
+  day,
+  dbPath,
+  onRevertAttendance,
+  onRevertCompensation,
+}) => {
   const [historyEntries, setHistoryEntries] = useState<AttendanceBackupEntry[]>(
     []
   );
   const [compensationEntries, setCompensationEntries] = useState<
     CompensationBackupEntry[]
   >([]);
-  const [combinedEntries, setCombinedEntries] = useState<CombinedBackupEntry[]>(
-    []
-  );
+  const [combinedEntries, setCombinedEntries] = useState<DisplayEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,23 +115,19 @@ export const AttendanceHistoryDialog: React.FC<
 
       setIsLoading(true);
       setError(null);
-      setHistoryEntries([]); // Clear previous entries
+      setHistoryEntries([]);
       setCompensationEntries([]);
       setCombinedEntries([]);
 
-      // --- Refactored Path Construction ---
       const baseBackupDir = `${dbPath}/SweldoDB/attendances/${employeeId}`;
       const attendanceBackupFilePath = `${baseBackupDir}/${year}_${month}_attendance_backup.csv`;
-      const compensationBackupFilePath = `${baseBackupDir}/${year}_${month}_compensation_backup.csv`; // Now uses the same base directory
+      const compensationBackupFilePath = `${baseBackupDir}/${year}_${month}_compensation_backup.csv`;
 
       console.log(
         `[AttendanceHistoryDialog] Backup directory: ${baseBackupDir}`
       );
-      // Removed individual path logs
-      // --- End Refactored Path Construction ---
 
       try {
-        // Load attendance backup
         const attendanceContent = await window.electron.readFile(
           attendanceBackupFilePath
         );
@@ -128,14 +146,8 @@ export const AttendanceHistoryDialog: React.FC<
             );
           }
 
-          // Check if we have data rows
           if (attendanceResults.data.length >= 2) {
-            // Manually process rows, skipping the header (index 0)
             const dataRows = attendanceResults.data.slice(1);
-
-            console.log(
-              `[AttendanceHistoryDialog] Attendance data rows: ${dataRows.length}`
-            );
 
             if (dataRows.length > 0) {
               console.log(
@@ -159,27 +171,6 @@ export const AttendanceHistoryDialog: React.FC<
               .filter((entry) => entry !== null && !isNaN(entry.day));
           }
         }
-
-        // Load compensation backup
-        console.log(
-          `[AttendanceHistoryDialog] Attempting to load compensation backup...`
-        );
-
-        // === ADDED: Explicit file existence check ===
-        try {
-          const exists = await window.electron.fileExists(
-            compensationBackupFilePath
-          );
-          console.log(
-            `[AttendanceHistoryDialog] fileExists check for compensation backup returned: ${exists}`
-          );
-        } catch (checkError) {
-          console.error(
-            `[AttendanceHistoryDialog] Error during fileExists check:`,
-            checkError
-          );
-        }
-        // === END ADDED ===
 
         const compensationContent = await window.electron
           .readFile(compensationBackupFilePath)
@@ -227,13 +218,8 @@ export const AttendanceHistoryDialog: React.FC<
             }
           );
 
-          // Check if we have data rows
           if (compensationResults.data.length >= 2) {
-            // Manually process rows, skipping the header (index 0)
             const dataRows = compensationResults.data.slice(1);
-            console.log(
-              `[AttendanceHistoryDialog] Compensation data rows: ${dataRows.length}`
-            );
 
             if (dataRows.length > 0) {
               console.log(
@@ -256,6 +242,20 @@ export const AttendanceHistoryDialog: React.FC<
                   dayType: row[5] || null,
                   absence: row[22] === "true" || row[22] === "1" || null,
                   deductions: row[18] ? parseFloat(row[18]) : null,
+                  dailyRate: row[6] ? parseFloat(row[6]) : null,
+                  overtimeMinutes: row[8] ? parseFloat(row[8]) : null,
+                  overtimePay: row[9] ? parseFloat(row[9]) : null,
+                  undertimeMinutes: row[10] ? parseFloat(row[10]) : null,
+                  undertimeDeduction: row[11] ? parseFloat(row[11]) : null,
+                  lateMinutes: row[12] ? parseFloat(row[12]) : null,
+                  lateDeduction: row[13] ? parseFloat(row[13]) : null,
+                  holidayBonus: row[14] ? parseFloat(row[14]) : null,
+                  leaveType: row[15] || null,
+                  leavePay: row[16] ? parseFloat(row[16]) : null,
+                  manualOverride: row[20] === "true" || row[20] === "1" || null,
+                  notes: row[21] || null,
+                  nightDifferentialHours: row[23] ? parseFloat(row[23]) : null,
+                  nightDifferentialPay: row[24] ? parseFloat(row[24]) : null,
                 } as CompensationBackupEntry;
 
                 return entry;
@@ -268,7 +268,6 @@ export const AttendanceHistoryDialog: React.FC<
           );
         }
 
-        // Filter for the specific day
         const filteredAttendanceData = attendanceData.filter(
           (entry) => entry.day === day
         );
@@ -281,63 +280,47 @@ export const AttendanceHistoryDialog: React.FC<
           compensationCount: filteredCompensationData.length,
         });
 
-        // Create combined entries with both attendance and compensation data
-        const allTimestamps = new Set([
-          ...filteredAttendanceData.map((entry) => entry.timestamp),
-          ...filteredCompensationData.map((entry) => entry.timestamp),
-        ]);
-
-        console.log(
-          `[AttendanceHistoryDialog] Unique timestamps: ${
-            Array.from(allTimestamps).length
-          }`
-        );
-
-        const combined = Array.from(allTimestamps).map((timestamp) => {
-          const attendanceEntry = filteredAttendanceData.find(
-            (entry) => entry.timestamp === timestamp
-          );
-          const compensationEntry = filteredCompensationData.find(
-            (entry) => entry.timestamp === timestamp
-          );
-
-          return {
-            timestamp,
+        const attendanceDisplayEntries: DisplayEntry[] =
+          filteredAttendanceData.map((entry) => ({
+            timestamp: entry.timestamp,
+            type: "attendance",
             attendanceData: {
-              timeIn: attendanceEntry?.timeIn || null,
-              timeOut: attendanceEntry?.timeOut || null,
+              timeIn: entry.timeIn,
+              timeOut: entry.timeOut,
             },
-            compensationData: compensationEntry
-              ? {
-                  grossPay: compensationEntry.grossPay,
-                  netPay: compensationEntry.netPay,
-                  hoursWorked: compensationEntry.hoursWorked,
-                  dayType: compensationEntry.dayType,
-                  absence: compensationEntry.absence,
-                  deductions: compensationEntry.deductions,
-                }
-              : null,
-          };
-        });
+          }));
 
-        if (combined.length > 0) {
-          console.log(
-            `[AttendanceHistoryDialog] Sample combined entry:`,
-            combined[0]
-          );
-        }
+        const compensationDisplayEntries: DisplayEntry[] =
+          filteredCompensationData.map((entry) => ({
+            timestamp: entry.timestamp,
+            type: "compensation",
+            compensationData: entry,
+          }));
 
-        // Sort by timestamp descending (most recent first)
-        combined.sort(
+        const allDisplayEntries = [
+          ...attendanceDisplayEntries,
+          ...compensationDisplayEntries,
+        ];
+        allDisplayEntries.sort(
           (a, b) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
 
+        console.log(
+          `[AttendanceHistoryDialog] Total display entries created: ${allDisplayEntries.length}`
+        );
+        if (allDisplayEntries.length > 0) {
+          console.log(
+            `[AttendanceHistoryDialog] Sample display entry:`,
+            allDisplayEntries[0]
+          );
+        }
+
         setHistoryEntries(filteredAttendanceData);
         setCompensationEntries(filteredCompensationData);
-        setCombinedEntries(combined);
+        setCombinedEntries(allDisplayEntries);
 
-        if (combined.length === 0) {
+        if (allDisplayEntries.length === 0) {
           setError(`No history found for day ${day} in the backup files.`);
         }
       } catch (err: any) {
@@ -345,9 +328,7 @@ export const AttendanceHistoryDialog: React.FC<
           `[AttendanceHistoryDialog] Error reading or processing backup files:`,
           err
         );
-        // Handle file not found specifically maybe? For now, general error.
         if (err.message?.includes("ENOENT")) {
-          // Check if it's a 'File not found' error
           setError("Backup files not found for this month.");
         } else {
           setError("Failed to load attendance history.");
@@ -361,11 +342,10 @@ export const AttendanceHistoryDialog: React.FC<
     };
 
     fetchHistory();
-  }, [isOpen, employeeId, year, month, day, dbPath]); // Dependencies
+  }, [isOpen, employeeId, year, month, day, dbPath]);
 
   if (!isOpen) return null;
 
-  // Format the date for the header
   const headerDate = new Date(year, month - 1, day).toLocaleDateString(
     undefined,
     {
@@ -387,7 +367,7 @@ export const AttendanceHistoryDialog: React.FC<
         hour12: true,
       });
     } catch {
-      return dateString; // Fallback to original string if parsing fails
+      return dateString;
     }
   };
 
@@ -421,34 +401,26 @@ export const AttendanceHistoryDialog: React.FC<
   };
 
   return (
-    // Using similar styling as CompensationDialog for consistency
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" // Lighter backdrop
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-4xl overflow-hidden" // Light background, light border, wider dialog
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-5xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-          {" "}
-          {/* Light header bg and border */}
           <h3 className="text-lg font-medium text-gray-800">
-            {" "}
-            {/* Darker text */}
-            Attendance & Compensation History for {headerDate}{" "}
-            {/* Use formatted date */}
+            Attendance & Compensation History for {headerDate}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 focus:outline-none" // Adjusted text colors
+            className="text-gray-500 hover:text-gray-700 focus:outline-none"
           >
             <IoClose className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="max-h-[60vh] overflow-y-auto bg-white scrollbar-thin">
           {isLoading && (
             <div className="flex flex-col items-center justify-center h-40 text-gray-500">
@@ -476,43 +448,43 @@ export const AttendanceHistoryDialog: React.FC<
                 <tr>
                   <th
                     scope="col"
-                    className="px-3 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Revert
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Timestamp
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Time In
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Time Out
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Deductions
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Gross Pay
                   </th>
                   <th
                     scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                   >
                     Net Pay
                   </th>
@@ -520,80 +492,120 @@ export const AttendanceHistoryDialog: React.FC<
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {combinedEntries.map((entry) => {
-                  // Find matching attendance entry to use for revert
-                  const matchingAttendance = historyEntries.find(
-                    (att) => att.timestamp === entry.timestamp
-                  );
+                  const hasCompensationData =
+                    entry.type === "compensation" && !!entry.compensationData;
+                  const hasAttendanceData =
+                    entry.type === "attendance" && !!entry.attendanceData;
 
                   return (
                     <tr
-                      key={entry.timestamp}
+                      key={`${entry.timestamp}-${entry.type}`}
                       className="hover:bg-gray-50 transition-colors even:bg-gray-50/50"
                     >
-                      <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-700">
-                        <button
-                          onClick={async () => {
-                            try {
-                              if (!matchingAttendance) {
-                                toast.error(
-                                  "No attendance data available to revert"
-                                );
-                                return;
-                              }
+                      <td className="px-2 py-4 whitespace-nowrap text-center text-sm text-gray-700">
+                        {entry.type === "compensation" &&
+                          entry.compensationData && (
+                            <Tooltip
+                              content={`Revert compensation to state from ${formatDate(
+                                entry.timestamp
+                              )}`}
+                              position="top"
+                            >
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await onRevertCompensation(
+                                      day,
+                                      entry.compensationData!
+                                    );
+                                    onClose();
+                                  } catch (revertError) {
+                                    console.error(
+                                      "Compensation revert failed:",
+                                      revertError
+                                    );
+                                  }
+                                }}
+                                className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-purple-100 rounded-full transition-colors duration-150"
+                              >
+                                <FaUndo className={`w-4 h-4`} />
+                              </button>
+                            </Tooltip>
+                          )}
 
-                              await onRevert(
-                                day,
-                                matchingAttendance.timeIn,
-                                matchingAttendance.timeOut
-                              );
-                              toast.success(
-                                `Attendance reverted to state from ${formatDate(
-                                  entry.timestamp
-                                )}`
-                              );
-                              onClose();
-                            } catch (revertError) {
-                              console.error("Revert failed:", revertError);
-                              toast.error("Failed to revert attendance.");
-                            }
-                          }}
-                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors duration-150"
-                          title={`Revert to this state (${formatTime(
-                            entry.attendanceData.timeIn
-                          )} - ${formatTime(
-                            entry.attendanceData.timeOut
-                          )}) saved on ${formatDate(entry.timestamp)}`}
-                          disabled={!matchingAttendance}
-                        >
-                          <FaUndo
-                            className={`w-4 h-4 ${
-                              !matchingAttendance ? "opacity-50" : ""
-                            }`}
-                          />
-                        </button>
+                        {entry.type === "attendance" &&
+                          entry.attendanceData && (
+                            <Tooltip
+                              content={`Revert attendance to state from ${formatDate(
+                                entry.timestamp
+                              )} (${formatTime(
+                                entry.attendanceData.timeIn
+                              )} - ${formatTime(
+                                entry.attendanceData.timeOut
+                              )})`}
+                              position="top"
+                            >
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await onRevertAttendance(
+                                      day,
+                                      entry.attendanceData!.timeIn,
+                                      entry.attendanceData!.timeOut
+                                    );
+                                    toast.success(
+                                      `Attendance reverted to state from ${formatDate(
+                                        entry.timestamp
+                                      )}`
+                                    );
+                                    onClose();
+                                  } catch (revertError) {
+                                    console.error(
+                                      "Attendance revert failed:",
+                                      revertError
+                                    );
+                                    toast.error("Failed to revert attendance.");
+                                  }
+                                }}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors duration-150"
+                              >
+                                <FaUndo className={`w-4 h-4`} />
+                              </button>
+                            </Tooltip>
+                          )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
                         {formatDate(entry.timestamp)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {formatTime(entry.attendanceData.timeIn)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {formatTime(entry.attendanceData.timeOut)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {entry.compensationData
-                          ? formatCurrency(entry.compensationData.deductions)
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {entry.type === "attendance"
+                          ? formatTime(entry.attendanceData?.timeIn ?? null)
                           : "-"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {entry.compensationData
-                          ? formatCurrency(entry.compensationData.grossPay)
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {entry.type === "attendance"
+                          ? formatTime(entry.attendanceData?.timeOut ?? null)
                           : "-"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {entry.compensationData
-                          ? formatCurrency(entry.compensationData.netPay)
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {entry.type === "compensation"
+                          ? formatCurrency(
+                              entry.compensationData?.deductions ?? null
+                            )
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {entry.type === "compensation"
+                          ? formatCurrency(
+                              entry.compensationData?.grossPay ?? null
+                            )
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {entry.type === "compensation"
+                          ? formatCurrency(
+                              entry.compensationData?.netPay ?? null
+                            )
                           : "-"}
                       </td>
                     </tr>
@@ -604,13 +616,10 @@ export const AttendanceHistoryDialog: React.FC<
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
-          {" "}
-          {/* Light footer bg and border */}
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-white text-gray-700 rounded-md border border-gray-300 hover:bg-gray-100 transition-colors duration-200 text-sm" // Adjusted button style
+            className="px-4 py-1.5 bg-white text-gray-700 rounded-md border border-gray-300 hover:bg-gray-100 transition-colors duration-200 text-sm"
           >
             Close
           </button>
