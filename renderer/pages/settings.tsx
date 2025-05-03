@@ -469,22 +469,22 @@ export default function SettingsPage() {
                             type="checkbox"
                             name="toggle"
                             id="overtime-toggle"
-                            checked={
-                              attendanceSettings?.countEarlyTimeInAsOvertime ??
-                              false
-                            }
-                            onChange={(checked) =>
-                              handleInputChange(
-                                {
-                                  target: {
-                                    name: "countEarlyTimeInAsOvertime",
+                          checked={
+                            attendanceSettings?.countEarlyTimeInAsOvertime ??
+                            false
+                          }
+                          onChange={(checked) =>
+                            handleInputChange(
+                              {
+                                target: {
+                                  name: "countEarlyTimeInAsOvertime",
                                     value:
                                       !attendanceSettings?.countEarlyTimeInAsOvertime,
-                                  },
                                 },
-                                "countEarlyTimeInAsOvertime"
-                              )
-                            }
+                              },
+                              "countEarlyTimeInAsOvertime"
+                            )
+                          }
                             className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-200 appearance-none cursor-pointer peer"
                           />
                           <label

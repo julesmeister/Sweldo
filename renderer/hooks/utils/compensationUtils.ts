@@ -1,4 +1,4 @@
-import { Attendance } from "@/renderer/model/attendance";
+import { Attendance } from "@/renderer/model/attendance_old";
 import { Compensation, DayType } from "@/renderer/model/compensation";
 import { Holiday, HolidayModel } from "@/renderer/model/holiday";
 import { Employee } from "@/renderer/model/employee";

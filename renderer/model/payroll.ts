@@ -4,7 +4,7 @@ import {
   Attendance,
   ExcelData,
   createAttendanceModel,
-} from "./attendance";
+} from "./attendance_old";
 import { Compensation, createCompensationModel } from "./compensation";
 import { MissingTimeModel, MissingTimeLog } from "./missingTime";
 import * as Papa from "papaparse";

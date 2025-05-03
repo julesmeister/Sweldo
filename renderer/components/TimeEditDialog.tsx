@@ -10,7 +10,7 @@ import {
   getScheduleForDate,
 } from "@/renderer/model/settings";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
-import { Attendance } from "../model/attendance";
+import { Attendance } from "../model/attendance_old";
 import { toast } from "sonner";
 
 interface TimeEditDialogProps {

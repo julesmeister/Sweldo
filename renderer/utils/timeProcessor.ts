@@ -1,4 +1,4 @@
-import { Attendance } from "../model/attendance";
+import { Attendance } from "../model/attendance_old";
 import { MissingTimeLog } from "../model/missingTime";
 import { EmploymentType } from "../model/settings";
 

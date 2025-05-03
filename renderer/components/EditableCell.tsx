@@ -3,7 +3,7 @@ import { EmploymentType } from "@/renderer/model/settings";
 import { FaCheck, FaSun, FaMoon, FaTimes, FaEraser } from "react-icons/fa"; // Added moon icon for evening times and times icon
 import { BsFillSunsetFill } from "react-icons/bs"; // Added sunset icon for afternoon
 import { toast } from "sonner";
-import { createAttendanceModel } from "@/renderer/model/attendance"; // Import model factory
+import { createAttendanceModel } from "@/renderer/model/attendance_old"; // Import model factory
 
 interface EditableCellProps {
   value: string | number | null;
