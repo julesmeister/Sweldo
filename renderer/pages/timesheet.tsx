@@ -51,6 +51,7 @@ import {
   useSchedules,
   shouldMarkAsAbsent,
 } from "@/renderer/hooks/utils/useSchedule";
+import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
 
 const formatName = (name: string): string => {
   if (!name) return "";
@@ -101,6 +102,10 @@ const TimesheetPage: React.FC = () => {
   const [hasAttemptedInitialRefresh, setHasAttemptedInitialRefresh] =
     useState(false);
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState<number | null>(
+    null
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -378,6 +383,9 @@ const TimesheetPage: React.FC = () => {
   ) => {
     // Stop any active cell editing before opening the dialog
     handleStopEdit();
+    // Close history dialog if open
+    setIsHistoryDialogOpen(false);
+    setSelectedHistoryDay(null);
 
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
@@ -622,13 +630,16 @@ const TimesheetPage: React.FC = () => {
 
   // --- Handlers for Single Edit Mode ---
   const handleStartEdit = (cellKey: string) => {
-    console.log(`[Timesheet] Attempting to start edit for: ${cellKey}`);
-
     // Close the compensation dialog if it's open
     if (isDialogOpen) {
       setIsDialogOpen(false);
       setSelectedEntry(null);
       setClickPosition(null);
+    }
+    // Close history dialog if open
+    if (isHistoryDialogOpen) {
+      setIsHistoryDialogOpen(false);
+      setSelectedHistoryDay(null);
     }
 
     if (editingCellKey && editingCellKey !== cellKey) {
@@ -637,15 +648,29 @@ const TimesheetPage: React.FC = () => {
       );
     } else {
       setEditingCellKey(cellKey);
-      console.log(`[Timesheet] Started editing cell: ${cellKey}`);
     }
   };
 
   const handleStopEdit = () => {
-    console.log(`[Timesheet] Stopping edit for cell: ${editingCellKey}`);
     setEditingCellKey(null);
   };
   // --- End Handlers ---
+
+  // --- Handler to open History Dialog ---
+  const handleDayCellClick = (day: number, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent row click (CompensationDialog)
+    handleStopEdit(); // Close any active editable cell
+    // Close compensation dialog if open
+    if (isDialogOpen) {
+      setIsDialogOpen(false);
+      setSelectedEntry(null);
+      setClickPosition(null);
+    }
+
+    setSelectedHistoryDay(day);
+    setIsHistoryDialogOpen(true);
+  };
+  // --- End History Handler ---
 
   // --- Swap Time Handler ---
   const handleSwapTimes = async (rowData: Attendance) => {
@@ -658,46 +683,80 @@ const TimesheetPage: React.FC = () => {
       return;
     }
 
-    console.log(
-      `[Timesheet] Swapping times for employee ${rowData.employeeId}, day ${rowData.day}`
-    );
-
-    const originalTimeIn = rowData.timeIn;
-    const originalTimeOut = rowData.timeOut;
-
-    // Prepare the update data
-    const updates = [
-      {
-        day: rowData.day,
-        timeIn: originalTimeOut, // New timeIn is old timeOut
-        timeOut: originalTimeIn, // New timeOut is old timeIn
-      },
-    ];
-
     try {
-      // Call the save function which now handles individual updates
-      await attendanceModel.saveOrUpdateAttendances(
-        updates,
-        rowData.month,
-        rowData.year,
-        rowData.employeeId
+      const originalTimeIn = rowData.timeIn;
+      const originalTimeOut = rowData.timeOut;
+
+      // First update timeIn (to timeOut value)
+      await handleTimesheetEdit(
+        originalTimeOut || "", // New timeIn is old timeOut
+        rowData,
+        "timeIn"
       );
 
-      // Refresh data to show the updated times immediately
-      // Use showToast: false as the swap button already shows a success toast
-      await refreshTimesheetData(false);
+      // Then update timeOut with the original timeIn value
+      // We need to create an updated rowData with the new timeIn already set
+      const updatedRowData = {
+        ...rowData,
+        timeIn: originalTimeOut, // Reflect the first change
+      };
 
-      // Note: Compensations might need recomputing.
-      // Consider if this should trigger computeCompensations or if the next load/refresh will handle it.
-      // For now, just refresh attendance data.
+      await handleTimesheetEdit(
+        originalTimeIn || "", // New timeOut is old timeIn
+        updatedRowData,
+        "timeOut"
+      );
     } catch (error) {
-      console.error("Error during time swap save:", error);
-      // The catch block in EditableCell will show the toast,
-      // but we might re-throw or handle differently if needed here.
       throw error; // Re-throw so EditableCell can catch it
     }
   };
   // --- End Swap Handler ---
+
+  // --- Revert Handler ---
+  const handleRevertToHistory = async (
+    day: number,
+    timeIn: string | null,
+    timeOut: string | null
+  ) => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You don't have permission to modify attendance records");
+      throw new Error("Permission denied");
+    }
+    if (!employee || !selectedEmployeeId) {
+      toast.error("Employee context missing.");
+      throw new Error("Missing employee data");
+    }
+
+    try {
+      // Find the existing attendance record for this day
+      const existingAttendance = timesheetEntries.find(
+        (entry) =>
+          entry.day === day &&
+          entry.month === storedMonthInt &&
+          entry.year === year &&
+          entry.employeeId === selectedEmployeeId
+      );
+
+      if (!existingAttendance) {
+        throw new Error(`No attendance record found for day ${day}`);
+      }
+
+      // First update timeIn
+      await handleTimesheetEdit(timeIn || "", existingAttendance, "timeIn");
+
+      // Then update timeOut (use the updated record with new timeIn)
+      const updatedAttendance = {
+        ...existingAttendance,
+        timeIn: timeIn,
+      };
+
+      await handleTimesheetEdit(timeOut || "", updatedAttendance, "timeOut");
+    } catch (error) {
+      console.error(`Error reverting day ${day}:`, error);
+      throw error;
+    }
+  };
+  // --- End Revert Handler ---
 
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
@@ -929,7 +988,17 @@ const TimesheetPage: React.FC = () => {
                     : "text-gray-500"
                 }`}
               >
-                {renderColumnContent(column.key, foundEntry, compensation)}
+                {column.key === "day" ? (
+                  // Wrap day content in a div and add onClick for history
+                  <div
+                    onClick={(e) => handleDayCellClick(day, e)}
+                    className="cursor-pointer hover:text-blue-600 w-full h-full flex flex-col items-center justify-center"
+                  >
+                    {renderColumnContent(column.key, foundEntry, compensation)}
+                  </div>
+                ) : (
+                  renderColumnContent(column.key, foundEntry, compensation)
+                )}
               </td>
             ))
         )}
@@ -1238,6 +1307,22 @@ const TimesheetPage: React.FC = () => {
           onClose={() => setShowRecomputeDialog(false)}
           onRecompute={handleRecompute}
         />
+        {/* Render the Attendance History Dialog */}
+        {selectedEmployeeId && selectedHistoryDay !== null && (
+          <AttendanceHistoryDialog
+            isOpen={isHistoryDialogOpen}
+            onClose={() => {
+              setIsHistoryDialogOpen(false);
+              setSelectedHistoryDay(null);
+            }}
+            employeeId={selectedEmployeeId}
+            year={year}
+            month={storedMonthInt}
+            day={selectedHistoryDay}
+            dbPath={dbPath}
+            onRevert={handleRevertToHistory}
+          />
+        )}
       </main>
     </RootLayout>
   );

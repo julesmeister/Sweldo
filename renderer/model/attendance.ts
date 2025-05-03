@@ -58,10 +58,16 @@ export class AttendanceModel {
     );
     const timestamp = new Date().toISOString();
 
-    // Map record without alternative times
+    // Map record without alternative times AND explicitly select only needed fields
     const backupData = recordsToBackup.map((record) => ({
       timestamp: timestamp,
-      ...record,
+      // Explicitly list fields matching backupHeaders
+      employeeId: record.employeeId,
+      day: record.day,
+      month: record.month,
+      year: record.year,
+      timeIn: record.timeIn,
+      timeOut: record.timeOut,
     }));
 
     // Define headers specifically for the backup file (removed alternatives)

@@ -116,7 +116,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
             const times = await model.loadAlternativeTimes(rowData.employeeId);
             setLoadedAlternatives(times);
           } catch (error) {
-            console.error("Error loading alternative times:", error);
+            // console.error("Error loading alternative times:", error);
             toast.error("Could not load time suggestions.");
             setLoadedAlternatives([]);
           } finally {
@@ -165,7 +165,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
       setLocalValue(editValue);
       onStopEdit(); // Notify parent that editing stopped
     } catch (error) {
-      console.error("Error saving:", error);
+      // console.error("Error saving:", error);
       toast.error("Failed to save changes");
       // Don't call onStopEdit on error? Or maybe do? Depends on desired UX.
       // For now, keep editing on error.
@@ -234,7 +234,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
       setLocalValue(""); // Update local display value on success
       onStopEdit(); // Notify parent editing is done
     } catch (error) {
-      console.error("Error clearing:", error);
+      // console.error("Error clearing:", error);
       toast.error("Failed to clear value");
       // Revert editValue if save fails?
       // setEditValue(localValue?.toString() || "");
@@ -332,7 +332,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                     onStopEdit(); // Close dropdown after swap
                     toast.success("Time In/Out swapped successfully.");
                   } catch (swapError) {
-                    console.error("Error swapping times:", swapError);
+                    // console.error("Error swapping times:", swapError);
                     toast.error("Failed to swap times.");
                   }
                 }}
