@@ -35,7 +35,8 @@ export default function RootLayout({
   const pathname = usePathname();
   const { setLoading, setActiveLink } = useLoadingStore();
   const initialRender = useRef(true);
-  const { isAuthenticated, logout, checkSession } = useAuthStore();
+  const { isAuthenticated, logout, checkSession, initializeAuth } =
+    useAuthStore();
   const { dbPath, isInitialized, initialize } = useSettingsStore();
   const [showLogin, setShowLogin] = useState(false);
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
@@ -88,62 +89,21 @@ export default function RootLayout({
     }
   };
 
-  // Initialize auth store with dbPath and check for roles
+  // Initialize auth store based on settings store readiness
   useEffect(() => {
-    const initializeAuth = async () => {
-      // Wait for settings to be initialized
-      if (!isInitialized) {
-        return;
-      }
-
-      // Skip if we've already checked roles and user is authenticated
-      if (hasCheckedRoles.current && isAuthenticated) {
-        setIsCheckingRoles(false);
-        return;
-      }
-
-      if (!dbPath) {
-        setIsCheckingRoles(false);
-        // If no dbPath, we need to allow access to settings
-        if (pathname === "/settings") {
-          return; // Don't show login for settings page when no dbPath
-        }
-      }
-
-      // Check if any roles exist
-      try {
-        const roleModel = new RoleModelImpl(dbPath);
-
-        // Ensure SweldoDB directory exists
-        const sweldoPath = path.join(dbPath, "SweldoDB");
-        await window.electron.ensureDir(sweldoPath);
-
-        const roles = await roleModel.getRoles();
-
-        // If no roles exist, redirect to role creation page
-        if (roles.length === 0) {
-          toast.error("No roles found. Please create an admin role first.");
-          router.push("/settings"); // Assuming this is your roles management page
-          return;
-        }
-
-        // Only show login if there are roles and user is not authenticated
-        if (roles.length > 0 && !isAuthenticated) {
-          setShowLogin(true);
-        }
-
-        hasCheckedRoles.current = true;
-      } catch (error) {
-        setInitError(
-          "Error checking roles. Please check your database path and try again."
-        );
-      } finally {
-        setIsCheckingRoles(false);
-      }
-    };
-
-    initializeAuth();
-  }, [dbPath, isAuthenticated, pathname, isInitialized]);
+    if (!isInitialized) {
+      // console.log("[Layout] Waiting for settings store to initialize...");
+      return; // Wait until settings store (and thus dbPath) is ready
+    }
+    // console.log("[Layout] Settings store initialized. Calling initializeAuth...");
+    initializeAuth()
+      .then(() => {
+        // console.log("[Layout] initializeAuth completed.");
+      })
+      .catch((error) => {
+        console.error("[Layout] Error calling initializeAuth:", error);
+      });
+  }, [isInitialized, initializeAuth]);
 
   const [lastActivity, setLastActivity] = useState(Date.now());
 
@@ -205,6 +165,63 @@ export default function RootLayout({
     // Only reset loading on subsequent route changes
     setLoading(false);
   }, [pathname]);
+
+  // Role checking and login prompt logic
+  useEffect(() => {
+    console.log("[Layout] Running role check effect...");
+    console.log(
+      `[Layout Role Check] Dependencies: dbPath=${!!dbPath}, isAuth=${isAuthenticated}, isInit=${isInitialized}`
+    );
+
+    const checkRolesAndAuth = async () => {
+      if (!isInitialized || !dbPath) {
+        // console.log("[Layout Role Check] Exiting early: Settings not ready or no dbPath.");
+        // Need dbPath and settings initialized before checking roles
+        // Also, if no dbPath, the initial setup screen handles it
+        setIsCheckingRoles(false); // Ensure loading stops if we exit here
+        return;
+      }
+
+      // Skip if we've already checked roles and user is authenticated
+      if (hasCheckedRoles.current && isAuthenticated) {
+        // console.log("[Layout Role Check] Exiting early: Roles checked and user authenticated.");
+        setIsCheckingRoles(false);
+        return;
+      }
+
+      try {
+        // console.log("[Layout Role Check] Proceeding with role check...");
+        const roleModel = new RoleModelImpl(dbPath);
+        const sweldoPath = path.join(dbPath, "SweldoDB");
+        await window.electron.ensureDir(sweldoPath);
+        const roles = await roleModel.getRoles();
+
+        if (roles.length === 0) {
+          // console.log("[Layout Role Check] No roles found, redirecting to settings.");
+          toast.error("No roles found. Please create an admin role first.");
+          router.push("/settings");
+          hasCheckedRoles.current = true; // Mark as checked even if none found
+          return;
+        }
+
+        if (roles.length > 0 && !isAuthenticated) {
+          // console.log("[Layout Role Check] Roles found, showing login dialog.");
+          setShowLogin(true);
+        }
+        hasCheckedRoles.current = true;
+      } catch (error) {
+        // console.error("[Layout Role Check] Error during role check:", error);
+        setInitError(
+          "Error checking roles. Please check your database path and try again."
+        );
+      } finally {
+        // console.log("[Layout Role Check] Setting isCheckingRoles to false.");
+        setIsCheckingRoles(false);
+      }
+    };
+
+    checkRolesAndAuth();
+  }, [dbPath, isAuthenticated, pathname, isInitialized]);
 
   // Show loading state while checking roles
   if (isCheckingRoles) {

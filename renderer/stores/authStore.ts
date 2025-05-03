@@ -73,84 +73,86 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     isAuthInitialized: false,
 
     initializeAuth: async () => {
-      if (get().isAuthInitialized) return;
-      console.log("Initializing auth store from file...");
-
-      const dbPath = useSettingsStore.getState().dbPath;
-      let loadedState = { ...defaultAuthState };
-
-      if (dbPath) {
-        const filePath = authStateFilePath(dbPath);
-        console.log("Attempting to load auth state from:", filePath);
-        try {
-          const fileExists = await window.electron.fileExists(filePath);
-          if (fileExists) {
-            const fileContent = await window.electron.readFile(filePath);
-            const parsedState = JSON.parse(fileContent);
-            // Basic validation?
-            loadedState = { ...defaultAuthState, ...parsedState };
-            console.log("Auth state loaded.");
-
-            // Check if the loaded session is still valid
-            const now = Date.now();
-            const timeSinceLastActivity = now - loadedState.lastActivity;
-            const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
-
-            if (!isSessionValid && loadedState.isAuthenticated) {
-              console.log("Loaded auth session expired, logging out.");
-              loadedState = { ...defaultAuthState }; // Reset to default (logged out)
-            } else {
-              console.log("Loaded auth session is valid.");
-            }
-          } else {
-            console.log(
-              "Auth state file not found, using defaults (logged out)."
-            );
-          }
-        } catch (error) {
-          console.error(
-            "Error loading or parsing auth state file, using defaults:",
-            error
-          );
-          // Reset to default on error
-          loadedState = { ...defaultAuthState };
-        }
-      } else {
-        console.warn(
-          "Cannot initialize auth store: dbPath not available from settings store."
-        );
-        // Stay logged out if dbPath isn't ready
+      // console.log(`[AuthStore Init] Attempting initialization. Already initialized: ${get().isAuthInitialized}`);
+      if (get().isAuthInitialized) {
+        // console.log("[AuthStore Init] Skipping, already initialized.");
+        return;
       }
 
-      set({ ...loadedState, isAuthInitialized: true });
+      const dbPath = useSettingsStore.getState().dbPath;
+      try {
+        let loadedState = { ...defaultAuthState };
 
-      // Save initial state (handles case where file didn't exist or session expired)
-      await _saveAuthState();
+        if (dbPath) {
+          const filePath = authStateFilePath(dbPath);
+          try {
+            const fileExists = await window.electron.fileExists(filePath);
+            if (fileExists) {
+              const fileContent = await window.electron.readFile(filePath);
+              const parsedState = JSON.parse(fileContent);
+              loadedState = { ...defaultAuthState, ...parsedState };
+
+              const now = Date.now();
+              const timeSinceLastActivity = now - loadedState.lastActivity;
+              const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
+
+              if (!isSessionValid && loadedState.isAuthenticated) {
+                loadedState = { ...defaultAuthState };
+              }
+            }
+          } catch (error) {
+            console.error(
+              "Error loading or parsing auth state file, using defaults:",
+              error
+            );
+            loadedState = { ...defaultAuthState };
+          }
+        }
+
+        set({ ...loadedState, isAuthInitialized: true });
+
+        await _saveAuthState();
+      } catch (initError) {
+        console.error(
+          "[AuthStore Init] CRITICAL ERROR during initialization:",
+          initError
+        );
+        set({ ...defaultAuthState, isAuthInitialized: true });
+      }
     },
 
     checkSession: () => {
       const { lastActivity, isAuthenticated, logout, isAuthInitialized } =
         get();
+
+      // console.log(`[checkSession] Running: isAuthInitialized=${isAuthInitialized}, isAuthenticated=${isAuthenticated}`);
+
       // Important: Don't check session if store hasn't been initialized from file yet
-      if (!isAuthInitialized || !isAuthenticated) return false;
+      if (!isAuthInitialized || !isAuthenticated) {
+        // console.log(`[checkSession] Returning false (init=${isAuthInitialized}, auth=${isAuthenticated})`);
+        return false;
+      }
 
       const now = Date.now();
       const timeSinceLastActivity = now - lastActivity;
       const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
 
+      // console.log(`[checkSession] Time check: now=${now}, lastActivity=${lastActivity}, diff=${timeSinceLastActivity}, timeout=${SESSION_TIMEOUT}, valid=${isSessionValid}`);
+
       if (!isSessionValid) {
+        // console.log("[checkSession] Returning false (Session expired)");
         console.log("Session expired during checkSession, logging out.");
-        // Use timeout to avoid infinite loops if checkSession is called within logout
         setTimeout(logout, 0);
         return false;
       }
 
+      // console.log("[checkSession] Returning true (Session valid)");
       return true;
     },
 
     updateLastActivity: () => {
       set({ lastActivity: Date.now() });
-      _saveAuthState(); // Save state when activity is updated
+      _saveAuthState();
     },
 
     login: async (pinToMatch: string) => {
@@ -187,7 +189,7 @@ export const useAuthStore = create<AuthState>()((set, get) => {
             accessCodes: matchedRole.accessCodes,
             lastActivity: Date.now(),
           });
-          await _saveAuthState(); // Save state after successful login
+          await _saveAuthState();
           toast.success("Login successful!");
           return true;
         }
@@ -206,51 +208,25 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const { isAuthenticated } = get();
       if (isAuthenticated) {
         set({
-          ...defaultAuthState, // Reset to default logged-out state
-          isAuthInitialized: get().isAuthInitialized, // Keep initialized flag
-          lastActivity: 0, // Set last activity to 0 or Date.now()?
+          ...defaultAuthState,
+          isAuthInitialized: get().isAuthInitialized,
+          lastActivity: 0,
         });
-        _saveAuthState(); // Save the logged-out state
-        toast.info("Logged out"); // Adjusted message
+        _saveAuthState();
+        toast.info("Logged out");
       }
     },
 
-    hasAccess: async (requiredCode: string) => {
-      const { currentRole, checkSession } = get();
+    hasAccess: (requiredCode: string): boolean => {
+      const { currentRole, checkSession, accessCodes } = get();
 
-      if (!checkSession() || !currentRole) {
+      if (!checkSession()) {
         return false;
       }
 
-      // Re-fetch the role data on every check to ensure it's up-to-date
-      const dbPath = useSettingsStore.getState().dbPath;
-      if (!dbPath) {
-        console.error("hasAccess check failed: dbPath not set.");
-        return false; // Cannot check without dbPath
-      }
-
-      try {
-        const roleModel = new RoleModelImpl(dbPath);
-        const latestRoleData = await roleModel.getRoleById(currentRole.id);
-
-        if (!latestRoleData) {
-          console.warn(
-            `hasAccess check failed: Role with ID ${currentRole.id} not found.`
-          );
-          // Maybe logout if the role doesn't exist anymore?
-          get().logout();
-          return false;
-        }
-
-        // Perform the check against the *latest* access codes
-        return latestRoleData.accessCodes.includes(requiredCode);
-      } catch (error) {
-        console.error(
-          "Error fetching role data during hasAccess check:",
-          error
-        );
-        return false; // Fail safe
-      }
+      // Directly use the accessCodes from the state (set during login)
+      // console.log(`Checking access for '${requiredCode}'. Current role: ${currentRole?.name}. Available codes:`, accessCodes);
+      return accessCodes.includes(requiredCode);
     },
   };
 });

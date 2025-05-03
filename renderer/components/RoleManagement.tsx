@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Role, RoleModel } from "../model/role";
 import { decryptPinCode } from "../lib/encryption";
+import { useAuthStore } from "../stores/authStore";
 
 interface RoleManagementProps {
   roleModel: RoleModel;
@@ -230,6 +231,7 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
 
       toast.success("Role updated successfully");
       loadRoles();
+
       setSelectedRole(null);
       setIsEditing(false);
       setFormData({ name: "", pinCode: "", description: "", accessCodes: [] });

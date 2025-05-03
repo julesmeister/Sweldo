@@ -106,6 +106,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     initialize: async (initialDbPath) => {
       if (get().isInitialized) return; // Prevent re-initialization
       console.log("Initializing settings store from file...");
+      console.log(
+        `[SettingsStore Init] Received initialDbPath: ${initialDbPath}`
+      );
 
       let loadedSettings = { ...defaultSettings };
 
@@ -137,11 +140,94 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         console.warn("Initializing settings store without an initial dbPath.");
       }
 
+      // --- One-time LocalStorage Fallback --- START
+      try {
+        const lsState = localStorage.getItem("settings-storage");
+        if (lsState) {
+          const parsedLs = JSON.parse(lsState);
+          if (parsedLs && parsedLs.state) {
+            console.log(
+              "[SettingsStore Init] Found localStorage state, checking for fallbacks:",
+              parsedLs.state
+            );
+            // Use localStorage value ONLY if the loaded value is still the default empty string
+            if (
+              loadedSettings.preparedBy === "" &&
+              typeof parsedLs.state.preparedBy === "string" &&
+              parsedLs.state.preparedBy
+            ) {
+              loadedSettings.preparedBy = parsedLs.state.preparedBy;
+              console.log(
+                "[SettingsStore Init] Using localStorage fallback for preparedBy"
+              );
+            }
+            if (
+              loadedSettings.approvedBy === "" &&
+              typeof parsedLs.state.approvedBy === "string" &&
+              parsedLs.state.approvedBy
+            ) {
+              loadedSettings.approvedBy = parsedLs.state.approvedBy;
+              console.log(
+                "[SettingsStore Init] Using localStorage fallback for approvedBy"
+              );
+            }
+            if (
+              loadedSettings.companyName === "" &&
+              typeof parsedLs.state.companyName === "string" &&
+              parsedLs.state.companyName
+            ) {
+              loadedSettings.companyName = parsedLs.state.companyName;
+              console.log(
+                "[SettingsStore Init] Using localStorage fallback for companyName"
+              );
+            }
+            // We don't necessarily need logoPath fallback here as layout already tries to load dbPath
+            // ColumnColors and CalculationSettings are complex, safer to rely on app_settings.json
+            if (
+              !initialDbPath &&
+              typeof parsedLs.state.dbPath === "string" &&
+              parsedLs.state.dbPath
+            ) {
+              // If initialDbPath wasn't provided but localStorage has one, use it.
+              loadedSettings.dbPath = parsedLs.state.dbPath;
+              console.log(
+                "[SettingsStore Init] Using localStorage fallback for dbPath itself."
+              );
+            }
+          }
+        }
+      } catch (e) {
+        console.error(
+          "[SettingsStore Init] Error processing localStorage fallback:",
+          e
+        );
+      }
+      // --- One-time LocalStorage Fallback --- END
+
+      // --- Log before final set ---
+      console.log(
+        "[SettingsStore Init] Final state before setting:",
+        loadedSettings
+      );
+      // --- End Log ---
+
       set({ ...loadedSettings, isInitialized: true });
 
-      // Attempt an initial save if dbPath is now set (covers case where file didn't exist)
+      // Attempt an initial save if dbPath is now set
       if (get().dbPath) {
         await _saveSettings();
+        // --- Log after save attempt ---
+        console.log(
+          "[SettingsStore Init] _saveSettings attempted with dbPath:",
+          get().dbPath
+        );
+        // --- End Log ---
+      } else {
+        // --- Log if save skipped ---
+        console.log(
+          "[SettingsStore Init] Skipping initial save because dbPath is empty."
+        );
+        // --- End Log ---
       }
     },
 
