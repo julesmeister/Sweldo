@@ -56,7 +56,7 @@ This model handles reading and writing daily attendance records (time in/out) an
         *   Prepares the data for CSV (only `employeeId`, `day`, `month`, `year`, `timeIn`, `timeOut` columns).
         *   Writes the complete, updated list to the primary `..._attendance.csv` file using `Papa.unparse` (with headers).
         *   Calls the internal `appendToBackup` helper to append *only the changed/added* records (with a timestamp) to the `..._attendance_backup.csv` file.
-    *   **Does not** save alternative times; use `saveAlternativeTimes` for that.
+    *   **Updates Alternatives:** After successfully saving the attendance CSV and backup, it loads the existing `alternatives.json` for the employee, checks if the `timeIn` or `timeOut` values from the just-saved records are new, adds any new unique times to the list, and saves the updated list back to `alternatives.json`. This ensures the suggestions list grows automatically. (Errors during this step are logged but do not prevent the main attendance save).
 
 3.  **`saveAlternativeTimes(employeeId, times)`**:
     *   Constructs the file path: `<basePath>/<employeeId>/alternatives.json`.

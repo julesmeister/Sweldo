@@ -296,7 +296,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                                ${
                                  editValue === time
                                    ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
-                                   : "hover:bg-white/80 text-gray-700 hover:shadow-sm"
+                                   : "hover:bg-gray-100 text-gray-700 hover:shadow-sm"
                                }
                              `}
                       >

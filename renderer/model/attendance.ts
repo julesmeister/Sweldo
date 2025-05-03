@@ -337,6 +337,47 @@ export class AttendanceModel {
         });
         await window.electron.writeFile(filePath, csv);
         await this.appendToBackup(recordsToBackup, filePath);
+
+        // --- Add/Update Alternatives ---
+        try {
+          const currentAlternatives = await this.loadAlternativeTimes(
+            employeeId
+          );
+          const alternativesSet = new Set(currentAlternatives); // Use a Set for efficient checking
+          let alternativesChanged = false;
+
+          // Iterate through the records that were actually saved/updated
+          for (const record of recordsToBackup) {
+            const timesToAdd = [record.timeIn, record.timeOut];
+
+            for (const time of timesToAdd) {
+              // Check if time is valid (not null/empty and basic HH:MM format)
+              if (
+                time &&
+                typeof time === "string" &&
+                /^\d{1,2}:\d{2}$/.test(time)
+              ) {
+                if (!alternativesSet.has(time)) {
+                  alternativesSet.add(time);
+                  alternativesChanged = true;
+                }
+              }
+            }
+          }
+
+          if (alternativesChanged) {
+            const updatedAlternatives = Array.from(alternativesSet).sort(); // Keep it sorted
+            await this.saveAlternativeTimes(employeeId, updatedAlternatives);
+            console.log(`Updated alternatives for employee ${employeeId}`); // Optional logging
+          }
+        } catch (altError) {
+          // Log the error but don't let it block the main save operation success
+          console.warn(
+            `Warning: Failed to update alternative times for employee ${employeeId}:`,
+            altError
+          );
+        }
+        // --- End Add/Update Alternatives ---
       }
     } catch (error) {
       console.error(
