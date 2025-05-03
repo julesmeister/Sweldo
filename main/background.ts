@@ -84,6 +84,42 @@ ipcMain.handle(
   }
 );
 
+ipcMain.handle(
+  "fs:appendFile",
+  async (_event, filePath: string, content: string) => {
+    try {
+      if (!validatePath(filePath)) {
+        throw new Error("Invalid file path");
+      }
+      // Ensure the directory exists before appending.
+      // If ensureDir itself throws, the error will be caught and propagated.
+      await ensureDir(path.dirname(filePath));
+      await fs.appendFile(filePath, content, "utf-8");
+    } catch (error) {
+      console.error("Error appending file:", error);
+      throw error; // Re-throw the error to be caught by the renderer process
+    }
+  }
+);
+
+ipcMain.handle("fs:readdir", async (_event, dirPath: string) => {
+  try {
+    if (!validatePath(dirPath)) {
+      throw new Error("Invalid directory path");
+    }
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    // Return entries suitable for the renderer (e.g., names and type)
+    return entries.map((entry) => ({
+      name: entry.name,
+      isDirectory: entry.isDirectory(),
+      isFile: entry.isFile(),
+    }));
+  } catch (error) {
+    console.error("Error reading directory:", error);
+    throw error; // Re-throw the error
+  }
+});
+
 ipcMain.handle("fs:ensureDir", async (_event, dirPath: string) => {
   try {
     if (!validatePath(dirPath)) {

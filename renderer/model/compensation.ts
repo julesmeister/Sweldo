@@ -36,6 +36,80 @@ export class CompensationModel {
     this.folderPath = filePath;
   }
 
+  // Helper function to append records to the backup file
+  private async appendToBackup(
+    recordsToBackup: Compensation[],
+    filePath: string
+  ): Promise<void> {
+    if (!recordsToBackup || recordsToBackup.length === 0) {
+      return; // Nothing to backup or invalid input
+    }
+
+    const backupFilePath = filePath.replace(
+      "_compensation.csv",
+      "_compensation_backup.csv"
+    );
+    const timestamp = new Date().toISOString();
+
+    // Map records to include the timestamp
+    const backupData = recordsToBackup.map((record) => ({
+      timestamp: timestamp,
+      ...record,
+    }));
+
+    // Define headers specifically for the backup file, including timestamp
+    const backupHeaders = [
+      "timestamp",
+      "employeeId",
+      "month",
+      "year",
+      "day",
+      "dayType",
+      "dailyRate",
+      "hoursWorked",
+      "overtimeMinutes",
+      "overtimePay",
+      "undertimeMinutes",
+      "undertimeDeduction",
+      "lateMinutes",
+      "lateDeduction",
+      "holidayBonus",
+      "leaveType",
+      "leavePay",
+      "grossPay",
+      "deductions",
+      "netPay",
+      "manualOverride",
+      "notes",
+      "absence",
+      "nightDifferentialHours",
+      "nightDifferentialPay",
+    ];
+
+    try {
+      const backupExists = await window.electron.fileExists(backupFilePath);
+
+      // Convert to CSV. Only include headers if the file doesn't exist.
+      const csvToAppend = Papa.unparse(backupData, {
+        header: !backupExists,
+        columns: backupHeaders, // Ensure consistent column order
+      });
+
+      // Ensure content starts on a new line if appending to existing file
+      const contentToAppend = backupExists ? `\n${csvToAppend}` : csvToAppend;
+
+      await window.electron.appendFile(backupFilePath, contentToAppend);
+    } catch (error) {
+      console.error(
+        "Error appending to compensation backup file:",
+        backupFilePath,
+        error
+      );
+      // Log and continue, or re-throw if backup failure should halt the process
+      // throw new Error(`Failed to write backup file: ${backupFilePath}`);
+    }
+  }
+
   // Load compensation records from CSV
   public async loadRecords(
     month?: number,
@@ -108,32 +182,41 @@ export class CompensationModel {
     return allRecords;
   }
 
-  // Save compensation records
+  // Save compensation records (overwrites file, used by saveOrUpdateCompensations)
+  // This function WILL now also trigger the backup append
   public async saveOrUpdateRecords(
     employeeId: string,
     year: number,
     month: number,
-    records: Compensation[]
+    records: Compensation[],
+    recordsToBackup: Compensation[] // Pass the records that changed
   ): Promise<void> {
     try {
       const filePath = `${this.folderPath}/${employeeId}/${year}_${month}_compensation.csv`;
-      const csv = Papa.unparse(records);
+      const csv = Papa.unparse(records, { header: true }); // Ensure headers for main file
       await window.electron.writeFile(filePath, csv);
+
+      // Append the changed records to the backup file
+      await this.appendToBackup(recordsToBackup, filePath);
     } catch (error) {
-      throw error;
+      console.error(
+        `Error saving compensation records for ${employeeId} ${year}-${month}:`,
+        error
+      );
+      throw error; // Re-throw error
     }
   }
 
   // Save or update specific compensation records
   public async saveOrUpdateCompensations(
-    compensations: Compensation[],
+    compensationsToSave: Compensation[],
     month: number,
     year: number,
     employeeId: string
   ): Promise<void> {
     try {
       // Validate input compensations
-      for (const compensation of compensations) {
+      for (const compensation of compensationsToSave) {
         if (
           !Number.isInteger(compensation.month) ||
           compensation.month < 1 ||
@@ -156,27 +239,64 @@ export class CompensationModel {
       // Load existing records
       const existingRecords = await this.loadRecords(month, year, employeeId);
 
-      // Update or add new records
-      const updatedRecords = [...existingRecords];
-      for (const compensation of compensations) {
-        const index = updatedRecords.findIndex(
-          (r) =>
-            r.month === compensation.month &&
-            r.year === compensation.year &&
-            r.day === compensation.day
-        );
+      const recordsToBackup: Compensation[] = [];
+      let changesMade = false;
 
-        if (index >= 0) {
-          updatedRecords[index] = compensation;
+      // Create a map for faster lookups of existing records by day
+      const existingRecordsMap = new Map<number, Compensation>();
+      existingRecords.forEach((record) =>
+        existingRecordsMap.set(record.day, record)
+      );
+
+      // Prepare the list for updated records
+      const updatedRecordsList: Compensation[] = [...existingRecords];
+
+      for (const compensation of compensationsToSave) {
+        const existingRecord = existingRecordsMap.get(compensation.day);
+
+        if (existingRecord) {
+          // Check if the record actually changed (simple JSON string comparison for now)
+          // For more complex objects or specific checks, compare fields individually
+          if (JSON.stringify(existingRecord) !== JSON.stringify(compensation)) {
+            const index = updatedRecordsList.findIndex(
+              (r) => r.day === compensation.day
+            );
+            if (index !== -1) {
+              updatedRecordsList[index] = compensation; // Update in the list
+              recordsToBackup.push(compensation);
+              changesMade = true;
+            }
+          }
         } else {
-          updatedRecords.push(compensation);
+          // New record, add it
+          updatedRecordsList.push(compensation);
+          recordsToBackup.push(compensation);
+          changesMade = true;
+          // Add to map as well if subsequent updates in the same batch might reference it
+          // existingRecordsMap.set(compensation.day, compensation);
         }
       }
 
-      // Save all records
-      await this.saveOrUpdateRecords(employeeId, year, month, updatedRecords);
+      // Only save if changes were actually made
+      if (changesMade) {
+        // Sort records by day before saving
+        updatedRecordsList.sort((a, b) => a.day - b.day);
+
+        // Save all records (overwrites main file) and pass changed records for backup
+        await this.saveOrUpdateRecords(
+          employeeId,
+          year,
+          month,
+          updatedRecordsList,
+          recordsToBackup
+        );
+      }
     } catch (error) {
-      throw error;
+      console.error(
+        `Error saving or updating compensations for ${employeeId} ${year}-${month}:`,
+        error
+      );
+      throw error; // Re-throw error
     }
   }
 }

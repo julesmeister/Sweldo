@@ -15,6 +15,7 @@ import {
   IoShieldOutline,
   IoFolderOutline,
   IoImageOutline,
+  IoSyncOutline,
 } from "react-icons/io5";
 import { MdOutlineDataset } from "react-icons/md";
 import {
@@ -31,6 +32,7 @@ import {
 import { MagicCard } from "../components/magicui/magic-card";
 import ScheduleSettings from "../components/ScheduleSettings";
 import RoleManagement from "../components/RoleManagement";
+import DataMigrationSettings from "../components/DataMigrationSettings";
 import { RoleModelImpl } from "../model/role";
 import { Switch } from "@headlessui/react";
 
@@ -729,7 +731,10 @@ export default function SettingsPage() {
           onSave={async (types) => {
             try {
               setEmploymentTypes(types);
-              await attendanceSettingsModel.saveTimeSettings(types);
+              // Need to ensure attendanceSettingsModel is available here
+              // Maybe initialize it in a useEffect based on dbPath?
+              const model = createAttendanceSettingsModel(dbPath || "");
+              await model.saveTimeSettings(types);
             } catch (error) {
               console.error("Error saving employment types:", error);
             }
@@ -2447,6 +2452,20 @@ export default function SettingsPage() {
         </div>
       ),
     },
+    {
+      key: "dataMigration",
+      title: "Data Migration",
+      icon: <IoSyncOutline className="w-5 h-5" />,
+      requiredAccess: "MANAGE_SETTINGS",
+      content: dbPath ? (
+        <DataMigrationSettings dbPath={dbPath} />
+      ) : (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-sm text-yellow-800">
+          Please configure the database path in the 'Database Management'
+          section before running migrations.
+        </div>
+      ),
+    },
   ];
 
   // Filter accessible sections
@@ -2458,8 +2477,11 @@ export default function SettingsPage() {
 
   // Effects
   useEffect(() => {
-    if (!accessibleSections.find((section) => section.key === selected)) {
-      setSelected(accessibleSections[0]?.key || "");
+    if (
+      accessibleSections.length > 0 &&
+      !accessibleSections.find((section) => section.key === selected)
+    ) {
+      setSelected(accessibleSections[0].key);
     }
   }, [selected, accessibleSections]);
 
@@ -2866,12 +2888,12 @@ export default function SettingsPage() {
         <div className="px-4 sm:px-0">
           <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
             <div className="border-b border-gray-100">
-              <div className="flex items-center gap-1 px-6 bg-gray-50">
+              <div className="flex items-center gap-1 px-6 bg-gray-50 overflow-x-auto scrollbar-thin">
                 {accessibleSections.map((section) => (
                   <button
                     key={section.key}
                     onClick={() => handleSelectionChange(section.key)}
-                    className={`flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all whitespace-nowrap ${
                       selected === section.key
                         ? "text-blue-600"
                         : "text-gray-600 hover:text-gray-900"

@@ -100,6 +100,7 @@ const TimesheetPage: React.FC = () => {
   const [showRecomputeDialog, setShowRecomputeDialog] = useState(false);
   const [hasAttemptedInitialRefresh, setHasAttemptedInitialRefresh] =
     useState(false);
+  const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -375,6 +376,9 @@ const TimesheetPage: React.FC = () => {
     compensation: Compensation | undefined | null,
     event: React.MouseEvent
   ) => {
+    // Stop any active cell editing before opening the dialog
+    handleStopEdit();
+
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     const spaceBelow = windowHeight - rect.bottom;
@@ -616,6 +620,85 @@ const TimesheetPage: React.FC = () => {
   // Get schedule info for all days at once
   const scheduleMap = useSchedules(employmentTypeObj, dates);
 
+  // --- Handlers for Single Edit Mode ---
+  const handleStartEdit = (cellKey: string) => {
+    console.log(`[Timesheet] Attempting to start edit for: ${cellKey}`);
+
+    // Close the compensation dialog if it's open
+    if (isDialogOpen) {
+      setIsDialogOpen(false);
+      setSelectedEntry(null);
+      setClickPosition(null);
+    }
+
+    if (editingCellKey && editingCellKey !== cellKey) {
+      toast.warning(
+        "Please save or cancel the current edit before starting another."
+      );
+    } else {
+      setEditingCellKey(cellKey);
+      console.log(`[Timesheet] Started editing cell: ${cellKey}`);
+    }
+  };
+
+  const handleStopEdit = () => {
+    console.log(`[Timesheet] Stopping edit for cell: ${editingCellKey}`);
+    setEditingCellKey(null);
+  };
+  // --- End Handlers ---
+
+  // --- Swap Time Handler ---
+  const handleSwapTimes = async (rowData: Attendance) => {
+    if (!hasAccess("MANAGE_ATTENDANCE")) {
+      toast.error("You don't have permission to modify attendance records");
+      return;
+    }
+    if (!rowData || !rowData.employeeId) {
+      toast.error("Cannot swap times: Missing employee data.");
+      return;
+    }
+
+    console.log(
+      `[Timesheet] Swapping times for employee ${rowData.employeeId}, day ${rowData.day}`
+    );
+
+    const originalTimeIn = rowData.timeIn;
+    const originalTimeOut = rowData.timeOut;
+
+    // Prepare the update data
+    const updates = [
+      {
+        day: rowData.day,
+        timeIn: originalTimeOut, // New timeIn is old timeOut
+        timeOut: originalTimeIn, // New timeOut is old timeIn
+      },
+    ];
+
+    try {
+      // Call the save function which now handles individual updates
+      await attendanceModel.saveOrUpdateAttendances(
+        updates,
+        rowData.month,
+        rowData.year,
+        rowData.employeeId
+      );
+
+      // Refresh data to show the updated times immediately
+      // Use showToast: false as the swap button already shows a success toast
+      await refreshTimesheetData(false);
+
+      // Note: Compensations might need recomputing.
+      // Consider if this should trigger computeCompensations or if the next load/refresh will handle it.
+      // For now, just refresh attendance data.
+    } catch (error) {
+      console.error("Error during time swap save:", error);
+      // The catch block in EditableCell will show the toast,
+      // but we might re-throw or handle differently if needed here.
+      throw error; // Re-throw so EditableCell can catch it
+    }
+  };
+  // --- End Swap Handler ---
+
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
     return (
@@ -724,7 +807,6 @@ const TimesheetPage: React.FC = () => {
     const isAbsent =
       scheduleInfo?.hasSchedule && !scheduleInfo.isRestDay && !hasTimeEntries;
 
-
     const rowClass = `cursor-pointer ${
       isAbsent
         ? "bg-red-50 hover:bg-red-100"
@@ -745,21 +827,37 @@ const TimesheetPage: React.FC = () => {
             (column.key === "timeIn" || column.key === "timeOut" ? (
               employeeTimeSettings?.requiresTimeTracking ? (
                 hasAccess("MANAGE_ATTENDANCE") ? (
-                  <EditableCell
-                    key={column.key}
-                    value={
-                      column.key === "timeIn"
-                        ? foundEntry.timeIn || ""
-                        : foundEntry.timeOut || ""
-                    }
-                    column={column}
-                    rowData={foundEntry}
-                    onClick={(event) => event.stopPropagation()}
-                    onSave={async (value, rowData) =>
-                      handleTimesheetEdit(value.toString(), rowData, column.key)
-                    }
-                    employmentTypes={employmentTypes}
-                  />
+                  (() => {
+                    // IIFE to calculate cellKey
+                    const cellKey = `${column.key}-${day}`;
+                    const isCurrentlyEditing = editingCellKey === cellKey;
+                    return (
+                      <EditableCell
+                        key={cellKey} // Use cellKey for React key as well
+                        value={
+                          column.key === "timeIn"
+                            ? foundEntry.timeIn || ""
+                            : foundEntry.timeOut || ""
+                        }
+                        dbPath={dbPath} // Pass dbPath
+                        column={column}
+                        rowData={foundEntry}
+                        isEditing={isCurrentlyEditing} // Pass isEditing state
+                        onStartEdit={() => handleStartEdit(cellKey)} // Pass start edit handler
+                        onStopEdit={handleStopEdit} // Pass stop edit handler
+                        onSave={async (value, rowData) => {
+                          await handleTimesheetEdit(
+                            value.toString(),
+                            rowData,
+                            column.key
+                          );
+                          handleStopEdit(); // Stop editing on successful save
+                        }}
+                        onSwapTimes={handleSwapTimes} // Pass swap handler
+                        employmentTypes={employmentTypes}
+                      />
+                    );
+                  })()
                 ) : (
                   <td
                     key={column.key}

@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld("electron", {
   readFile: (filePath: string) => ipcRenderer.invoke("fs:readFile", filePath),
   writeFile: (filePath: string, content: string) =>
     ipcRenderer.invoke("fs:writeFile", filePath, content),
+  appendFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke("fs:appendFile", filePath, content),
   saveFile: (filePath: string, content: string) =>
     ipcRenderer.invoke("fs:saveFile", filePath, content),
   ensureDir: (dirPath: string) => ipcRenderer.invoke("fs:ensureDir", dirPath),
@@ -106,6 +108,7 @@ contextBridge.exposeInMainWorld("electron", {
       };
     }
   ) => ipcRenderer.invoke("pdf:generateLandscape", payrolls, options),
+  readDir: (dirPath: string) => ipcRenderer.invoke("fs:readdir", dirPath),
 });
 
 export type IpcHandler = typeof handler;
