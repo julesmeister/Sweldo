@@ -142,6 +142,123 @@ The Compensation model was migrated from CSV to JSON with the following changes:
    - Added UI button in `DataMigrationSettings.tsx`
    - Progress reporting via callback
 
+### Shorts Model
+
+1. **File Renaming**
+   - Original `shorts.ts` → `shorts_old.ts` (Completed)
+   - New JSON implementation to be created as `shorts.ts`
+
+2. **Interface Maintenance**
+   - Public interface (`Short`) to be preserved
+   - Factory function (`createShortModel`) to be maintained
+
+3. **Storage Format**
+   - CSV: `SweldoDB/shorts/[employeeId]/YYYY_MM_shorts.csv` (One row per short)
+   - JSON: `SweldoDB/shorts/[employeeId]/YYYY_MM_shorts.json` (Object containing `shorts` array)
+   ```json
+   // YYYY_MM_shorts.json
+   {
+     "meta": {
+       "employeeId": "...",
+       "year": YYYY,
+       "month": MM,
+       "lastModified": "iso_timestamp"
+     },
+     "shorts": [
+       {
+         "id": "...",
+         "employeeId": "...",
+         "date": "iso_timestamp",
+         "amount": 100,
+         "remainingUnpaid": 50,
+         "reason": "...",
+         "status": "Unpaid"
+       }
+     ]
+   }
+   ```
+
+4. **Migration Function**
+   - Add `migrateCsvToJson` function to `ShortModel` in `shorts.ts`
+   - Add UI button in `DataMigrationSettings.tsx`
+
+## In Progress Migrations
+
+### Role Model
+
+1. **File Renaming**
+   - Original `role.ts` → `role_old.ts` (Completed)
+   - New JSON implementation to be created as `role.ts`
+
+2. **Interface Maintenance**
+   - Public interfaces (`Role`, `RoleModel`) to be preserved
+   - Factory function (`createRoleModel`) to be maintained
+
+3. **Storage Format**
+   - CSV: One row per role
+   - JSON: Object containing an array of roles
+   ```json
+   {
+     "roles": [
+       {
+         "id": "...",
+         "name": "...",
+         "pinCode": "encrypted_pin",
+         "accessCodes": ["code1", "code2"],
+         "description": "...",
+         "createdAt": "iso_timestamp",
+         "updatedAt": "iso_timestamp"
+       }
+     ]
+   }
+   ```
+
+4. **Migration Function**
+   - Add `migrateCsvToJson` function to `role.ts`
+   - Add UI button in `DataMigrationSettings.tsx`
+
+### Settings Model
+
+1. **File Renaming**
+   - Original `settings.ts` → `settings_old.ts` (Completed)
+   - New JSON implementation to be created as `settings.ts`
+
+2. **Interface Maintenance**
+   - Public interfaces (`Settings`, `AttendanceSettings`, `EmploymentType`) to be preserved
+   - Factory function (`createAttendanceSettingsModel`) to be maintained
+
+3. **Storage Format**
+   - `settings.csv` → `settings.json` (Stores single `AttendanceSettings` object)
+   ```json
+   // settings.json
+   {
+     "lateGracePeriod": 5,
+     "lateDeductionPerMinute": 1,
+     // ... other AttendanceSettings fields
+     "countEarlyTimeInAsOvertime": false
+   }
+   ```
+   - `timeSettings.csv` → `timeSettings.json` (Stores `EmploymentType` array)
+   ```json
+   // timeSettings.json
+   {
+     "employmentTypes": [
+       {
+         "type": "regular",
+         "hoursOfWork": 8,
+         "schedules": [...],
+         "monthSchedules": {...},
+         "requiresTimeTracking": true
+       }
+       // ... other employment types
+     ]
+   }
+   ```
+
+4. **Migration Function**
+   - Add `migrateCsvToJson` function to `AttendanceSettingsModel` in `settings.ts` (handles both files)
+   - Add UI button in `DataMigrationSettings.tsx`
+
 ## Template for Future Migrations
 
 ### 1. Rename Original Model

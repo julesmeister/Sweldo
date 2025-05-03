@@ -4,7 +4,7 @@ import {
   Attendance,
   ExcelData,
   createAttendanceModel,
-} from "./attendance_old";
+} from "./attendance";
 import { Compensation, createCompensationModel } from "./compensation";
 import { MissingTimeModel, MissingTimeLog } from "./missingTime";
 import * as Papa from "papaparse";
@@ -23,6 +23,9 @@ import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 import { evaluateFormula } from "../utils/formula";
 import { processTimeEntries } from "../utils/timeProcessor";
+
+// Import the old Payroll model for fallback logic
+import { Payroll as OldPayroll } from "./payroll_old";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -56,7 +59,6 @@ export interface PayrollSummaryModel {
     shortDeductions?: number;
     others: number;
   };
-
   netPay: number;
   paymentDate: string;
   daysWorked: number;
@@ -79,37 +81,14 @@ interface TimeEntry {
   hour: number;
 }
 
-interface PayrollCSVData {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  startDate: string;
-  endDate: string;
-  dailyRate: string;
-  basicPay: string;
-  overtimePay: string;
-  overtimeMinutes: string;
-  undertimeDeduction: string;
-  undertimeMinutes: string;
-  lateDeduction: string;
-  lateMinutes: string;
-  holidayBonus: string;
-  grossPay: string;
-  allowances: string;
-  sssDeduction: string;
-  philHealthDeduction: string;
-  pagIbigDeduction: string;
-  cashAdvanceIDs: string;
-  cashAdvanceDeductions: string;
-  shortIDs: string;
-  shortDeductions: string;
-  otherDeductions: string;
-  netPay: string;
-  paymentDate: string;
-  daysWorked: string;
-  absences: string;
-  nightDifferentialHours: string;
-  nightDifferentialPay: string;
+interface PayrollJsonStructure {
+  meta: {
+    employeeId: string;
+    year: number;
+    month: number;
+    lastModified: string;
+  };
+  payrolls: PayrollSummaryModel[];
 }
 
 export class Payroll {
@@ -121,6 +100,7 @@ export class Payroll {
   private dbPath: string;
   private attendanceSettingsModel: AttendanceSettingsModel;
   private employmentTypes: EmploymentType[] = [];
+  private oldPayrollModelInstance: OldPayroll;
 
   constructor(rows: any[][], fileTypeParam: string, dbPath: string) {
     this.dbPath = dbPath;
@@ -132,7 +112,8 @@ export class Payroll {
     this.fileType = fileTypeParam || "xlsx";
     this.days = 0;
     this.attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
-    // Initialize the processing asynchronously
+    this.oldPayrollModelInstance = new OldPayroll(rows, fileTypeParam, dbPath);
+
     if (rows && rows.length > 0) {
       this.init(rows);
     }
@@ -167,13 +148,10 @@ export class Payroll {
   private async replaceValues(rows: any[][]): Promise<void> {
     const targetRow = rows[2];
     const attTimeIndex = this.findIndexInRow(targetRow, "Att. Time");
-    const tabulationIndex = this.findIndexInRow(targetRow, "Tabulation");
 
-    // Parse days
     const lastNonNullValue = rows[3].filter((value) => value != null).pop();
     this.days = parseInt(lastNonNullValue?.toString() || "0");
 
-    // Parse date range
     for (let i = attTimeIndex + 1; i < targetRow.length; i++) {
       if (attTimeIndex !== -1 && i < targetRow.length) {
         const dateString = targetRow[i]?.toString() || "";
@@ -190,19 +168,15 @@ export class Payroll {
       }
     }
 
-    // Load time settings before processing
     await this.loadTimeSettings();
 
-    // Process employee data
     for (let i = 4; i < rows.length; i += 2) {
       const timeList = rows[i + 1]?.map((value) => value?.toString());
 
-      // Get employee ID and load employee data
       const employeeId = this.processColumn(rows[i], "ID:");
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
 
-      // Only add employee to this.employees if they don't exist in the database
       if (!employee) {
         const employeeName = this.processColumn(rows[i], "Name:");
         this.employees.push({
@@ -219,7 +193,6 @@ export class Payroll {
         });
       }
 
-      // Process time entries using the utility function
       const { attendances, missingTimeLogs } = processTimeEntries(
         timeList || [],
         employeeId,
@@ -232,44 +205,35 @@ export class Payroll {
 
       if (employee) {
         const attendanceModel = createAttendanceModel(this.dbPath);
-
-        // 1. Load existing attendance for the month/year
         const existingAttendances = await attendanceModel.loadAttendancesById(
           this.dateRange.start.getMonth() + 1,
           this.dateRange.start.getFullYear(),
           employee.id
         );
         const existingDays = new Set(existingAttendances.map((att) => att.day));
-
-        // 2. Filter processed entries to find only new ones
         const newAttendancesToSave = attendances.filter(
           (att) => !existingDays.has(att.day)
         );
-
-        // 3. Save only if there are new entries to add
         if (newAttendancesToSave.length > 0) {
-          console.log(
-            `[Payroll] Saving ${newAttendancesToSave.length} new attendance entries for employee ${employee.id}`
-          );
           await attendanceModel.saveOrUpdateAttendances(
-            newAttendancesToSave, // Pass only the new entries
+            newAttendancesToSave,
             this.dateRange.start.getMonth() + 1,
             this.dateRange.start.getFullYear(),
             employee.id
           );
-        } else {
-          console.log(
-            `[Payroll] No new attendance entries to save for employee ${employee.id}, existing data preserved.`
-          );
         }
 
-        // Save missing time logs
         const missingTimeModel = MissingTimeModel.createMissingTimeModel(
           this.dbPath
         );
         for (const log of missingTimeLogs) {
+          const logWithId: MissingTimeLog = {
+            ...log,
+            id: `log-${Date.now()}-${Math.random()}`,
+            createdAt: new Date().toISOString(),
+          };
           await missingTimeModel.saveMissingTimeLog(
-            log,
+            logWithId,
             this.dateRange.start.getMonth() + 1,
             this.dateRange.start.getFullYear()
           );
@@ -277,7 +241,6 @@ export class Payroll {
       }
     }
 
-    // Save employees
     let model = createEmployeeModel(this.dbPath);
     await model.saveOnlyNewEmployees(this.employees);
   }
@@ -296,18 +259,14 @@ export class Payroll {
     const compensationModel = createCompensationModel(this.dbPath);
 
     const employee = await employeeModel.loadEmployeeById(employeeId);
-    const attendance = await createAttendanceModel(this.dbPath); // Keep attendance model if needed elsewhere, but not for daysWorked/absences
 
-    // Get all months between start and end date to handle cross-month payroll periods
     const months: { month: number; year: number }[] = [];
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate instanceof Date ? endDate : new Date(endDate);
 
-    // Create a new date object for iteration to avoid modifying the original
     const currentDateIter = new Date(start.getFullYear(), start.getMonth(), 1);
     const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
 
-    // Keep adding months while currentDateIter is less than or equal to endMonth
     while (currentDateIter <= endMonth) {
       months.push({
         month: currentDateIter.getMonth() + 1,
@@ -316,7 +275,6 @@ export class Payroll {
       currentDateIter.setMonth(currentDateIter.getMonth() + 1);
     }
 
-    // Fetch all compensations for the date range from all relevant months
     const compensationResults = await Promise.all(
       months.map(({ month, year }) =>
         compensationModel.loadRecords(month, year, employeeId)
@@ -324,9 +282,7 @@ export class Payroll {
     );
     const allCompensations = compensationResults.flat();
 
-    // Filter records to only include those within the exact date range
     const filteredCompensations = allCompensations.filter((comp) => {
-      // Create date at start of day to avoid timezone issues
       const compDate = new Date(comp.year, comp.month - 1, comp.day);
       compDate.setHours(0, 0, 0, 0);
 
@@ -343,9 +299,6 @@ export class Payroll {
       throw new Error("Employee not found");
     }
 
-    // --- REFINED LOGIC START ---
-
-    // Create a map for quick lookup of compensation records by date timestamp
     const compensationMap = new Map<number, Compensation>();
     filteredCompensations.forEach((comp) => {
       const compDate = new Date(comp.year, comp.month - 1, comp.day);
@@ -363,52 +316,33 @@ export class Payroll {
       currentDay.setDate(start.getDate() + i);
       currentDay.setHours(0, 0, 0, 0);
       const currentDayTime = currentDay.getTime();
-      const isRestDay = currentDay.getDay() === 0; // Assuming Sunday is rest day
+      const isRestDay = currentDay.getDay() === 0;
 
       const compensationRecord = compensationMap.get(currentDayTime);
 
       if (compensationRecord) {
-        // Compensation record exists for this day
-        const netPay = compensationRecord.netPay ?? 0; // Treat null/undefined netPay as 0
+        const netPay = compensationRecord.netPay ?? 0;
         const dayType = compensationRecord.dayType;
 
         if (netPay > 0) {
-          // If there's net pay, it's a worked day (or paid leave/holiday)
           calculatedDaysWorked++;
         } else if (dayType !== "Regular") {
-          // If there's no net pay but it's not a Regular day, it's a leave/holiday
-          calculatedAbsences = calculatedAbsences; // stay the same
+          calculatedAbsences = calculatedAbsences;
         } else {
-          // Record exists, netPay is 0, and it's a Regular day (or other non-paid type) -> Absence
-          // Only count as absence if it's not a designated rest day
           if (!isRestDay) {
             calculatedAbsences++;
           }
         }
       } else {
-        // No compensation record for this day
-        // If it's not a rest day, count as absence
         if (!isRestDay) {
           calculatedAbsences++;
         }
-        // Else, it's a rest day without compensation, do nothing
       }
     }
 
-    // Use the newly calculated counts
     const daysWorked = calculatedDaysWorked;
     const totalAbsences = calculatedAbsences;
 
-    console.log(
-      `[Payroll Summary] Refined Calculated Days Worked: ${daysWorked}`
-    );
-    console.log(
-      `[Payroll Summary] Refined Calculated Absences: ${totalAbsences}`
-    );
-
-    // --- REFINED LOGIC END ---
-
-    // Calculate totals from pre-computed compensation records
     let totalBasicPay = 0;
     let totalOvertime = 0;
     let totalOvertimeMinutes = 0;
@@ -419,22 +353,13 @@ export class Payroll {
     let totalHolidayBonus = 0;
     let totalLeavePay = 0;
     let totalGrossPay = 0;
-    let totalOtherDeductionsFromComp = 0; // Renamed to avoid confusion with gov't deductions
+    let totalOtherDeductionsFromComp = 0;
     let totalNightDifferentialHours = 0;
     let totalNightDifferentialPay = 0;
-
-    // Calculate the daily rate once
     const dailyRate = parseFloat(`${employee.dailyRate || 0}`);
-
-    // Calculate basic pay for the period using the NEW daysWorked count
     totalBasicPay = dailyRate * daysWorked;
-    console.log(
-      `[Payroll Summary] Calculated Basic Pay (Rate * Days Worked): ${dailyRate} * ${daysWorked} = ${totalBasicPay}`
-    );
 
-    // Sum up all pre-computed values from compensation records
     for (const comp of filteredCompensations) {
-      // Basic pay is now calculated above based on daysWorked, so don't sum it here.
       totalOvertime += comp.overtimePay || 0;
       totalOvertimeMinutes += comp.overtimeMinutes || 0;
       totalUndertimeDeduction += comp.undertimeDeduction || 0;
@@ -443,37 +368,23 @@ export class Payroll {
       totalLateMinutes += comp.lateMinutes || 0;
       totalHolidayBonus += comp.holidayBonus || 0;
       totalLeavePay += comp.leavePay || 0;
-      totalOtherDeductionsFromComp += comp.deductions || 0; // Summing 'deductions' field from Compensation
+      totalOtherDeductionsFromComp += comp.deductions || 0;
       totalNightDifferentialHours += comp.nightDifferentialHours || 0;
       totalNightDifferentialPay += comp.nightDifferentialPay || 0;
     }
 
-    // Calculate total gross pay for the period (using the recalculated basicPay)
-    // Gross Pay = Basic Pay + Overtime + Holiday Bonus + Leave Pay + Night Diff - Undertime - Late
     totalGrossPay =
-      totalBasicPay + // Use the recalculated basic pay
+      totalBasicPay +
       totalOvertime +
       totalHolidayBonus +
       totalLeavePay +
       totalNightDifferentialPay;
-    console.log(`[Payroll Summary] Calculated Gross Pay: ${totalGrossPay}`);
 
-    // Calculate final net pay (This part seems okay, uses grossPay - deductions)
-    // Note: The 'totalDeductions' summed from compensation records might need review
-    // depending on what it represents. Assuming it's *not* government deductions.
-    // const governmentDeductions = (employee.sss || 0) + (employee.philHealth || 0) + (employee.pagIbig || 0);
-    // Let's recalculate totalNetPay based on the new gross and separate deductions
-    // totalNetPay = totalGrossPay - totalOtherDeductionsFromComp - governmentDeductions; // Example if totalOtherDeductionsFromComp are non-gov't
-
-    // Load cash advances for the period - handle cross-month periods
     let cashAdvances: CashAdvance[] = [];
-
-    // If start and end dates are in different months, load from both months
     if (
       startDate.getMonth() !== endDate.getMonth() ||
       startDate.getFullYear() !== endDate.getFullYear()
     ) {
-      // Load from start month
       const startMonthCashAdvanceModel = createCashAdvanceModel(
         this.dbPath,
         employeeId,
@@ -484,8 +395,6 @@ export class Payroll {
         await startMonthCashAdvanceModel.loadCashAdvances(employeeId);
       cashAdvances = [...cashAdvances, ...startMonthCashAdvances];
     }
-
-    // Always load from end month
     const endMonthCashAdvanceModel = createCashAdvanceModel(
       this.dbPath,
       employeeId,
@@ -495,22 +404,16 @@ export class Payroll {
     const endMonthCashAdvances =
       await endMonthCashAdvanceModel.loadCashAdvances(employeeId);
     cashAdvances = [...cashAdvances, ...endMonthCashAdvances];
-
-    // Filter cash advances to only include those within the date range
     cashAdvances = cashAdvances.filter((advance) => {
       const advanceDate = new Date(advance.date);
       return advanceDate >= startDate && advanceDate <= endDate;
     });
 
-    // Load shorts for the period - handle cross-month periods
     let shorts: Short[] = [];
-
-    // If start and end dates are in different months, load from both months
     if (
       startDate.getMonth() !== endDate.getMonth() ||
       startDate.getFullYear() !== endDate.getFullYear()
     ) {
-      // Load from start month
       const startMonthShortModel = createShortModel(
         this.dbPath,
         employeeId,
@@ -522,8 +425,6 @@ export class Payroll {
       );
       shorts = [...shorts, ...startMonthShorts];
     }
-
-    // Always load from end month
     const endMonthShortModel = createShortModel(
       this.dbPath,
       employeeId,
@@ -532,20 +433,14 @@ export class Payroll {
     );
     const endMonthShorts = await endMonthShortModel.loadShorts(employeeId);
     shorts = [...shorts, ...endMonthShorts];
-
-    // Filter shorts to only include those within the date range
     shorts = shorts.filter((short) => {
       const shortDate = new Date(short.date);
       return shortDate >= startDate && shortDate <= endDate;
     });
 
-    // Calculate cash advance deductions (based on what's actually paid in this period, usually handled in generatePayrollSummary)
-    const cashAdvanceDeductions = 0; // Placeholder - actual deduction amount determined later
+    const cashAdvanceDeductions = 0;
+    const shortDeductions = 0;
 
-    // Calculate short deductions (based on what's actually paid in this period, usually handled in generatePayrollSummary)
-    const shortDeductions = 0; // Placeholder - actual deduction amount determined later
-
-    // Ensure the final summary object uses the recalculated values
     const summary: PayrollSummaryModel = {
       id: `${employeeId}-${start.getTime()}`,
       employeeName: employee.name,
@@ -553,7 +448,7 @@ export class Payroll {
       startDate: start,
       endDate: end,
       dailyRate: employee.dailyRate || 0,
-      basicPay: totalBasicPay, // Use recalculated
+      basicPay: totalBasicPay,
       overtime: totalOvertime,
       overtimeMinutes: totalOvertimeMinutes,
       undertimeDeduction: totalUndertimeDeduction,
@@ -563,30 +458,27 @@ export class Payroll {
       holidayBonus: totalHolidayBonus,
       nightDifferentialHours: totalNightDifferentialHours,
       nightDifferentialPay: totalNightDifferentialPay,
-      dayType: filteredCompensations[0]?.dayType || "Regular", // Keep this logic if needed
-      leaveType: filteredCompensations[0]?.leaveType || "None", // Keep this logic if needed
+      dayType: filteredCompensations[0]?.dayType || "Regular",
+      leaveType: filteredCompensations[0]?.leaveType || "None",
       leavePay: totalLeavePay,
-      grossPay: totalGrossPay, // Use recalculated
-      allowances: 0, // Assuming allowances are handled separately or not applicable here
-      cashAdvanceIDs: cashAdvances.map((advance) => advance.id), // Keep IDs for reference
-      shortIDs: shorts.map((short) => short.id), // Keep IDs for reference
+      grossPay: totalGrossPay,
+      allowances: 0,
+      cashAdvanceIDs: cashAdvances.map((advance) => advance.id),
+      shortIDs: shorts.map((short) => short.id),
       deductions: {
-        sss: employee.sss || 0, // Default government deductions
+        sss: employee.sss || 0,
         philHealth: employee.philHealth || 0,
         pagIbig: employee.pagIbig || 0,
-        cashAdvanceDeductions, // Placeholder, will be updated in generatePayrollSummary
-        shortDeductions, // Placeholder, will be updated in generatePayrollSummary
-        others: totalOtherDeductionsFromComp, // Use the sum from compensation records
+        cashAdvanceDeductions,
+        shortDeductions,
+        others: totalOtherDeductionsFromComp,
       },
-      netPay: 0, // Placeholder - netPay calculation happens later in generatePayrollSummary
+      netPay: 0,
       paymentDate: end.toISOString(),
-      daysWorked, // Use recalculated
-      absences: totalAbsences, // Use recalculated
+      daysWorked,
+      absences: totalAbsences,
     };
 
-    // The actual netPay calculation happens in generatePayrollSummary using formulas or gross - total deductions.
-    // We just need to ensure the grossPay and basicPay fed into it are correct.
-    console.log("[Payroll Summary] Returning Summary Object:", summary);
     return summary;
   }
 
@@ -608,6 +500,76 @@ export class Payroll {
       throw new Error(
         `Failed to load calculation settings: ${(error as any).message}`
       );
+    }
+  }
+
+  private static getPayrollJsonFilePath(
+    dbPath: string,
+    employeeId: string,
+    year: number,
+    month: number
+  ): string {
+    return `${dbPath}/SweldoDB/payrolls/${employeeId}/${year}_${month}_payroll.json`;
+  }
+
+  private static async readPayrollJsonFile(
+    dbPath: string,
+    employeeId: string,
+    year: number,
+    month: number
+  ): Promise<PayrollJsonStructure | null> {
+    const filePath = Payroll.getPayrollJsonFilePath(
+      dbPath,
+      employeeId,
+      year,
+      month
+    );
+    try {
+      const fileExists = await window.electron.fileExists(filePath);
+      if (!fileExists) return null;
+      const content = await window.electron.readFile(filePath);
+      const data = JSON.parse(content) as PayrollJsonStructure;
+      data.payrolls.forEach((p) => {
+        p.startDate = new Date(p.startDate);
+        p.endDate = new Date(p.endDate);
+      });
+      return data;
+    } catch (error) {
+      console.error(`Error reading payroll JSON file ${filePath}:`, error);
+      return null;
+    }
+  }
+
+  private static async writePayrollJsonFile(
+    dbPath: string,
+    employeeId: string,
+    year: number,
+    month: number,
+    data: PayrollJsonStructure
+  ): Promise<void> {
+    const filePath = Payroll.getPayrollJsonFilePath(
+      dbPath,
+      employeeId,
+      year,
+      month
+    );
+    const dirPath = `${dbPath}/SweldoDB/payrolls/${employeeId}`;
+    try {
+      await window.electron.ensureDir(dirPath);
+      const dataToSave = JSON.parse(JSON.stringify(data));
+      dataToSave.payrolls.forEach((p: any) => {
+        p.startDate =
+          p.startDate instanceof Date ? p.startDate.toISOString() : p.startDate;
+        p.endDate =
+          p.endDate instanceof Date ? p.endDate.toISOString() : p.endDate;
+      });
+      await window.electron.writeFile(
+        filePath,
+        JSON.stringify(dataToSave, null, 2)
+      );
+    } catch (error) {
+      console.error(`Error writing payroll JSON file ${filePath}:`, error);
+      throw error;
     }
   }
 
@@ -641,7 +603,6 @@ export class Payroll {
       const calculationSettings = await this.loadCalculationSettings();
       console.log("[Payroll] Calculation Settings:", calculationSettings);
 
-      // Calculate values using formulas if available
       const variables = {
         basicPay: summary.basicPay,
         overtime: summary.overtime,
@@ -660,7 +621,6 @@ export class Payroll {
       };
       console.log("[Payroll] Variables for Formula Evaluation:", variables);
 
-      // Calculate gross pay using formula if available
       let grossPayValue = summary.grossPay;
       console.log(
         `[Payroll] Initial Gross Pay (from summary): ${grossPayValue}`
@@ -690,7 +650,6 @@ export class Payroll {
         );
       }
 
-      // Calculate others using formula if available
       let othersValue = 0;
       if (calculationSettings.others?.formula) {
         try {
@@ -722,13 +681,12 @@ export class Payroll {
         );
       }
 
-      // Calculate total deductions using formula if available
       const deductionVariables = {
         sss: deductions?.sss ?? employee.sss ?? 0,
         philHealth: deductions?.philHealth ?? employee.philHealth ?? 0,
         pagIbig: deductions?.pagIbig ?? employee.pagIbig ?? 0,
         cashAdvanceDeductions: deductions?.cashAdvanceDeductions ?? 0,
-        others: deductions?.shortDeductions ?? 0, // shorts go into others
+        others: deductions?.shortDeductions ?? 0,
         lateDeduction: summary.lateDeduction ?? 0,
         undertimeDeduction: summary.undertimeDeduction ?? 0,
       };
@@ -761,7 +719,6 @@ export class Payroll {
           );
         }
       } else {
-        // No formula available, sum all deductions
         totalDeductions = Object.values(deductionVariables).reduce(
           (sum, val) => sum + (typeof val === "number" ? val : 0),
           0
@@ -771,7 +728,6 @@ export class Payroll {
         );
       }
 
-      // Calculate net pay using formula if available
       let netPayValue = grossPayValue - totalDeductions;
       console.log(
         `[Payroll] Initial Net Pay (Gross - Total Deductions): ${grossPayValue} - ${totalDeductions} = ${netPayValue}`
@@ -784,7 +740,7 @@ export class Payroll {
           ...variables,
           grossPay: grossPayValue,
           totalDeductions,
-          others: othersValue, // Ensure 'others' used here matches the calculated 'othersValue'
+          others: othersValue,
         };
         console.log(
           "[Payroll] Variables for Net Pay Formula:",
@@ -839,299 +795,12 @@ export class Payroll {
       };
       console.log("[Payroll] Final Deductions Object:", finalDeductions);
 
-      const payrollData: PayrollCSVData = {
-        id: `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`,
-        employeeId,
-        employeeName: employee.name,
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        dailyRate: summary.dailyRate.toString(),
-        basicPay: summary.basicPay.toString(),
-        overtimePay: summary.overtime.toString(),
-        overtimeMinutes: (summary.overtimeMinutes || 0).toString(),
-        undertimeDeduction: (summary.undertimeDeduction || 0).toString(),
-        undertimeMinutes: (summary.undertimeMinutes || 0).toString(),
-        lateDeduction: (summary.lateDeduction || 0).toString(),
-        lateMinutes: (summary.lateMinutes || 0).toString(),
-        holidayBonus: (summary.holidayBonus || 0).toString(),
-        grossPay: grossPayValue.toString(),
-        allowances: (summary.allowances || 0).toString(),
-        sssDeduction: finalDeductions.sss.toString(),
-        philHealthDeduction: finalDeductions.philHealth.toString(),
-        pagIbigDeduction: finalDeductions.pagIbig.toString(),
-        cashAdvanceIDs: (summary.cashAdvanceIDs || []).join("|"),
-        cashAdvanceDeductions: finalDeductions.cashAdvanceDeductions.toString(),
-        shortIDs: (summary.shortIDs || []).join("|"),
-        shortDeductions: finalDeductions.shortDeductions.toString(),
-        otherDeductions: finalDeductions.others.toString(),
-        netPay: netPayValue.toString(),
-        paymentDate: new Date(
-          end.getTime() + 2 * 24 * 60 * 60 * 1000
-        ).toISOString(),
-        daysWorked: (summary.daysWorked || 0).toString(),
-        absences: (summary.absences || 0).toString(),
-        nightDifferentialHours: (
-          summary.nightDifferentialHours || 0
-        ).toString(),
-        nightDifferentialPay: (summary.nightDifferentialPay || 0).toString(),
-      };
-      console.log("[Payroll] Payroll Data for CSV:", payrollData);
-
-      // Get all months between start and end date
-      const months = [];
-      let currentDate = new Date(start);
-      while (currentDate <= end) {
-        months.push({
-          month: currentDate.getMonth() + 1,
-          year: currentDate.getFullYear(),
-        });
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-
-      // Update cash advances if there are any deductions
-      const cashAdvanceDeductionAmount = deductions?.cashAdvanceDeductions || 0;
-      const cashAdvanceIDsToUpdate = summary.cashAdvanceIDs || [];
-      if (cashAdvanceDeductionAmount > 0 && cashAdvanceIDsToUpdate.length > 0) {
-        console.log(
-          `[Payroll] Processing cash advance deductions. Total amount to deduct: ${cashAdvanceDeductionAmount}`
-        );
-        console.log(
-          `[Payroll] Processing cash advance deductions. Total amount to deduct: ${cashAdvanceDeductionAmount}`
-        );
-
-        // Load all cash advances from relevant months
-        const allAdvances: CashAdvance[] = [];
-
-        // Get the current month and year from the payroll end date
-        const currentMonth = end.getMonth() + 1;
-        const currentYear = end.getFullYear();
-
-        // Check current month and previous month to catch recent advances
-        for (let monthOffset = 0; monthOffset <= 1; monthOffset++) {
-          let targetMonth = currentMonth - monthOffset;
-          let targetYear = currentYear;
-
-          // Handle year boundary
-          if (targetMonth < 1) {
-            targetMonth = 12 + targetMonth;
-            targetYear--;
-          }
-
-          console.log(
-            `[Payroll] Loading cash advances for ${targetYear}-${targetMonth}`
-          );
-          const cashAdvanceModel = createCashAdvanceModel(
-            this.dbPath,
-            employeeId,
-            targetMonth,
-            targetYear
-          );
-          const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
-          allAdvances.push(...advances);
-        }
-
-        // Filter advances by the IDs in the summary and sort by date (oldest first)
-        const advancesToUpdate = allAdvances
-          .filter((advance) => {
-            const isMatch = cashAdvanceIDsToUpdate.includes(advance.id);
-            console.log(
-              `[Payroll] Checking advance ${advance.id}: ${
-                isMatch ? "matches" : "no match"
-              }`
-            );
-            return isMatch;
-          })
-          .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-        console.log(
-          `[Payroll] Found ${advancesToUpdate.length} cash advances to update`
-        );
-
-        // Calculate how much to deduct from each advance
-        let remainingDeduction = cashAdvanceDeductionAmount;
-
-        // Update each cash advance
-        for (const advance of advancesToUpdate) {
-          if (advance.status !== "Paid" && remainingDeduction > 0) {
-            console.log(
-              `[Payroll] Processing advance ID: ${advance.id}, Current remaining: ${advance.remainingUnpaid}`
-            );
-
-            // Calculate how much we can deduct from this advance
-            const deductionForThisAdvance = Math.min(
-              advance.remainingUnpaid,
-              remainingDeduction
-            );
-
-            const newRemainingUnpaid = Math.max(
-              0,
-              advance.remainingUnpaid - deductionForThisAdvance
-            );
-
-            console.log(
-              `[Payroll] Deducting ${deductionForThisAdvance} from advance. New remaining: ${newRemainingUnpaid}`
-            );
-
-            const updatedAdvance = {
-              ...advance,
-              status:
-                newRemainingUnpaid <= 0
-                  ? ("Paid" as const)
-                  : ("Unpaid" as const),
-              remainingUnpaid: newRemainingUnpaid,
-            } as CashAdvance;
-
-            // Update installment details if applicable
-            if (
-              updatedAdvance.paymentSchedule === "Installment" &&
-              updatedAdvance.installmentDetails
-            ) {
-              const paymentsLeft = Math.ceil(
-                updatedAdvance.amount /
-                  updatedAdvance.installmentDetails.amountPerPayment
-              );
-              updatedAdvance.installmentDetails.remainingPayments =
-                paymentsLeft;
-              console.log(
-                `[Payroll] Updated installment payments left: ${paymentsLeft}`
-              );
-            }
-
-            // Save the update
-            const cashAdvanceModel = createCashAdvanceModel(
-              this.dbPath,
-              employeeId,
-              advance.date.getMonth() + 1,
-              advance.date.getFullYear()
-            );
-            await cashAdvanceModel.updateCashAdvance(updatedAdvance);
-            console.log(
-              `[Payroll] Saved updated cash advance status: ${updatedAdvance.status}`
-            );
-
-            // Update remaining deduction amount
-            remainingDeduction -= deductionForThisAdvance;
-            console.log(
-              `[Payroll] Remaining deduction amount: ${remainingDeduction}`
-            );
-          }
-        }
-
-        if (remainingDeduction > 0) {
-          console.warn(
-            `[Payroll] Warning: Not all deductions were applied. Remaining: ${remainingDeduction}`
-          );
-        }
-      }
-
-      // Update shorts if there are any deductions
-      const shortDeductionAmount = deductions?.shortDeductions || 0;
-      const shortIDsToUpdate = summary.shortIDs || [];
-      if (shortDeductionAmount > 0 && shortIDsToUpdate.length > 0) {
-        console.log(
-          `[Payroll] Processing short deductions. Total amount to deduct: ${shortDeductionAmount}`
-        );
-        // Load all shorts from relevant months
-        const allShorts: Short[] = [];
-        for (const { month, year } of months) {
-          const shortModel = createShortModel(
-            this.dbPath,
-            employeeId,
-            month,
-            year
-          );
-          const shorts = await shortModel.loadShorts(employeeId);
-          allShorts.push(...shorts);
-        }
-
-        // Filter shorts by the IDs in the summary
-        const shortsToUpdate = allShorts.filter((short) =>
-          shortIDsToUpdate.includes(short.id)
-        );
-
-        // Update each short
-        for (const short of shortsToUpdate) {
-          if (short.status !== "Paid") {
-            const updatedShort = {
-              ...short,
-              status: "Paid" as const,
-              remainingUnpaid: 0,
-            } as Short;
-
-            // Save the update
-            const shortModel = createShortModel(
-              this.dbPath,
-              employeeId,
-              short.date.getMonth() + 1,
-              short.date.getFullYear()
-            );
-            await shortModel.updateShort(updatedShort);
-          }
-        }
-      }
-
-      // Save payroll data only to the file corresponding to the end date's month
-      const endMonth = end.getMonth() + 1;
-      const endYear = end.getFullYear();
-      const filePath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
-
-      try {
-        // Ensure directory exists
-        const dirPath = `${this.dbPath}/SweldoDB/payrolls/${employeeId}`;
-        try {
-          await window.electron.ensureDir(dirPath);
-        } catch (error) {
-          throw error;
-        }
-
-        let csvContent = "";
-        const fileExists = await window.electron.fileExists(filePath);
-
-        if (fileExists) {
-          const existingContent = await window.electron.readFile(filePath);
-          const parsedData = Papa.parse<PayrollCSVData>(existingContent, {
-            header: true,
-          });
-          parsedData.data.push(payrollData);
-          csvContent = Papa.unparse(parsedData.data);
-        } else {
-          csvContent = Papa.unparse([payrollData]);
-        }
-
-        await window.electron.writeFile(filePath, csvContent);
-      } catch (error: unknown) {
-        toast.error(
-          `Failed to save payroll CSV: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
-
-      // Update employee's last payment period
-      try {
-        await employeeModel.updateEmployeeDetails({
-          ...employee,
-          lastPaymentPeriod: {
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            start: start.toISOString(),
-            end: end.toISOString(),
-          },
-        });
-      } catch (error: unknown) {
-        toast.error(
-          `Failed to update employee details: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      }
-
-      // Create the payroll summary object
       const payrollSummary: PayrollSummaryModel = {
         ...summary,
-        grossPay: grossPayValue, // Use the final calculated grossPayValue
+        id: `${employeeId}_${start.getTime()}_${end.getTime()}`,
+        grossPay: grossPayValue,
         deductions: finalDeductions,
-        netPay: netPayValue, // Use the final calculated netPayValue
+        netPay: netPayValue,
         paymentDate: new Date(
           end.getTime() + 2 * 24 * 60 * 60 * 1000
         ).toISOString(),
@@ -1143,23 +812,61 @@ export class Payroll {
         shortIDs: summary.shortIDs || [],
         cashAdvanceIDs: summary.cashAdvanceIDs || [],
       };
-      console.log("[Payroll] Final Payroll Summary Object:", payrollSummary);
 
-      // Update statistics
-      try {
-        const statisticsModel = createStatisticsModel(this.dbPath, endYear);
-        await statisticsModel.updatePayrollStatistics([payrollSummary]);
-      } catch (error: unknown) {
-        toast.error(
-          `Failed to update statistics: ${
-            error instanceof Error ? error.message : String(error)
-          }`
+      const endMonth = end.getMonth() + 1;
+      const endYear = end.getFullYear();
+      const payrollJsonData = await Payroll.readPayrollJsonFile(
+        this.dbPath,
+        employeeId,
+        endYear,
+        endMonth
+      );
+
+      let updatedPayrolls: PayrollSummaryModel[] = [];
+      if (payrollJsonData) {
+        updatedPayrolls = payrollJsonData.payrolls.filter(
+          (p) => p.id !== payrollSummary.id
         );
       }
+      updatedPayrolls.push(payrollSummary);
+      updatedPayrolls.sort(
+        (a, b) => b.startDate.getTime() - a.startDate.getTime()
+      );
+
+      const updatedJsonStructure: PayrollJsonStructure = {
+        meta: {
+          employeeId,
+          year: endYear,
+          month: endMonth,
+          lastModified: new Date().toISOString(),
+        },
+        payrolls: updatedPayrolls,
+      };
+
+      await Payroll.writePayrollJsonFile(
+        this.dbPath,
+        employeeId,
+        endYear,
+        endMonth,
+        updatedJsonStructure
+      );
+
+      await employeeModel.updateEmployeeDetails({
+        ...employee,
+        lastPaymentPeriod: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+      });
+
+      const statisticsModel = createStatisticsModel(this.dbPath, endYear);
+      await statisticsModel.updatePayrollStatistics([payrollSummary]);
 
       return payrollSummary;
     } catch (error) {
-      console.error("[Payroll] Error in generatePayrollSummary:", error); // Added top-level error log
+      console.error("[Payroll] Error in generatePayrollSummary:", error);
       throw error;
     }
   }
@@ -1170,250 +877,103 @@ export class Payroll {
     startDate: Date,
     endDate: Date
   ): Promise<void> {
+    const endMonth = endDate.getMonth() + 1;
+    const endYear = endDate.getFullYear();
+    const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
+
     try {
-      // Get the file path based on the end date's month and year
-      const endMonth = endDate.getMonth() + 1;
-      const endYear = endDate.getFullYear();
-      const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${endYear}_${endMonth}_payroll.csv`;
-
-      // Check if file exists
-      const fileExists = await window.electron.fileExists(filePath);
-
-      if (!fileExists) {
-        throw new Error(`Payroll file not found: ${filePath}`);
-      }
-
-      // Read the file content
-      const content = await window.electron.readFile(filePath);
-
-      const parsedData = Papa.parse<PayrollCSVData>(content, { header: true });
-
-      // Find the exact record to delete using the ID
-      const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
-
-      // Find the payroll record before filtering it out
-      const payrollToDelete = parsedData.data.find(
-        (row: any) => row.id === payrollId
+      const jsonData = await Payroll.readPayrollJsonFile(
+        dbPath,
+        employeeId,
+        endYear,
+        endMonth
       );
+      let deletedFromJson = false;
+      let payrollToDelete: PayrollSummaryModel | undefined = undefined;
 
-      // If not found with exact ID, try a more flexible approach
-      if (!payrollToDelete) {
-        // Try to find by employee ID and date range
-        const alternativeMatch = parsedData.data.find((row: any) => {
-          const rowStartDate = new Date(row.startDate);
-          const rowEndDate = new Date(row.endDate);
-
-          // Check if dates match (within a day to account for timezone differences)
-          const startDateMatch =
-            Math.abs(rowStartDate.getTime() - startDate.getTime()) < 86400000; // 24 hours in ms
-          const endDateMatch =
-            Math.abs(rowEndDate.getTime() - endDate.getTime()) < 86400000; // 24 hours in ms
-
-          return (
-            row.employeeId === employeeId && startDateMatch && endDateMatch
+      if (jsonData) {
+        const initialLength = jsonData.payrolls.length;
+        payrollToDelete = jsonData.payrolls.find((p) => p.id === payrollId);
+        jsonData.payrolls = jsonData.payrolls.filter((p) => p.id !== payrollId);
+        if (jsonData.payrolls.length < initialLength) {
+          jsonData.meta.lastModified = new Date().toISOString();
+          await Payroll.writePayrollJsonFile(
+            dbPath,
+            employeeId,
+            endYear,
+            endMonth,
+            jsonData
           );
-        });
-
-        if (alternativeMatch) {
-          // Use this ID instead
-          const alternativeId = alternativeMatch.id;
-
-          // Filter out the matching record
-          const filteredData = parsedData.data.filter((row: any) => {
-            const rowId = row.id?.toString();
-            return rowId !== alternativeId;
-          });
-
-          // Convert back to CSV
-          const updatedContent = Papa.unparse(filteredData);
-
-          // Write the updated content back to the file
-          await window.electron.writeFile(filePath, updatedContent);
-
-          return;
+          deletedFromJson = true;
+          console.log(`Deleted payroll ${payrollId} from JSON.`);
         }
-
-        throw new Error("Payroll record not found");
       }
 
-      // If there are cash advance deductions, reverse them
-      const cashAdvanceDeductions = parseFloat(
-        payrollToDelete.cashAdvanceDeductions || "0"
-      );
+      if (!deletedFromJson) {
+        console.log(
+          `Payroll ${payrollId} not found in JSON, attempting fallback CSV deletion.`
+        );
+        try {
+          const oldPayrollStatic = OldPayroll;
+          await oldPayrollStatic.deletePayrollSummary(
+            dbPath,
+            employeeId,
+            startDate,
+            endDate
+          );
+          const csvSummaries = await OldPayroll.loadPayrollSummaries(
+            dbPath,
+            employeeId,
+            endYear,
+            endMonth
+          );
+          payrollToDelete = csvSummaries.find((p) => p.id === payrollId);
+          console.log(`Deleted payroll ${payrollId} from CSV (fallback).`);
+        } catch (csvError) {
+          console.error(
+            `Error during fallback CSV delete for ${payrollId}:`,
+            csvError
+          );
+          if (!jsonData) {
+            throw new Error(
+              `Payroll record ${payrollId} not found in JSON or CSV.`
+            );
+          }
+          throw new Error(
+            `Payroll record ${payrollId} not found in JSON and failed to delete from CSV: ${
+              (csvError as Error).message
+            }`
+          );
+        }
+      }
 
-      if (cashAdvanceDeductions > 0) {
-        await Payroll.reverseCashAdvanceDeduction(
-          dbPath,
-          employeeId,
-          cashAdvanceDeductions,
-          endDate
+      if (payrollToDelete) {
+        const cashAdvanceDeductions =
+          payrollToDelete.deductions?.cashAdvanceDeductions || 0;
+        if (cashAdvanceDeductions > 0) {
+          await Payroll.reverseCashAdvanceDeduction(
+            dbPath,
+            employeeId,
+            cashAdvanceDeductions,
+            endDate
+          );
+        }
+        const shortIDs = payrollToDelete.shortIDs || [];
+        if (shortIDs.length > 0) {
+          await Payroll.reverseShortDeduction(
+            dbPath,
+            employeeId,
+            shortIDs,
+            endDate
+          );
+        }
+      } else if (deletedFromJson || !jsonData) {
+        console.warn(
+          `Could not retrieve details for payroll ${payrollId} to reverse deductions.`
         );
       }
-
-      // If there are short deductions, reverse them
-      const shortIDs = payrollToDelete.shortIDs
-        ? payrollToDelete.shortIDs.split("|")
-        : [];
-
-      if (shortIDs.length > 0) {
-        await Payroll.reverseShortDeduction(
-          dbPath,
-          employeeId,
-          shortIDs,
-          endDate
-        );
-      }
-
-      // Filter out the matching record
-      const filteredData = parsedData.data.filter((row: any) => {
-        const rowId = row.id?.toString();
-        return rowId !== payrollId;
-      });
-
-      // Convert back to CSV
-      const updatedContent = Papa.unparse(filteredData);
-
-      // Write the updated content back to the file
-      await window.electron.writeFile(filePath, updatedContent);
     } catch (error) {
-      throw error;
-    }
-  }
-
-  public static async loadPayrolls(
-    dbPath: string,
-    employeeId: string,
-    year: number,
-    month: number
-  ): Promise<PayrollSummaryModel[]> {
-    try {
-      const compensationModel = createCompensationModel(dbPath);
-      const employeeModel = createEmployeeModel(dbPath);
-
-      // Load employee details
-      const employee = await employeeModel.loadEmployeeById(employeeId);
-      if (!employee) {
-        throw new Error("Employee not found");
-      }
-
-      // Load all compensations for the month
-      const compensations = await compensationModel.loadRecords(
-        month,
-        year,
-        employeeId
-      );
-
-      // Group compensations by week or pay period
-      const payPeriods = new Map<string, Compensation[]>();
-
-      compensations.forEach((comp) => {
-        const date = new Date(comp.year, comp.month - 1, comp.day); // Use the start of each week as the pay period key
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        const key = weekStart.toISOString();
-
-        if (!payPeriods.has(key)) {
-          payPeriods.set(key, []);
-        }
-        payPeriods.get(key)?.push(comp);
-      });
-
-      // Convert each pay period into a PayrollSummary
-      const payrolls: PayrollSummaryModel[] = [];
-
-      for (const [key, periodCompensations] of payPeriods) {
-        const startDate = new Date(key);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 14); // Two weeks per period
-
-        const summary = {
-          id: `${employeeId}-${startDate.getTime()}`,
-          employeeName: employee.name,
-          employeeId: employeeId,
-          startDate,
-          endDate,
-          dailyRate: employee.dailyRate || 0,
-          basicPay: periodCompensations.reduce((sum, comp) => {
-            const hoursWorked = comp.hoursWorked || 0;
-            const dailyRate = employee.dailyRate || 0;
-            return sum + hoursWorked * (dailyRate / 8);
-          }, 0),
-          overtime: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.overtimePay || 0),
-            0
-          ),
-          overtimeMinutes: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.overtimeMinutes || 0),
-            0
-          ),
-          undertimeDeduction: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.undertimeDeduction || 0),
-            0
-          ),
-          undertimeMinutes: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.undertimeMinutes || 0),
-            0
-          ),
-          lateDeduction: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.lateDeduction || 0),
-            0
-          ),
-          lateMinutes: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.lateMinutes || 0),
-            0
-          ),
-          holidayBonus: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.holidayBonus || 0),
-            0
-          ),
-          leavePay: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.leavePay || 0),
-            0
-          ),
-          grossPay: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.grossPay || 0),
-            0
-          ),
-          allowances: 0, // Not in compensation model, set to 0
-          deductions: {
-            sss: employee.sss || 0,
-            philHealth: employee.philHealth || 0,
-            pagIbig: employee.pagIbig || 0,
-            cashAdvanceDeductions: 0,
-            others: periodCompensations.reduce(
-              (sum, comp) => sum + (comp.deductions || 0),
-              0
-            ),
-          },
-          netPay: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.netPay || 0),
-            0
-          ),
-          paymentDate: new Date(endDate.getTime() + 3 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0], // Payment 3 days after period end
-          daysWorked: periodCompensations.length, // Add number of days worked
-          absences:
-            getWorkingDaysInPeriod(startDate, endDate) -
-            periodCompensations.length, // Calculate absences
-          nightDifferentialHours: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.nightDifferentialHours || 0),
-            0
-          ),
-          nightDifferentialPay: periodCompensations.reduce(
-            (sum, comp) => sum + (comp.nightDifferentialPay || 0),
-            0
-          ),
-        };
-
-        payrolls.push(summary);
-      }
-
-      return payrolls.sort(
-        (a, b) =>
-          new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-      );
-    } catch (error) {
+      console.error(`Error deleting payroll summary ${payrollId}:`, error);
       throw error;
     }
   }
@@ -1425,140 +985,46 @@ export class Payroll {
     month: number
   ): Promise<PayrollSummaryModel[]> {
     try {
-      const filePath = `${dbPath}/SweldoDB/payrolls/${employeeId}/${year}_${month}_payroll.csv`;
-
-      // Check if file exists using electron
-      const fileExists = await window.electron.fileExists(filePath);
-      if (!fileExists) {
-        return [];
-      }
-
-      const fileContent = await window.electron.readFile(filePath);
-
-      // Parse the entire CSV file at once with headers
-      const parsedData = Papa.parse<PayrollCSVData>(fileContent, {
-        header: true,
-        skipEmptyLines: true, // Keep this
-        delimiter: ",", // Explicitly set the delimiter
-        transformHeader: (header) => header.trim(),
-        transform: (value) => value.trim(),
-      });
-
-      if (parsedData.errors.length > 0) {
-        // Filter out the 'UndetectableDelimiter' warning if it's the only one,
-        // as it often defaults correctly but can be noisy.
-        const criticalErrors = parsedData.errors.filter(
-          (e) => e.code !== "UndetectableDelimiter"
+      const jsonData = await Payroll.readPayrollJsonFile(
+        dbPath,
+        employeeId,
+        year,
+        month
+      );
+      if (jsonData) {
+        console.log(
+          `Loaded ${jsonData.payrolls.length} payrolls from JSON for ${employeeId} ${year}-${month}`
         );
-        if (criticalErrors.length > 0) {
-          console.error("Critical CSV Parsing Errors:", criticalErrors);
-          toast.error(
-            `Error parsing payroll CSV for ${employeeId} (${year}-${month}). Check console for details.`
+        return jsonData.payrolls;
+      } else {
+        console.warn(
+          `JSON payroll file not found for ${employeeId} ${year}-${month}. Falling back to CSV.`
+        );
+        try {
+          const oldPayrollStatic = OldPayroll;
+          const csvPayrolls = await oldPayrollStatic.loadPayrollSummaries(
+            dbPath,
+            employeeId,
+            year,
+            month
           );
-          return []; // Return empty on critical error
-        } else {
-          console.warn(
-            "CSV Parsing Warnings (non-critical):",
-            parsedData.errors
+          console.log(
+            `Loaded ${csvPayrolls.length} payrolls from CSV (fallback) for ${employeeId} ${year}-${month}`
           );
+          return csvPayrolls;
+        } catch (csvError) {
+          console.error(
+            `Error loading from CSV fallback for ${employeeId} ${year}-${month}:`,
+            csvError
+          );
+          return [];
         }
       }
-
-      // Add a try-catch within the map for more granular error checking
-      const payrolls: PayrollSummaryModel[] = parsedData.data
-        .map((row, index) => {
-          try {
-            // **Add check for essential data before processing the row**
-            // If employeeId is missing or empty, assume it's a bad/empty row and skip it.
-            if (!row.employeeId || row.employeeId.trim() === "") {
-              console.warn(
-                `Skipping row ${index + 1} due to missing employeeId:`,
-                row
-              );
-              return null;
-            }
-
-            // Ensure dates are properly parsed
-            const startDate = new Date(row.startDate);
-            const endDate = new Date(row.endDate);
-            const paymentDate = new Date(row.paymentDate);
-
-            // Validate date parsing
-            if (
-              isNaN(startDate.getTime()) ||
-              isNaN(endDate.getTime()) ||
-              isNaN(paymentDate.getTime())
-            ) {
-              console.warn(`Invalid date format in row ${index + 1}:`, row);
-              // Skip this row by returning null and filtering later
-              return null;
-            }
-
-            return {
-              id: row.id,
-              employeeId: row.employeeId,
-              employeeName: row.employeeName,
-              startDate,
-              endDate,
-              dailyRate: parseFloat(row.dailyRate || "0"),
-              basicPay: parseFloat(row.basicPay || "0"),
-              overtime: parseFloat(row.overtimePay || "0"),
-              overtimeMinutes: parseInt(row.overtimeMinutes || "0"),
-              undertimeDeduction: parseFloat(row.undertimeDeduction || "0"),
-              undertimeMinutes: parseInt(row.undertimeMinutes || "0"),
-              lateDeduction: parseFloat(row.lateDeduction || "0"),
-              lateMinutes: parseInt(row.lateMinutes || "0"),
-              holidayBonus: parseFloat(row.holidayBonus || "0"),
-              grossPay: parseFloat(row.grossPay || "0"),
-              allowances: parseFloat(row.allowances || "0"),
-              deductions: {
-                sss: parseFloat(row.sssDeduction || "0"),
-                philHealth: parseFloat(row.philHealthDeduction || "0"),
-                pagIbig: parseFloat(row.pagIbigDeduction || "0"),
-                cashAdvanceDeductions: parseFloat(
-                  row.cashAdvanceDeductions || "0"
-                ),
-                shortDeductions: parseFloat(row.shortDeductions || "0"),
-                others: parseFloat(row.otherDeductions || "0"),
-              },
-              netPay: parseFloat(row.netPay || "0"),
-              paymentDate: paymentDate.toISOString(),
-              daysWorked: parseInt(row.daysWorked || "0"),
-              absences: parseInt(row.absences || "0"),
-              nightDifferentialHours: parseFloat(
-                row.nightDifferentialHours || "0"
-              ),
-              nightDifferentialPay: parseFloat(row.nightDifferentialPay || "0"),
-              cashAdvanceIDs: row.cashAdvanceIDs
-                ? row.cashAdvanceIDs.split("|").filter((id) => id) // Filter out empty strings if split results in them
-                : [],
-              shortIDs: row.shortIDs
-                ? row.shortIDs.split("|").filter((id) => id)
-                : [], // Filter out empty strings
-            };
-          } catch (mapError) {
-            console.error(
-              `Error processing payroll row ${index + 1}:`,
-              mapError,
-              row
-            );
-            toast.error(
-              `Error processing payroll data for row ${
-                index + 1
-              }. Check console.`
-            );
-            return null; // Return null for rows that cause errors
-          }
-        })
-        .filter((payroll) => payroll !== null) as PayrollSummaryModel[]; // Filter out nulls
-
-      return payrolls;
     } catch (error) {
-      console.error("Error loading payroll summaries:", error);
-      toast.error(
-        "An unexpected error occurred while loading payroll summaries."
+      console.error(
+        `Error loading payroll summaries for ${employeeId} ${year}-${month}:`,
+        error
       );
-      // Re-throw or handle as appropriate for your application
       throw error;
     }
   }
@@ -1574,38 +1040,56 @@ export class Payroll {
     };
   }
 
-  // Helper function to count actual working days based on employment type schedule
   private async getActualWorkingDays(
     start: Date,
     end: Date,
     employmentType: string,
-    attendanceRecords: Attendance[],
     compensations: Compensation[]
   ): Promise<number> {
+    const attendanceModel = createAttendanceModel(this.dbPath);
+    const startMonth = start.getMonth() + 1;
+    const startYear = start.getFullYear();
+    const endMonth = end.getMonth() + 1;
+    const endYear = end.getFullYear();
+
+    let attendanceRecords: Attendance[] = [];
+    if (startMonth === endMonth && startYear === endYear) {
+      attendanceRecords = await attendanceModel.loadAttendancesById(
+        startMonth,
+        startYear,
+        ""
+      );
+    } else {
+      const startData = await attendanceModel.loadAttendancesById(
+        startMonth,
+        startYear,
+        ""
+      );
+      const endData = await attendanceModel.loadAttendancesById(
+        endMonth,
+        endYear,
+        ""
+      );
+      attendanceRecords = [...startData, ...endData];
+    }
+
     const timeSettings = await this.attendanceSettingsModel.loadTimeSettings();
     const employeeSchedule = timeSettings.find(
       (type) => type.type === employmentType
     );
+    if (!employeeSchedule) return 0;
 
-    if (!employeeSchedule) {
-      return 0;
-    }
-
-    // Load holidays for this period
     const holidayModel = createHolidayModel(
       this.dbPath,
       start.getFullYear(),
       start.getMonth() + 1
     );
     const holidays = await holidayModel.loadHolidays();
-
     let absences = 0;
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
       const schedule = getScheduleForDate(employeeSchedule, currentDate);
-
-      // Check if this date is a holiday
       const isHoliday = holidays.some((holiday) => {
         const holidayDate = new Date(holiday.startDate);
         return (
@@ -1615,24 +1099,19 @@ export class Payroll {
         );
       });
 
-      // Only check for absence if it's a scheduled working day and not a holiday
       if (schedule && !schedule.isOff && !isHoliday) {
-        // Find attendance record for this day
         const attendance = attendanceRecords.find(
           (record) =>
             record.day === currentDate.getDate() &&
             record.timeIn &&
-            record.timeOut // Must have both timeIn and timeOut
+            record.timeOut
         );
-
-        // If no attendance record found for a scheduled day, count as absence
         if (!attendance) {
           absences++;
         }
       }
       currentDate.setDate(currentDate.getDate() + 1);
     }
-
     return absences;
   }
 
@@ -1640,10 +1119,10 @@ export class Payroll {
     dbPath: string,
     employeeId: string,
     deductionAmount: number,
-    payrollDate: Date
+    payrollDate: Date,
+    isApplyingDeduction: boolean = false
   ): Promise<void> {
     try {
-      // Get all months between the payroll date and 3 months before (to catch recent cash advances)
       const months = [];
       let currentDate = new Date(payrollDate);
       for (let i = 0; i < 3; i++) {
@@ -1654,7 +1133,6 @@ export class Payroll {
         currentDate.setMonth(currentDate.getMonth() - 1);
       }
 
-      // Load cash advances from all relevant months
       const allAdvances: CashAdvance[] = [];
       for (const { month, year } of months) {
         const cashAdvanceModel = createCashAdvanceModel(
@@ -1667,63 +1145,73 @@ export class Payroll {
         allAdvances.push(...advances);
       }
 
-      // Sort by date (most recent first)
-      allAdvances.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-      // Find cash advances that were partially or fully paid
-      const paidAdvances = allAdvances.filter(
-        (advance) => advance.remainingUnpaid < advance.amount
+      allAdvances.sort((a, b) =>
+        isApplyingDeduction
+          ? a.date.getTime() - b.date.getTime()
+          : b.date.getTime() - a.date.getTime()
       );
 
-      if (paidAdvances.length === 0) {
-        // If no paid advances found, just return without throwing an error
-        // This handles cases where advances were already reversed
-        return;
-      }
+      let amountToProcess = deductionAmount;
 
-      // Calculate how much was deducted from each advance
-      let totalReversed = 0;
-      for (const advance of paidAdvances) {
-        const amountDeducted = advance.amount - advance.remainingUnpaid;
-        if (amountDeducted > 0) {
-          // Update the cash advance
-          const updatedCashAdvance = {
-            ...advance,
-            status: "Unpaid" as const,
-            remainingUnpaid: advance.amount, // Reset to full amount
-          } as CashAdvance;
+      for (const advance of allAdvances) {
+        if (amountToProcess <= 0) break;
 
-          // Update installment details if applicable
-          if (
-            updatedCashAdvance.paymentSchedule === "Installment" &&
-            updatedCashAdvance.installmentDetails
-          ) {
-            updatedCashAdvance.installmentDetails.remainingPayments = Math.ceil(
-              updatedCashAdvance.amount /
-                updatedCashAdvance.installmentDetails.amountPerPayment
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          employeeId,
+          advance.date.getMonth() + 1,
+          advance.date.getFullYear()
+        );
+
+        if (isApplyingDeduction) {
+          if (advance.status !== "Paid") {
+            const deductable = Math.min(
+              advance.remainingUnpaid,
+              amountToProcess
             );
+            const newRemaining = advance.remainingUnpaid - deductable;
+            const newStatus = newRemaining <= 0 ? "Paid" : "Unpaid";
+
+            await cashAdvanceModel.updateCashAdvance({
+              ...advance,
+              remainingUnpaid: newRemaining,
+              status: newStatus,
+            });
+            amountToProcess -= deductable;
           }
-
-          // Save the update
-          const cashAdvanceModel = createCashAdvanceModel(
-            dbPath,
-            employeeId,
-            advance.date.getMonth() + 1,
-            advance.date.getFullYear()
+        } else {
+          const refundable = Math.min(
+            advance.amount - advance.remainingUnpaid,
+            amountToProcess
           );
-          await cashAdvanceModel.updateCashAdvance(updatedCashAdvance);
+          if (refundable > 0) {
+            const newRemaining = advance.remainingUnpaid + refundable;
+            const newStatus = newRemaining > 0 ? "Unpaid" : "Paid";
 
-          totalReversed += amountDeducted;
+            await cashAdvanceModel.updateCashAdvance({
+              ...advance,
+              remainingUnpaid: newRemaining,
+              status: newStatus,
+            });
+            amountToProcess -= refundable;
+          }
         }
       }
 
-      if (Math.abs(totalReversed - deductionAmount) > 0.01) {
-        // Log warning instead of throwing error
-        toast.warning(
-          `Reversed amount (${totalReversed}) differs from deduction amount (${deductionAmount})`
+      if (amountToProcess > 0.01) {
+        console.warn(
+          `Could not fully ${
+            isApplyingDeduction ? "apply" : "reverse"
+          } cash advance amount. Remaining: ${amountToProcess}`
         );
       }
     } catch (error) {
+      console.error(
+        `Failed to ${
+          isApplyingDeduction ? "apply" : "reverse"
+        } cash advance deduction:`,
+        error
+      );
       throw error;
     }
   }
@@ -1732,10 +1220,10 @@ export class Payroll {
     dbPath: string,
     employeeId: string,
     shortIDs: string[],
-    payrollDate: Date
+    payrollDate: Date,
+    isApplyingDeduction: boolean = false
   ): Promise<void> {
     try {
-      // Get all months between the payroll date and 3 months before (to catch recent shorts)
       const months = [];
       let currentDate = new Date(payrollDate);
       for (let i = 0; i < 3; i++) {
@@ -1746,7 +1234,6 @@ export class Payroll {
         currentDate.setMonth(currentDate.getMonth() - 1);
       }
 
-      // Load shorts from all relevant months
       const allShorts: Short[] = [];
       for (const { month, year } of months) {
         const shortModel = createShortModel(dbPath, employeeId, month, year);
@@ -1754,39 +1241,46 @@ export class Payroll {
         allShorts.push(...shorts);
       }
 
-      // Filter shorts by the provided IDs
-      const shortsToReverse = allShorts.filter((short) =>
+      const shortsToProcess = allShorts.filter((short) =>
         shortIDs.includes(short.id)
       );
 
-      // Update each short
-      for (const short of shortsToReverse) {
-        if (short.status === "Paid") {
-          // Update the short
-          const updatedShort = {
-            ...short,
-            status: "Unpaid" as const,
-            remainingUnpaid: short.amount,
-          } as Short;
-
-          // Save the update
-          const shortModel = createShortModel(
-            dbPath,
-            employeeId,
-            short.date.getMonth() + 1,
-            short.date.getFullYear()
-          );
-          await shortModel.updateShort(updatedShort);
+      for (const short of shortsToProcess) {
+        const shortModel = createShortModel(
+          dbPath,
+          employeeId,
+          short.date.getMonth() + 1,
+          short.date.getFullYear()
+        );
+        if (isApplyingDeduction) {
+          if (short.status !== "Paid") {
+            await shortModel.updateShort({
+              ...short,
+              status: "Paid",
+              remainingUnpaid: 0,
+            });
+          }
+        } else {
+          if (short.status === "Paid") {
+            await shortModel.updateShort({
+              ...short,
+              status: "Unpaid",
+              remainingUnpaid: short.amount,
+            });
+          }
         }
       }
     } catch (error) {
-      throw new Error(
-        `Failed to reverse short deduction: ${(error as any).message}`
+      console.error(
+        `Failed to ${
+          isApplyingDeduction ? "apply" : "reverse"
+        } short deduction:`,
+        error
       );
+      throw error;
     }
   }
 
-  // Helper function to determine if a time should be AM or PM based on schedule
   private determineTimeAMPM(
     time: string,
     isTimeIn: boolean,
@@ -1798,38 +1292,29 @@ export class Payroll {
     const [schedInHour] = schedule.timeIn.split(":").map(Number);
     const [schedOutHour] = schedule.timeOut.split(":").map(Number);
 
-    // Determine if it's a night shift (starts in PM, ends in AM)
     const isNightShift = schedInHour >= 18;
 
     if (isNightShift) {
       if (isTimeIn) {
-        // For time in during night shift:
-        // If hour is between 18-23 or 0-2, it should be PM
         return hours >= 18 || hours <= 2 ? `${time} PM` : `${time} AM`;
       } else {
-        // For time out during night shift:
-        // If hour is between 3-11, it should be AM
         return hours >= 3 && hours <= 11 ? `${time} AM` : `${time} PM`;
       }
     }
 
-    // For regular shifts
     return hours < 12 ? `${time} AM` : `${time} PM`;
   }
 
-  // Helper to calculate time difference in hours, handling day boundaries
   private getHoursDifference(time1: string, time2: string): number {
     const [h1] = time1.split(":").map(Number);
     const [h2] = time2.split(":").map(Number);
 
-    // Handle cross-day scenarios (e.g. 23:00 vs 01:00)
     if (Math.abs(h1 - h2) > 12) {
       return 24 - Math.abs(h1 - h2);
     }
     return Math.abs(h1 - h2);
   }
 
-  // Process time entries based on schedule proximity
   private processTimeEntries(
     rawTime1: string,
     rawTime2: string,
@@ -1844,13 +1329,11 @@ export class Payroll {
     const [time1Hour] = rawTime1.split(":").map(Number);
     const [time2Hour] = rawTime2.split(":").map(Number);
 
-    // Calculate proximity to scheduled times
     const time1ToSchedIn = this.getHoursDifference(rawTime1, schedule.timeIn);
     const time1ToSchedOut = this.getHoursDifference(rawTime1, schedule.timeOut);
     const time2ToSchedIn = this.getHoursDifference(rawTime2, schedule.timeIn);
     const time2ToSchedOut = this.getHoursDifference(rawTime2, schedule.timeOut);
 
-    // If either time is within 3 hours of its expected schedule, assign accordingly
     if (time1ToSchedIn <= 3 && time2ToSchedOut <= 3) {
       return {
         timeIn: rawTime1,
@@ -1863,21 +1346,185 @@ export class Payroll {
       };
     }
 
-    // If no clear match within 3 hours, use default order
     return {
       timeIn: rawTime1,
       timeOut: rawTime2,
     };
   }
+
+  public static async migrateCsvToJson(
+    dbPath: string,
+    onProgress?: (message: string) => void
+  ): Promise<void> {
+    const payrollBasePath = `${dbPath}/SweldoDB/payrolls`;
+    onProgress?.("Starting Payroll Summary CSV to JSON migration...");
+
+    try {
+      const employeeDirs = await window.electron.readDir(payrollBasePath);
+
+      for (const dirEntry of employeeDirs) {
+        if (dirEntry.isDirectory) {
+          const employeeId = dirEntry.name;
+          const employeePath = `${payrollBasePath}/${employeeId}`;
+          onProgress?.(`Processing employee: ${employeeId}`);
+
+          try {
+            const filesInEmployeeDir = await window.electron.readDir(
+              employeePath
+            );
+
+            // Group files by year_month
+            const filesByMonth = new Map<
+              string,
+              { name: string; year: number; month: number }[]
+            >();
+            const payrollFileRegex = /(\d+)_(\d+)_payroll(?:-\d+)?\.csv$/;
+
+            for (const fileEntry of filesInEmployeeDir) {
+              if (fileEntry.isFile) {
+                const match = fileEntry.name.match(payrollFileRegex);
+                if (match) {
+                  const year = parseInt(match[1]);
+                  const month = parseInt(match[2]);
+                  const key = `${year}_${month}`;
+                  if (!filesByMonth.has(key)) {
+                    filesByMonth.set(key, []);
+                  }
+                  filesByMonth
+                    .get(key)
+                    ?.push({ name: fileEntry.name, year, month });
+                }
+              }
+            }
+
+            if (filesByMonth.size === 0) {
+              onProgress?.(
+                `  No payroll CSV files found for employee ${employeeId}.`
+              );
+              continue;
+            }
+
+            onProgress?.(
+              `  Found ${filesByMonth.size} year-month groups to process.`
+            );
+
+            // Process each year-month group
+            for (const [key, fileGroup] of filesByMonth.entries()) {
+              const { year, month } = fileGroup[0]; // Get year/month from the first file in group
+              const jsonFilePath = Payroll.getPayrollJsonFilePath(
+                dbPath,
+                employeeId,
+                year,
+                month
+              );
+              onProgress?.(`  Processing group ${key}...`);
+
+              // Check if JSON already exists for this group
+              if (await window.electron.fileExists(jsonFilePath)) {
+                onProgress?.(
+                  `    JSON file ${jsonFilePath} already exists, skipping group.`
+                );
+                continue;
+              }
+
+              let payrollSummaries: PayrollSummaryModel[] | null = null;
+              let sourceCsvFileName = "";
+
+              // Try loading from files in the group until data is found
+              for (const fileInfo of fileGroup) {
+                const csvFilePath = `${employeePath}/${fileInfo.name}`;
+                onProgress?.(`    Trying file: ${fileInfo.name}...`);
+                try {
+                  const oldPayrollStatic = OldPayroll;
+                  const loadedSummaries =
+                    await oldPayrollStatic.loadPayrollSummaries(
+                      dbPath,
+                      employeeId,
+                      fileInfo.year,
+                      fileInfo.month
+                    );
+
+                  // Check if loaded data is valid and non-empty
+                  if (loadedSummaries && loadedSummaries.length > 0) {
+                    payrollSummaries = loadedSummaries;
+                    sourceCsvFileName = fileInfo.name;
+                    onProgress?.(
+                      `      Found valid data in ${sourceCsvFileName}.`
+                    );
+                    break; // Found data, stop checking this group
+                  } else {
+                    onProgress?.(
+                      `      File ${fileInfo.name} is empty or contains no valid summaries.`
+                    );
+                  }
+                } catch (loadError) {
+                  onProgress?.(
+                    `      Error loading from ${fileInfo.name}: ${
+                      (loadError as Error).message
+                    }`
+                  );
+                  // Continue to the next file in the group
+                }
+              }
+
+              // If data was found in any file of the group, create JSON
+              if (payrollSummaries && sourceCsvFileName) {
+                try {
+                  const jsonData: PayrollJsonStructure = {
+                    meta: {
+                      employeeId,
+                      year,
+                      month,
+                      lastModified: new Date().toISOString(),
+                    },
+                    payrolls: payrollSummaries,
+                  };
+
+                  await Payroll.writePayrollJsonFile(
+                    dbPath,
+                    employeeId,
+                    year,
+                    month,
+                    jsonData
+                  );
+                  onProgress?.(
+                    `    Successfully converted data from ${sourceCsvFileName} to ${jsonFilePath}.`
+                  );
+                } catch (writeError) {
+                  const message =
+                    writeError instanceof Error
+                      ? writeError.message
+                      : String(writeError);
+                  onProgress?.(
+                    `    Error writing JSON for ${key} using data from ${sourceCsvFileName}: ${message}`
+                  );
+                  console.error(`Error writing JSON for ${key}:`, writeError);
+                }
+              } else {
+                onProgress?.(
+                  `    Skipping group ${key}: No non-empty CSV file found.`
+                );
+              }
+            }
+          } catch (dirError) {
+            const message =
+              dirError instanceof Error ? dirError.message : String(dirError);
+            onProgress?.(
+              `  Error reading directory ${employeePath}: ${message}`
+            );
+          }
+        }
+      }
+      onProgress?.("Payroll Summary migration finished.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onProgress?.(`Payroll Summary migration failed: ${message}`);
+      console.error("Payroll Summary Migration Error:", error);
+      throw new Error(`Payroll Summary migration failed: ${message}`);
+    }
+  }
 }
 
-/**
- * Calculates the number of working days between two dates.
- * A working day is a day that is not Sunday.
- * @param startDate The start date of the period.
- * @param endDate The end date of the period.
- * @returns The number of working days in the period.
- */
 function getWorkingDaysInPeriod(startDate: Date, endDate: Date): number {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -1885,11 +1532,9 @@ function getWorkingDaysInPeriod(startDate: Date, endDate: Date): number {
     (end.getTime() - start.getTime()) / (1000 * 3600 * 24)
   );
   let workingDays = 0;
-  // Iterate through each day in the period
   for (let i = 0; i <= days; i++) {
     const date = new Date(start);
     date.setDate(date.getDate() + i);
-    // Check if the day is not Sunday
     if (date.getDay() !== 0) {
       workingDays++;
     }
