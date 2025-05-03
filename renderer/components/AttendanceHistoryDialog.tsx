@@ -81,7 +81,6 @@ export const AttendanceHistoryDialog: React.FC<
 
         // Check if we have at least a header and one data row
         if (results.data.length < 2) {
-       
           setError("No history data found in the backup file.");
           setIsLoading(false);
           return;
@@ -212,7 +211,7 @@ export const AttendanceHistoryDialog: React.FC<
         </div>
 
         {/* Body */}
-        <div className=" max-h-[60vh] overflow-y-auto bg-white">
+        <div className="max-h-[60vh] overflow-y-auto bg-white scrollbar-thin">
           {isLoading && (
             <div className="flex flex-col items-center justify-center h-40 text-gray-500">
               <ImSpinner9 className="animate-spin h-8 w-8 mb-3 text-blue-500" />

@@ -52,6 +52,7 @@ import {
   shouldMarkAsAbsent,
 } from "@/renderer/hooks/utils/useSchedule";
 import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
+import { useAttendanceOperations } from "@/renderer/hooks/useAttendanceOperations";
 
 const formatName = (name: string): string => {
   if (!name) return "";
@@ -204,6 +205,17 @@ const TimesheetPage: React.FC = () => {
       // Recompute compensations to ensure everything is in sync
       await computeCompensations(newAttendance, newCompensations);
     },
+  });
+
+  // Use the new hooks for specialized attendance operations
+  const { handleSwapTimes, handleRevertToHistory } = useAttendanceOperations({
+    hasAccess,
+    handleTimesheetEdit,
+    timesheetEntries,
+    storedMonthInt,
+    year,
+    selectedEmployeeId,
+    employee,
   });
 
   // First effect: Load employee only
@@ -671,92 +683,6 @@ const TimesheetPage: React.FC = () => {
     setIsHistoryDialogOpen(true);
   };
   // --- End History Handler ---
-
-  // --- Swap Time Handler ---
-  const handleSwapTimes = async (rowData: Attendance) => {
-    if (!hasAccess("MANAGE_ATTENDANCE")) {
-      toast.error("You don't have permission to modify attendance records");
-      return;
-    }
-    if (!rowData || !rowData.employeeId) {
-      toast.error("Cannot swap times: Missing employee data.");
-      return;
-    }
-
-    try {
-      const originalTimeIn = rowData.timeIn;
-      const originalTimeOut = rowData.timeOut;
-
-      // First update timeIn (to timeOut value)
-      await handleTimesheetEdit(
-        originalTimeOut || "", // New timeIn is old timeOut
-        rowData,
-        "timeIn"
-      );
-
-      // Then update timeOut with the original timeIn value
-      // We need to create an updated rowData with the new timeIn already set
-      const updatedRowData = {
-        ...rowData,
-        timeIn: originalTimeOut, // Reflect the first change
-      };
-
-      await handleTimesheetEdit(
-        originalTimeIn || "", // New timeOut is old timeIn
-        updatedRowData,
-        "timeOut"
-      );
-    } catch (error) {
-      throw error; // Re-throw so EditableCell can catch it
-    }
-  };
-  // --- End Swap Handler ---
-
-  // --- Revert Handler ---
-  const handleRevertToHistory = async (
-    day: number,
-    timeIn: string | null,
-    timeOut: string | null
-  ) => {
-    if (!hasAccess("MANAGE_ATTENDANCE")) {
-      toast.error("You don't have permission to modify attendance records");
-      throw new Error("Permission denied");
-    }
-    if (!employee || !selectedEmployeeId) {
-      toast.error("Employee context missing.");
-      throw new Error("Missing employee data");
-    }
-
-    try {
-      // Find the existing attendance record for this day
-      const existingAttendance = timesheetEntries.find(
-        (entry) =>
-          entry.day === day &&
-          entry.month === storedMonthInt &&
-          entry.year === year &&
-          entry.employeeId === selectedEmployeeId
-      );
-
-      if (!existingAttendance) {
-        throw new Error(`No attendance record found for day ${day}`);
-      }
-
-      // First update timeIn
-      await handleTimesheetEdit(timeIn || "", existingAttendance, "timeIn");
-
-      // Then update timeOut (use the updated record with new timeIn)
-      const updatedAttendance = {
-        ...existingAttendance,
-        timeIn: timeIn,
-      };
-
-      await handleTimesheetEdit(timeOut || "", updatedAttendance, "timeOut");
-    } catch (error) {
-      console.error(`Error reverting day ${day}:`, error);
-      throw error;
-    }
-  };
-  // --- End Revert Handler ---
 
   // Check if user has basic access to view timesheets
   if (!hasAccess("VIEW_TIMESHEETS")) {
