@@ -102,8 +102,8 @@ The Attendance model was migrated from CSV to JSON with the following changes:
 The Compensation model was migrated from CSV to JSON with the following changes:
 
 1. **File Renaming**
-   - Original `compensation.ts` → `compensation_old.ts`
-   - New JSON implementation created as `compensation.ts`
+   - Original `compensation.ts` already exists, no need to rename
+   - Only need to update the existing implementation
 
 2. **Interface Maintenance**
    - All public interfaces (`Compensation`, etc.) preserved

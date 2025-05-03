@@ -469,22 +469,22 @@ export default function SettingsPage() {
                             type="checkbox"
                             name="toggle"
                             id="overtime-toggle"
-                          checked={
-                            attendanceSettings?.countEarlyTimeInAsOvertime ??
-                            false
-                          }
-                          onChange={(checked) =>
-                            handleInputChange(
-                              {
-                                target: {
-                                  name: "countEarlyTimeInAsOvertime",
+                            checked={
+                              attendanceSettings?.countEarlyTimeInAsOvertime ??
+                              false
+                            }
+                            onChange={(checked) =>
+                              handleInputChange(
+                                {
+                                  target: {
+                                    name: "countEarlyTimeInAsOvertime",
                                     value:
                                       !attendanceSettings?.countEarlyTimeInAsOvertime,
+                                  },
                                 },
-                              },
-                              "countEarlyTimeInAsOvertime"
-                            )
-                          }
+                                "countEarlyTimeInAsOvertime"
+                              )
+                            }
                             className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-200 appearance-none cursor-pointer peer"
                           />
                           <label
@@ -494,8 +494,8 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
-                      <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-lg flex items-start gap-3 border border-blue-100">
-                        <div className="rounded-full bg-blue-100 p-1.5 flex-shrink-0 mt-0.5">
+                      <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-lg flex items-center gap-3 border border-blue-100">
+                        <div className="rounded-full bg-blue-100 p-1.5 flex-shrink-0">
                           <svg
                             className="w-4 h-4 text-blue-600"
                             viewBox="0 0 20 20"
@@ -508,7 +508,7 @@ export default function SettingsPage() {
                             ></path>
                           </svg>
                         </div>
-                        <p>
+                        <p className="py-0.5">
                           {attendanceSettings?.countEarlyTimeInAsOvertime
                             ? "When enabled, overtime includes both early time-in and extended time-out periods"
                             : "When disabled, overtime is calculated only from extended time-out periods, regardless of early arrival"}

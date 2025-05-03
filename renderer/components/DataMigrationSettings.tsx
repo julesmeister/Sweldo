@@ -10,6 +10,7 @@ import {
   migrateBackupCsvToJson as migrateCompensationBackupCsvToJson,
 } from "@/renderer/model/compensation";
 import { migrateCsvToJson as migrateEmployeeCsvToJson } from "@/renderer/model/employee";
+import { migrateCsvToJson as migrateHolidayCsvToJson } from "@/renderer/model/holiday";
 import { toast } from "sonner";
 import {
   IoSyncOutline,
@@ -20,6 +21,7 @@ import {
   IoPeopleOutline,
   IoCloudUploadOutline,
   IoTrashOutline,
+  IoCalendarOutline,
 } from "react-icons/io5";
 
 interface DataMigrationSettingsProps {
@@ -58,6 +60,15 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
   const [employeeErrorDetails, setEmployeeErrorDetails] = useState<
     string | null
   >(null);
+
+  const [holidayMigrationStatus, setHolidayMigrationStatus] =
+    useState<MigrationStatus>("idle");
+  const [holidayProgressMessages, setHolidayProgressMessages] = useState<
+    string[]
+  >([]);
+  const [holidayErrorDetails, setHolidayErrorDetails] = useState<string | null>(
+    null
+  );
 
   const handleMigration = useCallback(async () => {
     if (!dbPath) {
@@ -231,6 +242,42 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     }
   }, [dbPath, employeeMigrationStatus]);
 
+  const handleHolidayCsvToJsonMigration = useCallback(async () => {
+    if (!dbPath) {
+      toast.error("Database path is not set. Please configure it first.");
+      return;
+    }
+    if (holidayMigrationStatus === "running") {
+      toast.info("Holiday CSV to JSON migration is already in progress.");
+      return;
+    }
+
+    setHolidayMigrationStatus("running");
+    setHolidayProgressMessages(["Starting holiday CSV to JSON migration..."]);
+    setHolidayErrorDetails(null);
+
+    try {
+      await migrateHolidayCsvToJson(dbPath, (message) => {
+        setHolidayProgressMessages((prev) => [...prev, message]);
+      });
+      setHolidayMigrationStatus("success");
+      toast.success("Holiday CSV to JSON migration completed successfully!");
+      setHolidayProgressMessages((prev) => [
+        ...prev,
+        "Holiday CSV to JSON migration completed successfully!",
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setHolidayMigrationStatus("error");
+      setHolidayErrorDetails(message);
+      toast.error(`Holiday CSV to JSON migration failed: ${message}`);
+      setHolidayProgressMessages((prev) => [
+        ...prev,
+        `Migration failed: ${message}`,
+      ]);
+    }
+  }, [dbPath, holidayMigrationStatus]);
+
   const clearAlternativesProgressMessages = useCallback(() => {
     setProgressMessages([]);
   }, []);
@@ -245,6 +292,10 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
 
   const clearEmployeeProgressMessages = useCallback(() => {
     setEmployeeProgressMessages([]);
+  }, []);
+
+  const clearHolidayProgressMessages = useCallback(() => {
+    setHolidayProgressMessages([]);
   }, []);
 
   return (
@@ -456,6 +507,50 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
             )}
           </button>
 
+          {/* Holiday CSV to JSON Button */}
+          <button
+            onClick={handleHolidayCsvToJsonMigration}
+            disabled={holidayMigrationStatus === "running"}
+            className={`inline-flex items-center justify-center gap-2 px-6 py-3 w-full border border-transparent rounded-lg text-sm font-medium text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 shadow mb-3
+                  ${
+                    holidayMigrationStatus === "running"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-yellow-600 hover:bg-yellow-700"
+                  }
+                `}
+          >
+            {holidayMigrationStatus === "running" ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Converting Holidays to JSON...
+              </>
+            ) : (
+              <>
+                <IoCalendarOutline className="w-5 h-5" />
+                Convert Holiday CSV to JSON
+              </>
+            )}
+          </button>
+
           {/* Employee CSV to JSON Button */}
           <button
             onClick={handleEmployeeCsvToJsonMigration}
@@ -507,6 +602,9 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
             compensationMigrationStatus === "running" ||
             compensationMigrationStatus === "success" ||
             compensationMigrationStatus === "error" ||
+            holidayMigrationStatus === "running" ||
+            holidayMigrationStatus === "success" ||
+            holidayMigrationStatus === "error" ||
             employeeMigrationStatus === "running" ||
             employeeMigrationStatus === "success" ||
             employeeMigrationStatus === "error") && (
@@ -593,6 +691,50 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
                         <span className="font-medium">
                           Compensation JSON Migration Failed:{" "}
                           {compensationErrorDetails}
+                        </span>
+                      </div>
+                    )}
+                </>
+              )}
+
+              {/* Holiday JSON Migration Log */}
+              {(holidayMigrationStatus === "running" ||
+                holidayMigrationStatus === "success" ||
+                holidayMigrationStatus === "error") && (
+                <>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-700">
+                      Holiday JSON Migration Log:
+                    </h4>
+                    <button
+                      onClick={clearHolidayProgressMessages}
+                      className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                      title="Clear log"
+                    >
+                      <IoTrashOutline className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <ul className="space-y-1 text-xs text-gray-600">
+                    {holidayProgressMessages.map((msg, index) => (
+                      <li key={index} className="font-mono">
+                        {msg}
+                      </li>
+                    ))}
+                  </ul>
+                  {holidayMigrationStatus === "success" && (
+                    <div className="mt-3 flex items-center gap-2 text-green-600">
+                      <IoCheckmarkCircleOutline className="w-5 h-5" />
+                      <span className="font-medium">
+                        Holiday JSON Migration Successful
+                      </span>
+                    </div>
+                  )}
+                  {holidayMigrationStatus === "error" &&
+                    holidayErrorDetails && (
+                      <div className="mt-3 flex items-center gap-2 text-red-600">
+                        <IoAlertCircleOutline className="w-5 h-5" />
+                        <span className="font-medium">
+                          Holiday JSON Migration Failed: {holidayErrorDetails}
                         </span>
                       </div>
                     )}

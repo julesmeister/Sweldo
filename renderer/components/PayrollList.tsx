@@ -56,6 +56,18 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     // Modify the click outside handler to use a ref for the month picker
     const monthPickerRef = useRef<HTMLDivElement>(null);
 
+    // Define all callbacks before any conditional returns
+    const handleMonthSelect = useCallback((selectedMonth: Date) => {
+      setMonth(selectedMonth);
+      setShowMonthPicker(false);
+    }, []);
+
+    const toggleMonthPicker = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      setShowMonthPicker((prev) => !prev);
+      setFilterType("custom");
+    }, []);
+
     useEffect(() => {
       if (!showMonthPicker) return;
 
@@ -149,21 +161,6 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     useEffect(() => {
       setPayrolls(initialPayrolls);
     }, [initialPayrolls]);
-
-    if (employee == null) {
-      return null;
-    }
-
-    const handleMonthSelect = useCallback((selectedMonth: Date) => {
-      setMonth(selectedMonth);
-      setShowMonthPicker(false);
-    }, []);
-
-    const toggleMonthPicker = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      setShowMonthPicker((prev) => !prev);
-      setFilterType("custom");
-    }, []);
 
     const handlePayrollSelect = useCallback(
       (payroll: PayrollSummaryModel) => {
@@ -329,6 +326,10 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
         )),
       [payrolls, handlePayrollSelect, handleDeleteClick, hasDeleteAccess]
     );
+
+    if (employee == null) {
+      return null;
+    }
 
     return (
       <div className="px-4 sm:px-0">
