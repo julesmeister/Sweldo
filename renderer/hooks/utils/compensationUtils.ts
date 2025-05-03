@@ -209,7 +209,8 @@ export const calculatePayMetrics = (
   employmentType?: EmploymentType | null
 ) => {
   const standardHours = employmentType?.hoursOfWork || 8;
-  const hourlyRate = dailyRate / standardHours;
+  const hourlyRate =
+    dailyRate > 0 && standardHours > 0 ? dailyRate / standardHours : 0; // Avoid division by zero
   const overtimeHourlyRate =
     hourlyRate * (attendanceSettings.overtimeHourlyMultiplier || 1.25);
 
@@ -219,7 +220,8 @@ export const calculatePayMetrics = (
     nightDifferentialPay: 0,
   };
 
-  if (actualTimeIn && actualTimeOut) {
+  if (actualTimeIn && actualTimeOut && hourlyRate > 0) {
+    // Check hourlyRate > 0
     nightDifferential = calculateNightDifferential(
       { timeIn: actualTimeIn, timeOut: actualTimeOut },
       { timeIn: actualTimeIn, timeOut: actualTimeOut }, // Use actual times as schedule to avoid time restriction
@@ -239,23 +241,24 @@ export const calculatePayMetrics = (
     (timeMetrics.overtimeDeductionMinutes / 60) * overtimeHourlyRate;
   const totalDeductions = lateDeduction + undertimeDeduction;
 
-  // Calculate holiday bonus if applicable
-  const holidayBonus = holiday ? dailyRate * (holiday.multiplier - 1) : 0;
+  // Calculate TOTAL holiday pay based on multiplier
+  const totalHolidayPay = holiday ? dailyRate * holiday.multiplier : 0;
 
-  // Calculate gross and net pay
-  const baseGrossPay = dailyRate;
+  // Calculate gross pay:
+  // If it's a holiday, the gross includes the totalHolidayPay + OT + NightDiff.
+  // If it's not a holiday, it's the dailyRate + OT + NightDiff.
+  // The base daily rate is implicitly included *within* totalHolidayPay when holiday is present.
   const grossPay =
-    baseGrossPay +
+    (holiday ? totalHolidayPay : dailyRate) +
     overtimePay +
-    nightDifferential.nightDifferentialPay +
-    holidayBonus;
+    nightDifferential.nightDifferentialPay;
+
   const netPay = grossPay - totalDeductions;
 
   const result = {
     deductions: totalDeductions,
     overtimePay,
-    baseGrossPay,
-    holidayBonus,
+    holidayBonus: totalHolidayPay, // Store the TOTAL holiday pay here
     grossPay,
     netPay,
     lateDeduction,
@@ -279,26 +282,93 @@ export const createCompensationRecord = (
   existingCompensation?: Partial<Compensation>,
   schedule?: Schedule | null
 ): Compensation => {
-  const { lateMinutes, undertimeMinutes, overtimeMinutes, hoursWorked } =
-    timeMetrics;
-
   const {
-    deductions,
-    overtimePay,
-    grossPay,
-    netPay,
-    holidayBonus,
-    lateDeduction,
-    undertimeDeduction,
-    nightDifferentialHours,
-    nightDifferentialPay,
+    lateMinutes: initialLateMinutes, // Rename initial values
+    undertimeMinutes: initialUndertimeMinutes,
+    overtimeMinutes: initialOvertimeMinutes,
+    hoursWorked: initialHoursWorked,
+  } = timeMetrics;
+
+  let {
+    deductions: initialDeductions, // Rename initial values
+    overtimePay: initialOvertimePay,
+    grossPay: initialGrossPay,
+    netPay: initialNetPay,
+    holidayBonus: initialHolidayBonus, // This now holds total potential holiday pay from payMetrics
+    lateDeduction: initialLateDeduction,
+    undertimeDeduction: initialUndertimeDeduction,
+    nightDifferentialHours: initialNightDifferentialHours,
+    nightDifferentialPay: initialNightDifferentialPay,
   } = payMetrics;
 
-  // Determine absence based on schedule and time entries
-  const isWorkday = !!schedule;
-  const isHoliday = !!holiday;
+  const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
   const hasTimeEntries = !!(entry.timeIn && entry.timeOut);
-  const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+
+  // Determine absence specifically for paid holidays vs normal days
+  const isPaidHoliday = holiday && holiday.multiplier > 0; // Assumes multiplier > 0 means paid
+  const isAbsent = !hasTimeEntries;
+
+  // Use let for final values that might change based on absence
+  let finalGrossPay = initialGrossPay;
+  let finalNetPay = initialNetPay;
+  let finalHolidayBonus = initialHolidayBonus; // Start with the calculated total holiday pay
+  let finalAbsence = false;
+  let finalLateMinutes = initialLateMinutes;
+  let finalUndertimeMinutes = initialUndertimeMinutes;
+  let finalOvertimeMinutes = initialOvertimeMinutes;
+  let finalHoursWorked = initialHoursWorked;
+  let finalDeductions = initialDeductions;
+  let finalOvertimePay = initialOvertimePay;
+  let finalLateDeduction = initialLateDeduction;
+  let finalUndertimeDeduction = initialUndertimeDeduction;
+  let finalNightDifferentialHours = initialNightDifferentialHours;
+  let finalNightDifferentialPay = initialNightDifferentialPay;
+
+  if (isAbsent) {
+    if (isPaidHoliday) {
+      // Absent on a PAID holiday - should receive base pay (or based on specific rule)
+      // Assuming base pay (100%) for regular holidays if absent
+      const holidayBasePay = dailyRate * 1.0; // Adjust multiplier if rule is different
+      finalGrossPay = holidayBasePay;
+      finalNetPay = holidayBasePay; // Assuming no deductions apply on paid absence
+      finalHolidayBonus = 0; // No work premium/bonus earned
+      finalAbsence = false; // Not typically marked absent if paid for holiday
+      // Keep time metrics (late/under/overtime minutes) as 0 for paid absence
+      finalLateMinutes = 0;
+      finalUndertimeMinutes = 0;
+      finalOvertimeMinutes = 0;
+      finalHoursWorked = 0;
+      finalDeductions = 0;
+      finalOvertimePay = 0;
+      finalLateDeduction = 0;
+      finalUndertimeDeduction = 0;
+      finalNightDifferentialHours = 0;
+      finalNightDifferentialPay = 0;
+    } else {
+      // Absent on a regular workday (or unpaid holiday)
+      finalGrossPay = 0;
+      finalNetPay = 0;
+      finalHolidayBonus = 0;
+      finalAbsence = true;
+      // Zero out metrics if truly absent and unpaid
+      finalLateMinutes = 0;
+      finalUndertimeMinutes = 0;
+      finalOvertimeMinutes = 0;
+      finalHoursWorked = 0;
+      finalDeductions = 0;
+      finalOvertimePay = 0;
+      finalLateDeduction = 0;
+      finalUndertimeDeduction = 0;
+      finalNightDifferentialHours = 0;
+      finalNightDifferentialPay = 0;
+    }
+  } else if (!isPaidHoliday) {
+    // Present on a non-holiday, ensure holidayBonus is zero
+    // Note: payMetrics already calculates holidayBonus as 0 if no holiday
+    // but we explicitly set finalHolidayBonus to 0 ensure it reflects *earned* bonus for the day
+    finalHolidayBonus = 0;
+  }
+  // If present on a paid holiday, the initially calculated values from payMetrics are correct for final values
 
   return {
     ...(existingCompensation || {}),
@@ -311,29 +381,30 @@ export const createCompensationRecord = (
         ? "Holiday"
         : "Special"
       : "Regular",
-    dailyRate: parseFloat((employee?.dailyRate || 0).toString()),
-    grossPay: isAbsent ? 0 : grossPay,
-    netPay: isAbsent ? 0 : netPay,
-    holidayBonus,
+    dailyRate,
+    grossPay: finalGrossPay,
+    netPay: finalNetPay,
+    holidayBonus: finalHolidayBonus, // Store the determined bonus (0 if absent, total if present)
     manualOverride: false,
-    lateMinutes,
-    undertimeMinutes,
-    overtimeMinutes,
-    hoursWorked: isAbsent ? 0 : hoursWorked,
-    deductions,
-    overtimePay,
-    lateDeduction,
-    undertimeDeduction,
-    leaveType: "None",
-    leavePay: 0,
-    notes: "",
-    absence: isAbsent,
-    nightDifferentialHours,
-    nightDifferentialPay,
+    lateMinutes: finalLateMinutes,
+    undertimeMinutes: finalUndertimeMinutes,
+    overtimeMinutes: finalOvertimeMinutes,
+    hoursWorked: finalHoursWorked,
+    deductions: finalDeductions,
+    overtimePay: finalOvertimePay,
+    lateDeduction: finalLateDeduction,
+    undertimeDeduction: finalUndertimeDeduction,
+    leaveType: existingCompensation?.leaveType || "None",
+    leavePay: existingCompensation?.leavePay || 0,
+    notes: existingCompensation?.notes || "",
+    absence: finalAbsence,
+    nightDifferentialHours: finalNightDifferentialHours,
+    nightDifferentialPay: finalNightDifferentialPay,
   } as Compensation;
 };
 
 // Helper function to create a base compensation record
+// **This might need adjustment depending on how it's used, especially if holidays apply**
 export const createBaseCompensation = (
   entry: Attendance,
   employee: Employee | null,
@@ -341,6 +412,12 @@ export const createBaseCompensation = (
   year: number,
   holiday: Holiday | undefined
 ): Compensation => {
+  const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+  // Apply basic holiday logic even for base compensation
+  const totalHolidayPay = holiday ? dailyRate * holiday.multiplier : 0;
+  const isPaidHoliday = holiday && holiday.multiplier > 0;
+  const basePay = isPaidHoliday ? dailyRate * 1.0 : 0; // Pay for absent holiday?
+
   return {
     employeeId: employee?.id || "",
     month,
@@ -351,11 +428,11 @@ export const createBaseCompensation = (
         ? "Holiday"
         : "Special"
       : ("Regular" as DayType),
-    dailyRate: 0,
-    grossPay: 0,
-    netPay: 0,
-    holidayBonus: 0,
-    manualOverride: true,
+    dailyRate: dailyRate, // Store the actual daily rate
+    grossPay: basePay, // Start with base pay if applicable for absent holiday
+    netPay: basePay,
+    holidayBonus: 0, // Default to 0 for base/absent case
+    manualOverride: true, // Usually base is for manual cases
     lateMinutes: 0,
     undertimeMinutes: 0,
     overtimeMinutes: 0,
@@ -367,7 +444,7 @@ export const createBaseCompensation = (
     leaveType: "None",
     leavePay: 0,
     notes: "",
-    absence: false,
+    absence: !isPaidHoliday, // Mark absent if not a paid holiday (needs refinement)
     nightDifferentialHours: 0,
     nightDifferentialPay: 0,
   };

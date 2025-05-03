@@ -23,6 +23,8 @@ import {
   calculatePayMetrics,
   isHolidayDate,
   getPaymentBreakdown,
+  calculateTimeDifference,
+  createDateString,
 } from "@/renderer/hooks/utils/compensationUtils";
 import { toast } from "sonner";
 import { ComputationBreakdownButton } from "@/renderer/components/ComputationBreakdownButton";
@@ -340,60 +342,87 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     const entryDate = new Date(year, month - 1, day);
     const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
 
-    // Create base return object with zero values
-    const createBaseReturn = (
-      grossPay = 0,
-      manualOverride = false,
-      absence = false
-    ) => ({
+    // Get the schedule for the specific day of the week
+    const scheduleDetails = employmentType
+      ? getScheduleForDate(employmentType, entryDate)
+      : null;
+
+    const isWorkday = !!scheduleDetails && !scheduleDetails.isOff;
+    const isHoliday = !!holiday;
+    const isPaidHoliday = holiday && holiday.multiplier > 0;
+    const hasTimeEntries = !!(timeIn && timeOut);
+    const isPresent = hasTimeEntries;
+
+    // --- Base return function (refactored) ---
+    const createBaseReturn = (props: Partial<Compensation> = {}) => ({
       lateMinutes: 0,
       undertimeMinutes: 0,
       overtimeMinutes: 0,
       hoursWorked: 0,
-      grossPay,
+      grossPay: 0,
       dailyRate,
       deductions: 0,
-      netPay: grossPay,
+      netPay: 0,
       lateDeduction: 0,
       undertimeDeduction: 0,
-      overtimeAddition: 0,
+      overtimePay: 0, // Changed from overtimeAddition
       nightDifferentialHours: 0,
       nightDifferentialPay: 0,
-      holidayBonus: holiday ? dailyRate * holiday.multiplier : 0,
-      manualOverride,
-      absence,
+      holidayBonus: 0,
+      manualOverride: false,
+      absence: false,
+      ...props, // Apply overrides
     });
 
-    // Get the schedule for the specific day of the week
-    const jsDay = entryDate.getDay(); // 0-6 (0 = Sunday)
-    const schedule = employmentType
-      ? getScheduleForDate(employmentType, entryDate)
-      : null;
+    // --- Logic based on presence/holiday/schedule ---
 
-    // Separate checks for workday and holiday
-    const isWorkday = !!schedule;
-    const isHoliday = !!holiday;
-
-    // If it's a workday (not a holiday) and no time entries, mark as absent
-    if (isWorkday && !isHoliday && (!timeIn || !timeOut)) {
-      return createBaseReturn(0, false, true);
+    if (!isPresent) {
+      if (isPaidHoliday) {
+        // Absent on paid holiday
+        const holidayBasePay = dailyRate * 1.0; // Assuming 100% base pay
+        return createBaseReturn({
+          grossPay: holidayBasePay,
+          netPay: holidayBasePay,
+          holidayBonus: 0, // No premium earned
+          absence: false, // Not technically absent
+          dayType: holiday.type === "Regular" ? "Holiday" : "Special",
+        });
+      } else {
+        // Absent on regular day or unpaid holiday
+        return createBaseReturn({ absence: true });
+      }
     }
 
-    // If it's a holiday, they should get holiday pay regardless of attendance
-    if (isHoliday) {
-      const holidayPay = dailyRate * (holiday?.multiplier || 1);
-      return createBaseReturn(holidayPay, false, false);
+    // --- Present --- //
+
+    // If present but it's not a scheduled workday (e.g., worked on rest day) or no settings
+    if (!isWorkday || !attendanceSettings || !scheduleDetails) {
+      // Handle worked rest day or missing settings - may need specific logic?
+      // For now, return base pay + any holiday multiplier if applicable?
+      const basePay = dailyRate;
+      const totalHolidayPay = holiday ? dailyRate * holiday.multiplier : 0;
+      const presentPay = holiday ? totalHolidayPay : basePay;
+      // Note: This doesn't calculate OT/ND for rest days without a schedule context yet
+      return createBaseReturn({
+        grossPay: presentPay,
+        netPay: presentPay,
+        holidayBonus: holiday ? totalHolidayPay : 0, // Store total pay if holiday
+        dayType: holiday
+          ? holiday.type === "Regular"
+            ? "Holiday"
+            : "Special"
+          : "Rest Day", // Or Regular?
+        hoursWorked:
+          timeIn && timeOut
+            ? calculateTimeDifference(
+                new Date(createDateString(year, month, day, timeOut)),
+                new Date(createDateString(year, month, day, timeIn))
+              ) / 60
+            : 0, // Basic hours calculation
+      });
     }
 
-    // If no schedule (rest day) and no holiday, return base values without marking absent
-    if (!isWorkday && !isHoliday) {
-      return createBaseReturn(0, false, false);
-    }
-
-    // Continue with time tracking logic for regular workdays with time entries
-    if (!timeIn || !timeOut || !attendanceSettings || !schedule) {
-      return createBaseReturn();
-    }
+    // --- Present on a scheduled workday --- //
 
     // Use shared utility functions for calculations
     const { actual, scheduled } = createTimeObjects(
@@ -405,59 +434,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       employmentType
     );
 
-    // Calculate night differential hours
-    const calculateNightHours = (timeIn: Date, timeOut: Date) => {
-      let nightHours = 0;
-      let timeInHour = timeIn.getHours() + timeIn.getMinutes() / 60;
-      let timeOutHour = timeOut.getHours() + timeOut.getMinutes() / 60;
-
-      // If timeOut is earlier than timeIn, it means we crossed midnight
-      if (timeOutHour < timeInHour) {
-        timeOutHour += 24;
-      }
-
-      const nightStartHour = 22; // 10 PM
-      const nightEndHour = 6; // 6 AM
-
-      // Calculate night hours in the evening (10 PM - midnight)
-      if (timeInHour < timeOutHour) {
-        if (timeInHour <= nightStartHour && timeOutHour > nightStartHour) {
-          // Started before 10 PM, ended after 10 PM
-          nightHours += Math.min(24, timeOutHour) - nightStartHour;
-        } else if (timeInHour >= nightStartHour) {
-          // Started after 10 PM
-          nightHours += Math.min(24, timeOutHour) - timeInHour;
-        }
-      }
-
-      // Calculate night hours in the morning (midnight - 6 AM)
-      if (timeOutHour > 24) {
-        // Shift crossed midnight
-        if (timeOutHour <= 24 + nightEndHour) {
-          // Ended before 6 AM
-          nightHours += timeOutHour - 24;
-        } else {
-          // Ended after 6 AM
-          nightHours += nightEndHour;
-        }
-      } else if (timeOutHour <= nightEndHour) {
-        // Shift ended before 6 AM on the same day
-        nightHours += timeOutHour;
-      }
-
-      return nightHours;
-    };
-
-    const nightHours = calculateNightHours(actual.timeIn, actual.timeOut);
-    const standardHours = employmentType?.hoursOfWork || 8;
-    const hourlyRate = dailyRate / standardHours;
-    const nightDiffMultiplier =
-      attendanceSettings?.nightDifferentialMultiplier || 0.1;
-    const nightDiffPay = nightHours * hourlyRate * nightDiffMultiplier;
-
     const timeMetrics = calculateTimeMetrics(
       actual,
-      scheduled,
+      scheduled, // scheduled is guaranteed here by the isWorkday check above
       attendanceSettings,
       employmentType
     );
@@ -469,28 +448,29 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       holiday,
       actual.timeIn,
       actual.timeOut,
-      scheduled
+      scheduled,
+      employmentType
     );
-
-    // Calculate total gross pay including night differential
-    const totalGrossPay = payMetrics.grossPay + nightDiffPay;
-    // Calculate total net pay including night differential
-    const totalNetPay = totalGrossPay - payMetrics.deductions;
 
     return {
       ...timeMetrics,
-      grossPay: totalGrossPay,
+      grossPay: payMetrics.grossPay,
       dailyRate,
       deductions: payMetrics.deductions,
-      netPay: totalNetPay,
+      netPay: payMetrics.netPay,
       lateDeduction: payMetrics.lateDeduction,
       undertimeDeduction: payMetrics.undertimeDeduction,
-      overtimeAddition: payMetrics.overtimePay,
-      holidayBonus: payMetrics.holidayBonus,
-      nightDifferentialHours: nightHours,
-      nightDifferentialPay: nightDiffPay,
+      overtimePay: payMetrics.overtimePay,
+      holidayBonus: payMetrics.holidayBonus, // Contains total holiday pay if present
+      nightDifferentialHours: payMetrics.nightDifferentialHours,
+      nightDifferentialPay: payMetrics.nightDifferentialPay,
       manualOverride: false,
-      absence: false,
+      absence: false, // Present here
+      dayType: holiday
+        ? holiday.type === "Regular"
+          ? "Holiday"
+          : "Special"
+        : "Regular",
     };
   }, [
     employmentType,
@@ -502,6 +482,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     year,
     month,
     day,
+    formData.dailyRate, // Include formData daily rate if it can be manually changed
   ]);
 
   useEffect(() => {
@@ -525,7 +506,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
           grossPay: computedValues.grossPay,
           deductions: computedValues.deductions,
           netPay: computedValues.netPay,
-          overtimePay: computedValues.overtimeAddition,
+          overtimePay: computedValues.overtimePay,
           undertimeDeduction: computedValues.undertimeDeduction,
           lateDeduction: computedValues.lateDeduction,
           holidayBonus: computedValues.holidayBonus,

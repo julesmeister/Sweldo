@@ -173,10 +173,7 @@ export default function SettingsPage() {
   const variablesPanelRef = useRef<HTMLDivElement>(null);
   const [showVariablesPanel, setShowVariablesPanel] = useState(false);
 
-  // Add useEffect to initialize the store when component mounts
-  React.useEffect(() => {
-    initialize();
-  }, [initialize]);
+  // Initialization is now handled in RootLayout
 
   const handleSaveChanges = async () => {
     if (!hasAccess("MANAGE_ATTENDANCE")) {

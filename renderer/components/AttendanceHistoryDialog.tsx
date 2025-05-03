@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Papa from "papaparse";
 import {
   IoClose,
@@ -81,6 +81,13 @@ interface AttendanceHistoryDialogProps {
   ) => Promise<void>;
 }
 
+// Define common class name for table headers
+const thClassName =
+  "px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider";
+
+// Define common class name for table data cells
+const tdClassName = "px-4 py-4 whitespace-nowrap text-sm text-gray-700";
+
 export const AttendanceHistoryDialog: React.FC<
   AttendanceHistoryDialogProps
 > = ({
@@ -94,29 +101,128 @@ export const AttendanceHistoryDialog: React.FC<
   onRevertAttendance,
   onRevertCompensation,
 }) => {
-  const [historyEntries, setHistoryEntries] = useState<AttendanceBackupEntry[]>(
-    []
-  );
-  const [compensationEntries, setCompensationEntries] = useState<
-    CompensationBackupEntry[]
-  >([]);
   const [combinedEntries, setCombinedEntries] = useState<DisplayEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to parse attendance CSV content
+  const parseAttendanceBackup = (
+    content: string,
+    defaultEmployeeId: string,
+    defaultMonth: number,
+    defaultYear: number
+  ): AttendanceBackupEntry[] => {
+    if (!content || content.trim().length === 0) return [];
+
+    const results = Papa.parse<any>(content, {
+      skipEmptyLines: true,
+      newline: "\n",
+    });
+
+    if (results.errors.length > 0) {
+      console.error("Parsing attendance errors:", results.errors);
+      // Decide if we should return empty or throw based on error severity?
+      // For now, log and continue, might return partial data.
+    }
+
+    if (results.data.length < 2) return []; // No data rows
+
+    const dataRows = results.data.slice(1); // Skip header
+    return dataRows
+      .map((row) => {
+        // Basic validation for row structure could be added here
+        if (!Array.isArray(row) || row.length < 7) return null;
+        const day = parseInt(row[2], 10);
+        if (isNaN(day)) return null; // Skip rows with invalid day
+        return {
+          timestamp: row[0] || "",
+          employeeId: row[1] || defaultEmployeeId,
+          day,
+          month: parseInt(row[3], 10) || defaultMonth,
+          year: parseInt(row[4], 10) || defaultYear,
+          timeIn: row[5] || null,
+          timeOut: row[6] || null,
+        } as AttendanceBackupEntry;
+      })
+      .filter((entry): entry is AttendanceBackupEntry => entry !== null);
+  };
+
+  // Helper function to parse compensation CSV content
+  const parseCompensationBackup = (
+    content: string,
+    defaultEmployeeId: string,
+    defaultMonth: number,
+    defaultYear: number
+  ): CompensationBackupEntry[] => {
+    if (!content || content.trim().length === 0) return [];
+
+    const results = Papa.parse<any>(content, {
+      skipEmptyLines: true,
+      newline: "\n",
+    });
+
+    if (results.errors.length > 0) {
+      console.error("Parsing compensation errors:", results.errors);
+    }
+
+    if (results.data.length < 2) return [];
+
+    const dataRows = results.data.slice(1);
+    return dataRows
+      .map((row) => {
+        // Basic validation
+        if (!Array.isArray(row) || row.length < 25) return null; // Check expected column count
+        const day = parseInt(row[4], 10);
+        if (isNaN(day)) return null;
+
+        const getFloatOrNull = (val: any) => (val ? parseFloat(val) : null);
+        const getBoolOrNull = (val: any) =>
+          val === "true" || val === "1"
+            ? true
+            : val === "false" || val === "0"
+            ? false
+            : null;
+
+        return {
+          timestamp: row[0] || "",
+          employeeId: row[1] || defaultEmployeeId,
+          day,
+          month: parseInt(row[2], 10) || defaultMonth,
+          year: parseInt(row[3], 10) || defaultYear,
+          grossPay: getFloatOrNull(row[17]),
+          netPay: getFloatOrNull(row[19]),
+          hoursWorked: getFloatOrNull(row[7]),
+          dayType: row[5] || null,
+          absence: getBoolOrNull(row[22]),
+          deductions: getFloatOrNull(row[18]),
+          dailyRate: getFloatOrNull(row[6]),
+          overtimeMinutes: getFloatOrNull(row[8]),
+          overtimePay: getFloatOrNull(row[9]),
+          undertimeMinutes: getFloatOrNull(row[10]),
+          undertimeDeduction: getFloatOrNull(row[11]),
+          lateMinutes: getFloatOrNull(row[12]),
+          lateDeduction: getFloatOrNull(row[13]),
+          holidayBonus: getFloatOrNull(row[14]),
+          leaveType: row[15] || null,
+          leavePay: getFloatOrNull(row[16]),
+          manualOverride: getBoolOrNull(row[20]),
+          notes: row[21] || null,
+          nightDifferentialHours: getFloatOrNull(row[23]),
+          nightDifferentialPay: getFloatOrNull(row[24]),
+        } as CompensationBackupEntry;
+      })
+      .filter((entry): entry is CompensationBackupEntry => entry !== null);
+  };
+
   useEffect(() => {
     const fetchHistory = async () => {
       if (!isOpen || !employeeId || !year || !month || !day || !dbPath) {
-        setHistoryEntries([]);
-        setCompensationEntries([]);
         setCombinedEntries([]);
         return;
       }
 
       setIsLoading(true);
       setError(null);
-      setHistoryEntries([]);
-      setCompensationEntries([]);
       setCombinedEntries([]);
 
       const baseBackupDir = `${dbPath}/SweldoDB/attendances/${employeeId}`;
@@ -128,50 +234,19 @@ export const AttendanceHistoryDialog: React.FC<
       );
 
       try {
-        const attendanceContent = await window.electron.readFile(
-          attendanceBackupFilePath
+        // Load attendance backup content
+        const attendanceContent = await window.electron
+          .readFile(attendanceBackupFilePath)
+          .catch(() => null);
+        // Parse using helper
+        const attendanceData = parseAttendanceBackup(
+          attendanceContent || "",
+          employeeId,
+          month,
+          year
         );
-        let attendanceData: AttendanceBackupEntry[] = [];
 
-        if (attendanceContent && attendanceContent.trim().length > 0) {
-          const attendanceResults = Papa.parse<any>(attendanceContent, {
-            skipEmptyLines: true,
-            newline: "\n",
-          });
-
-          if (attendanceResults.errors.length > 0) {
-            console.error(
-              "Parsing attendance errors:",
-              attendanceResults.errors
-            );
-          }
-
-          if (attendanceResults.data.length >= 2) {
-            const dataRows = attendanceResults.data.slice(1);
-
-            if (dataRows.length > 0) {
-              console.log(
-                "[AttendanceHistoryDialog] Sample attendance row:",
-                dataRows[0]
-              );
-            }
-
-            attendanceData = dataRows
-              .map((row) => {
-                return {
-                  timestamp: row[0] || "",
-                  employeeId: row[1] || employeeId,
-                  day: parseInt(row[2], 10),
-                  month: parseInt(row[3], 10) || month,
-                  year: parseInt(row[4], 10) || year,
-                  timeIn: row[5] || null,
-                  timeOut: row[6] || null,
-                } as AttendanceBackupEntry;
-              })
-              .filter((entry) => entry !== null && !isNaN(entry.day));
-          }
-        }
-
+        // Load compensation backup content
         const compensationContent = await window.electron
           .readFile(compensationBackupFilePath)
           .catch((err) => {
@@ -181,93 +256,15 @@ export const AttendanceHistoryDialog: React.FC<
             );
             return null;
           });
-
-        console.log(
-          `[AttendanceHistoryDialog] Compensation content loaded:`,
-          compensationContent
-            ? `${compensationContent.substring(0, 100)}... (${
-                compensationContent.length
-              } chars)`
-            : "null"
+        // Parse using helper
+        const compensationData = parseCompensationBackup(
+          compensationContent || "",
+          employeeId,
+          month,
+          year
         );
 
-        let compensationData: CompensationBackupEntry[] = [];
-
-        if (compensationContent && compensationContent.trim().length > 0) {
-          const compensationResults = Papa.parse<any>(compensationContent, {
-            skipEmptyLines: true,
-            newline: "\n",
-          });
-
-          if (compensationResults.errors.length > 0) {
-            console.error(
-              "[AttendanceHistoryDialog] Parsing compensation errors:",
-              compensationResults.errors
-            );
-          }
-
-          console.log(
-            `[AttendanceHistoryDialog] Compensation parsed results:`,
-            {
-              rowCount: compensationResults.data.length,
-              errors: compensationResults.errors.length,
-              firstRow:
-                compensationResults.data.length > 0
-                  ? compensationResults.data[0]
-                  : "none",
-            }
-          );
-
-          if (compensationResults.data.length >= 2) {
-            const dataRows = compensationResults.data.slice(1);
-
-            if (dataRows.length > 0) {
-              console.log(
-                "[AttendanceHistoryDialog] Sample compensation row:",
-                dataRows[0]
-              );
-            }
-
-            compensationData = dataRows
-              .map((row) => {
-                const entry = {
-                  timestamp: row[0] || "",
-                  employeeId: row[1] || employeeId,
-                  day: parseInt(row[4], 10),
-                  month: parseInt(row[2], 10) || month,
-                  year: parseInt(row[3], 10) || year,
-                  grossPay: row[17] ? parseFloat(row[17]) : null,
-                  netPay: row[19] ? parseFloat(row[19]) : null,
-                  hoursWorked: row[7] ? parseFloat(row[7]) : null,
-                  dayType: row[5] || null,
-                  absence: row[22] === "true" || row[22] === "1" || null,
-                  deductions: row[18] ? parseFloat(row[18]) : null,
-                  dailyRate: row[6] ? parseFloat(row[6]) : null,
-                  overtimeMinutes: row[8] ? parseFloat(row[8]) : null,
-                  overtimePay: row[9] ? parseFloat(row[9]) : null,
-                  undertimeMinutes: row[10] ? parseFloat(row[10]) : null,
-                  undertimeDeduction: row[11] ? parseFloat(row[11]) : null,
-                  lateMinutes: row[12] ? parseFloat(row[12]) : null,
-                  lateDeduction: row[13] ? parseFloat(row[13]) : null,
-                  holidayBonus: row[14] ? parseFloat(row[14]) : null,
-                  leaveType: row[15] || null,
-                  leavePay: row[16] ? parseFloat(row[16]) : null,
-                  manualOverride: row[20] === "true" || row[20] === "1" || null,
-                  notes: row[21] || null,
-                  nightDifferentialHours: row[23] ? parseFloat(row[23]) : null,
-                  nightDifferentialPay: row[24] ? parseFloat(row[24]) : null,
-                } as CompensationBackupEntry;
-
-                return entry;
-              })
-              .filter((entry) => entry !== null && !isNaN(entry.day));
-          }
-        } else {
-          console.log(
-            `[AttendanceHistoryDialog] No compensation content available or empty`
-          );
-        }
-
+        // Filter for the specific day (remains the same)
         const filteredAttendanceData = attendanceData.filter(
           (entry) => entry.day === day
         );
@@ -280,6 +277,7 @@ export const AttendanceHistoryDialog: React.FC<
           compensationCount: filteredCompensationData.length,
         });
 
+        // Create display entries (remains the same)
         const attendanceDisplayEntries: DisplayEntry[] =
           filteredAttendanceData.map((entry) => ({
             timestamp: entry.timestamp,
@@ -297,6 +295,7 @@ export const AttendanceHistoryDialog: React.FC<
             compensationData: entry,
           }));
 
+        // Combine and sort (remains the same)
         const allDisplayEntries = [
           ...attendanceDisplayEntries,
           ...compensationDisplayEntries,
@@ -316,8 +315,6 @@ export const AttendanceHistoryDialog: React.FC<
           );
         }
 
-        setHistoryEntries(filteredAttendanceData);
-        setCompensationEntries(filteredCompensationData);
         setCombinedEntries(allDisplayEntries);
 
         if (allDisplayEntries.length === 0) {
@@ -355,7 +352,7 @@ export const AttendanceHistoryDialog: React.FC<
     }
   );
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     try {
       return new Date(dateString).toLocaleString(undefined, {
         year: "numeric",
@@ -369,36 +366,33 @@ export const AttendanceHistoryDialog: React.FC<
     } catch {
       return dateString;
     }
-  };
+  }, []);
 
-  const formatTime = (time: string | null): string => {
+  const formatTime = useCallback((time: string | null): string => {
     if (!time) return "-";
     const parts = time.split(":");
     if (parts.length !== 2) return "-";
-
     const hours = Number(parts[0]);
     const minutes = Number(parts[1]);
-
     if (isNaN(hours) || isNaN(minutes)) return "-";
-
     const period = hours >= 12 ? "PM" : "AM";
     const formattedHours = hours % 12 || 12;
     return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
-  };
+  }, []);
 
-  const formatCurrency = (amount: number | null): string => {
+  const formatCurrency = useCallback((amount: number | null): string => {
     if (amount === null || isNaN(Number(amount))) return "-";
     return new Intl.NumberFormat("en-PH", {
       style: "currency",
       currency: "PHP",
       minimumFractionDigits: 2,
     }).format(amount);
-  };
+  }, []);
 
-  const formatHours = (hours: number | null): string => {
+  const formatHours = useCallback((hours: number | null): string => {
     if (hours === null || isNaN(Number(hours))) return "-";
     return hours.toFixed(2);
-  };
+  }, []);
 
   return (
     <div
@@ -452,40 +446,22 @@ export const AttendanceHistoryDialog: React.FC<
                   >
                     Revert
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Timestamp
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Time In
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Time Out
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Deductions
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Gross Pay
                   </th>
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
-                  >
+                  <th scope="col" className={thClassName}>
                     Net Pay
                   </th>
                 </tr>
@@ -574,34 +550,34 @@ export const AttendanceHistoryDialog: React.FC<
                             </Tooltip>
                           )}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {formatDate(entry.timestamp)}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {entry.type === "attendance"
                           ? formatTime(entry.attendanceData?.timeIn ?? null)
                           : "-"}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {entry.type === "attendance"
                           ? formatTime(entry.attendanceData?.timeOut ?? null)
                           : "-"}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {entry.type === "compensation"
                           ? formatCurrency(
                               entry.compensationData?.deductions ?? null
                             )
                           : "-"}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {entry.type === "compensation"
                           ? formatCurrency(
                               entry.compensationData?.grossPay ?? null
                             )
                           : "-"}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className={tdClassName}>
                         {entry.type === "compensation"
                           ? formatCurrency(
                               entry.compensationData?.netPay ?? null

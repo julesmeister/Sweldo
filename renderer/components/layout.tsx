@@ -44,8 +44,37 @@ export default function RootLayout({
 
   // Initialize settings store
   useEffect(() => {
-    initialize().catch((error) => {
-      setInitError("Failed to initialize settings. Please try again.");
+    // Retrieve dbPath from localStorage before initializing the store
+    let initialDbPath: string | null = null;
+    try {
+      const persistedState = localStorage.getItem("settings-storage");
+      if (persistedState) {
+        const parsed = JSON.parse(persistedState);
+        // Check if state and dbPath exist and are strings
+        if (parsed && parsed.state && typeof parsed.state.dbPath === "string") {
+          initialDbPath = parsed.state.dbPath;
+          console.log(
+            "[Layout] Found initialDbPath in localStorage:",
+            initialDbPath
+          );
+        } else {
+          console.log(
+            "[Layout] 'settings-storage' found in localStorage, but dbPath is missing or invalid."
+          );
+        }
+      } else {
+        console.log("[Layout] 'settings-storage' not found in localStorage.");
+      }
+    } catch (e) {
+      console.error("[Layout] Error reading dbPath from localStorage:", e);
+    }
+
+    // Pass the retrieved path (or null) to initialize
+    initialize(initialDbPath).catch((error) => {
+      console.error("[Layout] Error during settings initialization:", error);
+      setInitError(
+        "Failed to initialize settings. Please check console and try again."
+      );
     });
   }, [initialize]);
 

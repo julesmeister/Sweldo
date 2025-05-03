@@ -138,17 +138,51 @@ export const useTimesheetCheckbox = ({
         );
       });
 
-      // Only set dailyRate and pay if both timeIn and timeOut are present
-      const hasCompleteAttendance =
-        (updatedEntry.timeIn && updatedEntry.timeOut) ||
-        (updatedEntry.timeIn === "present" &&
-          updatedEntry.timeOut === "present");
-
-      const dailyRate = hasCompleteAttendance ? employee?.dailyRate || 0 : 0;
-
+      // Use the standard calculation logic
+      const dailyRate = employee?.dailyRate || 0;
       const isHoliday = !!holiday;
-      const hasTimeEntries = isPresent; // Using the checkbox state
-      const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
+      const isPaidHoliday = holiday && holiday.multiplier > 0;
+
+      // Determine pay based on presence and holiday status
+      let calculatedGrossPay = 0;
+      let calculatedHolidayBonus = 0;
+      let isMarkedAbsent = false;
+
+      if (isPresent) {
+        if (isPaidHoliday) {
+          // Present on a paid holiday
+          calculatedGrossPay = dailyRate * holiday.multiplier;
+          calculatedHolidayBonus = calculatedGrossPay; // Store total holiday pay in bonus field
+        } else {
+          // Present on a regular day
+          calculatedGrossPay = dailyRate;
+          calculatedHolidayBonus = 0;
+        }
+        isMarkedAbsent = false;
+      } else {
+        // Absent
+        if (isPaidHoliday) {
+          // Absent on a paid holiday (e.g., Regular Holiday) - pay base rate
+          calculatedGrossPay = dailyRate * 1.0; // Assuming 100% pay for absence on Reg Hol
+          calculatedHolidayBonus = 0; // No work premium earned
+          isMarkedAbsent = false; // Not technically absent if paid
+        } else {
+          // Absent on regular day or unpaid holiday
+          calculatedGrossPay = 0;
+          calculatedHolidayBonus = 0;
+          isMarkedAbsent = true;
+        }
+      }
+
+      // Only set dailyRate and pay if both timeIn and timeOut are present
+      // const hasCompleteAttendance =
+      //   (updatedEntry.timeIn && updatedEntry.timeOut) ||
+      //   (updatedEntry.timeIn === "present" &&
+      //     updatedEntry.timeOut === "present");
+      // const dailyRate = hasCompleteAttendance ? employee?.dailyRate || 0 : 0;
+      // const isHoliday = !!holiday;
+      // const hasTimeEntries = isPresent; // Using the checkbox state
+      // const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
 
       const compensation: Compensation = {
         ...(existingCompensation || {}),
@@ -156,20 +190,26 @@ export const useTimesheetCheckbox = ({
         month,
         year,
         day: foundEntry.day,
-        manualOverride: true,
-        dailyRate,
-        absence: isAbsent,
-        grossPay: isHoliday
-          ? dailyRate * (holiday?.multiplier || 1)
-          : hasTimeEntries
-          ? dailyRate
-          : 0,
-        netPay: isHoliday
-          ? dailyRate * (holiday?.multiplier || 1)
-          : hasTimeEntries
-          ? dailyRate
-          : 0,
-        dayType: "Regular" as DayType,
+        manualOverride: true, // Checkbox implies manual setting of presence
+        dailyRate: employee?.dailyRate || 0, // Store base rate
+        absence: isMarkedAbsent, // Use the determined absence status
+        grossPay: calculatedGrossPay, // Use calculated gross
+        netPay: calculatedGrossPay, // Assuming no deductions in this simplified scenario
+        holidayBonus: calculatedHolidayBonus, // Store calculated bonus (total pay if worked, 0 if absent)
+        dayType: isHoliday
+          ? holiday.type === "Regular"
+            ? "Holiday"
+            : "Special"
+          : "Regular",
+        // Zero out other time-based fields
+        hoursWorked: 0,
+        lateMinutes: 0,
+        undertimeMinutes: 0,
+        overtimeMinutes: 0,
+        deductions: 0,
+        overtimePay: 0,
+        lateDeduction: 0,
+        undertimeDeduction: 0,
         nightDifferentialHours: 0,
         nightDifferentialPay: 0,
       };

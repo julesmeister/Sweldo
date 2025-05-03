@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { EmploymentType } from "@/renderer/model/settings";
 import { FaCheck, FaSun, FaMoon, FaTimes, FaEraser } from "react-icons/fa"; // Added moon icon for evening times and times icon
 import { BsFillSunsetFill } from "react-icons/bs"; // Added sunset icon for afternoon
@@ -192,12 +192,16 @@ export const EditableCell: React.FC<EditableCellProps> = ({
     setEditValue(time);
   };
 
-  const getTimeValidation = () => {
+  // Memoize the time validation object
+  const timeValidationProps = useMemo(() => {
     if (column.key === "timeIn" || column.key === "timeOut") {
+      // Find employmentType based on rowData, not the whole array
       const employmentType = employmentTypes.find(
-        (type) => type.type === rowData.employmentType
+        (type) =>
+          type.type.toLowerCase() === rowData?.employmentType?.toLowerCase()
       );
-      if (employmentType) {
+      if (employmentType?.requiresTimeTracking) {
+        // Check requiresTimeTracking
         return {
           type: "time",
           min: "00:00",
@@ -206,8 +210,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({
         };
       }
     }
-    return {};
-  };
+    return {}; // Return empty object if not a time column or no tracking
+  }, [column.key, rowData?.employmentType, employmentTypes]); // Dependencies
 
   const formatTime = (time: string | null): string => {
     if (!time) return "-";
@@ -296,7 +300,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                                ${
                                  editValue === time
                                    ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
-                                   : "hover:bg-gray-100 text-gray-700 hover:shadow-sm"
+                                   : "hover:bg-gray-300 text-gray-900 hover:shadow-sm"
                                }
                              `}
                       >
@@ -321,7 +325,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
               className="flex flex-col items-center justify-center gap-1 p-2 bg-gray-50 hover:bg-green-50 text-gray-700 hover:text-green-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-green-200"
             >
               <FaCheck className="w-4 h-4" />
-              <span className="font-medium text-xs leading-tight">Save</span>
+              <span className="font-medium text-sm leading-tight">Save</span>
             </button>
             {onSwapTimes && (
               <button
@@ -353,7 +357,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                     d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
                   ></path>
                 </svg>
-                <span className="font-medium text-xs leading-tight">Swap</span>
+                <span className="font-medium text-sm leading-tight">Swap</span>
               </button>
             )}
             <button
@@ -361,7 +365,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
               className="flex flex-col items-center justify-center gap-1 p-2 bg-gray-50 hover:bg-yellow-50 text-gray-700 hover:text-yellow-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-yellow-200"
             >
               <FaEraser className="w-4 h-4" />
-              <span className="font-medium text-xs leading-tight">Clear</span>
+              <span className="font-medium text-sm leading-tight">Clear</span>
             </button>
             <button
               onClick={(e) => {
@@ -371,7 +375,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
               className="flex flex-col items-center justify-center gap-1 p-2 bg-gray-50 hover:bg-red-50 text-gray-700 hover:text-red-700 rounded-lg transition-all duration-150 border-2 border-transparent hover:border-red-200"
             >
               <FaTimes className="w-4 h-4" />
-              <span className="font-medium text-xs leading-tight">Cancel</span>
+              <span className="font-medium text-sm leading-tight">Cancel</span>
             </button>
           </div>
         </div>
@@ -398,12 +402,12 @@ export const EditableCell: React.FC<EditableCellProps> = ({
           <div className="flex items-center">
             <input
               ref={inputRef}
-              type={column.key.toLowerCase().includes("time") ? "time" : "text"}
+              type={timeValidationProps.type || "text"} // Use memoized type or default to text
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
               className="w-full p-1 border rounded bg-white"
-              {...getTimeValidation()}
+              {...timeValidationProps} // Spread memoized validation props
             />
           </div>
           {showAlternatives && renderTimeOptions()}

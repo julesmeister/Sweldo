@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   AttendanceModel,
   createAttendanceModel,
@@ -54,6 +54,10 @@ import {
 import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
 import { useAttendanceOperations } from "@/renderer/hooks/useAttendanceOperations";
 import { useTimesheetHistoryOperations } from "@/renderer/hooks/useTimesheetHistoryOperations";
+import { useEmployeeLoader } from "@/renderer/hooks/useEmployeeLoader";
+import { useTimesheetCoreLoader } from "@/renderer/hooks/useTimesheetCoreLoader";
+import { useEmploymentTypeLoader } from "@/renderer/hooks/useEmploymentTypeLoader";
+import { useEditCellManager } from "@/renderer/hooks/useEditCellManager";
 
 const formatName = (name: string): string => {
   if (!name) return "";
