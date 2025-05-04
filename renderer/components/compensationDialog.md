@@ -2,6 +2,22 @@
 
 This document outlines the core logic used within the `CompensationDialog.tsx` component, specifically within the `computedValues` memoized calculation, to determine the various pay and time metrics for a given day.
 
+## Recent Changes & Refinements (July 2024)
+
+Several updates were made to improve usability and fix issues:
+
+1.  **Asynchronous Schedule Loading:** The dialog now correctly uses the `useSchedule` hook, passing the required `AttendanceSettingsModel` instance. It properly handles the initial `null` state while schedule information is loaded asynchronously, displaying "Loading Schedule..." in the header.
+2.  **`handleClearAndOverride` Functionality:** Clicking the '×' (clear) button next to an editable field now:
+    *   Sets the field's value to `0`.
+    *   **Automatically enables** the `Manual Override` toggle.
+    *   **Immediately recalculates** dependent fields (`grossPay`, `netPay`, `deductions`) based on the cleared value, mirroring the logic in `handleInputChange`.
+3.  **`FormField` Component Updates:**
+    *   The internal logic for the `disabled` state of input fields was corrected. Fields are now disabled only if the user lacks edit access OR if the field is marked as `isComputedField` and `manualOverride` is false.
+    *   The clear button ('×') now triggers the `handleClearAndOverride` function.
+4.  **"Leave Pay" Field Behavior:**
+    *   The "Leave Pay" field is now treated like other computed fields regarding editability: it is **disabled by default** and only becomes editable when `Manual Override` is turned **on**.
+    *   The input for "Leave Pay" is now treated as an **integer** (whole number), and the displayed value is rounded accordingly for easier editing.
+
 ## Overview
 
 The calculation aims to determine compensation based on attendance (`timeIn`, `timeOut`), the employee's schedule (`scheduleInfo` from `useSchedule`), holiday status, and configured attendance settings.
@@ -85,45 +101,47 @@ This section describes the fields present in the `Compensation` interface and di
 *   **`nightDifferentialHours` (number):** Total hours worked within the night differential period (defined in `attendanceSettings`).
 *   **`nightDifferentialPay` (number):** Calculated additional pay for night differential hours.
 
-## Manual Edit Recalculation (`handleInputChange`)
+## Manual Edit Recalculation (`handleInputChange` and `handleClearAndOverride`)
 
-When `manualOverride` is **true**, editing certain fields triggers automatic recalculations of related pay fields to maintain consistency:
+When `manualOverride` is **true**, editing certain fields (`handleInputChange`) or clearing them using the '×' button (`handleClearAndOverride`) triggers automatic recalculations of related pay fields to maintain consistency:
 
-1.  **Editing `overtimeMinutes`:**
-    *   Recalculates `overtimePay` based on the new minutes, hourly rate, and OT multiplier.
+*   Clearing a field via '×' sets its value to 0 and automatically enables `Manual Override` before performing the recalculations below.
+
+1.  **Editing/Clearing `overtimeMinutes` or `overtimePay`:**
+    *   Recalculates `overtimePay` (sets to 0 if cleared).
     *   Recalculates `grossPay` (`dailyRate` + new `overtimePay` + `nightDifferentialPay` + `holidayBonus`).
     *   Recalculates `netPay` (new `grossPay` - `deductions`).
 
-2.  **Editing `undertimeMinutes`:**
-    *   Recalculates `undertimeDeduction` based on the new minutes and grace period/deduction rate.
+2.  **Editing/Clearing `undertimeMinutes` or `undertimeDeduction`:**
+    *   Recalculates `undertimeDeduction` (sets to 0 if cleared).
     *   Recalculates total `deductions` (new `undertimeDeduction` + `lateDeduction`).
     *   Recalculates `netPay` (`grossPay` - new `deductions`).
 
-3.  **Editing `lateMinutes`:**
-    *   Recalculates `lateDeduction` based on the new minutes and grace period/deduction rate.
+3.  **Editing/Clearing `lateMinutes` or `lateDeduction`:**
+    *   Recalculates `lateDeduction` (sets to 0 if cleared).
     *   Recalculates total `deductions` (`undertimeDeduction` + new `lateDeduction`).
     *   Recalculates `netPay` (`grossPay` - new `deductions`).
 
-4.  **Editing `nightDifferentialHours`:**
-    *   Recalculates `nightDifferentialPay` based on the new hours, hourly rate, and night diff multiplier.
+4.  **Editing/Clearing `nightDifferentialHours` or `nightDifferentialPay`:**
+    *   Recalculates `nightDifferentialPay` (sets to 0 if cleared).
     *   Recalculates `grossPay` (`dailyRate` + `overtimePay` + new `nightDifferentialPay` + `holidayBonus`).
     *   Recalculates `netPay` (new `grossPay` - `deductions`).
 
-5.  **Editing Pay Components (`overtimePay`, `holidayBonus`, `nightDifferentialPay`):**
-    *   Recalculates `grossPay` by subtracting the *old* value of the edited field and adding the *new* value.
+5.  **Editing/Clearing Pay Components (`overtimePay`, `holidayBonus`, `nightDifferentialPay`):**
+    *   Recalculates `grossPay` by subtracting the *old* value of the edited field and adding the *new* value (or 0 if cleared).
     *   Recalculates `netPay` (new `grossPay` - `deductions`).
 
-6.  **Editing Deduction Components (`undertimeDeduction`, `lateDeduction`):**
-    *   Recalculates total `deductions`.
+6.  **Editing/Clearing Deduction Components (`undertimeDeduction`, `lateDeduction`):**
+    *   Recalculates total `deductions` (uses 0 for the cleared component).
     *   Recalculates `netPay` (`grossPay` - new `deductions`).
 
-7.  **Editing `leavePay`:**
-    *   Recalculates `netPay` (`grossPay` - `deductions` + new `leavePay`).
+7.  **Editing/Clearing `leavePay`:**
+    *   Recalculates `netPay` (`grossPay` - `deductions` + new `leavePay` (or 0 if cleared)).
 
-8.  **Editing `grossPay` directly:**
-    *   Recalculates `netPay` (new `grossPay` - `deductions`).
+8.  **Editing/Clearing `grossPay` directly:**
+    *   Recalculates `netPay` (new `grossPay` (or 0 if cleared) - `deductions`).
 
-9.  **Editing `netPay` directly:**
-    *   Recalculates `grossPay` (new `netPay` + `deductions`).
+9.  **Editing/Clearing `netPay` directly:**
+    *   Recalculates `grossPay` (new `netPay` (or 0 if cleared) + `deductions`).
 
 *Note:* Editing fields like `hoursWorked` directly when `manualOverride` is true does *not* automatically trigger recalculations of pay components in the current implementation; only the direct input is stored.
