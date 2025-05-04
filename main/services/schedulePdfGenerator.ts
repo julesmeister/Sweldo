@@ -7,6 +7,65 @@ import {
   MonthSchedule,
 } from "@/renderer/model/settings"; // Adjust path as needed
 import { Employee } from "@/renderer/model/employee"; // Adjust path as needed
+// REMOVE import { globalColorMap } from "@/renderer/lib/colorUtils";
+
+// --- Color Logic Duplicated from renderer/lib/colorUtils.ts ---
+const pdfColorSchemes = [
+  "bg-green-50",
+  "bg-blue-50",
+  "bg-purple-50",
+  "bg-orange-50",
+  "bg-indigo-50",
+  "bg-rose-50",
+  "bg-yellow-50",
+  "bg-teal-50",
+  "bg-cyan-50",
+  "bg-emerald-50",
+  "bg-lime-50",
+  "bg-amber-50",
+  "bg-sky-50",
+  "bg-fuchsia-50",
+  "bg-pink-50",
+  "bg-violet-50",
+  "bg-red-50",
+  "bg-slate-50",
+  "bg-zinc-50",
+  "bg-neutral-50",
+  "bg-stone-50",
+  "bg-green-100",
+  "bg-blue-100",
+  "bg-purple-100",
+  "bg-orange-100",
+  "bg-indigo-100",
+  "bg-rose-100",
+  "bg-yellow-100",
+  "bg-teal-100",
+  "bg-cyan-100",
+  "bg-emerald-100",
+  "bg-lime-100",
+  "bg-amber-100",
+  "bg-sky-100",
+  "bg-fuchsia-100",
+  "bg-pink-100",
+  "bg-violet-100",
+  "bg-red-100",
+  // Added some darker variants manually if needed, or keep it simpler
+  // "bg-green-200", "bg-blue-200", "bg-purple-200", "bg-orange-200",
+  // "bg-indigo-200", "bg-rose-200", "bg-yellow-200", "bg-teal-200",
+];
+const pdfColorMap = new Map<string, string>();
+let pdfNextColorIndex = 0;
+
+function getColorClassForPdfKey(timeKey: string): string {
+  if (!timeKey || timeKey === "-") return "bg-white";
+  if (!pdfColorMap.has(timeKey)) {
+    const colorClass = pdfColorSchemes[pdfNextColorIndex];
+    pdfColorMap.set(timeKey, colorClass);
+    pdfNextColorIndex = (pdfNextColorIndex + 1) % pdfColorSchemes.length;
+  }
+  return pdfColorMap.get(timeKey) || "bg-white";
+}
+// --- End of Duplicated Color Logic ---
 
 // Define the structure of the data expected from the renderer
 interface SchedulePrintData {
@@ -42,17 +101,82 @@ function formatShiftForPdf(schedule: DailySchedule | null): string {
   return "-"; // Indicate missing data
 }
 
-// Helper to get cell background color (simplified)
+// Helper function to map Tailwind background classes to Hex codes
+function tailwindBgToHex(className: string | null): string | null {
+  if (!className) return null;
+  const bgClass = className.split(" ").find((cls) => cls.startsWith("bg-"));
+  if (!bgClass) return "#FFFFFF";
+  const mapping: { [key: string]: string } = {
+    "bg-gray-100": "#F3F4F6",
+    "bg-gray-200": "#E5E7EB",
+    "bg-red-50": "#FEF2F2", // Adjusted from -100
+    "bg-red-100": "#FEE2E2",
+    "bg-orange-50": "#FFF7ED",
+    "bg-orange-100": "#FFEDD5",
+    "bg-amber-50": "#FFFBEB",
+    "bg-amber-100": "#FEF3C7",
+    "bg-yellow-50": "#FEFCE8",
+    "bg-yellow-100": "#FEF9C3",
+    "bg-lime-50": "#F7FEE7",
+    "bg-lime-100": "#ECFCCB",
+    "bg-green-50": "#F0FDF4",
+    "bg-green-100": "#D1FAE5",
+    "bg-emerald-50": "#ECFDF5",
+    "bg-emerald-100": "#D1FAE5",
+    "bg-teal-50": "#F0FDFA",
+    "bg-teal-100": "#CCFBF1",
+    "bg-cyan-50": "#ECFEFF",
+    "bg-cyan-100": "#CFFAFE",
+    "bg-sky-50": "#F0F9FF",
+    "bg-sky-100": "#E0F2FE",
+    "bg-blue-50": "#EFF6FF",
+    "bg-blue-100": "#DBEAFE",
+    "bg-indigo-50": "#EEF2FF",
+    "bg-indigo-100": "#E0E7FF",
+    "bg-violet-50": "#F5F3FF",
+    "bg-violet-100": "#EDE9FE",
+    "bg-purple-50": "#FAF5FF",
+    "bg-purple-100": "#F3E8FF",
+    "bg-fuchsia-50": "#FCF4FF",
+    "bg-fuchsia-100": "#FAE8FF",
+    "bg-pink-50": "#FCF4F7",
+    "bg-pink-100": "#FCE7F3",
+    "bg-rose-50": "#FFF1F2",
+    "bg-rose-100": "#FFE4E6",
+    "bg-slate-50": "#F8FAFC",
+    "bg-zinc-50": "#FAFAFA",
+    "bg-neutral-50": "#FAFAFA",
+    "bg-stone-50": "#FAFAF9",
+    "bg-white": "#FFFFFF",
+  };
+  return mapping[bgClass] || "#FFFFFF";
+}
+
+// Updated Helper to get cell background color using the duplicated logic
 function getCellColor(schedule: DailySchedule | null): string | null {
   if (!schedule || schedule.isOff) return "#E5E7EB"; // gray-200
-  // Simple differentiation - can be expanded
+
   if (schedule.timeIn && schedule.timeOut) {
-    const startHour = parseInt(schedule.timeIn.split(":")[0], 10);
-    if (startHour < 12) return "#DBEAFE"; // blue-100
-    if (startHour < 18) return "#D1FAE5"; // green-100
-    return "#E0E7FF"; // indigo-100
+    const shiftKey = `${schedule.timeIn}-${schedule.timeOut}`;
+    // Get color class using the duplicated logic
+    const colorClass = getColorClassForPdfKey(shiftKey);
+    const hexColor = tailwindBgToHex(colorClass);
+    if (hexColor) return hexColor;
+
+    // Fallback logic based on start hour if not found in map (should be less common now)
+    try {
+      const startHour = parseInt(schedule.timeIn.split(":")[0], 10);
+      if (!isNaN(startHour)) {
+        if (startHour < 12) return tailwindBgToHex("bg-blue-100");
+        if (startHour < 18) return tailwindBgToHex("bg-green-100");
+        return tailwindBgToHex("bg-indigo-100");
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
   }
-  return "#FEF9C3"; // yellow-100 (for valid but unclassifiable)
+
+  return tailwindBgToHex("bg-yellow-100"); // Default fallback
 }
 
 export async function generateSchedulePdf(
@@ -111,7 +235,7 @@ export async function generateSchedulePdf(
       const headerHeight = 25;
       const tableHeaderHeight = 20;
       const rowHeight = 18; // Slightly increase row height for two lines in first col
-      const titleFontSize = 12;   
+      const titleFontSize = 12;
       const headerFontSize = 7;
       const cellFontSize = 7; // Base font size for name/shift
       const typeFontSize = 6; // Smaller for type
