@@ -13,8 +13,6 @@ import {
   AttendanceSettingsModel,
   createAttendanceSettingsModel,
   EmploymentType,
-  getScheduleForDay,
-  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
@@ -83,7 +81,7 @@ interface TimeEntry {
 
 interface PayrollJsonStructure {
   meta: {
-  employeeId: string;
+    employeeId: string;
     year: number;
     month: number;
     lastModified: string;
@@ -816,8 +814,8 @@ export class Payroll {
       const endMonth = end.getMonth() + 1;
       const endYear = end.getFullYear();
       const payrollJsonData = await Payroll.readPayrollJsonFile(
-            this.dbPath,
-            employeeId,
+        this.dbPath,
+        employeeId,
         endYear,
         endMonth
       );
@@ -835,7 +833,7 @@ export class Payroll {
 
       const updatedJsonStructure: PayrollJsonStructure = {
         meta: {
-            employeeId,
+          employeeId,
           year: endYear,
           month: endMonth,
           lastModified: new Date().toISOString(),
@@ -844,25 +842,25 @@ export class Payroll {
       };
 
       await Payroll.writePayrollJsonFile(
-              this.dbPath,
-              employeeId,
+        this.dbPath,
+        employeeId,
         endYear,
         endMonth,
         updatedJsonStructure
       );
 
-        await employeeModel.updateEmployeeDetails({
-          ...employee,
-          lastPaymentPeriod: {
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            start: start.toISOString(),
-            end: end.toISOString(),
-          },
-        });
+      await employeeModel.updateEmployeeDetails({
+        ...employee,
+        lastPaymentPeriod: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+      });
 
-        const statisticsModel = createStatisticsModel(this.dbPath, endYear);
-        await statisticsModel.updatePayrollStatistics([payrollSummary]);
+      const statisticsModel = createStatisticsModel(this.dbPath, endYear);
+      await statisticsModel.updatePayrollStatistics([payrollSummary]);
 
       return payrollSummary;
     } catch (error) {
@@ -877,9 +875,9 @@ export class Payroll {
     startDate: Date,
     endDate: Date
   ): Promise<void> {
-      const endMonth = endDate.getMonth() + 1;
-      const endYear = endDate.getFullYear();
-      const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
+    const endMonth = endDate.getMonth() + 1;
+    const endYear = endDate.getFullYear();
+    const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
 
     try {
       const jsonData = await Payroll.readPayrollJsonFile(
@@ -950,23 +948,23 @@ export class Payroll {
       if (payrollToDelete) {
         const cashAdvanceDeductions =
           payrollToDelete.deductions?.cashAdvanceDeductions || 0;
-      if (cashAdvanceDeductions > 0) {
-        await Payroll.reverseCashAdvanceDeduction(
-          dbPath,
-          employeeId,
-          cashAdvanceDeductions,
-          endDate
-        );
-      }
+        if (cashAdvanceDeductions > 0) {
+          await Payroll.reverseCashAdvanceDeduction(
+            dbPath,
+            employeeId,
+            cashAdvanceDeductions,
+            endDate
+          );
+        }
         const shortIDs = payrollToDelete.shortIDs || [];
-      if (shortIDs.length > 0) {
-        await Payroll.reverseShortDeduction(
-          dbPath,
-          employeeId,
-          shortIDs,
-          endDate
-        );
-      }
+        if (shortIDs.length > 0) {
+          await Payroll.reverseShortDeduction(
+            dbPath,
+            employeeId,
+            shortIDs,
+            endDate
+          );
+        }
       } else if (deletedFromJson || !jsonData) {
         console.warn(
           `Could not retrieve details for payroll ${payrollId} to reverse deductions.`
@@ -996,8 +994,8 @@ export class Payroll {
           `Loaded ${jsonData.payrolls.length} payrolls from JSON for ${employeeId} ${year}-${month}`
         );
         return jsonData.payrolls;
-        } else {
-          console.warn(
+      } else {
+        console.warn(
           `JSON payroll file not found for ${employeeId} ${year}-${month}. Falling back to CSV.`
         );
         try {
@@ -1013,7 +1011,7 @@ export class Payroll {
           );
           return csvPayrolls;
         } catch (csvError) {
-            console.error(
+          console.error(
             `Error loading from CSV fallback for ${employeeId} ${year}-${month}:`,
             csvError
           );
@@ -1089,7 +1087,10 @@ export class Payroll {
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
-      const schedule = getScheduleForDate(employeeSchedule, currentDate);
+      const schedule = await this.attendanceSettingsModel.getScheduleForDate(
+        employeeSchedule,
+        currentDate
+      );
       const isHoliday = holidays.some((holiday) => {
         const holidayDate = new Date(holiday.startDate);
         return (
@@ -1156,12 +1157,12 @@ export class Payroll {
       for (const advance of allAdvances) {
         if (amountToProcess <= 0) break;
 
-          const cashAdvanceModel = createCashAdvanceModel(
-            dbPath,
-            employeeId,
-            advance.date.getMonth() + 1,
-            advance.date.getFullYear()
-          );
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          employeeId,
+          advance.date.getMonth() + 1,
+          advance.date.getFullYear()
+        );
 
         if (isApplyingDeduction) {
           if (advance.status !== "Paid") {
@@ -1246,12 +1247,12 @@ export class Payroll {
       );
 
       for (const short of shortsToProcess) {
-          const shortModel = createShortModel(
-            dbPath,
-            employeeId,
-            short.date.getMonth() + 1,
-            short.date.getFullYear()
-          );
+        const shortModel = createShortModel(
+          dbPath,
+          employeeId,
+          short.date.getMonth() + 1,
+          short.date.getFullYear()
+        );
         if (isApplyingDeduction) {
           if (short.status !== "Paid") {
             await shortModel.updateShort({

@@ -31,9 +31,6 @@ export interface EmploymentType {
   type: string;
   hoursOfWork: number; // Standard hours of work per day
   schedules?: Schedule[];
-  monthSchedules?: {
-    [yearMonth: string]: MonthSchedule; // Format: "YYYY-MM"
-  };
   requiresTimeTracking: boolean;
 }
 
@@ -206,6 +203,76 @@ export class AttendanceSettingsModel {
     }
   }
 
+  // --- New Helpers for Monthly Schedules --- //
+  private getMonthSchedulePath(
+    employmentType: string,
+    year: number,
+    month: number
+  ): string {
+    const safeTypeName = employmentType.replace(/[^a-z0-9_-]/gi, "_"); // Sanitize type name for filename
+    const schedulesDir = path.join(
+      this.dbPath,
+      "SweldoDB",
+      "schedules",
+      safeTypeName
+    );
+    return path.join(
+      schedulesDir,
+      `${year}_${String(month).padStart(2, "0")}_schedule.json`
+    );
+  }
+
+  private async readMonthScheduleJson(
+    filePath: string
+  ): Promise<MonthSchedule | null> {
+    console.log(`[readMonthScheduleJson] Checking path: ${filePath}`);
+    try {
+      const fileExists = await window.electron.fileExists(filePath);
+      console.log(
+        `[readMonthScheduleJson] File exists check for ${filePath}: ${fileExists}`
+      );
+      if (!fileExists) return {}; // Return empty object if file doesn't exist
+      const content = await window.electron.readFile(filePath);
+      console.log(
+        `[readMonthScheduleJson] Read content for ${filePath}: ${
+          content ? content.substring(0, 100) + "..." : "<empty>"
+        }`
+      ); // Log snippet of content
+      if (!content || content.trim() === "") return {}; // Return empty if file is empty
+      const parsedData = JSON.parse(content) as MonthSchedule;
+      console.log(
+        `[readMonthScheduleJson] Parsed data for ${filePath}:`,
+        parsedData
+      );
+      return parsedData;
+    } catch (error) {
+      console.error(
+        `[SettingsModel] Error reading month schedule ${filePath}:`,
+        error
+      );
+      console.log(
+        `[readMonthScheduleJson] Returning null due to error for ${filePath}.`
+      );
+      return null; // Return null on error
+    }
+  }
+
+  private async writeMonthScheduleJson(
+    filePath: string,
+    data: MonthSchedule
+  ): Promise<void> {
+    try {
+      await window.electron.ensureDir(path.dirname(filePath));
+      await window.electron.writeFile(filePath, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error(
+        `[SettingsModel] Error writing month schedule ${filePath}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
   // --- Public API Methods (Updated for JSON) --- //
 
   public async loadAttendanceSettings(): Promise<AttendanceSettings> {
@@ -246,6 +313,7 @@ export class AttendanceSettingsModel {
     try {
       const jsonData = await this.readTimeSettingsJson();
       if (jsonData) {
+        // Ensure essential fields exist, remove monthSchedules if present from old saves
         return jsonData.employmentTypes;
       } else {
         console.warn(
@@ -253,6 +321,7 @@ export class AttendanceSettingsModel {
         );
         try {
           const csvSettings = await this.oldModel.loadTimeSettings();
+          // Remove monthSchedules if present from old saves
           return csvSettings;
         } catch (csvError) {
           console.error(
@@ -262,6 +331,7 @@ export class AttendanceSettingsModel {
           console.warn(
             "[SettingsModel] Using default time settings due to errors."
           );
+          // Return default without monthSchedules
           return defaultTimeSettings;
         }
       }
@@ -270,42 +340,136 @@ export class AttendanceSettingsModel {
         "[SettingsModel] Unexpected error loading time settings:",
         error
       );
-      return defaultTimeSettings; // Return default on unexpected error
+      // Return default without monthSchedules
+      return defaultTimeSettings;
     }
   }
 
   public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
     try {
-      // Perform cleanup of old month schedules (same logic as before)
-      const twelveMonthsAgo = new Date();
-      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-
-      const cleanedSettings = settings.map((setting) => {
-        const cleanedMonthSchedules = setting.monthSchedules
-          ? Object.entries(setting.monthSchedules).reduce(
-              (acc, [yearMonth, schedules]) => {
-                const [year, month] = yearMonth.split("-").map(Number);
-                const scheduleDate = new Date(year, month - 1);
-                if (scheduleDate >= twelveMonthsAgo) {
-                  acc[yearMonth] = schedules;
-                }
-                return acc;
-              },
-              {} as typeof setting.monthSchedules
-            )
-          : {};
-        return {
-          ...setting, // Spread the original setting first
-          monthSchedules: cleanedMonthSchedules, // Overwrite with cleaned version
-        };
-      });
-
-      const jsonData: TimeSettingsJson = { employmentTypes: cleanedSettings };
+      // Remove monthSchedules before saving to timeSettings.json - No longer needed as it's removed from type
+      const jsonData: TimeSettingsJson = { employmentTypes: settings };
       await this.writeTimeSettingsJson(jsonData);
     } catch (error) {
       console.error("[SettingsModel] Error saving time settings:", error);
       throw error;
     }
+  }
+
+  // --- New Methods for Monthly Schedules --- //
+  public async loadMonthSchedule(
+    employmentType: string,
+    year: number,
+    month: number
+  ): Promise<MonthSchedule | null> {
+    console.log(
+      `[loadMonthSchedule] Requested for Type: ${employmentType}, Year: ${year}, Month: ${month}`
+    );
+    if (!employmentType) {
+      console.warn(
+        "[SettingsModel] loadMonthSchedule called with empty employmentType."
+      );
+      return {};
+    }
+    const filePath = this.getMonthSchedulePath(employmentType, year, month);
+    console.log(`[loadMonthSchedule] Constructed file path: ${filePath}`);
+    const result = await this.readMonthScheduleJson(filePath);
+    console.log(
+      `[loadMonthSchedule] Result from readMonthScheduleJson for ${filePath}:`,
+      result
+    );
+    return result;
+  }
+
+  public async saveMonthSchedule(
+    employmentType: string,
+    year: number,
+    month: number,
+    schedule: MonthSchedule
+  ): Promise<void> {
+    if (!employmentType) {
+      console.error(
+        "[SettingsModel] saveMonthSchedule called with empty employmentType. Cannot save."
+      );
+      throw new Error("Cannot save month schedule without an employment type.");
+    }
+    const filePath = this.getMonthSchedulePath(employmentType, year, month);
+    await this.writeMonthScheduleJson(filePath, schedule);
+  }
+
+  // --- Instance Method for getting schedule --- //
+  public async getScheduleForDate(
+    employmentTypeInput: EmploymentType | string | null,
+    date: Date
+  ): Promise<DailySchedule | null> {
+    let employmentType: EmploymentType | null = null;
+
+    if (!employmentTypeInput) return null;
+
+    // If input is a string, load the full EmploymentType object
+    if (typeof employmentTypeInput === "string") {
+      const allTypes = await this.loadTimeSettings();
+      employmentType =
+        allTypes.find((t) => t.type === employmentTypeInput) || null;
+    } else {
+      employmentType = employmentTypeInput;
+    }
+
+    if (!employmentType) {
+      console.warn(
+        `[SettingsModel] Could not find employment type: ${employmentTypeInput}`
+      );
+      return null;
+    }
+
+    // 1. Check month-specific schedule
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // Month is 1-based here
+    const dateStr = date.toISOString().split("T")[0];
+
+    try {
+      const monthSchedule = await this.loadMonthSchedule(
+        employmentType.type,
+        year,
+        month
+      );
+      if (monthSchedule && monthSchedule[dateStr]) {
+        console.log(
+          `[getScheduleForDate] Using MONTH-SPECIFIC schedule for ${employmentType.type} on ${dateStr}`
+        );
+        return monthSchedule[dateStr];
+      }
+    } catch (error) {
+      console.error(
+        `[SettingsModel] Error loading month schedule for ${employmentType.type}, ${year}-${month}:`,
+        error
+      );
+      // Continue to fallback even if loading fails
+    }
+
+    // 2. Fall back to weekly schedule
+    if (employmentType.schedules) {
+      const dayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday, etc.
+      const scheduleDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust to 0-6 index (Mon-Sun)
+      const weeklySchedule = employmentType.schedules[scheduleDay];
+
+      if (weeklySchedule) {
+        console.log(
+          `[getScheduleForDate] Using WEEKLY fallback for ${employmentType.type} on ${dateStr} (Day ${dayOfWeek})`
+        );
+        return {
+          timeIn: weeklySchedule.timeIn,
+          timeOut: weeklySchedule.timeOut,
+          isOff: !weeklySchedule.timeIn || !weeklySchedule.timeOut,
+        };
+      }
+    }
+
+    console.log(
+      `[getScheduleForDate] NO schedule (monthly or weekly) found for ${employmentType.type} on ${dateStr}`
+    );
+    // 3. No schedule found
+    return null;
   }
 
   public async saveAttendanceSettings(
@@ -348,10 +512,34 @@ export class AttendanceSettingsModel {
       "timeSettings.json"
     );
     const oldModel = new OldAttendanceSettingsModel(dbPath); // Instance to load from CSV
+    // Create a temporary instance of the new model for accessing helper methods like saveMonthSchedule
+    const tempNewModel = new AttendanceSettingsModel(dbPath);
     let settingsMigrated = false;
     let timeSettingsMigrated = false;
+    let monthlySchedulesMigratedCount = 0;
 
-    // 1. Migrate settings.csv to settings.json
+    // Ensure the base schedules directory exists BEFORE processing any types
+    const baseSchedulesDir = path.join(dbPath, "SweldoDB", "schedules");
+    try {
+      onProgress?.("- Ensuring base schedules directory exists...");
+      await window.electron.ensureDir(baseSchedulesDir);
+      onProgress?.("- Base schedules directory ensured.");
+    } catch (dirError) {
+      const msg =
+        dirError instanceof Error ? dirError.message : String(dirError);
+      onProgress?.(
+        `! CRITICAL ERROR: Failed to create base schedules directory (${baseSchedulesDir}): ${msg}. Aborting monthly schedule migration.`
+      );
+      console.error(
+        "Critical migration error creating base schedules directory:",
+        dirError
+      );
+      // Skip the rest of the time settings migration if base dir fails
+      // Optionally, re-throw or handle differently if settings.json migration should also stop.
+      return; // Exit migration function
+    }
+
+    // 1. Migrate settings.csv to settings.json (No change needed here)
     try {
       if (await window.electron.fileExists(settingsJsonPath)) {
         onProgress?.(`- settings.json already exists, skipping.`);
@@ -374,35 +562,176 @@ export class AttendanceSettingsModel {
       console.error("Error migrating settings.csv:", error);
     }
 
-    // 2. Migrate timeSettings.csv to timeSettings.json
+    // 2. Migrate timeSettings.csv to timeSettings.json AND separate monthly files
     try {
       if (await window.electron.fileExists(timeSettingsJsonPath)) {
-        onProgress?.(`- timeSettings.json already exists, skipping.`);
-      } else {
-        onProgress?.("- Loading time settings from timeSettings.csv...");
-        const timeSettings = await oldModel.loadTimeSettings();
-        const timeSettingsJsonData: TimeSettingsJson = {
-          employmentTypes: timeSettings,
-        };
-        // Use the instance write helper via prototype.call
-        await AttendanceSettingsModel.prototype.writeTimeSettingsJson.call(
-          { timeSettingsJsonPath, dbPath },
-          timeSettingsJsonData
+        onProgress?.(
+          `- timeSettings.json already exists, skipping core time settings migration.`
         );
-        onProgress?.(`- Successfully created timeSettings.json`);
+        // Even if timeSettings.json exists, we might still need to extract monthly schedules if they haven't been moved
+        onProgress?.(
+          "- Checking for embedded monthly schedules in existing timeSettings.json..."
+        );
+        const existingTimeSettings = await tempNewModel.readTimeSettingsJson();
+        let needsExtraction = false;
+        if (existingTimeSettings?.employmentTypes) {
+          for (const type of existingTimeSettings.employmentTypes) {
+            // Check if the loaded type *still* has monthSchedules (from an incomplete previous migration)
+            if (
+              (type as any).monthSchedules &&
+              Object.keys((type as any).monthSchedules).length > 0
+            ) {
+              needsExtraction = true;
+              onProgress?.(
+                `-- Found embedded schedules for type: ${type.type}. Attempting extraction.`
+              );
+              const oldMonthSchedules = (type as any).monthSchedules;
+              for (const [yearMonth, monthData] of Object.entries(
+                oldMonthSchedules
+              )) {
+                try {
+                  const [year, month] = yearMonth.split("-").map(Number);
+                  if (
+                    year &&
+                    month &&
+                    typeof monthData === "object" &&
+                    monthData !== null
+                  ) {
+                    await tempNewModel.saveMonthSchedule(
+                      type.type,
+                      year,
+                      month,
+                      monthData as MonthSchedule
+                    );
+                    monthlySchedulesMigratedCount++;
+                    onProgress?.(
+                      `--- Migrated schedule for ${type.type} - ${yearMonth}`
+                    );
+                  } else {
+                    onProgress?.(
+                      `--- Skipping invalid month schedule data for ${type.type} - ${yearMonth}`
+                    );
+                  }
+                } catch (extractError) {
+                  const msg =
+                    extractError instanceof Error
+                      ? extractError.message
+                      : String(extractError);
+                  onProgress?.(
+                    `--- Error extracting schedule for ${type.type} - ${yearMonth}: ${msg}`
+                  );
+                }
+              }
+            }
+          }
+        }
+        if (needsExtraction) {
+          onProgress?.(
+            "- Re-saving timeSettings.json without embedded schedules..."
+          );
+          await tempNewModel.saveTimeSettings(
+            existingTimeSettings?.employmentTypes || []
+          ); // Save cleaned data
+          timeSettingsMigrated = true; // Mark as migrated because we cleaned it
+        }
+        if (!needsExtraction) {
+          onProgress?.(
+            "- No embedded monthly schedules found requiring extraction."
+          );
+        }
+      } else {
+        // timeSettings.json does not exist, perform full migration from CSV
+        onProgress?.("- Loading time settings from timeSettings.csv...");
+        const loadedTimeSettings = await oldModel.loadTimeSettings(); // This might contain monthSchedules
+
+        const coreTimeSettings: EmploymentType[] = [];
+        let migrationErrorOccurred = false;
+
+        for (const type of loadedTimeSettings) {
+          // Assume the loaded type might have monthSchedules attached by the old loader
+          const oldMonthSchedules = (type as any).monthSchedules;
+          const { monthSchedules, ...coreType } = type; // Destructure to separate core data
+          coreTimeSettings.push(coreType); // Add only core data
+
+          if (oldMonthSchedules && typeof oldMonthSchedules === "object") {
+            onProgress?.(
+              `-- Processing embedded schedules for type: ${coreType.type}`
+            );
+            for (const [yearMonth, monthData] of Object.entries(
+              oldMonthSchedules
+            )) {
+              try {
+                const [year, month] = yearMonth.split("-").map(Number);
+                if (
+                  year &&
+                  month &&
+                  typeof monthData === "object" &&
+                  monthData !== null
+                ) {
+                  await tempNewModel.saveMonthSchedule(
+                    coreType.type,
+                    year,
+                    month,
+                    monthData as MonthSchedule
+                  );
+                  monthlySchedulesMigratedCount++;
+                  onProgress?.(
+                    `--- Migrated schedule for ${coreType.type} - ${yearMonth}`
+                  );
+                } else {
+                  onProgress?.(
+                    `--- Skipping invalid month schedule data for ${coreType.type} - ${yearMonth}`
+                  );
+                }
+              } catch (monthSaveError) {
+                const msg =
+                  monthSaveError instanceof Error
+                    ? monthSaveError.message
+                    : String(monthSaveError);
+                onProgress?.(
+                  `--- Error saving schedule for ${coreType.type} - ${yearMonth}: ${msg}`
+                );
+                migrationErrorOccurred = true;
+              }
+            }
+          }
+        }
+
+        onProgress?.(`- Saving core time settings to timeSettings.json...`);
+        await tempNewModel.saveTimeSettings(coreTimeSettings); // Use the instance method
+        onProgress?.(
+          `- Successfully created timeSettings.json with core data.`
+        );
         timeSettingsMigrated = true;
+        if (migrationErrorOccurred) {
+          onProgress?.(
+            "! Warning: Some monthly schedules failed to migrate. Check logs."
+          );
+        }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      onProgress?.(`- Error migrating time settings: ${msg}. Skipping file.`);
+      onProgress?.(`- Error migrating time settings: ${msg}. Skipping.`);
       console.error("Error migrating timeSettings.csv:", error);
     }
 
-    if (settingsMigrated || timeSettingsMigrated) {
-      onProgress?.("Settings migration finished.");
+    // Final summary
+    let summary = "Settings migration finished. ";
+    const migratedParts: string[] = [];
+    if (settingsMigrated) migratedParts.push("Attendance settings migrated");
+    if (timeSettingsMigrated)
+      migratedParts.push("Core time settings saved/updated");
+    if (monthlySchedulesMigratedCount > 0)
+      migratedParts.push(
+        `${monthlySchedulesMigratedCount} monthly schedules migrated/extracted`
+      );
+
+    if (migratedParts.length === 0) {
+      summary += "No files required migration or extraction.";
     } else {
-      onProgress?.("Settings migration finished. No files needed migration.");
+      summary += migratedParts.join(", ") + ".";
     }
+    onProgress?.(summary);
   }
 }
 
@@ -410,51 +739,4 @@ export const createAttendanceSettingsModel = (
   dbPath: string
 ): AttendanceSettingsModel => {
   return new AttendanceSettingsModel(dbPath);
-};
-
-// Helper function to get schedule for a specific date
-export const getScheduleForDate = (
-  employmentType: EmploymentType | null,
-  date: Date
-): DailySchedule | null => {
-  if (!employmentType) {
-    return null;
-  }
-
-  // Check for month-specific schedule first
-  const yearMonth = `${date.getFullYear()}-${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}`;
-  const dateStr = date.toISOString().split("T")[0];
-  const monthSchedule = employmentType.monthSchedules?.[yearMonth]?.[dateStr];
-
-  if (monthSchedule) {
-    return monthSchedule;
-  }
-
-  // Fall back to weekly schedule if no month-specific schedule exists
-  if (employmentType.schedules) {
-    const dayOfWeek = date.getDay();
-    const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday from 0 to 7
-    const weeklySchedule = employmentType.schedules[scheduleDay - 1];
-
-    if (weeklySchedule) {
-      return {
-        timeIn: weeklySchedule.timeIn,
-        timeOut: weeklySchedule.timeOut,
-        isOff: !weeklySchedule.timeIn || !weeklySchedule.timeOut,
-      };
-    }
-  }
-
-  return null;
-};
-
-// Helper function to get schedule for a specific day of the week
-export const getScheduleForDay = (
-  employmentType: EmploymentType | null,
-  dayOfWeek: number
-): Schedule | null => {
-  if (!employmentType?.schedules) return null;
-  return employmentType.schedules[dayOfWeek - 1] || null;
 };

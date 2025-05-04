@@ -1,0 +1,91 @@
+{
+  "roles": [
+    {
+      "id": "d9838083-cb16-44d8-a9a7-4de7b28a760e",
+      "name": "admin",
+      "pinCode": "9ce228d0234158570f4d9d8d461c09ce:0bf8042bc3e69dd782d1506210ddf3a0",
+      "accessCodes": [
+        "VIEW_TIMESHEETS",
+        "MANAGE_EMPLOYEES",
+        "MANAGE_ATTENDANCE",
+        "MANAGE_PAYROLL",
+        "MANAGE_LEAVES",
+        "MANAGE_LOANS",
+        "GENERATE_REPORTS",
+        "MANAGE_SETTINGS",
+        "VIEW_REPORTS",
+        "APPROVE_REQUESTS"
+      ],
+      "createdAt": "2025-03-18T16:41:41.612Z",
+      "updatedAt": "2025-04-08T06:25:43.972Z"
+    },
+    {
+      "id": "87cf5d2f-8c74-45ac-ae34-6eb200aec514",
+      "name": "staff",
+      "pinCode": "277cdfbc7df68cf5c36a30d8077351d4:e7807a565cd409115248908135571daf",
+      "accessCodes": [
+        "VIEW_TIMESHEETS",
+        "VIEW_REPORTS"
+      ],
+      "createdAt": "2025-03-18T16:55:58.035Z",
+      "updatedAt": "2025-03-18T16:55:58.035Z"
+    },
+    {
+      "id": "f7d4f46a-0cb1-420d-9799-d5a44ce4b317",
+      "name": "Meyca",
+      "pinCode": "108f5bce55f0eb660ec61c233335dc60:1e6dd4d51bcedf61ef07bf3ef9c4c140",
+      "accessCodes": [
+        "VIEW_TIMESHEETS",
+        "MANAGE_PAYROLL",
+        "MANAGE_LEAVES",
+        "MANAGE_SETTINGS",
+        "VIEW_REPORTS",
+        "APPROVE_REQUESTS",
+        "GENERATE_REPORTS",
+        "MANAGE_LOANS",
+        "MANAGE_ATTENDANCE",
+        "MANAGE_EMPLOYEES"
+      ],
+      "createdAt": "2025-04-08T06:26:08.699Z",
+      "updatedAt": "2025-04-08T06:26:08.699Z"
+    },
+    {
+      "id": "dd9b87c0-2cdd-4520-8a31-98f97cb2231b",
+      "name": "Nicole",
+      "pinCode": "b9799d7fb3a7e022fda952a6b668766e:d25bd2c6ae33dca680ca30082b5ff20c",
+      "accessCodes": [
+        "MANAGE_SETTINGS",
+        "VIEW_REPORTS",
+        "MANAGE_LEAVES",
+        "MANAGE_PAYROLL",
+        "VIEW_TIMESHEETS",
+        "MANAGE_ATTENDANCE",
+        "MANAGE_EMPLOYEES",
+        "MANAGE_LOANS",
+        "GENERATE_REPORTS",
+        "APPROVE_REQUESTS"
+      ],
+      "createdAt": "2025-04-19T09:09:11.844Z",
+      "updatedAt": "2025-04-19T09:09:11.844Z"
+    },
+    {
+      "id": "97f3b7ae-63f2-4ec8-9d19-148c87d96d95",
+      "name": "Christine",
+      "pinCode": "6d78edbaddc00c95b83d6ad420f5ac50:a745d9e9857b5f0c68fd28001f16293f",
+      "accessCodes": [
+        "VIEW_TIMESHEETS",
+        "MANAGE_PAYROLL",
+        "MANAGE_LEAVES",
+        "MANAGE_SETTINGS",
+        "VIEW_REPORTS",
+        "APPROVE_REQUESTS",
+        "GENERATE_REPORTS",
+        "MANAGE_LOANS",
+        "MANAGE_ATTENDANCE",
+        "MANAGE_EMPLOYEES"
+      ],
+      "createdAt": "2025-04-25T13:28:31.886Z",
+      "updatedAt": "2025-04-25T13:28:31.886Z"
+    }
+  ]
+}

@@ -1,0 +1,1455 @@
+{
+  "employmentTypes": [
+    {
+      "type": "hk-1",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "06:00",
+          "timeOut": "15:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-02": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-15": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "14:00",
+            "timeOut": "14:11",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "hk-2",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "11:00",
+          "timeOut": "20:00"
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "11:00",
+          "timeOut": "20:00"
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "08:00",
+          "timeOut": "17:00"
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "08:00",
+          "timeOut": "17:00"
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "08:00",
+          "timeOut": "17:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "08:00",
+          "timeOut": "17:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {},
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-02": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "hk-3",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-02": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "hk-4",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-15": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "hk-5",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "06:00",
+          "timeOut": "18:00"
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "18:00",
+          "timeOut": "06:00"
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "14:00",
+          "timeOut": "23:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-02": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-15": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-16": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-17": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "22:00",
+            "timeOut": "07:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "06:00",
+            "timeOut": "15:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "11:00",
+            "timeOut": "20:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "14:00",
+            "timeOut": "23:00",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "fo-1",
+      "hoursOfWork": 8,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "18:00",
+          "timeOut": "06:00"
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "18:00",
+          "timeOut": "06:00"
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "22:00",
+          "timeOut": "07:00"
+        }
+      ],
+      "monthSchedules": {
+        "2025-02": {},
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-02": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "06:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-15": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-16": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-17": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          }
+        },
+        "2025-05": {},
+        "2025-06": {}
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "fo-2",
+      "hoursOfWork": 0,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "",
+          "timeOut": ""
+        }
+      ],
+      "monthSchedules": {
+        "2025-03": {},
+        "2025-04": {
+          "2025-04-01": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-02": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-08": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "18:00",
+            "timeOut": "02:06",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          }
+        }
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "f0-3",
+      "hoursOfWork": 0,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "",
+          "timeOut": ""
+        }
+      ],
+      "monthSchedules": {
+        "2025-03": {
+          "2025-03-31": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          }
+        },
+        "2025-04": {
+          "2025-04-02": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-03": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-04": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-05": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-06": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-07": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-09": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-10": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-11": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-12": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-13": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-14": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-15": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-18": {
+            "timeIn": "06:00",
+            "timeOut": "18:00",
+            "isOff": false
+          },
+          "2025-04-19": {
+            "timeIn": "22:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-20": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-21": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-22": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-23": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-24": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-25": {
+            "timeIn": "18:00",
+            "timeOut": "06:00",
+            "isOff": false
+          },
+          "2025-04-26": {
+            "timeIn": "",
+            "timeOut": "",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "14:00",
+            "timeOut": "22:00",
+            "isOff": false
+          }
+        }
+      },
+      "requiresTimeTracking": true
+    },
+    {
+      "type": "fo-4",
+      "hoursOfWork": 6.5,
+      "schedules": [
+        {
+          "dayOfWeek": 1,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 2,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 3,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 4,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 5,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 6,
+          "timeIn": "",
+          "timeOut": ""
+        },
+        {
+          "dayOfWeek": 7,
+          "timeIn": "",
+          "timeOut": ""
+        }
+      ],
+      "monthSchedules": {
+        "2025-04": {
+          "2025-04-26": {
+            "timeIn": "08:00",
+            "timeOut": "17:00",
+            "isOff": false
+          },
+          "2025-04-27": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-28": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          },
+          "2025-04-29": {
+            "timeIn": "06:00",
+            "timeOut": "14:00",
+            "isOff": false
+          }
+        }
+      },
+      "requiresTimeTracking": true
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+export const globalColorMap = {
+  colorSchemes: [
+    "bg-green-50 border-green-200 hover:border-green-300",
+    "bg-blue-50 border-blue-200 hover:border-blue-300",
+    "bg-purple-50 border-purple-200 hover:border-purple-300",
+    "bg-orange-50 border-orange-200 hover:border-orange-300",
+    "bg-indigo-50 border-indigo-200 hover:border-indigo-300",
+    "bg-rose-50 border-rose-200 hover:border-rose-300",
+    "bg-yellow-50 border-yellow-200 hover:border-yellow-300",
+    "bg-teal-50 border-teal-200 hover:border-teal-300",
+    "bg-cyan-50 border-cyan-200 hover:border-cyan-300",
+    "bg-emerald-50 border-emerald-200 hover:border-emerald-300",
+    "bg-lime-50 border-lime-200 hover:border-lime-300",
+    "bg-amber-50 border-amber-200 hover:border-amber-300",
+    "bg-sky-50 border-sky-200 hover:border-sky-300",
+    "bg-fuchsia-50 border-fuchsia-200 hover:border-fuchsia-300",
+    "bg-pink-50 border-pink-200 hover:border-pink-300",
+    "bg-violet-50 border-violet-200 hover:border-violet-300",
+    "bg-red-50 border-red-200 hover:border-red-300",
+    "bg-slate-50 border-slate-200 hover:border-slate-300",
+    "bg-zinc-50 border-zinc-200 hover:border-zinc-300",
+    "bg-neutral-50 border-neutral-200 hover:border-neutral-300",
+    "bg-stone-50 border-stone-200 hover:border-stone-300",
+    "bg-green-100 border-green-300 hover:border-green-400",
+    "bg-blue-100 border-blue-300 hover:border-blue-400",
+    "bg-purple-100 border-purple-300 hover:border-purple-400",
+    "bg-orange-100 border-orange-300 hover:border-orange-400",
+    "bg-indigo-100 border-indigo-300 hover:border-indigo-400",
+    "bg-rose-100 border-rose-300 hover:border-rose-400",
+    "bg-yellow-100 border-yellow-300 hover:border-yellow-400",
+    "bg-teal-100 border-teal-300 hover:border-teal-400",
+    "bg-cyan-100 border-cyan-300 hover:border-cyan-400",
+    "bg-emerald-100 border-emerald-300 hover:border-emerald-400",
+    "bg-lime-100 border-lime-300 hover:border-lime-400",
+    "bg-amber-100 border-amber-300 hover:border-amber-400",
+    "bg-sky-100 border-sky-300 hover:border-sky-400",
+    "bg-fuchsia-100 border-fuchsia-300 hover:border-fuchsia-400",
+    "bg-pink-100 border-pink-300 hover:border-pink-400",
+    "bg-violet-100 border-violet-300 hover:border-violet-400",
+    "bg-red-50/70 border-red-200 hover:border-red-300",
+    "bg-blue-50/70 border-blue-200 hover:border-blue-300",
+    "bg-green-50/70 border-green-200 hover:border-green-300",
+    "bg-yellow-50/70 border-yellow-200 hover:border-yellow-300",
+    "bg-purple-50/70 border-purple-200 hover:border-purple-300",
+    "bg-indigo-50/80 border-indigo-200 hover:border-indigo-300",
+    "bg-teal-50/80 border-teal-200 hover:border-teal-300",
+    "bg-rose-50/80 border-rose-200 hover:border-rose-300",
+    "bg-cyan-50/80 border-cyan-200 hover:border-cyan-300",
+    "bg-emerald-50/80 border-emerald-200 hover:border-emerald-300",
+    "bg-lime-50/80 border-lime-200 hover:border-lime-300",
+    "bg-amber-50/80 border-amber-200 hover:border-amber-300",
+    "bg-sky-50/80 border-sky-200 hover:border-sky-300",
+    "bg-fuchsia-50/80 border-fuchsia-200 hover:border-fuchsia-300",
+    "bg-pink-50/80 border-pink-200 hover:border-pink-300",
+    "bg-violet-50/80 border-violet-200 hover:border-violet-300",
+  ],
+  mappings: new Map<string, string>(), // Explicitly type the map
+  nextColorIndex: 0,
+  getColor(timeKey: string): string {
+    if (!timeKey || timeKey === "-") return "bg-white border-gray-200";
+
+    if (!this.mappings.has(timeKey)) {
+      const color = this.colorSchemes[this.nextColorIndex];
+      this.mappings.set(timeKey, color);
+      this.nextColorIndex =
+        (this.nextColorIndex + 1) % this.colorSchemes.length;
+    }
+    return this.mappings.get(timeKey) || "bg-white border-gray-200";
+  },
+}; 

@@ -188,11 +188,8 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         }
 
         const matchedRole = roles.find((role) => {
-          try {
-            return decryptPinCode(role.pinCode) === pinToMatch;
-          } catch (error) {
-            return false;
-          }
+          // Directly compare the already decrypted pinCode from getRoles()
+          return role.pinCode === pinToMatch;
         });
 
         if (matchedRole) {
