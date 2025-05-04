@@ -55,43 +55,22 @@ export default function LoansPage() {
 
   useEffect(() => {
     const loadEmployee = async () => {
-      console.log("[LoansPage] Loading employee with ID", selectedEmployeeId);
       if (!dbPath) {
-        console.error(
-          "[LoansPage] Error loading employee:",
-          "database path is not set"
-        );
-        console.log("[LoansPage] dbPath:", dbPath);
         return;
       }
       if (!selectedEmployeeId) {
-        console.error(
-          "[LoansPage] Error loading employee:",
-          "no selectedEmployeeId provided"
-        );
-        console.log("[LoansPage] selectedEmployeeId:", selectedEmployeeId);
         return;
       }
       if (!employeeModel) {
-        console.error(
-          "[LoansPage] Error loading employee:",
-          "employeeModel is undefined."
-        );
-        console.log("[LoansPage] employeeModel:", employeeModel);
         return;
       }
       if (selectedEmployeeId) {
         setLoading(true);
         try {
-          console.log(
-            "[LoansPage] Attempting to load employee with ID",
-            selectedEmployeeId
-          );
           const emp = await employeeModel.loadEmployeeById(selectedEmployeeId!);
-          console.log("[LoansPage] Loaded employee:", emp);
           if (emp !== null) setEmployee(emp);
         } catch (error) {
-          console.error("[LoansPage] Error loading employee:", error);
+          console.error("Error loading employee:", error);
         } finally {
           setLoading(false);
         }
@@ -131,7 +110,7 @@ export default function LoansPage() {
         );
         setLoans(currentLoans);
       } catch (error) {
-        console.error("[LoansPage] Error loading loans:", error);
+        console.error("Error loading loans:", error);
         toast.error("Failed to load loans");
       } finally {
         setLoading(false);
@@ -217,12 +196,10 @@ export default function LoansPage() {
   };
 
   const handleSaveLoan = (data: Loan): void => {
-    console.log("Saving loan:", data);
     if (loanModel) {
       loanModel
         .createLoan(data)
         .then(() => {
-          console.log("Loan saved successfully");
           toast.success("Loan saved successfully", {
             position: "bottom-right",
             duration: 3000,

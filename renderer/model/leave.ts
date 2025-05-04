@@ -64,7 +64,6 @@ export class LeaveModel {
     try {
       const employeePath = this.basePath;
       await window.electron.ensureDir(employeePath);
-      console.log(`Ensured directory exists: ${employeePath}`);
     } catch (error) {
       console.error(`Failed to ensure directory exists: ${error}`);
       throw error;
@@ -77,9 +76,6 @@ export class LeaveModel {
 
   async saveOrUpdateLeave(leave: Leave): Promise<void> {
     try {
-      console.log(`[LeaveModel] Attempting to save/update leave`);
-      console.log(`[LeaveModel] Leave data to save:`, leave);
-
       // Ensure directory exists before reading/writing
       await this.ensureDirectoryExists();
 
@@ -125,7 +121,6 @@ export class LeaveModel {
           jsonPath,
           JSON.stringify(jsonData, null, 2)
         );
-        console.log(`[LeaveModel] Successfully saved/updated leave to JSON`);
         return;
       }
 
@@ -141,7 +136,6 @@ export class LeaveModel {
 
       try {
         const data = await window.electron.readFile(filePath);
-        console.log(`[LeaveModel] Existing file found, updating content`);
         const lines = data.split("\n").filter((line) => line.trim().length > 0);
         let leaveExists = false;
 
@@ -149,14 +143,12 @@ export class LeaveModel {
           const fields = line.split(",");
           if (fields[0] === leave.id) {
             leaveExists = true;
-            console.log(`[LeaveModel] Updating existing leave entry`);
             return formatLeaveToCSV(leave);
           }
           return line;
         });
 
         if (!leaveExists) {
-          console.log(`[LeaveModel] Adding new leave entry`);
           updatedLines.push(formatLeaveToCSV(leave));
         }
 
@@ -164,22 +156,17 @@ export class LeaveModel {
           filePath,
           updatedLines.join("\n") + "\n"
         );
-        console.log(`[LeaveModel] Successfully saved/updated leave`);
       } catch (error: any) {
         if (error.code === "ENOENT") {
-          console.log(`[LeaveModel] Creating new file for leave entry`);
           const csvData = formatLeaveToCSV(leave) + "\n";
           await window.electron.writeFile(filePath, csvData);
-          console.log(
-            `[LeaveModel] Successfully created new file and saved leave`
-          );
         } else {
-          console.error("[LeaveModel] Error saving/updating leave:", error);
+          console.error("Error saving/updating leave:", error);
           throw error;
         }
       }
     } catch (error) {
-      console.error("[LeaveModel] Error in saveOrUpdateLeave:", error);
+      console.error("Error in saveOrUpdateLeave:", error);
       throw error;
     }
   }
@@ -190,8 +177,6 @@ export class LeaveModel {
     month: number
   ): Promise<Leave[]> {
     try {
-      console.log(`[LeaveModel] Loading leaves for ${year}-${month}`);
-
       // Ensure directory exists
       await this.ensureDirectoryExists();
 
@@ -217,15 +202,13 @@ export class LeaveModel {
             };
           });
 
-          console.log(
-            `[LeaveModel] Successfully loaded ${leaves.length} leaves from JSON`
-          );
           return leaves;
         } catch (error: any) {
-          if (error.code === "ENOENT" || error instanceof SyntaxError) {
-            console.log(
-              `[LeaveModel] No JSON file found or invalid JSON. Trying CSV.`
-            );
+          if (
+            error.code === "ENOENT" ||
+            error instanceof SyntaxError ||
+            (error instanceof Error && error.message.includes("ENOENT"))
+          ) {
             // Fall through to CSV loading
           } else {
             throw error;
@@ -235,7 +218,6 @@ export class LeaveModel {
 
       // Load from CSV (original implementation)
       const filePath = this.getFilePathByMonth(year, month);
-      console.log(`[LeaveModel] Loading leaves from CSV:`, filePath);
 
       try {
         const data = await window.electron.readFile(filePath);
@@ -257,9 +239,6 @@ export class LeaveModel {
             | "Emergency"
             | "Other";
           if (!["Sick", "Vacation", "Emergency", "Other"].includes(leaveType)) {
-            console.warn(
-              `[LeaveModel] Invalid leave type "${leaveType}" found, defaulting to "Other"`
-            );
             leaveType = "Other";
           }
 
@@ -283,16 +262,13 @@ export class LeaveModel {
           error.code === "ENOENT" ||
           (error instanceof Error && error.message.includes("ENOENT"))
         ) {
-          console.log(
-            `[LeaveModel] No leaves file found for ${year}-${month}, returning empty array`
-          );
           return [];
         }
         throw error;
       }
     } catch (error) {
-      console.error("[LeaveModel] Error loading leaves:", error);
-      throw error;
+      console.error("Error loading leaves:", error);
+      return [];
     }
   }
 
@@ -319,12 +295,10 @@ export class LeaveModel {
               jsonPath,
               JSON.stringify(jsonData, null, 2)
             );
-            console.log(`[LeaveModel] Successfully deleted leave from JSON`);
           }
           return;
         } catch (error: any) {
           if (error.code === "ENOENT") {
-            console.log(`[LeaveModel] No JSON file found for ${year}-${month}`);
             // Fall through to CSV deletion
           } else {
             throw error;
@@ -338,9 +312,8 @@ export class LeaveModel {
       const lines = data.split("\n");
       const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
       await window.electron.writeFile(filePath, updatedLines.join("\n"));
-      console.log(`[LeaveModel] Successfully deleted leave from CSV`);
     } catch (error) {
-      console.error("[LeaveModel] Error deleting leave:", error);
+      console.error("Error deleting leave:", error);
       throw error;
     }
   }

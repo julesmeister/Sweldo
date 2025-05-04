@@ -72,21 +72,11 @@ export default function CashAdvancesPage() {
         !employeeModel ||
         !cashAdvanceModel
       ) {
-        console.log("[CashAdvances] Missing required data:", {
-          selectedEmployeeId,
-          dbPath,
-          hasEmployeeModel: !!employeeModel,
-          hasCashAdvanceModel: !!cashAdvanceModel,
-        });
         return;
       }
 
       setLoading(true);
       try {
-        console.log(
-          "[CashAdvances] Loading data for employee:",
-          selectedEmployeeId
-        );
         const [emp, advances] = await Promise.all([
           employeeModel.loadEmployeeById(selectedEmployeeId),
           cashAdvanceModel.loadCashAdvances(selectedEmployeeId),
@@ -94,13 +84,10 @@ export default function CashAdvancesPage() {
 
         if (!mounted) return;
 
-        console.log("[CashAdvances] Loaded employee:", emp?.name);
-        console.log("[CashAdvances] Loaded advances:", advances);
-
         if (emp !== null) setEmployee(emp);
         setCashAdvances(advances);
       } catch (error) {
-        console.error("[CashAdvances] Error loading data:", error);
+        console.error("Error loading data:", error);
         if (mounted) {
           toast.error(
             error instanceof Error ? error.message : "Failed to load data"
@@ -122,28 +109,14 @@ export default function CashAdvancesPage() {
 
   // Filter advances based on month/year
   const filteredAdvances = useMemo(() => {
-    console.log("[CashAdvances] Filtering advances:", {
-      totalAdvances: cashAdvances.length,
-      month: dateContext.month,
-      year: dateContext.year,
-    });
-
     const filtered = cashAdvances.filter((advance) => {
       const advanceDate = new Date(advance.date);
       const matches =
         advanceDate.getMonth() === parseInt(dateContext.month, 10) &&
         advanceDate.getFullYear() === parseInt(dateContext.year, 10);
-      console.log("[CashAdvances] Checking advance:", {
-        id: advance.id,
-        date: advanceDate,
-        month: advanceDate.getMonth(),
-        year: advanceDate.getFullYear(),
-        matches,
-      });
       return matches;
     });
 
-    console.log("[CashAdvances] Filtered advances:", filtered);
     return filtered;
   }, [cashAdvances, dateContext]);
 
@@ -253,7 +226,6 @@ export default function CashAdvancesPage() {
   const router = useRouter();
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    console.log("Setting loading state to true");
     setLoading(true);
     setActiveLink(path);
     router.push(path);

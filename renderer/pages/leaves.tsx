@@ -65,7 +65,6 @@ export default function LeavesPage() {
   const router = useRouter();
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
-    console.log("Setting loading state to true");
     setLoading(true);
     setActiveLink(path);
     router.push(path);
@@ -74,21 +73,12 @@ export default function LeavesPage() {
   useEffect(() => {
     const loadEmployeeAndLeaves = async () => {
       if (!dbPath || !selectedEmployeeId || !employeeModel) {
-        console.log("[LeavesPage] Missing dependencies:", {
-          dbPath: !!dbPath,
-          selectedEmployeeId: !!selectedEmployeeId,
-          employeeModel: !!employeeModel,
-        });
         return;
       }
 
       setLoading(true);
       try {
         // Load employee
-        console.log(
-          "[LeavesPage] Loading employee with ID",
-          selectedEmployeeId
-        );
         const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
         if (emp !== null) {
           setEmployee(emp);
@@ -100,21 +90,15 @@ export default function LeavesPage() {
             storedYearInt,
             storedMonthInt
           );
-          console.log("[LeavesPage] Loaded leaves:", employeeLeaves);
           setLeaves(employeeLeaves);
         }
       } catch (error: any) {
         // Check if the error is a 'file not found' error (ENOENT)
         if (error.message?.includes("ENOENT")) {
-          console.warn(
-            "[LeavesPage] Leave file not found, treating as empty leaves."
-          );
           setLeaves([]); // Set leaves to empty array if file doesn't exist
-          // Optionally, show a less alarming toast or no toast at all
-          // toast.info("No leave records found for this period.");
         } else {
           // Log other types of errors
-          console.error("[LeavesPage] Error loading data:", error);
+          console.error("Error loading data:", error);
           toast.error("Failed to load leave requests. Please try again.");
         }
       } finally {
@@ -248,11 +232,6 @@ export default function LeavesPage() {
   const handleSaveLeave = async (leave: Leave) => {
     try {
       if (!dbPath || !selectedEmployeeId || !employeeModel) {
-        console.log("[LeavesPage] Missing dependencies:", {
-          dbPath: !!dbPath,
-          selectedEmployeeId: !!selectedEmployeeId,
-          employeeModel: !!employeeModel,
-        });
         return;
       }
 
@@ -265,7 +244,6 @@ export default function LeavesPage() {
         employeeId: selectedEmployeeId,
       };
 
-      console.log("[LeavesPage] Saving leave with data:", leaveWithEmployee);
       await leaveModel.saveOrUpdateLeave(leaveWithEmployee);
       setIsDialogOpen(false);
 
@@ -280,7 +258,7 @@ export default function LeavesPage() {
         toast.success(`Leave request saved successfully`);
       }
     } catch (error: any) {
-      console.error("[LeavesPage] Error saving leave:", error);
+      console.error("Error saving leave:", error);
       toast.error(`Error saving leave: ${error.message}`);
     } finally {
       setLoading(false);
