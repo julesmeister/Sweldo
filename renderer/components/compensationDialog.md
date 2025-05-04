@@ -98,8 +98,8 @@ This section describes the fields present in the `Compensation` interface and di
 *   **`manualOverride` (boolean, optional):** Flag indicating if computed values should be ignored in favor of manually entered data.
 *   **`notes` (string, optional):** User-entered notes for the specific day.
 *   **`absence` (boolean, optional):** Flag indicating if the employee was marked absent for the day.
-*   **`nightDifferentialHours` (number):** Total hours worked within the night differential period (defined in `attendanceSettings`).
-*   **`nightDifferentialPay` (number):** Calculated additional pay for night differential hours.
+*   **`nightDifferentialHours` (number):** Total hours worked within the night differential period (defined by `nightDifferentialStartHour` and `nightDifferentialEndHour` in `attendanceSettings`). Calculated by determining the precise overlap (in minutes) between the actual work interval (`timeIn` to `timeOut`) and the ND time window(s), handling the overnight case (e.g., 10 PM to 6 AM). A minimum threshold (currently 1 hour / 60 minutes) must be met for hours to be counted. The final value represents the total valid ND minutes converted to hours.
+*   **`nightDifferentialPay` (number):** Calculated additional pay for the valid `nightDifferentialHours` based on the hourly rate and `nightDifferentialMultiplier` from `attendanceSettings`.
 
 ## Manual Edit Recalculation (`handleInputChange` and `handleClearAndOverride`)
 

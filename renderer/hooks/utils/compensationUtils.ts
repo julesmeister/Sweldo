@@ -57,53 +57,94 @@ interface NightDifferentialMetrics {
 
 const calculateNightDifferential = (
   actual: { timeIn: Date; timeOut: Date },
-  scheduled: { timeIn: Date; timeOut: Date },
   settings: AttendanceSettings,
   hourlyRate: number
 ): NightDifferentialMetrics => {
-  const startHour = settings.nightDifferentialStartHour || 22; // Default to 10 PM
-  const endHour = settings.nightDifferentialEndHour || 6; // Default to 6 AM
-  const multiplier = settings.nightDifferentialMultiplier || 0.1; // Default to 10%
-  const NIGHT_DIFF_MIN_HOURS = 1; // Minimum hours required for night differential
+  const startHour = settings.nightDifferentialStartHour ?? 22; // Default to 10 PM
+  const endHour = settings.nightDifferentialEndHour ?? 6; // Default to 6 AM
+  const multiplier = settings.nightDifferentialMultiplier ?? 0.1; // Default to 10%
+  const NIGHT_DIFF_MIN_MINUTES = 60; // 1 hour minimum threshold in minutes
 
-  // Calculate total hours between effective times
-  let totalHours = Math.ceil(
-    (actual.timeOut.getTime() - actual.timeIn.getTime()) / (1000 * 60 * 60)
-  );
+  const actualTimeInMs = actual.timeIn.getTime();
+  const actualTimeOutMs = actual.timeOut.getTime();
 
-  // Handle midnight crossing
-  if (totalHours < 0) {
-    totalHours += 24;
+  if (actualTimeOutMs <= actualTimeInMs) {
+    return { nightDifferentialHours: 0, nightDifferentialPay: 0 }; // No duration worked
   }
 
-  let nightHours = 0;
-  let currentTime = new Date(actual.timeIn);
+  let totalNdMinutes = 0;
 
-  // Calculate night hours
-  for (let i = 0; i < totalHours; i++) {
-    const hour = currentTime.getHours();
-    const isNightHour =
-      (hour >= startHour && hour < 24) || (hour >= 0 && hour < endHour);
+  // --- Calculate ND interval for the day work started ---
+  const dayStart = new Date(actual.timeIn);
+  dayStart.setHours(0, 0, 0, 0);
 
-    if (isNightHour) {
-      nightHours++;
-    }
+  const ndStart1 = new Date(dayStart);
+  ndStart1.setHours(startHour, 0, 0, 0);
 
-    currentTime.setHours(currentTime.getHours() + 1);
+  const ndEnd1 = new Date(dayStart);
+  ndEnd1.setHours(endHour, 0, 0, 0);
+
+  // Adjust ndEnd1 to the next day if the ND period crosses midnight
+  if (endHour <= startHour) {
+    ndEnd1.setDate(ndEnd1.getDate() + 1);
   }
+
+  // Calculate overlap with the first potential ND interval
+  const ndStart1Ms = ndStart1.getTime();
+  const ndEnd1Ms = ndEnd1.getTime();
+
+  const overlap1Start = Math.max(actualTimeInMs, ndStart1Ms);
+  const overlap1End = Math.min(actualTimeOutMs, ndEnd1Ms);
+
+  if (overlap1End > overlap1Start) {
+    totalNdMinutes += (overlap1End - overlap1Start) / (1000 * 60);
+  }
+
+  // --- Calculate ND interval for the *next* day if work crosses midnight significantly OR if ND window started on the next day ---
+  // This is necessary if the work period itself spans past the start of the *next* day's ND period.
+  const dayAfterStart = new Date(dayStart);
+  dayAfterStart.setDate(dayAfterStart.getDate() + 1);
+
+  const ndStart2 = new Date(dayAfterStart);
+  ndStart2.setHours(startHour, 0, 0, 0);
+
+  const ndEnd2 = new Date(dayAfterStart);
+  ndEnd2.setHours(endHour, 0, 0, 0);
+
+  if (endHour <= startHour) {
+    // Handles the standard overnight case
+    ndEnd2.setDate(ndEnd2.getDate() + 1);
+  }
+
+  // Calculate overlap with the second potential ND interval
+  const ndStart2Ms = ndStart2.getTime();
+  const ndEnd2Ms = ndEnd2.getTime();
+
+  const overlap2Start = Math.max(actualTimeInMs, ndStart2Ms);
+  const overlap2End = Math.min(actualTimeOutMs, ndEnd2Ms);
+
+  if (overlap2End > overlap2Start) {
+    totalNdMinutes += (overlap2End - overlap2Start) / (1000 * 60);
+  }
+
+  // Round the total minutes
+  totalNdMinutes = Math.round(totalNdMinutes);
 
   // Check if night hours meet the minimum threshold
-  if (nightHours < NIGHT_DIFF_MIN_HOURS) {
+  if (totalNdMinutes < NIGHT_DIFF_MIN_MINUTES) {
     return {
       nightDifferentialHours: 0,
       nightDifferentialPay: 0,
     };
   }
 
-  const nightDifferentialPay = nightHours * hourlyRate * multiplier;
+  // Calculate hours (can be fractional)
+  const nightDifferentialHours = totalNdMinutes / 60;
+  const nightDifferentialPay = nightDifferentialHours * hourlyRate * multiplier;
 
   return {
-    nightDifferentialHours: nightHours,
+    // Return hours rounded to 2 decimal places for display, but use precise value for pay calculation
+    nightDifferentialHours: parseFloat(nightDifferentialHours.toFixed(2)),
     nightDifferentialPay,
   };
 };
@@ -223,7 +264,6 @@ export const calculatePayMetrics = (
     // Check hourlyRate > 0
     nightDifferential = calculateNightDifferential(
       { timeIn: actualTimeIn, timeOut: actualTimeOut },
-      { timeIn: actualTimeIn, timeOut: actualTimeOut }, // Use actual times as schedule to avoid time restriction
       attendanceSettings,
       hourlyRate
     );
