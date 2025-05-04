@@ -330,6 +330,7 @@ const TimesheetPage: React.FC = () => {
           await refreshTimesheetData(true);
         }
       } catch (error) {
+        console.error("Detailed error loading timesheet data:", error);
         toast.error("Error loading timesheet data");
       } finally {
         setLoading(false);

@@ -10,7 +10,6 @@ import { Attendance, AttendanceModel } from "@/renderer/model/attendance";
 import {
   AttendanceSettingsModel,
   EmploymentType,
-  getScheduleForDay,
 } from "@/renderer/model/settings";
 import { Employee } from "@/renderer/model/employee";
 import {
@@ -92,14 +91,21 @@ export const useComputeAllCompensations = (
         );
 
         const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
+
+        // Use the model instance and await the async call
         const schedule = employmentType
-          ? getScheduleForDay(employmentType, entryDate.getDay())
+          ? await attendanceSettingsModel.getScheduleForDate(
+              employmentType,
+              entryDate
+            )
           : null;
 
         // Determine absence status
-        const isWorkday = !!schedule;
+        // Check schedule directly now, not just if it exists
+        const isWorkday = !!schedule && !schedule.isOff;
         const isHoliday = !!holiday;
         const hasTimeEntries = !!(entry.timeIn && entry.timeOut);
+        // Absence condition updated to use schedule object properties
         const isAbsent = isWorkday && !isHoliday && !hasTimeEntries;
 
         // For non-time-tracking employees, holidays, or missing time entries
@@ -132,29 +138,41 @@ export const useComputeAllCompensations = (
               ...foundCompensation,
               ...newCompensation,
             };
-          } else {
+          } else if (!foundCompensation) {
+            // Only push if it doesn't exist
             updatedCompensations.push(newCompensation);
           }
           continue;
         }
 
         // Regular time-tracking computation
-        if (!schedule) continue;
+        if (!schedule || schedule.isOff) continue; // Use the fetched schedule
 
+        // Pass the already fetched schedule object to createTimeObjects
         const { actual, scheduled } = createTimeObjects(
           year,
           month,
           entry.day,
           entry.timeIn || "",
           entry.timeOut || "",
-          employmentType
+          schedule // Pass the schedule object fetched earlier
         );
+
+        // Check if scheduled times could be created (depends on schedule object)
+        if (!scheduled) {
+          console.warn(
+            `[computeCompensations] Could not create scheduled times for day ${entry.day}, possibly missing schedule timeIn/timeOut.`
+          );
+          // Decide how to handle this - skip compensation? Calculate based only on actual?
+          // For now, let's continue to the next entry if scheduled times are missing.
+          continue;
+        }
 
         const timeMetrics = calculateTimeMetrics(
           actual,
-          scheduled,
+          scheduled, // Pass the potentially null scheduled object
           attendanceSettings,
-          employmentType
+          employmentType // employmentType is still needed by calculateTimeMetrics
         );
         const dailyRate = parseFloat((employee.dailyRate || 0).toString());
         const hourlyRate = dailyRate / 8;

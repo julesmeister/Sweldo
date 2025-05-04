@@ -11,7 +11,7 @@ import {
   AttendanceSettings,
   AttendanceSettingsModel,
   EmploymentType,
-  getScheduleForDate,
+  DailySchedule,
 } from "@/renderer/model/settings";
 import { MissingTimeModel } from "@/renderer/model/missingTime";
 
@@ -110,12 +110,13 @@ export const useTimesheetCheckbox = ({
       );
 
       const date = new Date(year, month - 1, foundEntry.day);
-      // Get schedule for the day using found employment type
-      const schedule = employmentType
-        ? getScheduleForDate(employmentType, date)
+      // Get schedule for the day using the async model method
+      const schedule: DailySchedule | null = employmentType
+        ? await attendanceSettingsModel.getScheduleForDate(employmentType, date)
         : null;
 
-      const isWorkday = schedule && !schedule.isOff ? true : false; // Ensure boolean type
+      // Use the fetched schedule object
+      const isWorkday = schedule && !schedule.isOff ? true : false;
 
       const holiday = holidays.find((h) => {
         const entryDate = new Date(year, month - 1, foundEntry.day);

@@ -19,20 +19,8 @@ interface DateSelectorState {
 
 // Modified Zustand store
 const useStore = create<DateSelectorState>((set) => ({
-  selectedMonth: (() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("selectedMonth");
-      return stored ? parseInt(stored) : new Date().getMonth();
-    }
-    return new Date().getMonth();
-  })(),
-  selectedYear: (() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("selectedYear");
-      return stored ? parseInt(stored) : new Date().getFullYear();
-    }
-    return new Date().getFullYear();
-  })(),
+  selectedMonth: new Date().getMonth(),
+  selectedYear: new Date().getFullYear(),
   isOpen: false,
   timeoutId: null,
   setIsOpen: (isOpen) => set({ isOpen }),
@@ -61,6 +49,20 @@ export default function DateSelector() {
     setSelectedMonth,
     setSelectedYear,
   } = useStore();
+
+  // Effect to hydrate state from localStorage after mounting
+  useEffect(() => {
+    const storedMonth = localStorage.getItem("selectedMonth");
+    if (storedMonth !== null) {
+      setSelectedMonth(parseInt(storedMonth));
+    }
+
+    const storedYear = localStorage.getItem("selectedYear");
+    if (storedYear !== null) {
+      setSelectedYear(parseInt(storedYear));
+    }
+    // Run only once on mount
+  }, []);
 
   const months = [
     "January",

@@ -8,8 +8,7 @@ import { Employee } from "@/renderer/model/employee";
 import {
   AttendanceSettingsModel,
   EmploymentType,
-  getScheduleForDay,
-  getScheduleForDate,
+  DailySchedule,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "@/renderer/model/holiday";
 import {
@@ -165,28 +164,59 @@ export const useTimesheetEdit = ({
         (c) => c.day === foundEntry.day
       );
 
-      // Get schedule for the day
+      // Get schedule for the day using the async model method
       const date = new Date(year, month - 1, foundEntry.day);
-      const schedule = employmentType
-        ? getScheduleForDate(employmentType, date)
+      // Use await and the model instance
+      const schedule: DailySchedule | null = employmentType
+        ? await attendanceSettingsModel.getScheduleForDate(employmentType, date)
         : null;
+
+      // Check if it's a scheduled off day or no schedule exists
       if (!schedule || schedule.isOff) {
-        return;
+        // If it's an off day or no schedule, potentially update compensation to reflect this
+        // (e.g., zero out hours worked, pay, etc. if applicable)
+        // This might involve calling createBaseCompensation or similar logic
+        console.log(
+          `Day ${foundEntry.day} is an off day or has no schedule. Skipping detailed computation.`
+        );
+
+        // Re-fetch and update state to reflect the saved attendance
+        const [updatedAttendanceData, updatedCompensationData] =
+          await Promise.all([
+            attendanceModel.loadAttendancesById(
+              month,
+              year,
+              selectedEmployeeId
+            ),
+            compensationModel.loadRecords(month, year, selectedEmployeeId),
+          ]);
+        onDataUpdate(updatedAttendanceData, updatedCompensationData);
+        toast.success("Timesheet updated (Off Day/No Schedule)");
+        return; // Stop further processing if it's an off day
       }
 
-      // Create time objects and calculate metrics
+      // Create time objects and calculate metrics (only if it's a scheduled work day)
       const { actual, scheduled } = createTimeObjects(
         year,
         month,
         foundEntry.day,
         updatedEntry.timeIn ?? "",
         updatedEntry.timeOut ?? "",
-        employmentType || null
+        schedule // Pass the fetched DailySchedule object
       );
+
+      // Ensure scheduled times could be created
+      if (!scheduled) {
+        console.warn(
+          `[useTimesheetEdit] Could not create scheduled times for day ${foundEntry.day}.`
+        );
+        // Handle this case - perhaps log an error and skip compensation update?
+        // For now, just proceed but compensation might be inaccurate.
+      }
 
       const timeMetrics = calculateTimeMetrics(
         actual,
-        scheduled,
+        scheduled, // Pass the potentially null scheduled object
         await attendanceSettingsModel.loadAttendanceSettings(),
         employmentType || null
       );

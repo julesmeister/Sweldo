@@ -157,30 +157,31 @@ export default function Navbar() {
               ref={navContainerRef}
               className="hidden md:ml-8 md:flex md:items-center md:justify-between flex-1"
             >
-              {/* Render content only after mounting */}
-              {hasMounted ? (
-                <div className="flex space-x-1 relative">
-                  {/* The sliding background element */}
-                  <div
-                    className="absolute bg-blue-800 rounded-full transition-all duration-300 ease-in-out z-0"
-                    style={{
-                      left: `${highlighterStyle.left}px`,
-                      width: `${highlighterStyle.width}px`,
-                      height: "2rem",
-                      transform: "translateY(-50%)",
-                      top: "50%",
-                      display: highlighterStyle.display,
-                    }}
-                  />
+              {/* Navigation Links Container */}
+              <div className="flex space-x-1 relative">
+                {/* The sliding background element */}
+                <div
+                  className="absolute bg-blue-800 rounded-full transition-all duration-300 ease-in-out z-0"
+                  style={{
+                    left: `${highlighterStyle.left}px`,
+                    width: `${highlighterStyle.width}px`,
+                    height: "2rem",
+                    transform: "translateY(-50%)",
+                    top: "50%",
+                    display: highlighterStyle.display,
+                  }}
+                />
 
-                  {/* Visible navigation links */}
-                  {navLinks.slice(0, visibleLinks).map(({ path, label }) => (
+                {/* Visible navigation links */}
+                {navLinks.slice(0, visibleLinks).map(({ path, label }) => {
+                  const isActive = pathname === path;
+                  return (
                     <Link
                       key={path}
                       href={path}
                       ref={(el) => setNavRef(path, el)}
                       className={`text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10 ${
-                        pathname === path ? "font-semibold" : ""
+                        isActive ? "font-semibold" : ""
                       }`}
                       onClick={(e) => {
                         e.preventDefault();
@@ -189,41 +190,44 @@ export default function Navbar() {
                     >
                       {label}
                     </Link>
-                  ))}
+                  );
+                })}
 
-                  {/* Hover dropdown for remaining links */}
-                  {visibleLinks < navLinks.length && (
-                    <div className="relative group">
-                      <button className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10">
-                        More
-                        <svg
-                          className="ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-180"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.5}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M19 9l-7 7-7-7"
-                          />
-                        </svg>
-                      </button>
+                {/* Hover dropdown for remaining links */}
+                {visibleLinks < navLinks.length && (
+                  <div className="relative group">
+                    <button className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10">
+                      More
+                      <svg
+                        className="ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-180"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
 
-                      {/* Hover dropdown menu */}
-                      <div className="absolute left-0 mt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out">
-                        <div className="w-[180px] p-2 rounded-xl bg-white/95 shadow-xl shadow-blue-900/10 backdrop-blur-sm border border-white/20 transform-gpu">
-                          {navLinks
-                            .slice(visibleLinks)
-                            .map(({ path, label }, index) => (
+                    {/* Hover dropdown menu */}
+                    <div className="absolute left-0 mt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out">
+                      <div className="w-[180px] p-2 rounded-xl bg-white/95 shadow-xl shadow-blue-900/10 backdrop-blur-sm border border-white/20 transform-gpu">
+                        {navLinks
+                          .slice(visibleLinks)
+                          .map(({ path, label }, index) => {
+                            const isActive = pathname === path;
+                            return (
                               <Link
                                 key={path}
                                 href={path}
                                 className={`
                                 relative flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-200
                                 ${
-                                  pathname === path
+                                  isActive
                                     ? "text-blue-600 bg-blue-50/80"
                                     : "text-gray-600 hover:text-blue-600 hover:bg-blue-50/60"
                                 }
@@ -234,7 +238,7 @@ export default function Navbar() {
                                 }} // prevent default for hydration
                               >
                                 {label}
-                                {pathname === path && (
+                                {isActive && (
                                   <motion.div
                                     layoutId="menuActiveIndicator"
                                     className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-600"
@@ -246,17 +250,18 @@ export default function Navbar() {
                                   />
                                 )}
                               </Link>
-                            ))}
-                        </div>
+                            );
+                          })}
                       </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                // Optional: Render a placeholder or null during initial mount
-                <div className="flex-1"></div> // Basic placeholder
-              )}
-              <DateSelector />
+                  </div>
+                )}
+              </div>
+
+              {/* Date Selector for Desktop View */}
+              <div className="ml-auto pl-4">
+                <DateSelector />
+              </div>
             </div>
 
             {/* Mobile menu button */}

@@ -7,7 +7,6 @@ import { CompensationModel, Compensation } from "@/renderer/model/compensation";
 import { Employee } from "@/renderer/model/employee";
 import {
   AttendanceSettingsModel,
-  getScheduleForDate,
   DailySchedule,
 } from "@/renderer/model/settings";
 import { MissingTimeLog, MissingTimeModel } from "@/renderer/model/missingTime";
@@ -124,19 +123,13 @@ export const useMissingTimeEdit = ({
         existingCompensation
       );
 
-      // Get schedule for the specific date
-      const schedule = employmentType
-        ? getScheduleForDate(employmentType, date)
+      // Get schedule for the specific date using the async model method
+      const schedule: DailySchedule | null = employmentType
+        ? await attendanceSettingsModel.getScheduleForDate(employmentType, date)
         : null;
       console.log("[useMissingTimeEdit] Schedule found:", schedule);
 
-      if (!schedule && employmentType?.requiresTimeTracking) {
-        console.log("[useMissingTimeEdit] No schedule found for date");
-        toast.error("No schedule found for this date");
-        return;
-      }
-
-      // Create time objects and calculate metrics
+      // Create time objects and calculate metrics only if it's a workday
       if (employmentType?.requiresTimeTracking && schedule && !schedule.isOff) {
         const { actual, scheduled } = createTimeObjects(
           year,
@@ -144,68 +137,72 @@ export const useMissingTimeEdit = ({
           updatedAttendance.day,
           updatedAttendance.timeIn || "",
           updatedAttendance.timeOut || "",
-          employmentType
+          schedule // Pass the fetched DailySchedule object
         );
         console.log("[useMissingTimeEdit] Time objects created:", {
           actual,
           scheduled,
         });
 
-        const timeMetrics = calculateTimeMetrics(
-          actual,
-          scheduled,
-          attendanceSettings,
-          employmentType
-        );
-        console.log(
-          "[useMissingTimeEdit] Time metrics calculated:",
-          timeMetrics
-        );
+        // Ensure scheduled object was created
+        if (!scheduled) {
+          console.warn(
+            "[useMissingTimeEdit] Scheduled time objects could not be created."
+          );
+          // Potentially update compensation to a base/error state or just skip?
+          // For now, let's skip the detailed comp record creation
+          toast.error(
+            "Could not calculate detailed compensation: Missing schedule times."
+          );
+        } else {
+          // Proceed with detailed calculation only if scheduled exists
+          const timeMetrics = calculateTimeMetrics(
+            actual,
+            scheduled,
+            attendanceSettings,
+            employmentType
+          );
+          console.log(
+            "[useMissingTimeEdit] Time metrics calculated:",
+            timeMetrics
+          );
 
-        const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
-        const hourlyRate = dailyRate / 8;
-        const overtimeHours = Math.floor(timeMetrics.overtimeMinutes / 60);
-        const overtimePay =
-          overtimeHours *
-          hourlyRate *
-          (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+          const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+          // Removed unused variables: hourlyRate, overtimeHours, overtimePay
 
-        const payMetrics = calculatePayMetrics(
-          timeMetrics,
-          attendanceSettings,
-          dailyRate,
-          holiday,
-          actual.timeIn,
-          actual.timeOut,
-          scheduled,
-          employmentType
-        );
+          const payMetrics = calculatePayMetrics(
+            timeMetrics,
+            attendanceSettings,
+            dailyRate,
+            holiday,
+            actual.timeIn,
+            actual.timeOut,
+            scheduled,
+            employmentType
+          );
 
-        // Create updated compensation
-        const compensation = createCompensationRecord(
-          updatedAttendance,
-          employee,
-          timeMetrics,
-          payMetrics,
-          month,
-          year,
-          holiday,
-          existingCompensation,
-          {
-            timeIn: schedule.timeIn,
-            timeOut: schedule.timeOut,
-            dayOfWeek: updatedAttendance.day,
-          }
-        );
+          // Create updated compensation
+          const compensation = createCompensationRecord(
+            updatedAttendance,
+            employee,
+            timeMetrics,
+            payMetrics,
+            month,
+            year,
+            holiday,
+            existingCompensation,
+            schedule // Pass the DailySchedule object directly
+          );
 
-        // Save compensation
-        await compensationModel.saveOrUpdateCompensations(
-          [compensation],
-          month,
-          year,
-          selectedLog.employeeId
-        );
-        console.log("[useMissingTimeEdit] Compensation saved successfully");
+          // Save compensation
+          await compensationModel.saveOrUpdateCompensations(
+            [compensation],
+            month,
+            year,
+            selectedLog.employeeId
+          );
+          console.log("[useMissingTimeEdit] Compensation saved successfully");
+        }
       } else {
         // Handle non-time-tracking or off day
         const dailyRate = parseFloat((employee?.dailyRate || 0).toString());

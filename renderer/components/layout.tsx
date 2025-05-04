@@ -52,6 +52,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
   const hasCheckedRoles = useRef(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   // Add a force reset function and timeout mechanism
   const [resetCount, setResetCount] = useState(0);
@@ -295,6 +296,11 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated]);
 
+  // Add useEffect to set hasMounted after component mounts on client
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
@@ -427,7 +433,24 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  // Show loading state while checking roles - with direct localStorage check
+  // **** NEW: Always render placeholder/spinner initially before mount ****
+  if (!hasMounted) {
+    return (
+      <div className="min-h-screen bg-background font-sans flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 mx-auto"></div>
+          <div className="text-gray-600">Initializing application...</div>
+          {/* Optional: Keep reset button if helpful during loading */}
+          {/* <button onClick={forceReset} className="mt-4 px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600">Reset (Stuck?)</button> */}
+        </div>
+        <Toaster position="top-right" richColors />
+      </div>
+    );
+  }
+  // **** END NEW ****
+
+  // Show loading state while checking roles - Original logic modified (removed localStorage check)
+  // Now this runs *after* hasMounted is true
   const isInitializedInLocalStorage = (() => {
     try {
       return localStorage.getItem("sweldo_session_initialized") === "true";
@@ -436,6 +459,8 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     }
   })();
 
+  // REMOVED this block as it's now handled by the !hasMounted check above
+  /*
   if (
     isCheckingRoles &&
     !hasInitializedThisSession &&
@@ -457,6 +482,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  */
 
   // Show error state if initialization failed
   if (initError) {
@@ -504,8 +530,8 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If no dbPath and not on settings page, show redirect message
-  if (!dbPath && !pathname?.startsWith("/settings")) {
+  // If no dbPath and not on settings page, show redirect message - ONLY AFTER MOUNTING
+  if (hasMounted && !dbPath && !pathname?.startsWith("/settings")) {
     return (
       <div className="min-h-screen bg-background font-sans flex items-center justify-center">
         <div className="text-center p-8 max-w-md">

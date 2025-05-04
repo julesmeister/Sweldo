@@ -5,9 +5,8 @@ import { Employee } from "@/renderer/model/employee";
 import {
   AttendanceSettings,
   EmploymentType,
-  getScheduleForDate,
+  DailySchedule,
 } from "@/renderer/model/settings";
-import { Schedule } from "@/renderer/model/schedule";
 import { IoCalculator } from "react-icons/io5";
 import React from "react";
 
@@ -280,127 +279,66 @@ export const createCompensationRecord = (
   year: number,
   holiday?: Holiday,
   existingCompensation?: Partial<Compensation>,
-  schedule?: Schedule | null
+  schedule?: DailySchedule | null
 ): Compensation => {
-  const {
-    lateMinutes: initialLateMinutes, // Rename initial values
-    undertimeMinutes: initialUndertimeMinutes,
-    overtimeMinutes: initialOvertimeMinutes,
-    hoursWorked: initialHoursWorked,
-  } = timeMetrics;
-
-  let {
-    deductions: initialDeductions, // Rename initial values
-    overtimePay: initialOvertimePay,
-    grossPay: initialGrossPay,
-    netPay: initialNetPay,
-    holidayBonus: initialHolidayBonus, // This now holds total potential holiday pay from payMetrics
-    lateDeduction: initialLateDeduction,
-    undertimeDeduction: initialUndertimeDeduction,
-    nightDifferentialHours: initialNightDifferentialHours,
-    nightDifferentialPay: initialNightDifferentialPay,
-  } = payMetrics;
-
   const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
-  const hasTimeEntries = !!(entry.timeIn && entry.timeOut);
+  const isOffDay = schedule?.isOff === true;
+  const isWorkday = !!schedule && !isOffDay;
+  const isAbsent = isWorkday && !(entry.timeIn && entry.timeOut);
 
-  // Determine absence specifically for paid holidays vs normal days
-  const isPaidHoliday = holiday && holiday.multiplier > 0; // Assumes multiplier > 0 means paid
-  const isAbsent = !hasTimeEntries;
-
-  // Use let for final values that might change based on absence
-  let finalGrossPay = initialGrossPay;
-  let finalNetPay = initialNetPay;
-  let finalHolidayBonus = initialHolidayBonus; // Start with the calculated total holiday pay
-  let finalAbsence = false;
-  let finalLateMinutes = initialLateMinutes;
-  let finalUndertimeMinutes = initialUndertimeMinutes;
-  let finalOvertimeMinutes = initialOvertimeMinutes;
-  let finalHoursWorked = initialHoursWorked;
-  let finalDeductions = initialDeductions;
-  let finalOvertimePay = initialOvertimePay;
-  let finalLateDeduction = initialLateDeduction;
-  let finalUndertimeDeduction = initialUndertimeDeduction;
-  let finalNightDifferentialHours = initialNightDifferentialHours;
-  let finalNightDifferentialPay = initialNightDifferentialPay;
-
-  if (isAbsent) {
-    if (isPaidHoliday) {
-      // Absent on a PAID holiday - should receive base pay (or based on specific rule)
-      // Assuming base pay (100%) for regular holidays if absent
-      const holidayBasePay = dailyRate * 1.0; // Adjust multiplier if rule is different
-      finalGrossPay = holidayBasePay;
-      finalNetPay = holidayBasePay; // Assuming no deductions apply on paid absence
-      finalHolidayBonus = 0; // No work premium/bonus earned
-      finalAbsence = false; // Not typically marked absent if paid for holiday
-      // Keep time metrics (late/under/overtime minutes) as 0 for paid absence
-      finalLateMinutes = 0;
-      finalUndertimeMinutes = 0;
-      finalOvertimeMinutes = 0;
-      finalHoursWorked = 0;
-      finalDeductions = 0;
-      finalOvertimePay = 0;
-      finalLateDeduction = 0;
-      finalUndertimeDeduction = 0;
-      finalNightDifferentialHours = 0;
-      finalNightDifferentialPay = 0;
-    } else {
-      // Absent on a regular workday (or unpaid holiday)
-      finalGrossPay = 0;
-      finalNetPay = 0;
-      finalHolidayBonus = 0;
-      finalAbsence = true;
-      // Zero out metrics if truly absent and unpaid
-      finalLateMinutes = 0;
-      finalUndertimeMinutes = 0;
-      finalOvertimeMinutes = 0;
-      finalHoursWorked = 0;
-      finalDeductions = 0;
-      finalOvertimePay = 0;
-      finalLateDeduction = 0;
-      finalUndertimeDeduction = 0;
-      finalNightDifferentialHours = 0;
-      finalNightDifferentialPay = 0;
-    }
-  } else if (!isPaidHoliday) {
-    // Present on a non-holiday, ensure holidayBonus is zero
-    // Note: payMetrics already calculates holidayBonus as 0 if no holiday
-    // but we explicitly set finalHolidayBonus to 0 ensure it reflects *earned* bonus for the day
-    finalHolidayBonus = 0;
-  }
-  // If present on a paid holiday, the initially calculated values from payMetrics are correct for final values
-
-  return {
+  // Start with base compensation or existing data
+  let compensation: Compensation = {
     ...(existingCompensation || {}),
     employeeId: employee?.id || "",
     month,
     year,
     day: entry.day,
-    dayType: holiday
-      ? holiday.type === "Regular"
-        ? "Holiday"
-        : "Special"
-      : "Regular",
+    dayType: holiday?.type || "Regular",
     dailyRate,
-    grossPay: finalGrossPay,
-    netPay: finalNetPay,
-    holidayBonus: finalHolidayBonus, // Store the determined bonus (0 if absent, total if present)
-    manualOverride: false,
-    lateMinutes: finalLateMinutes,
-    undertimeMinutes: finalUndertimeMinutes,
-    overtimeMinutes: finalOvertimeMinutes,
-    hoursWorked: finalHoursWorked,
-    deductions: finalDeductions,
-    overtimePay: finalOvertimePay,
-    lateDeduction: finalLateDeduction,
-    undertimeDeduction: finalUndertimeDeduction,
+    hoursWorked: timeMetrics.hoursWorked,
+    grossPay: payMetrics.grossPay,
+    netPay: payMetrics.netPay,
+    lateMinutes: timeMetrics.lateMinutes,
+    lateDeduction: payMetrics.lateDeduction,
+    undertimeMinutes: timeMetrics.undertimeMinutes,
+    undertimeDeduction: payMetrics.undertimeDeduction,
+    overtimeMinutes: timeMetrics.overtimeMinutes,
+    overtimePay: payMetrics.overtimePay,
+    holidayBonus: payMetrics.holidayBonus,
+    nightDifferentialHours: payMetrics.nightDifferentialHours,
+    nightDifferentialPay: payMetrics.nightDifferentialPay || 0,
+    deductions: payMetrics.deductions,
+    manualOverride: existingCompensation?.manualOverride || false,
+    absence: isAbsent,
     leaveType: existingCompensation?.leaveType || "None",
     leavePay: existingCompensation?.leavePay || 0,
     notes: existingCompensation?.notes || "",
-    absence: finalAbsence,
-    nightDifferentialHours: finalNightDifferentialHours,
-    nightDifferentialPay: finalNightDifferentialPay,
-  } as Compensation;
+  };
+
+  // If it's an official off day according to the schedule, adjust pay logic
+  // (This might need refinement based on exact business rules for paid/unpaid off days)
+  if (isOffDay) {
+    compensation.grossPay = 0; // Example: Unpaid off day
+    compensation.netPay = 0;
+    compensation.hoursWorked = 0;
+    // Reset time-based metrics if it's an off day
+    compensation.lateMinutes = 0;
+    compensation.lateDeduction = 0;
+    compensation.undertimeMinutes = 0;
+    compensation.undertimeDeduction = 0;
+    compensation.overtimeMinutes = 0;
+    compensation.overtimePay = 0;
+    compensation.nightDifferentialHours = 0;
+    compensation.nightDifferentialPay = 0;
+    compensation.absence = false; // Not technically absent if it's a scheduled off day
+    compensation.leavePay = 0; // Explicitly set to 0
+  }
+
+  // Ensure grossPay and netPay are non-negative
+  compensation.grossPay = Math.max(0, compensation.grossPay || 0);
+  compensation.netPay = Math.max(0, compensation.netPay || 0);
+
+  return compensation;
 };
 
 // Helper function to create a base compensation record
@@ -472,77 +410,79 @@ export const isHolidayDate = (date: Date, holiday: Holiday): boolean => {
   );
 };
 
-// Helper function to get schedule for a specific date
-const getEffectiveSchedule = (
-  employmentType: EmploymentType | null,
-  date: Date
-): { timeIn: string; timeOut: string } | null => {
-  if (!employmentType?.requiresTimeTracking) return null;
-
-  const schedule = getScheduleForDate(employmentType, date);
-  if (!schedule || schedule.isOff) return null;
-
-  return {
-    timeIn: schedule.timeIn,
-    timeOut: schedule.timeOut,
-  };
-};
-
-// Update createTimeObjects to use the new schedule format
 export const createTimeObjects = (
   year: number,
   month: number,
   day: number,
   actualTimeIn: string,
   actualTimeOut: string,
-  employmentType: EmploymentType | null
+  schedule: DailySchedule | null
 ) => {
-  const date = new Date(year, month - 1, day);
-  const schedule = getEffectiveSchedule(employmentType, date);
+  // Use the passed schedule object directly
+  const scheduledTimeIn = schedule?.timeIn;
+  const scheduledTimeOut = schedule?.timeOut;
 
-  // Create timeIn date
-  const timeInDate = new Date(createDateString(year, month, day, actualTimeIn));
-
-  // Create timeOut date - if timeOut is earlier than timeIn, it means we crossed midnight
-  let timeOutDate = new Date(createDateString(year, month, day, actualTimeOut));
-  const timeInHour = parseInt(actualTimeIn.split(":")[0]);
-  const timeOutHour = parseInt(actualTimeOut.split(":")[0]);
-
-  // If timeOut hour is less than timeIn hour, it means we crossed midnight
-  if (timeOutHour < timeInHour) {
-    timeOutDate.setDate(timeOutDate.getDate() + 1);
-  }
-
-  const actual = {
-    timeIn: timeInDate,
-    timeOut: timeOutDate,
-  };
-
-  if (!schedule) {
-    return { actual, scheduled: null };
-  }
-
-  // Apply the same midnight crossing logic to scheduled times
-  const scheduledTimeIn = new Date(
-    createDateString(year, month, day, schedule.timeIn)
+  const actualTimeInStr = createDateString(
+    year,
+    month,
+    day,
+    actualTimeIn || "00:00" // Default if empty
   );
-  let scheduledTimeOut = new Date(
-    createDateString(year, month, day, schedule.timeOut)
+  const actualTimeOutStr = createDateString(
+    year,
+    month,
+    day,
+    actualTimeOut || "00:00" // Default if empty
   );
 
-  const schedTimeInHour = parseInt(schedule.timeIn.split(":")[0]);
-  const schedTimeOutHour = parseInt(schedule.timeOut.split(":")[0]);
+  const actualTimeInObj = new Date(actualTimeInStr);
+  let actualTimeOutObj = new Date(actualTimeOutStr);
 
-  if (schedTimeOutHour < schedTimeInHour) {
-    scheduledTimeOut.setDate(scheduledTimeOut.getDate() + 1);
+  // Handle potential midnight crossing for actual times
+  if (actualTimeOutObj <= actualTimeInObj) {
+    actualTimeOutObj.setDate(actualTimeOutObj.getDate() + 1);
   }
 
-  const scheduled = {
-    timeIn: scheduledTimeIn,
-    timeOut: scheduledTimeOut,
-  };
+  // Create scheduled Date objects only if schedule times exist
+  let scheduledTimeInObj: Date | null = null;
+  let scheduledTimeOutObj: Date | null = null;
 
-  return { actual, scheduled };
+  if (scheduledTimeIn && scheduledTimeOut) {
+    const scheduledTimeInStr = createDateString(
+      year,
+      month,
+      day,
+      scheduledTimeIn
+    );
+    const scheduledTimeOutStr = createDateString(
+      year,
+      month,
+      day,
+      scheduledTimeOut
+    );
+    scheduledTimeInObj = new Date(scheduledTimeInStr);
+    scheduledTimeOutObj = new Date(scheduledTimeOutStr);
+
+    // Handle potential midnight crossing for scheduled times
+    if (scheduledTimeOutObj <= scheduledTimeInObj) {
+      scheduledTimeOutObj.setDate(scheduledTimeOutObj.getDate() + 1);
+    }
+  }
+
+  return {
+    actual: {
+      timeIn: actualTimeInObj,
+      timeOut: actualTimeOutObj,
+    },
+    // Return null if either scheduled object is null
+    scheduled:
+      scheduledTimeInObj && scheduledTimeOutObj
+        ? {
+            timeIn: scheduledTimeInObj,
+            timeOut: scheduledTimeOutObj,
+          }
+        : null,
+  };
 };
 
 export interface PaymentBreakdown {

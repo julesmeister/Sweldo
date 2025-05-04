@@ -28,7 +28,11 @@ import {
 } from "@/renderer/hooks/utils/compensationUtils";
 import { toast } from "sonner";
 import { ComputationBreakdownButton } from "@/renderer/components/ComputationBreakdownButton";
-import { useSchedule, formatTime } from "@/renderer/hooks/utils/useSchedule";
+import {
+  useSchedule,
+  formatTime,
+  ScheduleInfo,
+} from "@/renderer/hooks/utils/useSchedule";
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -277,8 +281,14 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     manualOverride: compensation.manualOverride || false,
   });
   const { dbPath } = useSettingsStore();
-  const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
-  const holidayModel = createHolidayModel(dbPath, year, month);
+  const attendanceSettingsModel = useMemo(
+    () => createAttendanceSettingsModel(dbPath),
+    [dbPath]
+  );
+  const holidayModel = useMemo(
+    () => createHolidayModel(dbPath, year, month),
+    [dbPath, year, month]
+  );
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [employmentType, setEmploymentType] = useState<EmploymentType | null>(
     null
@@ -295,65 +305,112 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     () => new Date(year, month - 1, day),
     [year, month, day]
   );
-  const { schedule, hasSchedule, isRestDay, formattedSchedule } = useSchedule(
+
+  const scheduleInfo = useSchedule(
+    attendanceSettingsModel,
     employmentType,
     date
   );
 
+  const { schedule, hasSchedule, isRestDay, formattedSchedule } =
+    useMemo(() => {
+      return (
+        scheduleInfo || {
+          schedule: null,
+          hasSchedule: false,
+          isRestDay: false,
+          formattedSchedule: "Loading...",
+        }
+      );
+    }, [scheduleInfo]);
+
   useEffect(() => {
-    const loadSchedule = async () => {
-      if (!dbPath) return;
+    const loadInitialData = async () => {
+      if (!dbPath || !attendanceSettingsModel || !holidayModel) return;
 
       try {
-        const settingsModel = createAttendanceSettingsModel(dbPath);
-        const timeSettings = await settingsModel.loadTimeSettings();
-        const employmentType = timeSettings.find(
-          (type) => type.type === employee?.employmentType
-        );
+        const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+        const currentEmploymentType =
+          timeSettings.find((type) => type.type === employee?.employmentType) ||
+          null;
+        setEmploymentType(currentEmploymentType);
 
-        if (employmentType) {
-          setFormData((prev) => ({
-            ...prev,
-            dayType: isRestDay ? "Rest Day" : prev.dayType,
-            hoursWorked: isRestDay ? 0 : Math.round(prev.hoursWorked || 0),
-          }));
-        }
-
-        setEmploymentType(employmentType || null);
-        const settings = await settingsModel.loadAttendanceSettings();
+        const [settings, loadedHolidays] = await Promise.all([
+          attendanceSettingsModel.loadAttendanceSettings(),
+          holidayModel.loadHolidays(),
+        ]);
         setAttendanceSettings(settings);
+        setHolidays(loadedHolidays);
       } catch (error) {
-        toast.error("Failed to load schedule");
+        console.error("Error loading initial data for dialog:", error);
+        toast.error("Failed to load settings or holidays for dialog");
       }
     };
 
     if (isOpen) {
-      loadSchedule();
+      loadInitialData();
     }
-  }, [dbPath, employee?.employmentType, isOpen, year, month, day, isRestDay]);
+  }, [
+    dbPath,
+    attendanceSettingsModel,
+    holidayModel,
+    employee?.employmentType,
+    isOpen,
+  ]);
+
+  useEffect(() => {
+    if (isOpen && scheduleInfo) {
+      setFormData((prev) => ({
+        ...prev,
+        dayType: scheduleInfo.isRestDay ? "Rest Day" : prev.dayType,
+        hoursWorked: scheduleInfo.isRestDay
+          ? 0
+          : Math.round(prev.hoursWorked || 0),
+      }));
+    }
+  }, [isOpen, scheduleInfo]);
 
   useEffect(() => {
     setFormData(compensation);
   }, [compensation]);
 
   const computedValues = useMemo(() => {
+    if (!employmentType || !attendanceSettings || !scheduleInfo) {
+      const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+      return {
+        lateMinutes: 0,
+        undertimeMinutes: 0,
+        overtimeMinutes: 0,
+        hoursWorked: 0,
+        grossPay: dailyRate,
+        dailyRate,
+        deductions: 0,
+        netPay: dailyRate,
+        lateDeduction: 0,
+        undertimeDeduction: 0,
+        overtimePay: 0,
+        holidayBonus: 0,
+        nightDifferentialHours: 0,
+        nightDifferentialPay: 0,
+        manualOverride: false,
+        absence: false,
+        dayType: "Regular" as DayType,
+      };
+    }
+
     const dailyRate: number =
       formData.dailyRate || parseFloat((employee?.dailyRate || 0).toString());
     const entryDate = new Date(year, month - 1, day);
     const holiday = holidays.find((h) => isHolidayDate(entryDate, h));
 
-    // Get the schedule for the specific day of the week
-    const scheduleDetails = employmentType
-      ? getScheduleForDate(employmentType, entryDate)
-      : null;
+    const scheduleDetails = scheduleInfo.schedule;
+    const isWorkday = scheduleInfo.hasSchedule && !scheduleInfo.isRestDay;
 
-    const isWorkday = !!scheduleDetails && !scheduleDetails.isOff;
     const isHoliday = !!holiday;
     const isPaidHoliday = holiday && holiday.multiplier > 0;
     const hasTimeEntries = !!(timeIn && timeOut);
     const isPresent = hasTimeEntries;
 
-    // --- Base return function (refactored) ---
     const createBaseReturn = (props: Partial<Compensation> = {}) => ({
       lateMinutes: 0,
       undertimeMinutes: 0,
@@ -365,78 +422,105 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       netPay: 0,
       lateDeduction: 0,
       undertimeDeduction: 0,
-      overtimePay: 0, // Changed from overtimeAddition
+      overtimePay: 0,
       nightDifferentialHours: 0,
       nightDifferentialPay: 0,
       holidayBonus: 0,
       manualOverride: false,
       absence: false,
-      ...props, // Apply overrides
+      ...props,
     });
-
-    // --- Logic based on presence/holiday/schedule ---
 
     if (!isPresent) {
       if (isPaidHoliday) {
-        // Absent on paid holiday
-        const holidayBasePay = dailyRate * 1.0; // Assuming 100% base pay
+        const holidayBasePay = dailyRate * 1.0;
         return createBaseReturn({
           grossPay: holidayBasePay,
           netPay: holidayBasePay,
-          holidayBonus: 0, // No premium earned
-          absence: false, // Not technically absent
-          dayType: holiday.type === "Regular" ? "Holiday" : "Special",
+          holidayBonus: 0,
+          absence: false,
+          dayType: holiday?.type === "Regular" ? "Holiday" : "Special",
         });
       } else {
-        // Absent on regular day or unpaid holiday
-        return createBaseReturn({ absence: true });
+        return createBaseReturn({ absence: isWorkday });
       }
     }
 
-    // --- Present --- //
-
-    // If present but it's not a scheduled workday (e.g., worked on rest day) or no settings
-    if (!isWorkday || !attendanceSettings || !scheduleDetails) {
-      // Handle worked rest day or missing settings - may need specific logic?
-      // For now, return base pay + any holiday multiplier if applicable?
+    if (scheduleInfo.isRestDay || !attendanceSettings) {
       const basePay = dailyRate;
       const totalHolidayPay = holiday ? dailyRate * holiday.multiplier : 0;
       const presentPay = holiday ? totalHolidayPay : basePay;
-      // Note: This doesn't calculate OT/ND for rest days without a schedule context yet
+
+      let hoursWorked = 0;
+      if (timeIn && timeOut) {
+        try {
+          hoursWorked =
+            calculateTimeDifference(
+              new Date(createDateString(year, month, day, timeOut)),
+              new Date(createDateString(year, month, day, timeIn))
+            ) / 60;
+        } catch (e) {
+          console.error("Error calculating time difference for rest day:", e);
+        }
+      }
+
+      const standardHours = employmentType?.hoursOfWork || 8;
+      const rawOvertimeMinutes = Math.max(
+        0,
+        hoursWorked * 60 - standardHours * 60
+      );
+      const overtimeMinutes = Math.floor(rawOvertimeMinutes / 60) * 60;
+      const hourlyRate =
+        dailyRate > 0 && standardHours > 0 ? dailyRate / standardHours : 0;
+      const overtimePay =
+        (overtimeMinutes / 60) *
+        hourlyRate *
+        (attendanceSettings?.overtimeHourlyMultiplier || 1.25);
+
       return createBaseReturn({
-        grossPay: presentPay,
-        netPay: presentPay,
-        holidayBonus: holiday ? totalHolidayPay : 0, // Store total pay if holiday
+        grossPay: presentPay + overtimePay,
+        netPay: presentPay + overtimePay,
+        holidayBonus: holiday ? totalHolidayPay : 0,
         dayType: holiday
           ? holiday.type === "Regular"
             ? "Holiday"
             : "Special"
-          : "Rest Day", // Or Regular?
-        hoursWorked:
-          timeIn && timeOut
-            ? calculateTimeDifference(
-                new Date(createDateString(year, month, day, timeOut)),
-                new Date(createDateString(year, month, day, timeIn))
-              ) / 60
-            : 0, // Basic hours calculation
+          : "Rest Day",
+        hoursWorked: Math.round(hoursWorked),
+        overtimeMinutes: overtimeMinutes,
+        overtimePay: overtimePay,
       });
     }
 
-    // --- Present on a scheduled workday --- //
+    if (!timeIn || !timeOut) {
+      return createBaseReturn({ absence: true });
+    }
 
-    // Use shared utility functions for calculations
     const { actual, scheduled } = createTimeObjects(
       year,
       month,
       day,
       timeIn,
       timeOut,
-      employmentType
+      scheduleDetails
     );
+
+    if (!scheduled) {
+      console.warn(
+        "[CompensationDialog] Scheduled time objects could not be created. Check schedule details."
+      );
+      return createBaseReturn({
+        grossPay: dailyRate,
+        netPay: dailyRate,
+        hoursWorked: Math.round(
+          calculateTimeDifference(actual.timeOut, actual.timeIn) / 60
+        ),
+      });
+    }
 
     const timeMetrics = calculateTimeMetrics(
       actual,
-      scheduled, // scheduled is guaranteed here by the isWorkday check above
+      scheduled,
       attendanceSettings,
       employmentType
     );
@@ -461,11 +545,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       lateDeduction: payMetrics.lateDeduction,
       undertimeDeduction: payMetrics.undertimeDeduction,
       overtimePay: payMetrics.overtimePay,
-      holidayBonus: payMetrics.holidayBonus, // Contains total holiday pay if present
+      holidayBonus: payMetrics.holidayBonus,
       nightDifferentialHours: payMetrics.nightDifferentialHours,
       nightDifferentialPay: payMetrics.nightDifferentialPay,
       manualOverride: false,
-      absence: false, // Present here
+      absence: false,
       dayType: holiday
         ? holiday.type === "Regular"
           ? "Holiday"
@@ -482,14 +566,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     year,
     month,
     day,
-    formData.dailyRate, // Include formData daily rate if it can be manually changed
+    formData.dailyRate,
+    scheduleInfo,
   ]);
 
   useEffect(() => {
-    // Only update formData with computed values if manualOverride is false
     if (computedValues && !formData.manualOverride) {
       setFormData((prev) => {
-        // Calculate night differential first
         const nightHours = computedValues.nightDifferentialHours;
         const standardHours = employmentType?.hoursOfWork || 8;
         const hourlyRate = (employee?.dailyRate || 0) / standardHours;
@@ -524,7 +607,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     attendanceSettings,
   ]);
 
-  // Update formData when compensation prop changes
   useEffect(() => {
     if (compensation) {
       setFormData({
@@ -560,7 +642,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return;
     }
 
-    // Check if trying to change computed fields without manual override
     const isComputedField = [
       "lateMinutes",
       "undertimeMinutes",
@@ -585,7 +666,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     setFormData((prev) => {
       const newData = { ...prev };
 
-      // Handle minute fields affecting their corresponding pay/deduction fields
       if (name === "overtimeMinutes" && formData.manualOverride) {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
@@ -595,7 +675,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
           attendanceSettings?.overtimeHourlyMultiplier || 1.25;
         newData.overtimePay =
           Math.floor(numericValue / 60) * hourlyRate * overtimeMultiplier;
-        // Update gross pay and net pay
         newData.grossPay =
           (formData.dailyRate || 0) +
           newData.overtimePay +
@@ -611,7 +690,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             ? (numericValue - gracePeriod) *
               (attendanceSettings?.undertimeDeductionPerMinute || 0)
             : 0;
-        // Update total deductions and net pay
         newData.deductions =
           newData.undertimeDeduction + (formData.lateDeduction || 0);
         newData.netPay = (formData.grossPay || 0) - newData.deductions;
@@ -624,14 +702,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             ? (numericValue - gracePeriod) *
               (attendanceSettings?.lateDeductionPerMinute || 0)
             : 0;
-        // Update total deductions and net pay
         newData.deductions =
           (formData.undertimeDeduction || 0) + newData.lateDeduction;
         newData.netPay = (formData.grossPay || 0) - newData.deductions;
       } else if (name === "nightDifferentialHours" && formData.manualOverride) {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        // Set night differential pay to 0 if hours are 0
         if (numericValue === 0) {
           newData.nightDifferentialPay = 0;
         } else {
@@ -642,62 +718,42 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
           newData.nightDifferentialPay =
             numericValue * hourlyRate * nightDiffMultiplier;
         }
-        // Update gross pay and net pay
         newData.grossPay =
           (formData.dailyRate || 0) +
           (formData.overtimePay || 0) +
           newData.nightDifferentialPay +
           (formData.holidayBonus || 0);
         newData.netPay = newData.grossPay - (formData.deductions || 0);
-      }
-      // Handle fields that affect gross pay
-      else if (
+      } else if (
         name === "overtimePay" ||
         name === "holidayBonus" ||
         name === "nightDifferentialPay"
       ) {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        // Recalculate gross pay by adding the new value to the base gross pay
         const baseGrossPay =
           (prev.grossPay || 0) - ((prev[key] as number) || 0);
         newData.grossPay = baseGrossPay + numericValue;
-        // Update net pay to reflect the new gross pay minus deductions
         newData.netPay = newData.grossPay - (prev.deductions || 0);
-      }
-      // Handle fields that affect net pay (deductions)
-      else if (name === "undertimeDeduction" || name === "lateDeduction") {
+      } else if (name === "undertimeDeduction" || name === "lateDeduction") {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        // Recalculate total deductions
         const totalDeductions =
           (prev.undertimeDeduction || 0) + (prev.lateDeduction || 0);
         newData.deductions = totalDeductions;
-        // Update net pay by subtracting total deductions from gross pay
         newData.netPay = (prev.grossPay || 0) - totalDeductions;
-      }
-      // Handle leave pay (affects net pay)
-      else if (name === "leavePay") {
+      } else if (name === "leavePay") {
         const key = name as keyof Compensation;
         (newData[key] as number) = numericValue;
-        // Update net pay by adding leave pay to gross pay minus deductions
         newData.netPay =
           (prev.grossPay || 0) - (prev.deductions || 0) + numericValue;
-      }
-      // Handle direct gross pay edits
-      else if (name === "grossPay") {
+      } else if (name === "grossPay") {
         newData.grossPay = numericValue;
-        // Update net pay by subtracting deductions from new gross pay
         newData.netPay = numericValue - (prev.deductions || 0);
-      }
-      // Handle direct net pay edits
-      else if (name === "netPay") {
+      } else if (name === "netPay") {
         newData.netPay = numericValue;
-        // Update gross pay by adding deductions to new net pay
         newData.grossPay = numericValue + (prev.deductions || 0);
-      }
-      // Handle other fields normally
-      else {
+      } else {
         const key = name as keyof Compensation;
         (newData[key] as string | number) =
           name.includes("Pay") ||
@@ -730,7 +786,6 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
           maxHeight: "calc(100vh - 100px)",
         }}
       >
-        {/* Caret */}
         <div
           className="absolute left-8 w-0 h-0"
           style={{
@@ -739,11 +794,11 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             ...(position?.showAbove
               ? {
                   bottom: "-8px",
-                  borderTop: "8px solid rgb(55, 65, 81)", // matches border-gray-700
+                  borderTop: "8px solid rgb(55, 65, 81)",
                 }
               : {
                   top: "-8px",
-                  borderBottom: "8px solid rgb(55, 65, 81)", // matches border-gray-700
+                  borderBottom: "8px solid rgb(55, 65, 81)",
                 }),
           }}
         />
@@ -755,16 +810,15 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             ...(position?.showAbove
               ? {
                   bottom: "-6px",
-                  borderTop: "7px solid rgb(17, 24, 39)", // matches bg-gray-900
+                  borderTop: "7px solid rgb(17, 24, 39)",
                 }
               : {
                   top: "-6px",
-                  borderBottom: "7px solid rgb(17, 24, 39)", // matches bg-gray-900
+                  borderBottom: "7px solid rgb(17, 24, 39)",
                 }),
           }}
         />
 
-        {/* Dialog content */}
         <div className="relative">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 rounded-t-lg">
             <div className="flex items-center justify-between">
@@ -789,11 +843,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                       d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  {employmentType
-                    ? `${formattedSchedule || "Day Off"} based on ${
-                        employmentType.type
-                      }`
-                    : "No Schedule"}
+                  {scheduleInfo
+                    ? formattedSchedule || "Day Off"
+                    : "Loading Schedule..."}
+                  {employmentType && scheduleInfo
+                    ? ` based on ${employmentType.type}`
+                    : ""}
                 </span>
               </h3>
             </div>

@@ -658,13 +658,20 @@ export default function ScheduleSettings({
     setEmploymentTypes(updatedTypes);
   };
 
-  // State for Roster view date range
-  const [rosterViewStartDate, setRosterViewStartDate] = useState<Date>(
-    () => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
-  );
-  const [rosterViewEndDate, setRosterViewEndDate] = useState<Date>(
-    () => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0)
-  );
+  // State for Roster view date range (Default to 15 days from start of selected month)
+  const [rosterViewStartDate, setRosterViewStartDate] = useState<Date>(() => {
+    // Use the selectedMonth state which defaults to the 1st of the globally selected month
+    const startDate = new Date(selectedMonth);
+    startDate.setHours(0, 0, 0, 0); // Ensure start of day
+    return startDate;
+  });
+  const [rosterViewEndDate, setRosterViewEndDate] = useState<Date>(() => {
+    // Calculate end date based on the start date (1st of month + 14 days)
+    const endDate = new Date(selectedMonth);
+    endDate.setDate(endDate.getDate() + 14);
+    endDate.setHours(23, 59, 59, 999); // Ensure end of day
+    return endDate;
+  });
 
   // State for copied roster range data
   const [copiedRosterData, setCopiedRosterData] = useState<{
@@ -704,19 +711,11 @@ export default function ScheduleSettings({
   };
 
   const handleRosterPreviousRange = () => {
-    const msPerDay = 1000 * 60 * 60 * 24;
-    // Calculate interval (number of full days between start and end)
-    const intervalDays = Math.round(
-      (rosterViewEndDate.getTime() - rosterViewStartDate.getTime()) / msPerDay
-    );
-
-    // New end date is the day before the old start date
-    let newEndDate = new Date(rosterViewStartDate);
-    newEndDate.setDate(newEndDate.getDate() - 1);
-
-    // New start date is interval days before the new end date
-    let newStartDate = new Date(newEndDate);
-    newStartDate.setDate(newStartDate.getDate() - intervalDays);
+    // Move back by 15 days
+    const newStartDate = new Date(rosterViewStartDate);
+    newStartDate.setDate(newStartDate.getDate() - 15);
+    const newEndDate = new Date(rosterViewEndDate);
+    newEndDate.setDate(newEndDate.getDate() - 15);
 
     setRosterViewStartDate(newStartDate);
     setRosterViewEndDate(newEndDate);
@@ -733,19 +732,11 @@ export default function ScheduleSettings({
   };
 
   const handleRosterNextRange = () => {
-    const msPerDay = 1000 * 60 * 60 * 24;
-    // Calculate interval (number of full days between start and end)
-    const intervalDays = Math.round(
-      (rosterViewEndDate.getTime() - rosterViewStartDate.getTime()) / msPerDay
-    );
-
-    // New start date is the day after the old end date
-    let newStartDate = new Date(rosterViewEndDate);
-    newStartDate.setDate(newStartDate.getDate() + 1);
-
-    // New end date is interval days after the new start date
-    let newEndDate = new Date(newStartDate);
-    newEndDate.setDate(newEndDate.getDate() + intervalDays);
+    // Move forward by 15 days
+    const newStartDate = new Date(rosterViewStartDate);
+    newStartDate.setDate(newStartDate.getDate() + 15);
+    const newEndDate = new Date(rosterViewEndDate);
+    newEndDate.setDate(newEndDate.getDate() + 15);
 
     setRosterViewStartDate(newStartDate);
     setRosterViewEndDate(newEndDate);

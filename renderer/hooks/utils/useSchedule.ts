@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   EmploymentType,
-  getScheduleForDate,
   DailySchedule,
+  AttendanceSettingsModel,
 } from "@/renderer/model/settings";
 
 // Use DailySchedule type directly instead of defining our own Schedule interface
@@ -23,10 +23,11 @@ export const formatTime = (time: string): string => {
 };
 
 // Non-hook version for calculating schedule info for a single date
-export const getScheduleInfo = (
+export const getScheduleInfo = async (
+  model: AttendanceSettingsModel,
   employmentType: EmploymentType | null,
   date: Date
-): ScheduleInfo => {
+): Promise<ScheduleInfo> => {
   if (!employmentType) {
     return {
       schedule: null,
@@ -36,7 +37,7 @@ export const getScheduleInfo = (
     };
   }
 
-  const schedule = getScheduleForDate(employmentType, date);
+  const schedule = await model.getScheduleForDate(employmentType, date);
   // Consider a schedule valid only if it has both timeIn and timeOut values
   const hasSchedule =
     !!schedule && !!schedule.timeIn && !!schedule.timeOut && !schedule.isOff;
@@ -59,55 +60,139 @@ export const getScheduleInfo = (
 
 // Hook version for calculating schedule info for multiple dates
 export const useSchedules = (
+  model: AttendanceSettingsModel | null,
   employmentType: EmploymentType | null,
-  dates: Date[]
-): Map<number, ScheduleInfo> => {
-  return useMemo(() => {
-    const map = new Map();
-    dates.forEach((date) => {
-      map.set(date.getDate(), getScheduleInfo(employmentType, date));
-    });
-    return map;
-  }, [employmentType, dates]);
+  dates: Date[] | undefined
+): Map<number, ScheduleInfo | null> => {
+  const validDates = dates || [];
+  const [schedulesMap, setSchedulesMap] = useState<
+    Map<number, ScheduleInfo | null>
+  >(new Map(validDates.map((d) => [d.getDate(), null])));
+
+  const datesKey = validDates.map((d) => d.toISOString()).join(",");
+
+  useEffect(() => {
+    if (!model || !employmentType || validDates.length === 0) {
+      setSchedulesMap(
+        new Map(
+          validDates.map((d) => [
+            d.getDate(),
+            {
+              schedule: null,
+              hasSchedule: false,
+              isRestDay: false,
+              formattedSchedule: null,
+            },
+          ])
+        )
+      );
+      return;
+    }
+
+    let isMounted = true;
+    const fetchSchedules = async () => {
+      const newMap = new Map<number, ScheduleInfo | null>();
+      const promises = validDates.map(async (date) => {
+        const info = await getScheduleInfo(model, employmentType, date);
+        return { date, info };
+      });
+
+      const results = await Promise.all(promises);
+
+      if (isMounted) {
+        results.forEach(({ date, info }) => {
+          newMap.set(date.getDate(), info);
+        });
+        setSchedulesMap(newMap);
+      }
+    };
+
+    fetchSchedules();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [model, employmentType?.type, datesKey]);
+
+  return schedulesMap;
 };
 
-// Legacy hook for single date (for backward compatibility)
+// Legacy hook for single date (refactored for async)
 export const useSchedule = (
+  model: AttendanceSettingsModel | null,
+  employmentType: EmploymentType | null,
+  date: Date | null
+): ScheduleInfo | null => {
+  const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
+
+  useEffect(() => {
+    if (!model || !employmentType || !date) {
+      setScheduleInfo({
+        schedule: null,
+        hasSchedule: false,
+        isRestDay: false,
+        formattedSchedule: null,
+      });
+      return;
+    }
+
+    let isMounted = true;
+    const fetchSchedule = async () => {
+      try {
+        const info = await getScheduleInfo(model, employmentType, date);
+        if (isMounted) {
+          setScheduleInfo(info);
+        }
+      } catch (error) {
+        console.error("Error fetching schedule info:", error);
+        if (isMounted) {
+          setScheduleInfo({
+            schedule: null,
+            hasSchedule: false,
+            isRestDay: false,
+            formattedSchedule: null,
+          });
+        }
+      }
+    };
+
+    fetchSchedule();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [model, employmentType?.type, date]);
+
+  return scheduleInfo;
+};
+
+// Utility function that can be used without the hook (now async)
+export const checkHasSchedule = async (
+  model: AttendanceSettingsModel,
   employmentType: EmploymentType | null,
   date: Date
-): ScheduleInfo => {
-  return useMemo(
-    () => getScheduleInfo(employmentType, date),
-    [employmentType, date]
+): Promise<boolean> => {
+  if (!employmentType || !model) return false;
+  const schedule = await model.getScheduleForDate(employmentType, date);
+  return (
+    !!schedule && !!schedule.timeIn && !!schedule.timeOut && !schedule.isOff
   );
 };
 
-// Utility function that can be used without the hook
-export const checkHasSchedule = (
-  employmentType: EmploymentType | null,
-  date: Date
-): boolean => {
-  if (!employmentType) return false;
-  const schedule = getScheduleForDate(employmentType, date);
-  return !!schedule && !schedule.isOff;
-};
-
-// Utility function to check if a date should be marked as absent
-export const shouldMarkAsAbsent = (
+// Utility function to check if a date should be marked as absent (now async)
+export const shouldMarkAsAbsent = async (
+  model: AttendanceSettingsModel,
   employmentType: EmploymentType | null,
   date: Date,
   hasTimeEntries: boolean
-): boolean => {
-  if (!employmentType) return false;
+): Promise<boolean> => {
+  if (!employmentType || !model) return false;
 
-  // Get schedule info for the date
-  const scheduleInfo = getScheduleInfo(employmentType, date);
+  const scheduleInfo = await getScheduleInfo(model, employmentType, date);
 
-  // If there's no schedule or it's a rest day, don't mark as absent
   if (!scheduleInfo.hasSchedule || scheduleInfo.isRestDay) {
     return false;
   }
 
-  // If there's a schedule but no time entries, mark as absent
   return !hasTimeEntries;
 };
