@@ -225,33 +225,17 @@ export class AttendanceSettingsModel {
   private async readMonthScheduleJson(
     filePath: string
   ): Promise<MonthSchedule | null> {
-    console.log(`[readMonthScheduleJson] Checking path: ${filePath}`);
     try {
       const fileExists = await window.electron.fileExists(filePath);
-      console.log(
-        `[readMonthScheduleJson] File exists check for ${filePath}: ${fileExists}`
-      );
       if (!fileExists) return {}; // Return empty object if file doesn't exist
       const content = await window.electron.readFile(filePath);
-      console.log(
-        `[readMonthScheduleJson] Read content for ${filePath}: ${
-          content ? content.substring(0, 100) + "..." : "<empty>"
-        }`
-      ); // Log snippet of content
       if (!content || content.trim() === "") return {}; // Return empty if file is empty
       const parsedData = JSON.parse(content) as MonthSchedule;
-      console.log(
-        `[readMonthScheduleJson] Parsed data for ${filePath}:`,
-        parsedData
-      );
       return parsedData;
     } catch (error) {
       console.error(
         `[SettingsModel] Error reading month schedule ${filePath}:`,
         error
-      );
-      console.log(
-        `[readMonthScheduleJson] Returning null due to error for ${filePath}.`
       );
       return null; // Return null on error
     }
@@ -362,9 +346,6 @@ export class AttendanceSettingsModel {
     year: number,
     month: number
   ): Promise<MonthSchedule | null> {
-    console.log(
-      `[loadMonthSchedule] Requested for Type: ${employmentType}, Year: ${year}, Month: ${month}`
-    );
     if (!employmentType) {
       console.warn(
         "[SettingsModel] loadMonthSchedule called with empty employmentType."
@@ -372,12 +353,7 @@ export class AttendanceSettingsModel {
       return {};
     }
     const filePath = this.getMonthSchedulePath(employmentType, year, month);
-    console.log(`[loadMonthSchedule] Constructed file path: ${filePath}`);
     const result = await this.readMonthScheduleJson(filePath);
-    console.log(
-      `[loadMonthSchedule] Result from readMonthScheduleJson for ${filePath}:`,
-      result
-    );
     return result;
   }
 
@@ -416,9 +392,7 @@ export class AttendanceSettingsModel {
     }
 
     if (!employmentType) {
-      console.warn(
-        `[SettingsModel] Could not find employment type: ${employmentTypeInput}`
-      );
+      // console.warn(`[SettingsModel] Could not find employment type: ${employmentTypeInput}`); // Keep warn for now?
       return null;
     }
 
@@ -434,9 +408,7 @@ export class AttendanceSettingsModel {
         month
       );
       if (monthSchedule && monthSchedule[dateStr]) {
-        console.log(
-          `[getScheduleForDate] Using MONTH-SPECIFIC schedule for ${employmentType.type} on ${dateStr}`
-        );
+        // console.log(`[getScheduleForDate] Using MONTH-SPECIFIC schedule for ${employmentType.type} on ${dateStr}`);
         return monthSchedule[dateStr];
       }
     } catch (error) {
@@ -454,9 +426,7 @@ export class AttendanceSettingsModel {
       const weeklySchedule = employmentType.schedules[scheduleDay];
 
       if (weeklySchedule) {
-        console.log(
-          `[getScheduleForDate] Using WEEKLY fallback for ${employmentType.type} on ${dateStr} (Day ${dayOfWeek})`
-        );
+        // console.log(`[getScheduleForDate] Using WEEKLY fallback for ${employmentType.type} on ${dateStr} (Day ${dayOfWeek})`);
         return {
           timeIn: weeklySchedule.timeIn,
           timeOut: weeklySchedule.timeOut,
@@ -465,9 +435,7 @@ export class AttendanceSettingsModel {
       }
     }
 
-    console.log(
-      `[getScheduleForDate] NO schedule (monthly or weekly) found for ${employmentType.type} on ${dateStr}`
-    );
+    // console.log(`[getScheduleForDate] NO schedule (monthly or weekly) found for ${employmentType.type} on ${dateStr}`);
     // 3. No schedule found
     return null;
   }
@@ -691,7 +659,14 @@ export class AttendanceSettingsModel {
                 onProgress?.(
                   `--- Error saving schedule for ${coreType.type} - ${yearMonth}: ${msg}`
                 );
-                migrationErrorOccurred = true;
+                console.error(
+                  `[Migration Error] Failed to save monthly schedule for ${coreType.type} - ${yearMonth}:`,
+                  monthSaveError
+                );
+                // Re-throw the error to stop the time settings migration process
+                throw new Error(
+                  `Failed to save monthly schedule for ${coreType.type} - ${yearMonth}: ${msg}`
+                );
               }
             }
           }
@@ -711,8 +686,12 @@ export class AttendanceSettingsModel {
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      onProgress?.(`- Error migrating time settings: ${msg}. Skipping.`);
+      onProgress?.(
+        `- Error during time settings migration: ${msg}. Process halted.`
+      );
       console.error("Error migrating timeSettings.csv:", error);
+      // No further action needed here as the error is caught and logged,
+      // and coreTimeSettings won't be saved due to the error.
     }
 
     // Final summary

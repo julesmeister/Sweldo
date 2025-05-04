@@ -154,7 +154,6 @@ export default function ScheduleSettings({
     const checkInitialMode = async () => {
       const initialType = employmentTypes[0]?.type;
       if (!initialType) {
-        console.warn("[Initial Mode Check] No initial employment type found.");
         initialModeChecked.current = true; // Prevent re-checking if types load later somehow
         return;
       }
@@ -163,9 +162,6 @@ export default function ScheduleSettings({
       const initialMonth = selectedMonth.getMonth() + 1;
 
       try {
-        console.log(
-          `[Initial Mode Check] Checking for schedule: ${initialType}, ${initialYear}-${initialMonth}`
-        );
         const initialSchedule = await settingsModel.loadMonthSchedule(
           initialType,
           initialYear,
@@ -174,21 +170,11 @@ export default function ScheduleSettings({
 
         // Check if the loaded schedule is not null AND has keys (is not empty {})
         if (initialSchedule && Object.keys(initialSchedule).length > 0) {
-          console.log(
-            "[Initial Mode Check] Found existing monthly schedule. Setting mode to 'monthly'."
-          );
           setScheduleMode("monthly");
         } else {
-          console.log(
-            "[Initial Mode Check] No existing monthly schedule found. Defaulting to 'weekly'."
-          );
           // Default is already weekly, no need to set explicitly
         }
       } catch (error) {
-        console.error(
-          "[Initial Mode Check] Error checking initial schedule:",
-          error
-        );
         // Keep default weekly mode on error
       } finally {
         initialModeChecked.current = true; // Mark check as complete
@@ -203,9 +189,6 @@ export default function ScheduleSettings({
     const loadSchedule = async () => {
       // Load schedules only when in monthly mode
       if (scheduleMode !== "monthly" || employmentTypes.length === 0) {
-        console.log(
-          "[ScheduleSettings Load Effect] Skipping load (not monthly mode or no employment types)"
-        );
         setAllMonthSchedules({}); // Clear schedules if not in monthly mode
         return;
       }
@@ -216,25 +199,15 @@ export default function ScheduleSettings({
         const month = selectedMonth.getMonth() + 1;
 
         // Load schedule for all employment types
-        console.log(
-          `[ScheduleSettings Load Effect] Loading schedules for ${year}-${month}`
-        );
         for (const empType of employmentTypes) {
           if (empType.type) {
             // Ensure type name exists
-            console.log(
-              `[ScheduleSettings Load Effect] --> Loading for Type: ${empType.type}`
-            );
             const schedule = await settingsModel.loadMonthSchedule(
               empType.type,
               year,
               month
             );
             newSchedules[empType.type] = schedule || {}; // Store schedule (or empty obj) by type name
-            console.log(
-              `[ScheduleSettings Load Effect] --> Loaded for ${empType.type}:`,
-              newSchedules[empType.type]
-            );
           } else {
             console.warn(
               "[ScheduleSettings Load Effect] Skipping type with empty name",
@@ -244,10 +217,6 @@ export default function ScheduleSettings({
         }
 
         setAllMonthSchedules(newSchedules);
-        console.log(
-          "[ScheduleSettings Load Effect] Set allMonthSchedules to:",
-          newSchedules
-        );
       } catch (error) {
         console.error(
           "[ScheduleSettings Load Effect] Error loading month schedule:",
@@ -329,7 +298,6 @@ export default function ScheduleSettings({
 
     // Only update if there are actual changes
     if (JSON.stringify(updatedTypes) !== JSON.stringify(employmentTypes)) {
-      console.log("Updating employment types with schedules:", updatedTypes);
       setEmploymentTypes(updatedTypes as EmploymentType[]);
     }
   }, [employmentTypes]);
@@ -496,10 +464,6 @@ export default function ScheduleSettings({
   const handleSaveEmploymentTypes = async () => {
     try {
       // Only save the core employment types (name, hours, weekly pattern, requires tracking)
-      console.log(
-        "ScheduleSettings saving CORE employment types:",
-        employmentTypes
-      );
       await onSave(employmentTypes); // onSave should call model.saveTimeSettings
       toast.success("Employment types saved successfully");
     } catch (error) {
@@ -522,9 +486,6 @@ export default function ScheduleSettings({
         date.getFullYear() !== selectedMonth.getFullYear() ||
         date.getMonth() !== selectedMonth.getMonth()
       ) {
-        console.warn(
-          "Attempted to update schedule for non-selected type/month. Ignoring."
-        );
         return;
       }
 
@@ -590,10 +551,6 @@ export default function ScheduleSettings({
         isOff: false,
       };
 
-      console.log(
-        `[ScheduleSettings getScheduleForDate] For ${typeId} on ${dateStr}, returning:`,
-        result
-      );
       return result;
     },
     [allMonthSchedules, employmentTypes, selectedTypeTab, selectedMonth]
@@ -619,9 +576,7 @@ export default function ScheduleSettings({
     );
   };
 
-  React.useEffect(() => {
-    console.log("[DEBUG] Schedule mode changed to:", scheduleMode);
-  }, [scheduleMode]);
+  React.useEffect(() => {}, [scheduleMode]);
 
   const { handlePrintSchedules } = useSchedulePrint({
     employmentTypes,
