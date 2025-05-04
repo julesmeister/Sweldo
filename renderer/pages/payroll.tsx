@@ -35,6 +35,7 @@ import { createStatisticsModel } from "../model/statistics";
 import { Tooltip } from "@/renderer/components/Tooltip";
 import { usePayrollPDFGeneration } from "../hooks/usePayrollPDFGeneration";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "../lib/utils";
+import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 
 export default function PayrollPage() {
   const { hasAccess } = useAuthStore();
@@ -44,6 +45,7 @@ export default function PayrollPage() {
   const [payrollSummary, setPayrollSummary] =
     useState<PayrollSummaryModel | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [refreshPayrolls, setRefreshPayrolls] = useState(false);
   const [showDeductionsDialog, setShowDeductionsDialog] = useState(false);
   const [clickPosition, setClickPosition] = useState<{
@@ -53,7 +55,7 @@ export default function PayrollPage() {
   } | null>(null);
   const { isLoading, setLoading, setActiveLink } = useLoadingStore();
   const { dbPath, logoPath, preparedBy, approvedBy } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const { dateRange, setDateRange } = useDateRangeStore();
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
@@ -219,6 +221,22 @@ export default function PayrollPage() {
       }
     }
   }, [storedMonth, storedYear, dateRange.startDate, setDateRange]);
+
+  // Add effect to load all employees
+  useEffect(() => {
+    const loadAllEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadAllEmployees();
+  }, [dbPath]);
 
   const handleDeductionsClick = (
     event: React.MouseEvent<HTMLButtonElement>
@@ -388,86 +406,111 @@ export default function PayrollPage() {
                       />
                     </svg>
                     <span className="text-[13px] font-medium text-gray-600">
-                      Selected Employee
+                      For
+                    </span>
+                    <EmployeeDropdown
+                      employees={employees}
+                      selectedEmployeeId={selectedEmployeeId}
+                      onSelectEmployee={setSelectedEmployeeId}
+                      displayFormat="minimal"
+                      className="text-[13px] font-medium text-blue-600"
+                    />
+                    <span className="text-[13px] font-medium text-gray-600 mr-1.5">
+                      Only
                     </span>
                   </div>
-                  <button
-                    onClick={handleDeductionsClick}
-                    disabled={!selectedEmployeeId || isLoading}
-                    className="h-[42px] px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
-                    onMouseEnter={() => setShowGenerateTooltip(true)}
-                    onMouseLeave={() => setShowGenerateTooltip(false)}
-                  >
-                    Generate Payroll For {employee?.name}
-                    {/* Generate Payroll Tooltip */}
-                    {showGenerateTooltip && (
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 z-50 w-[380px]">
-                        <div className="bg-white rounded-xl shadow-lg border border-gray-100/20 p-4 relative">
-                          {/* Arrow pointing up */}
-                          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                            <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
-                          </div>
-
-                          <div className="space-y-3 text-left">
-                            <div className="flex items-start gap-2.5">
-                              <IoInformationCircle className="w-[18px] h-[18px] text-blue-600 flex-shrink-0 mt-0.5" />
-                              <h4 className="text-[15px] font-semibold text-gray-900">
-                                Payroll Generation Details
-                              </h4>
+                  <div>
+                    <button
+                      onClick={handleDeductionsClick}
+                      disabled={!selectedEmployeeId || isLoading}
+                      className="w-full h-[42px] px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative flex items-center justify-center gap-2"
+                      onMouseEnter={() => setShowGenerateTooltip(true)}
+                      onMouseLeave={() => setShowGenerateTooltip(false)}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                        />
+                      </svg>
+                      Generate Payroll
+                      {/* Generate Payroll Tooltip */}
+                      {showGenerateTooltip && (
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 z-50 w-[380px]">
+                          <div className="bg-white rounded-xl shadow-lg border border-gray-100/20 p-4 relative">
+                            {/* Arrow pointing up */}
+                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                              <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
                             </div>
-                            <div className="space-y-2.5 ml-[26px]">
-                              <div className="flex gap-2.5 items-start">
-                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
-                                <p className="text-[13px] text-gray-600 leading-normal">
-                                  Summarizes all{" "}
-                                  <span className="font-medium text-gray-900">
-                                    attendances
-                                  </span>
-                                  ,{" "}
-                                  <span className="font-medium text-gray-900">
-                                    compensations
-                                  </span>
-                                  , and{" "}
-                                  <span className="font-medium text-gray-900">
-                                    deductions
-                                  </span>{" "}
-                                  within the selected date range
-                                </p>
+
+                            <div className="space-y-3 text-left">
+                              <div className="flex items-start gap-2.5">
+                                <IoInformationCircle className="w-[18px] h-[18px] text-blue-600 flex-shrink-0 mt-0.5" />
+                                <h4 className="text-[15px] font-semibold text-gray-900">
+                                  Payroll Generation Details
+                                </h4>
                               </div>
-                              <div className="flex gap-2.5 items-start">
-                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
-                                <p className="text-[13px] text-gray-600 leading-normal">
-                                  Includes available{" "}
-                                  <span className="font-medium text-gray-900">
-                                    cash advances
-                                  </span>
-                                  ,{" "}
-                                  <span className="font-medium text-gray-900">
-                                    shorts
-                                  </span>
-                                  ,{" "}
-                                  <span className="font-medium text-gray-900">
-                                    loans
-                                  </span>
-                                  , and{" "}
-                                  <span className="font-medium text-gray-900">
-                                    leaves
-                                  </span>
-                                </p>
-                              </div>
-                              <div className="flex gap-2.5 items-start">
-                                <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
-                                <p className="text-[13px] text-gray-600 leading-normal">
-                                  You can select and adjust which deductions to
-                                  apply and their amounts in the next step
-                                </p>
+                              <div className="space-y-2.5 ml-[26px]">
+                                <div className="flex gap-2.5 items-start">
+                                  <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                  <p className="text-[13px] text-gray-600 leading-normal">
+                                    Summarizes all{" "}
+                                    <span className="font-medium text-gray-900">
+                                      attendances
+                                    </span>
+                                    ,{" "}
+                                    <span className="font-medium text-gray-900">
+                                      compensations
+                                    </span>
+                                    , and{" "}
+                                    <span className="font-medium text-gray-900">
+                                      deductions
+                                    </span>{" "}
+                                    within the selected date range
+                                  </p>
+                                </div>
+                                <div className="flex gap-2.5 items-start">
+                                  <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                  <p className="text-[13px] text-gray-600 leading-normal">
+                                    Includes available{" "}
+                                    <span className="font-medium text-gray-900">
+                                      cash advances
+                                    </span>
+                                    ,{" "}
+                                    <span className="font-medium text-gray-900">
+                                      shorts
+                                    </span>
+                                    ,{" "}
+                                    <span className="font-medium text-gray-900">
+                                      loans
+                                    </span>
+                                    , and{" "}
+                                    <span className="font-medium text-gray-900">
+                                      leaves
+                                    </span>
+                                  </p>
+                                </div>
+                                <div className="flex gap-2.5 items-start">
+                                  <div className="w-2 h-[2px] bg-gray-300 mt-[9px] flex-shrink-0" />
+                                  <p className="text-[13px] text-gray-600 leading-normal">
+                                    You can select and adjust which deductions
+                                    to apply and their amounts in the next step
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </button>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
               {hasAccess("GENERATE_REPORTS") && (

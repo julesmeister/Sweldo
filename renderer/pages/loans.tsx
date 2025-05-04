@@ -16,11 +16,13 @@ import { Loan } from "@/renderer/model/loan";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
+import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [clickPosition, setClickPosition] = useState<{
     top: number;
     left: number;
@@ -30,7 +32,7 @@ export default function LoansPage() {
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
   const { dbPath } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const [employee, setEmployee] = useState<Employee | null>(null);
 
   const employeeModel = useMemo(
@@ -139,6 +141,21 @@ export default function LoansPage() {
     loadLoans();
   }, [loanModel, storedMonthInt, storedYear, setLoading]);
 
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
@@ -240,9 +257,16 @@ export default function LoansPage() {
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                      {selectedEmployeeId
-                        ? employee?.name + "'s Loans"
-                        : "Loans"}
+                      {selectedEmployeeId ? (
+                        <EmployeeDropdown
+                          employees={employees}
+                          selectedEmployeeId={selectedEmployeeId}
+                          onSelectEmployee={setSelectedEmployeeId}
+                          labelPrefix="Loans"
+                        />
+                      ) : (
+                        "Loans"
+                      )}
                     </h2>
                     <div className="relative flex items-center space-x-4">
                       <button

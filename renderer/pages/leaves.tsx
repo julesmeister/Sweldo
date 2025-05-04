@@ -13,6 +13,7 @@ import { createLeaveModel } from "@/renderer/model/leave";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
+import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 
 interface Leave {
   id: string;
@@ -32,11 +33,12 @@ export default function LeavesPage() {
   );
   const { setLoading, setActiveLink } = useLoadingStore();
   const { dbPath } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -325,6 +327,22 @@ export default function LeavesPage() {
     }
   };
 
+  // Add effect to load all employees
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath]);
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -342,9 +360,16 @@ export default function LeavesPage() {
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900">
-                      {selectedEmployeeId
-                        ? `${employee?.name}'s Leave Requests`
-                        : "Leave Requests"}
+                      {selectedEmployeeId ? (
+                        <EmployeeDropdown
+                          employees={employees}
+                          selectedEmployeeId={selectedEmployeeId}
+                          onSelectEmployee={setSelectedEmployeeId}
+                          labelPrefix="Leave Requests"
+                        />
+                      ) : (
+                        "Leave Requests"
+                      )}
                     </h2>
                     <button
                       type="button"

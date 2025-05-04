@@ -36,14 +36,46 @@ This README documents the structure, setup, build process, and key desktop-speci
 If you encounter errors like:
 - `Cannot apply unknown utility class: bg-gray-900`
 - `It looks like you're trying to use tailwindcss directly as a PostCSS plugin`
+- `TypeError: Cannot read properties of undefined (reading 'blocklist')` during build
 
 **Solution Steps**:
 1. Remove any custom `postcss.config.js` files you've created.
 2. Let the built-in Next.js PostCSS and Tailwind configuration handle things.
 3. If you must customize, make sure you're using the correct plugin names for your version.
 4. Keep configuration consistent between root and renderer directories.
+5. When building for web, ensure the renderer directory has its own `postcss.config.js` that correctly points to the Tailwind config file.
+6. For a solution that works with both Nextron and web builds, use a dynamic path:
+```js
+module.exports = {
+  plugins: {
+    tailwindcss: {
+      config: process.env.npm_lifecycle_event === 'build:web' 
+        ? './tailwind.config.js'  // For web builds (npm run build:web) 
+        : './renderer/tailwind.config.js', // For Nextron builds (npm run dev, npm run build)
+    },
+    autoprefixer: {},
+  },
+};
+```
 
 **For reference**: The Tailwind configuration is located at `renderer/tailwind.config.js` and contains all necessary color and plugin definitions.
+
+## Firebase Hosting Setup Progress
+
+### ✅ Completed Steps
+1. ✅ Installed Firebase CLI tools
+2. ✅ Initialized Firebase hosting (`firebase init hosting`)
+3. ✅ Configured `firebase.json` to use `app` as the public directory
+4. ✅ Set up proper ignores for Electron-specific directories in `firebase.json`
+5. ✅ Configured hosting rewrites for SPA support
+6. ✅ Configured `renderer/next.config.js` for static export (`output: 'export'`)
+7. ✅ Added web build script (`build:web`) to package.json
+8. ✅ Fixed PostCSS configuration for both Nextron and web builds
+9. ✅ Successfully tested the web build process
+
+### 🔲 Remaining Steps
+1. 🔲 Handle conditional imports/code for Electron-specific functionality
+2. 🔲 Deploy to Firebase hosting (`firebase deploy --only hosting`)
 
 ## Project Structure Overview
 
@@ -134,13 +166,13 @@ These steps outline how to build and deploy the Next.js **renderer** application
 1.  **Configure Firebase Hosting:**
     *   Edit the `firebase.json` file in the **root** of your project.
     *   Locate the `"hosting"` section.
-    *   Change the `"public"` directory from `"public"` (or whatever it was set to during init) to `"renderer/out"`.
+    *   Change the `"public"` directory from `"public"` (or whatever it was set to during init) to `"app"`.
     *   Ensure rewrites are configured for a Next.js SPA (Single Page Application). It should look something like this:
 
     ```json
     {
       "hosting": {
-        "public": "renderer/out", // <-- Important: Point to Next.js build output
+        "public": "app", // <-- Important: Point to Next.js build output
         "ignore": [
           "firebase.json",
           "**/.*",
@@ -186,10 +218,10 @@ These steps outline how to build and deploy the Next.js **renderer** application
 3.  **Build the Next.js App:**
     *   Navigate to the **root** directory (if you were inside `renderer`).
     *   Run the web-specific build script: `npm run build:web`
-    *   This command should now generate the static site files in the `renderer/out` directory, based on the `next.config.js` setting.
+    *   This command should now generate the static site files in the `app` directory in your project root, based on the `next.config.js` setting.
 
 4.  **Deploy to Firebase Hosting:**
     *   Ensure you are in the **root** directory.
     *   Run the deploy command: `firebase deploy --only hosting`
 
-Following these steps ensures that only the statically exported Next.js application from `renderer/out` is deployed to Firebase Hosting.
+Following these steps ensures that only the statically exported Next.js application from `app` is deployed to Firebase Hosting.

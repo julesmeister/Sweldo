@@ -17,6 +17,7 @@ import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
+import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 
 export default function CashAdvancesPage() {
   const [cashAdvances, setCashAdvances] = useState<CashAdvance[]>([]);
@@ -24,6 +25,7 @@ export default function CashAdvancesPage() {
   const [selectedCashAdvance, setSelectedCashAdvance] =
     useState<CashAdvance | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [clickPosition, setClickPosition] = useState<{
     top: number;
     left: number;
@@ -43,7 +45,7 @@ export default function CashAdvancesPage() {
 
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const { dbPath } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
   const cashAdvanceModel = useMemo(() => {
@@ -327,6 +329,22 @@ export default function CashAdvancesPage() {
     }
   }
 
+  // Add effect to load all employees
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath]);
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -344,9 +362,16 @@ export default function CashAdvancesPage() {
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                      {selectedEmployeeId
-                        ? employee?.name + "'s Cash Advances"
-                        : "Cash Advances"}
+                      {selectedEmployeeId ? (
+                        <EmployeeDropdown
+                          employees={employees}
+                          selectedEmployeeId={selectedEmployeeId}
+                          onSelectEmployee={setSelectedEmployeeId}
+                          labelPrefix="Cash Advances"
+                        />
+                      ) : (
+                        "Cash Advances"
+                      )}
                     </h2>
                     <div className="relative flex items-center space-x-4">
                       <button

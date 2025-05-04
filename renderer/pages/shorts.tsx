@@ -15,12 +15,14 @@ import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 
 export default function ShortsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedShort, setSelectedShort] = useState<Short | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [clickPosition, setClickPosition] = useState<{
     top: number;
     left: number;
@@ -41,7 +43,7 @@ export default function ShortsPage() {
 
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const { dbPath } = useSettingsStore();
-  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
   const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
   const shortModel = useMemo(() => {
@@ -96,6 +98,22 @@ export default function ShortsPage() {
       mounted = false;
     };
   }, [selectedEmployeeId, dbPath, employeeModel, shortModel]);
+
+  // Add effect to load all employees
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath) return;
+      try {
+        const employeeModel = createEmployeeModel(dbPath);
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        setEmployees(loadedEmployees);
+      } catch (error) {
+        toast.error("Error loading employees");
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath]);
 
   const storedMonthInt = parseInt(dateContext.month, 10) + 1;
   const yearInt = parseInt(dateContext.year, 10);
@@ -292,9 +310,16 @@ export default function ShortsPage() {
                   <div className="px-6 py-4 border-b border-gray-200">
                     <div className="flex justify-between items-center mb-3">
                       <h2 className="text-lg font-medium text-gray-900">
-                        {selectedEmployeeId
-                          ? employee?.name + "'s Shorts"
-                          : "Shorts"}
+                        {selectedEmployeeId ? (
+                          <EmployeeDropdown
+                            employees={employees}
+                            selectedEmployeeId={selectedEmployeeId}
+                            onSelectEmployee={setSelectedEmployeeId}
+                            labelPrefix="Shorts"
+                          />
+                        ) : (
+                          "Shorts"
+                        )}
                       </h2>
                       <div className="flex items-center gap-2">
                         <button
