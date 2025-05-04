@@ -102,9 +102,7 @@ export default function LeavesPage() {
           setLeaves(employeeLeaves);
         }
       } catch (error: any) {
-        console.error("[LeavesPage] Error loading data:", error);
-        // Check if the error is a 'file not found' error
-        // The exact structure might vary, adjust if needed based on console logs
+        // Check if the error is a 'file not found' error (ENOENT)
         if (error.message?.includes("ENOENT")) {
           console.warn(
             "[LeavesPage] Leave file not found, treating as empty leaves."
@@ -113,7 +111,8 @@ export default function LeavesPage() {
           // Optionally, show a less alarming toast or no toast at all
           // toast.info("No leave records found for this period.");
         } else {
-          // For other errors, show a generic error message
+          // Log other types of errors
+          console.error("[LeavesPage] Error loading data:", error);
           toast.error("Failed to load leave requests. Please try again.");
         }
       } finally {

@@ -462,7 +462,7 @@ export default function StatisticsPage() {
   // Initialize settings store when component mounts
   useEffect(() => {
     if (!isInitialized) {
-      initialize();
+      initialize(null);
     }
   }, [isInitialized, initialize]);
 
