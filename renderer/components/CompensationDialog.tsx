@@ -4,7 +4,6 @@ import {
   AttendanceSettings,
   EmploymentType,
   createAttendanceSettingsModel,
-  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { Employee } from "@/renderer/model/employee";
 import { EmployeeModel } from "@/renderer/model/employee";
@@ -60,6 +59,7 @@ interface FormFieldProps {
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => void;
+  onClearAndOverride?: () => void;
   readOnly?: boolean;
   type?: "text" | "select";
   options?: { value: string; label: string }[];
@@ -75,6 +75,7 @@ const FormField: React.FC<FormFieldProps> = ({
   name,
   value,
   onChange,
+  onClearAndOverride,
   readOnly = false,
   type = "text",
   options,
@@ -105,17 +106,19 @@ const FormField: React.FC<FormFieldProps> = ({
   const isMinutesField = name.includes("Minutes");
   // Determine if this is an hours field
   const isHoursField = name.includes("Hours");
+  // Determine if this is a leave pay field
+  const isLeavePayField = name === "leavePay";
 
   // Format the value based on field type
   const formattedValue =
     typeof value === "number"
-      ? isMonetaryField
+      ? isMonetaryField && !isLeavePayField
         ? name === "overtimePay" ||
           name === "undertimeDeduction" ||
           name === "lateDeduction"
           ? Math.round(value)
           : Number(value).toFixed(2)
-        : isMinutesField || isHoursField
+        : isMinutesField || isHoursField || isLeavePayField
         ? Math.round(value)
         : value
       : value;
@@ -227,7 +230,7 @@ const FormField: React.FC<FormFieldProps> = ({
               }
             }}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldClassName}`}
-            disabled={!hasEditAccess || !manualOverride}
+            disabled={!hasEditAccess || (isComputedField && !manualOverride)}
             min="0"
             step={
               name === "overtimePay" ||
@@ -241,12 +244,14 @@ const FormField: React.FC<FormFieldProps> = ({
             <button
               onClick={(e) => {
                 e.preventDefault();
-                if (hasEditAccess && manualOverride) {
+                if (hasEditAccess && onClearAndOverride) {
+                  onClearAndOverride();
+                } else if (hasEditAccess) {
                   onChange({ target: { name, value: "0" } } as any);
                 }
               }}
               className="absolute right-2 top-1/2 -translate-y-[55%] text-gray-400 hover:text-gray-600 text-xl font-bold"
-              title="Clear value"
+              title="Clear value (enables Manual Override)"
             >
               ×
             </button>
@@ -661,7 +666,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return;
     }
 
-    const numericValue = parseFloat(value) || 0;
+    // Parse as integer for leavePay, otherwise float
+    const numericValue =
+      name === "leavePay" ? parseInt(value) || 0 : parseFloat(value) || 0;
 
     setFormData((prev) => {
       const newData = { ...prev };
@@ -763,6 +770,119 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             ? numericValue
             : value;
       }
+
+      return newData;
+    });
+  };
+
+  const handleClearAndOverride = (fieldName: keyof Compensation) => {
+    if (!hasEditAccess) {
+      toast.error("You do not have permission to edit compensation records");
+      return;
+    }
+    setFormData((prev) => {
+      // Start with previous data, set manual override, clear the target field
+      const newData: Compensation = {
+        ...prev,
+        [fieldName]: 0,
+        manualOverride: true,
+      };
+
+      // Define base values needed for recalculations
+      const dailyRate = newData.dailyRate || 0;
+      const overtimePay = newData.overtimePay || 0;
+      const nightDiffPay = newData.nightDifferentialPay || 0;
+      const holidayBonus = newData.holidayBonus || 0;
+      let lateDeduction = newData.lateDeduction || 0;
+      let undertimeDeduction = newData.undertimeDeduction || 0;
+      let totalDeductions = newData.deductions || 0;
+      let grossPay = newData.grossPay || 0;
+      let netPay = newData.netPay || 0;
+      const leavePay = newData.leavePay || 0;
+
+      // Perform recalculations based on the field that was cleared to 0
+      // This mirrors the logic in handleInputChange
+      switch (fieldName) {
+        case "overtimeMinutes":
+        case "overtimePay":
+          // If minutes were cleared, OT pay becomes 0. If pay was cleared, it's already 0.
+          newData.overtimePay = 0;
+          grossPay =
+            dailyRate +
+            (newData.overtimePay || 0) +
+            nightDiffPay +
+            holidayBonus;
+          netPay = grossPay - totalDeductions + leavePay;
+          break;
+        case "undertimeMinutes":
+        case "undertimeDeduction":
+          // If minutes were cleared, deduction becomes 0. If deduction was cleared, it's already 0.
+          newData.undertimeDeduction = 0;
+          totalDeductions = (newData.undertimeDeduction || 0) + lateDeduction;
+          netPay = grossPay - totalDeductions + leavePay;
+          break;
+        case "lateMinutes":
+        case "lateDeduction":
+          // If minutes were cleared, deduction becomes 0. If deduction was cleared, it's already 0.
+          newData.lateDeduction = 0;
+          totalDeductions = undertimeDeduction + (newData.lateDeduction || 0);
+          netPay = grossPay - totalDeductions + leavePay;
+          break;
+        case "nightDifferentialHours":
+        case "nightDifferentialPay":
+          // If hours were cleared, pay becomes 0. If pay was cleared, it's already 0.
+          newData.nightDifferentialPay = 0;
+          grossPay =
+            dailyRate +
+            overtimePay +
+            (newData.nightDifferentialPay || 0) +
+            holidayBonus;
+          netPay = grossPay - totalDeductions + leavePay;
+          break;
+        case "holidayBonus":
+          // holidayBonus is already 0 in newData
+          grossPay =
+            dailyRate +
+            overtimePay +
+            nightDiffPay +
+            (newData.holidayBonus || 0);
+          netPay = grossPay - totalDeductions + leavePay;
+          break;
+        case "leavePay":
+          // leavePay is already 0 in newData
+          netPay = grossPay - totalDeductions + (newData.leavePay || 0);
+          break;
+        case "deductions":
+          // deductions is already 0 in newData
+          netPay = grossPay - (newData.deductions || 0) + leavePay;
+          // Note: Clearing total deductions doesn't auto-clear individual late/undertime deductions
+          break;
+        case "grossPay":
+          // grossPay is already 0 in newData
+          netPay = (newData.grossPay || 0) - totalDeductions + leavePay;
+          break;
+        case "netPay":
+          // netPay is already 0 in newData
+          // Recalculate grossPay based on cleared netPay
+          grossPay = (newData.netPay || 0) + totalDeductions - leavePay;
+          break;
+        // No recalculation needed if other fields like notes, dayType are cleared (though they don't have clear buttons)
+      }
+
+      // Update the calculated fields in newData, ensuring non-negativity
+      newData.grossPay = Math.max(0, grossPay);
+      newData.deductions = Math.max(0, totalDeductions);
+      newData.netPay = Math.max(0, netPay);
+      // Ensure individual deductions are also non-negative (if they were recalculated)
+      newData.lateDeduction = Math.max(0, newData.lateDeduction || 0);
+      newData.undertimeDeduction = Math.max(0, newData.undertimeDeduction || 0);
+      newData.overtimePay = Math.max(0, newData.overtimePay || 0);
+      newData.nightDifferentialPay = Math.max(
+        0,
+        newData.nightDifferentialPay || 0
+      );
+      newData.holidayBonus = Math.max(0, newData.holidayBonus || 0);
+      newData.leavePay = Math.max(0, newData.leavePay || 0);
 
       return newData;
     });
@@ -894,7 +1014,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   Reset
                 </button>
               )}
-              {attendanceSettings && (
+              {attendanceSettings && scheduleInfo && (
                 <ComputationBreakdownButton
                   breakdown={
                     formData.manualOverride
@@ -918,22 +1038,22 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                           netPay: formData.netPay || 0,
                           details: {
                             hourlyRate:
-                              parseFloat(
-                                (
-                                  formData.dailyRate ||
-                                  employee?.dailyRate ||
-                                  0
-                                ).toString()
-                              ) / 8,
-                            overtimeHourlyRate:
                               (parseFloat(
                                 (
                                   formData.dailyRate ||
                                   employee?.dailyRate ||
                                   0
                                 ).toString()
-                              ) /
-                                8) *
+                              ) || 0) / (employmentType?.hoursOfWork || 8),
+                            overtimeHourlyRate:
+                              ((parseFloat(
+                                (
+                                  formData.dailyRate ||
+                                  employee?.dailyRate ||
+                                  0
+                                ).toString()
+                              ) || 0) /
+                                (employmentType?.hoursOfWork || 8)) *
                               (attendanceSettings.overtimeHourlyMultiplier ||
                                 1.25),
                             overtimeMinutes: formData.overtimeMinutes || 0,
@@ -952,48 +1072,23 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                               0,
                           },
                         }
-                      : getPaymentBreakdown(
-                          calculateTimeMetrics(
-                            createTimeObjects(
-                              year,
-                              month,
-                              day,
-                              timeIn || "00:00",
-                              timeOut || "00:00",
-                              employmentType
-                            ).actual,
-                            createTimeObjects(
-                              year,
-                              month,
-                              day,
-                              timeIn || "00:00",
-                              timeOut || "00:00",
-                              employmentType
-                            ).scheduled,
+                      : (() => {
+                          const { actual, scheduled } = createTimeObjects(
+                            year,
+                            month,
+                            day,
+                            timeIn || "00:00",
+                            timeOut || "00:00",
+                            scheduleInfo.schedule
+                          );
+                          const timeMetrics = calculateTimeMetrics(
+                            actual,
+                            scheduled,
                             attendanceSettings,
                             employmentType
-                          ),
-                          calculatePayMetrics(
-                            calculateTimeMetrics(
-                              createTimeObjects(
-                                year,
-                                month,
-                                day,
-                                timeIn || "00:00",
-                                timeOut || "00:00",
-                                employmentType
-                              ).actual,
-                              createTimeObjects(
-                                year,
-                                month,
-                                day,
-                                timeIn || "00:00",
-                                timeOut || "00:00",
-                                employmentType
-                              ).scheduled,
-                              attendanceSettings,
-                              employmentType
-                            ),
+                          );
+                          const payMetrics = calculatePayMetrics(
+                            timeMetrics,
                             attendanceSettings,
                             parseFloat(
                               (
@@ -1002,45 +1097,26 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                                 0
                               ).toString()
                             ),
-                            holidays.find((h) =>
-                              isHolidayDate(new Date(year, month - 1, day), h)
-                            ),
-                            createTimeObjects(
-                              year,
-                              month,
-                              day,
-                              timeIn || "00:00",
-                              timeOut || "00:00",
-                              employmentType
-                            ).actual.timeIn,
-                            createTimeObjects(
-                              year,
-                              month,
-                              day,
-                              timeIn || "00:00",
-                              timeOut || "00:00",
-                              employmentType
-                            ).actual.timeOut,
-                            createTimeObjects(
-                              year,
-                              month,
-                              day,
-                              timeIn || "00:00",
-                              timeOut || "00:00",
-                              employmentType
-                            ).scheduled,
+                            holidays.find((h) => isHolidayDate(date, h)),
+                            actual.timeIn,
+                            actual.timeOut,
+                            scheduled,
                             employmentType
-                          ),
-                          attendanceSettings,
-                          parseFloat(
-                            (
-                              formData.dailyRate ||
-                              employee?.dailyRate ||
-                              0
-                            ).toString()
-                          ),
-                          employmentType
-                        )
+                          );
+                          return getPaymentBreakdown(
+                            timeMetrics,
+                            payMetrics,
+                            attendanceSettings,
+                            parseFloat(
+                              (
+                                formData.dailyRate ||
+                                employee?.dailyRate ||
+                                0
+                              ).toString()
+                            ),
+                            employmentType
+                          );
+                        })()
                   }
                   attendanceSettings={attendanceSettings}
                   holiday={holidays.find((h) =>
@@ -1108,6 +1184,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="overtimeMinutes"
                 value={formData.overtimeMinutes || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("overtimeMinutes")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1118,6 +1197,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="overtimePay"
                 value={formData.overtimePay || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("overtimePay")}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1128,6 +1208,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="undertimeMinutes"
                 value={formData.undertimeMinutes || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("undertimeMinutes")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1138,6 +1221,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="undertimeDeduction"
                 value={formData.undertimeDeduction || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("undertimeDeduction")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1148,6 +1234,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="lateMinutes"
                 value={formData.lateMinutes || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("lateMinutes")}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1158,6 +1245,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="lateDeduction"
                 value={formData.lateDeduction || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("lateDeduction")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1168,6 +1258,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="nightDifferentialHours"
                 value={formData.nightDifferentialHours || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("nightDifferentialHours")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1179,6 +1272,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="nightDifferentialPay"
                 value={formData.nightDifferentialPay || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("nightDifferentialPay")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1189,6 +1285,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="holidayBonus"
                 value={formData.holidayBonus || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() =>
+                  handleClearAndOverride("holidayBonus")
+                }
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1199,7 +1298,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="leavePay"
                 value={formData.leavePay || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("leavePay")}
                 hasEditAccess={hasEditAccess}
+                manualOverride={formData.manualOverride}
+                isComputedField={true}
               />
 
               <FormField
@@ -1207,6 +1309,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="deductions"
                 value={formData.deductions || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("deductions")}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1217,6 +1320,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="grossPay"
                 value={formData.grossPay || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("grossPay")}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
@@ -1227,6 +1331,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 name="netPay"
                 value={formData.netPay || 0}
                 onChange={handleInputChange}
+                onClearAndOverride={() => handleClearAndOverride("netPay")}
                 manualOverride={formData.manualOverride}
                 isComputedField={true}
                 hasEditAccess={hasEditAccess}
