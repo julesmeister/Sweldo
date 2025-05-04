@@ -1516,11 +1516,10 @@ export async function migrateBackupCsvToJson(
     // First, try to process specific test file in backups directory
     try {
       const testBackupPath = `${dbPath}/backups/2025_4_attendance_backup.csv`;
-    
+
       const testBackupExists = await window.electron.fileExists(testBackupPath);
 
       if (testBackupExists) {
-      
         onProgress?.(`Found test backup file: ${testBackupPath}`);
 
         const testEmployeePath = `${dbPath}/backups`;
@@ -1550,7 +1549,6 @@ export async function migrateBackupCsvToJson(
 
     // Now proceed with normal processing
     const employeeDirs = await window.electron.readDir(attendancesBasePath);
-   
 
     for (const dirEntry of employeeDirs) {
       if (dirEntry.isDirectory) {
@@ -1585,7 +1583,6 @@ export async function migrateBackupCsvToJson(
                 /(\d+)_(\d+)_attendance_backup\.csv/
               );
               if (!fileNameMatch) {
-                
                 onProgress?.(
                   `  - Skipping ${backupCsvFileName}: Invalid filename format`
                 );
@@ -1606,7 +1603,6 @@ export async function migrateBackupCsvToJson(
               );
 
               if (backupExists) {
-               
                 onProgress?.(
                   `  - Processing backup file: ${backupCsvFileName}`
                 );
@@ -1654,7 +1650,6 @@ export async function migrateBackupCsvToJson(
     }
 
     if (totalFilesProcessed === 0) {
-
       onProgress?.(
         `WARNING: No backup files were processed. Please check file paths and permissions.`
       );

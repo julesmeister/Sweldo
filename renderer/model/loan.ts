@@ -305,9 +305,13 @@ export class LoanModel {
           );
           return loans;
         } catch (error: any) {
-          if (error.code === "ENOENT" || error instanceof SyntaxError) {
+          if (
+            error.code === "ENOENT" ||
+            error instanceof SyntaxError ||
+            (error instanceof Error && error.message.includes("ENOENT"))
+          ) {
             console.log(
-              `[LoanModel] No JSON file found or invalid JSON. Trying CSV.`
+              `[LoanModel] No JSON file found or invalid JSON for ${year}-${month}. Trying CSV.`
             );
             // Fall through to CSV loading
           } else {
