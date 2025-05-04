@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld("electron", {
       };
     }
   ) => ipcRenderer.invoke("pdf:generateLandscape", payrolls, options),
+  generateSchedulePdf: (data: any) =>
+    ipcRenderer.invoke("generate-schedule-pdf", data),
   readDir: (dirPath: string) => ipcRenderer.invoke("fs:readdir", dirPath),
 });
 
