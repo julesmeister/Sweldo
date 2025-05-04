@@ -651,7 +651,11 @@ const TimesheetPage: React.FC = () => {
   );
 
   // Get schedule info for all days at once
-  const scheduleMap = useSchedules(employmentTypeObj, dates);
+  const scheduleMap = useSchedules(
+    attendanceSettingsModel,
+    employmentTypeObj,
+    dates
+  );
 
   // --- Handlers for Single Edit Mode ---
   const handleStartEdit = (cellKey: string) => {

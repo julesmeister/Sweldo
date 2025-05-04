@@ -7,10 +7,9 @@ import {
   AttendanceSettings,
   EmploymentType,
   createAttendanceSettingsModel,
-  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
-import { Attendance } from "../model/attendance_old";
+import { Attendance } from "../model/attendance";
 import { toast } from "sonner";
 
 interface TimeEditDialogProps {
@@ -59,13 +58,16 @@ export const TimeEditDialog: React.FC<TimeEditDialogProps> = ({
       try {
         const settingsModel = createAttendanceSettingsModel(dbPath);
         const employmentTypes = await settingsModel.loadTimeSettings();
-        const employmentType = employmentTypes.find(
+        const employmentTypeData = employmentTypes.find(
           (type) => type.type === log.employmentType
         );
 
-        if (employmentType) {
+        if (employmentTypeData) {
           const date = new Date(log.year, log.month - 1, parseInt(log.day));
-          const schedule = getScheduleForDate(employmentType, date);
+          const schedule = await settingsModel.getScheduleForDate(
+            employmentTypeData,
+            date
+          );
 
           if (schedule && !schedule.isOff) {
             setScheduledTimeIn(schedule.timeIn);

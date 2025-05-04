@@ -1,57 +1,40 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { PayrollSummary } from "@/renderer/components/PayrollSummary";
-import { PayrollList } from "@/renderer/components/PayrollList";
-import { useSettingsStore } from "@/renderer/stores/settingsStore";
-import { useLoadingStore } from "@/renderer/stores/loadingStore";
-import { useEmployeeStore } from "@/renderer/stores/employeeStore";
-import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
-import { Payroll, PayrollSummaryModel } from "@/renderer/model/payroll";
-import { DateRangePicker } from "@/renderer/components/DateRangePicker";
-import { DeductionsDialog } from "@/renderer/components/DeductionsDialog";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  Fragment,
+} from "react";
+import path from "path";
 import { usePathname, useRouter } from "next/navigation";
-import { createEmployeeModel, Employee } from "@/renderer/model/employee";
-import RootLayout from "@/renderer/components/layout";
-import AddButton from "@/renderer/components/magicui/add-button";
-import { useAuthStore } from "@/renderer/stores/authStore";
+import { toast } from "sonner";
 import {
   IoShieldOutline,
   IoInformationCircle,
   IoPrintOutline,
   IoWarningOutline,
 } from "react-icons/io5";
-import { toast } from "sonner";
-import path from "path";
-import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
-import { usePayrollDelete } from "@/renderer/hooks/usePayrollDelete";
-import { usePayrollStatistics } from "@/renderer/hooks/usePayrollStatistics";
-import { createStatisticsModel } from "@/renderer/model/statistics";
-import { PDFGeneratorOptions } from "@/renderer/types/payroll";
+import RootLayout from "../components/layout";
+import { useSettingsStore } from "../stores/settingsStore";
+import { useLoadingStore } from "../stores/loadingStore";
+import { useEmployeeStore } from "../stores/employeeStore";
+import { useDateRangeStore } from "../stores/dateRangeStore";
+import { useAuthStore } from "../stores/authStore";
+import { Employee, createEmployeeModel } from "../model/employee";
+import { Payroll, PayrollSummaryModel } from "../model/payroll";
+import { PayrollList } from "../components/PayrollList";
+import { PayrollSummary } from "../components/PayrollSummary";
+import { DeductionsDialog } from "../components/DeductionsDialog";
+import AddButton from "../components/magicui/add-button";
+import { DateRangePicker } from "../components/DateRangePicker";
+import { usePayrollDelete } from "../hooks/usePayrollDelete";
+import { usePayrollStatistics } from "../hooks/usePayrollStatistics";
+import { createStatisticsModel } from "../model/statistics";
 import { Tooltip } from "@/renderer/components/Tooltip";
-
-// Helper function for safe localStorage access
-const safeStorage = {
-  getItem: (key: string): string | null => {
-    try {
-      if (typeof window !== "undefined") {
-        return localStorage.getItem(key);
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): void => {
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(key, value);
-      }
-    } catch (e) {
-      // Removed console.warn
-    }
-  },
-};
+import { usePayrollPDFGeneration } from "../hooks/usePayrollPDFGeneration";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "../lib/utils";
 
 export default function PayrollPage() {
   const { hasAccess } = useAuthStore();
@@ -76,18 +59,20 @@ export default function PayrollPage() {
   const [storedYear, setStoredYear] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [potentialPayrollCount, setPotentialPayrollCount] = useState(0);
   const { deletePayroll, isDeleting } = usePayrollDelete({
     dbPath,
     selectedEmployeeId: selectedEmployeeId!,
     onPayrollDeleted: () => setRefreshPayrolls(true),
   });
+  const { isGeneratingStatistics, updateMonthStatistics } =
+    usePayrollStatistics();
   const {
-    isGeneratingStatistics,
-    generatePayrollStatistics,
-    updateMonthStatistics,
-  } = usePayrollStatistics();
+    isGeneratingPDF,
+    potentialPayrollCount,
+    calculatePotentialPayrollCount,
+    generatePayslipsForAll,
+    generateSummaryForAll,
+  } = usePayrollPDFGeneration({ dbPath });
   const [showTooltip, setShowTooltip] = useState(false);
   const [showSummaryTooltip, setShowSummaryTooltip] = useState(false);
   const [showPayslipsTooltip, setShowPayslipsTooltip] = useState(false);
@@ -215,14 +200,15 @@ export default function PayrollPage() {
   // Remove the date range initialization effects and combine them
   useEffect(() => {
     if (!storedMonth || !storedYear) {
-      const month = safeStorage.getItem("selectedMonth");
+      // Use utility functions
+      const month = safeLocalStorageGetItem("selectedMonth");
       const year =
-        safeStorage.getItem("selectedYear") ||
+        safeLocalStorageGetItem("selectedYear") ||
         new Date().getFullYear().toString();
+      safeLocalStorageSetItem("selectedYear", year); // Set year using util
 
       if (month) setStoredMonth(month);
-      setStoredYear(year);
-      safeStorage.setItem("selectedYear", year);
+      if (year) setStoredYear(year);
 
       if (month && year && !dateRange.startDate) {
         const monthNum = parseInt(month, 10);
@@ -334,651 +320,7 @@ export default function PayrollPage() {
     router.push(path);
   };
 
-  const handleGeneratePayslipsForAll = async () => {
-    if (!hasAccess("GENERATE_REPORTS")) {
-      toast.error("You don't have permission to generate reports");
-      return;
-    }
-
-    if (!dateRange.startDate || !dateRange.endDate) {
-      toast.error("Please select a date range");
-      return;
-    }
-
-    try {
-      setIsGeneratingPDF(true);
-
-      // Load all active employees
-      const employeeModel = createEmployeeModel(dbPath);
-      const allEmployees = await employeeModel.loadEmployees();
-      const activeEmployees = allEmployees.filter((e) => e.status === "active");
-
-      if (activeEmployees.length === 0) {
-        toast.error("No active employees found");
-        return;
-      }
-
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-
-      // Get all months between start and end date
-      const months: { month: number; year: number }[] = [];
-      const currentDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        1
-      );
-      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-
-      while (currentDate <= endMonth) {
-        months.push({
-          month: currentDate.getMonth() + 1,
-          year: currentDate.getFullYear(),
-        });
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-
-      // Load and collect payroll data for each active employee
-      const payrollPromises = activeEmployees.map(async (employee) => {
-        try {
-          // Load payrolls for all relevant months
-          const monthlyPayrollPromises = months.map(({ month, year }) =>
-            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
-          );
-
-          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
-          const employeePayrolls = monthlyPayrolls.flat();
-
-          // Filter payrolls within date range
-          return employeePayrolls
-            .filter((summary) => {
-              const summaryStartDate = new Date(summary.startDate);
-              const summaryEndDate = new Date(summary.endDate);
-
-              // Normalize all dates to start of day in local timezone
-              const normalizedStartDate = new Date(startDate);
-              normalizedStartDate.setHours(0, 0, 0, 0);
-
-              const normalizedEndDate = new Date(endDate);
-              normalizedEndDate.setHours(23, 59, 59, 999);
-
-              const normalizedSummaryStart = new Date(summaryStartDate);
-              normalizedSummaryStart.setHours(0, 0, 0, 0);
-
-              const normalizedSummaryEnd = new Date(summaryEndDate);
-              normalizedSummaryEnd.setHours(23, 59, 59, 999);
-
-              return (
-                normalizedSummaryStart >= normalizedStartDate &&
-                normalizedSummaryStart <= normalizedEndDate &&
-                normalizedSummaryEnd >= normalizedStartDate &&
-                normalizedSummaryEnd <= normalizedEndDate
-              );
-            })
-            .map((summary, index) => {
-              // Create variables object for formula evaluation
-              const variables = {
-                basicPay: Number(summary.basicPay) || 0,
-                overtime: Number(summary.overtime) || 0,
-                holidayBonus: Number(summary.holidayBonus) || 0,
-                undertimeDeduction: Number(summary.undertimeDeduction) || 0,
-                lateDeduction: Number(summary.lateDeduction) || 0,
-                nightDifferentialPay: Number(summary.nightDifferentialPay) || 0,
-                sss: Number(summary.deductions.sss) || 0,
-                philHealth: Number(summary.deductions.philHealth) || 0,
-                pagIbig: Number(summary.deductions.pagIbig) || 0,
-                cashAdvanceDeductions:
-                  Number(summary.deductions.cashAdvanceDeductions) || 0,
-                shorts: Number(summary.deductions.shortDeductions) || 0,
-                others: Number(summary.deductions.others) || 0,
-              };
-
-              // Get settings store state
-              const settingsState = useSettingsStore.getState();
-              const { calculationSettings } = settingsState;
-
-              // Evaluate formulas
-              let grossPay = variables.basicPay;
-              let totalDeduction = 0;
-              let netPay = 0;
-
-              try {
-                if (calculationSettings?.grossPay?.formula) {
-                  // eslint-disable-next-line no-new-func
-                  const grossPayFn = new Function(
-                    ...Object.keys(variables),
-                    `return ${calculationSettings.grossPay.formula}`
-                  );
-                  grossPay = grossPayFn(...Object.values(variables));
-                }
-
-                if (calculationSettings?.totalDeductions?.formula) {
-                  // eslint-disable-next-line no-new-func
-                  const totalDeductionsFn = new Function(
-                    ...Object.keys(variables),
-                    `return ${calculationSettings.totalDeductions.formula}`
-                  );
-                  totalDeduction = totalDeductionsFn(
-                    ...Object.values(variables)
-                  );
-                } else {
-                  // Fallback to sum of all deductions
-                  totalDeduction =
-                    variables.sss +
-                    variables.philHealth +
-                    variables.pagIbig +
-                    variables.cashAdvanceDeductions +
-                    variables.shorts +
-                    variables.others;
-                }
-
-                if (calculationSettings?.netPay?.formula) {
-                  const netPayVariables = {
-                    ...variables,
-                    grossPay,
-                    totalDeductions: totalDeduction,
-                  };
-                  // eslint-disable-next-line no-new-func
-                  const netPayFn = new Function(
-                    ...Object.keys(netPayVariables),
-                    `return ${calculationSettings.netPay.formula}`
-                  );
-                  netPay = netPayFn(...Object.values(netPayVariables));
-                } else {
-                  netPay = grossPay - totalDeduction;
-                }
-              } catch (error) {
-                // Fallback to basic calculations
-                grossPay =
-                  variables.basicPay +
-                  variables.overtime +
-                  variables.holidayBonus -
-                  variables.undertimeDeduction;
-                netPay = grossPay - totalDeduction;
-              }
-
-              return {
-                ...summary,
-                startDate: summary.startDate.toISOString(),
-                endDate: summary.endDate.toISOString(),
-                employeeName: employee.name,
-                daysWorked: Number(summary.daysWorked) || 15,
-                basicPay: variables.basicPay,
-                undertimeDeduction: variables.undertimeDeduction,
-                lateDeduction: variables.lateDeduction,
-                holidayBonus: variables.holidayBonus,
-                overtime: variables.overtime,
-                grossPay,
-                netPay,
-                dailyRate: Number(summary.dailyRate) || 0,
-                deductions: {
-                  sss: variables.sss,
-                  philHealth: variables.philHealth,
-                  pagIbig: variables.pagIbig,
-                  cashAdvanceDeductions: variables.cashAdvanceDeductions,
-                  others: variables.others,
-                  shortDeductions: variables.shorts,
-                  totalDeduction: totalDeduction,
-                },
-                preparedBy: preparedBy || "",
-                approvedBy: approvedBy || "",
-                payslipNumber: index + 1,
-              };
-            });
-        } catch (error) {
-          return [];
-        }
-      });
-
-      // Wait for all payroll data to be collected
-      const payrollResults = await Promise.all(payrollPromises);
-      const formattedPayrolls = payrollResults
-        .flat()
-        .filter((payroll) => payroll !== null);
-
-      // Check if there's any data to generate PDF
-      if (formattedPayrolls.length === 0) {
-        toast.error("No payroll data found for the selected date range");
-        return;
-      }
-
-      // Get the output directory path
-      const outputPath = await window.electron.getPath("documents");
-      const pdfOutputPath = path.join(outputPath, "payroll_summaries.pdf");
-
-      // Use logo from settings store
-      if (!logoPath) {
-        // Skip warning about logo path
-      }
-
-      // Get settings store state
-      const settingsState = useSettingsStore.getState();
-
-      // Generate PDF with formatted payroll summaries
-      const pdfPath = await window.electron.generatePDF(formattedPayrolls, {
-        outputPath: pdfOutputPath,
-        logoPath: logoPath || "",
-        companyName: settingsState.companyName,
-        calculationSettings: settingsState.calculationSettings,
-        dbPath: dbPath,
-      } as PDFGeneratorOptions);
-
-      // Open the generated PDF
-      await window.electron.openPath(pdfPath);
-      toast.success("PDF generated successfully!");
-
-      // Convert string dates to Date objects for statistics update
-      const payrollsForStatistics = formattedPayrolls.map((payroll) => ({
-        ...payroll,
-        startDate: new Date(payroll.startDate),
-        endDate: new Date(payroll.endDate),
-      }));
-
-      // Update statistics for each month in the range
-      for (const { month, year } of months) {
-        const monthName = new Date(year, month - 1, 1).toLocaleString(
-          "default",
-          { month: "long" }
-        );
-        await updateMonthStatistics(
-          payrollsForStatistics.filter((payroll) => {
-            const payrollMonth = payroll.startDate.getMonth() + 1;
-            const payrollYear = payroll.startDate.getFullYear();
-            return payrollMonth === month && payrollYear === year;
-          }),
-          dbPath,
-          monthName,
-          year
-        );
-      }
-    } catch (error) {
-      toast.error("Failed to generate PDF");
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
-
-  const handleGeneratePayrollSummariesPDFForAll = async () => {
-    if (!hasAccess("GENERATE_REPORTS")) {
-      toast.error("You don't have permission to generate reports");
-      return;
-    }
-
-    if (!dateRange.startDate || !dateRange.endDate) {
-      toast.error("Please select a date range");
-      return;
-    }
-
-    try {
-      setIsGeneratingPDF(true);
-
-      // Load all active employees
-      const employeeModel = createEmployeeModel(dbPath);
-      const allEmployees = await employeeModel.loadEmployees();
-      const activeEmployees = allEmployees.filter((e) => e.status === "active");
-
-      if (activeEmployees.length === 0) {
-        toast.error("No active employees found");
-        return;
-      }
-
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-
-      // Get all months between start and end date
-      const months: { month: number; year: number }[] = [];
-      const currentDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        1
-      );
-      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-
-      while (currentDate <= endMonth) {
-        months.push({
-          month: currentDate.getMonth() + 1,
-          year: currentDate.getFullYear(),
-        });
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-
-      // Load and collect payroll data for each active employee
-      const payrollPromises = activeEmployees.map(async (employee) => {
-        try {
-          // Load payrolls for all relevant months
-          const monthlyPayrollPromises = months.map(({ month, year }) =>
-            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
-          );
-
-          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
-          const employeePayrolls = monthlyPayrolls.flat();
-
-          // Filter payrolls within date range
-          return employeePayrolls
-            .filter((summary) => {
-              const summaryStartDate = new Date(summary.startDate);
-              const summaryEndDate = new Date(summary.endDate);
-
-              // Normalize all dates to start of day in local timezone
-              const normalizedStartDate = new Date(startDate);
-              normalizedStartDate.setHours(0, 0, 0, 0);
-
-              const normalizedEndDate = new Date(endDate);
-              normalizedEndDate.setHours(23, 59, 59, 999);
-
-              const normalizedSummaryStart = new Date(summaryStartDate);
-              normalizedSummaryStart.setHours(0, 0, 0, 0);
-
-              const normalizedSummaryEnd = new Date(summaryEndDate);
-              normalizedSummaryEnd.setHours(23, 59, 59, 999);
-
-              return (
-                normalizedSummaryStart >= normalizedStartDate &&
-                normalizedSummaryStart <= normalizedEndDate &&
-                normalizedSummaryEnd >= normalizedStartDate &&
-                normalizedSummaryEnd <= normalizedEndDate
-              );
-            })
-            .map((summary, index) => {
-              // Create variables object for formula evaluation
-              const variables = {
-                basicPay: Number(summary.basicPay) || 0,
-                overtime: Number(summary.overtime) || 0,
-                holidayBonus: Number(summary.holidayBonus) || 0,
-                undertimeDeduction: Number(summary.undertimeDeduction) || 0,
-                lateDeduction: Number(summary.lateDeduction) || 0,
-                nightDifferentialPay: Number(summary.nightDifferentialPay) || 0,
-                sss: Number(summary.deductions.sss) || 0,
-                philHealth: Number(summary.deductions.philHealth) || 0,
-                pagIbig: Number(summary.deductions.pagIbig) || 0,
-                cashAdvanceDeductions:
-                  Number(summary.deductions.cashAdvanceDeductions) || 0,
-                shorts: Number(summary.deductions.shortDeductions) || 0,
-                others: Number(summary.deductions.others) || 0,
-              };
-
-              // Get settings store state
-              const settingsState = useSettingsStore.getState();
-              const { calculationSettings } = settingsState;
-
-              // Evaluate formulas
-              let grossPay = variables.basicPay;
-              let totalDeduction = 0;
-              let netPay = 0;
-
-              try {
-                if (calculationSettings?.grossPay?.formula) {
-                  // eslint-disable-next-line no-new-func
-                  const grossPayFn = new Function(
-                    ...Object.keys(variables),
-                    `return ${calculationSettings.grossPay.formula}`
-                  );
-                  grossPay = grossPayFn(...Object.values(variables));
-                } else {
-                  // Fallback calculation for gross pay
-                  grossPay =
-                    variables.basicPay +
-                    variables.overtime +
-                    variables.holidayBonus +
-                    variables.nightDifferentialPay -
-                    variables.undertimeDeduction -
-                    variables.lateDeduction;
-                }
-
-                // Calculate total deductions using formula if available
-                if (calculationSettings?.totalDeductions?.formula) {
-                  const deductionVariables = {
-                    sss: variables.sss,
-                    philHealth: variables.philHealth,
-                    pagIbig: variables.pagIbig,
-                    cashAdvanceDeductions: variables.cashAdvanceDeductions,
-                    others: variables.shorts,
-                    lateDeduction: variables.lateDeduction,
-                    undertimeDeduction: variables.undertimeDeduction,
-                  };
-
-                  // eslint-disable-next-line no-new-func
-                  const totalDeductionsFn = new Function(
-                    ...Object.keys(deductionVariables),
-                    `return ${calculationSettings.totalDeductions.formula}`
-                  );
-                  totalDeduction = totalDeductionsFn(
-                    ...Object.values(deductionVariables)
-                  );
-                } else {
-                  // Fallback to sum of all deductions
-                  totalDeduction =
-                    variables.sss +
-                    variables.philHealth +
-                    variables.pagIbig +
-                    variables.cashAdvanceDeductions +
-                    variables.shorts +
-                    variables.lateDeduction +
-                    variables.undertimeDeduction;
-                }
-
-                // Calculate net pay using formula if available
-                if (calculationSettings?.netPay?.formula) {
-                  const netPayVariables = {
-                    ...variables,
-                    grossPay,
-                    totalDeductions: totalDeduction,
-                  };
-                  // eslint-disable-next-line no-new-func
-                  const netPayFn = new Function(
-                    ...Object.keys(netPayVariables),
-                    `return ${calculationSettings.netPay.formula}`
-                  );
-                  netPay = netPayFn(...Object.values(netPayVariables));
-                } else {
-                  netPay = grossPay - totalDeduction;
-                }
-              } catch (error) {
-                // Fallback to basic calculations
-                grossPay =
-                  variables.basicPay +
-                  variables.overtime +
-                  variables.holidayBonus -
-                  variables.undertimeDeduction;
-                netPay = grossPay - totalDeduction;
-              }
-
-              return {
-                ...summary,
-                startDate: summary.startDate.toISOString(),
-                endDate: summary.endDate.toISOString(),
-                employeeName: employee.name,
-                daysWorked: Number(summary.daysWorked) || 15,
-                basicPay: variables.basicPay,
-                undertimeDeduction: variables.undertimeDeduction,
-                lateDeduction: variables.lateDeduction,
-                holidayBonus: variables.holidayBonus,
-                overtime: variables.overtime,
-                grossPay,
-                netPay,
-                dailyRate: Number(summary.dailyRate) || 0,
-                deductions: {
-                  sss: variables.sss,
-                  philHealth: variables.philHealth,
-                  pagIbig: variables.pagIbig,
-                  cashAdvanceDeductions: variables.cashAdvanceDeductions,
-                  others: variables.others,
-                  shortDeductions: variables.shorts,
-                  totalDeduction: totalDeduction,
-                },
-                preparedBy: preparedBy || "",
-                approvedBy: approvedBy || "",
-                payslipNumber: index + 1,
-              };
-            });
-        } catch (error) {
-          return [];
-        }
-      });
-
-      // Wait for all payroll data to be collected
-      const payrollResults = await Promise.all(payrollPromises);
-      const formattedPayrolls = payrollResults
-        .flat()
-        .filter((payroll) => payroll !== null);
-
-      // Check if there's any data to generate PDF
-      if (formattedPayrolls.length === 0) {
-        toast.error("No payroll data found for the selected date range");
-        return;
-      }
-
-      // Get the output directory path
-      const outputPath = await window.electron.getPath("documents");
-      const pdfOutputPath = path.join(
-        outputPath,
-        "payroll_summaries_landscape.pdf"
-      );
-
-      // Get settings store state
-      const settingsState = useSettingsStore.getState();
-
-      // Generate PDF with formatted payroll summaries
-      const pdfPath = await window.electron.generatePDFLandscape(
-        formattedPayrolls,
-        {
-          outputPath: pdfOutputPath,
-          logoPath: logoPath || "",
-          companyName: settingsState.companyName,
-          columnColors: settingsState.columnColors,
-          calculationSettings: settingsState.calculationSettings,
-          dbPath: dbPath,
-        }
-      );
-
-      // Open the generated PDF
-      await window.electron.openPath(pdfPath);
-      toast.success("PDF generated successfully!");
-
-      // Convert string dates to Date objects for statistics update
-      const payrollsForStatistics = formattedPayrolls.map((payroll) => ({
-        ...payroll,
-        startDate: new Date(payroll.startDate),
-        endDate: new Date(payroll.endDate),
-      }));
-
-      // Update statistics for each month in the range
-      for (const { month, year } of months) {
-        const monthName = new Date(year, month - 1, 1).toLocaleString(
-          "default",
-          { month: "long" }
-        );
-        await updateMonthStatistics(
-          payrollsForStatistics.filter((payroll) => {
-            const payrollMonth = payroll.startDate.getMonth() + 1;
-            const payrollYear = payroll.startDate.getFullYear();
-            return payrollMonth === month && payrollYear === year;
-          }),
-          dbPath,
-          monthName,
-          year
-        );
-      }
-    } catch (error) {
-      toast.error("Failed to generate PDF");
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
-
-  // Add a function to calculate potential payroll count
-  const calculatePotentialPayrollCount = useCallback(async () => {
-    if (!dateRange.startDate || !dateRange.endDate || !dbPath) {
-      setPotentialPayrollCount(0);
-      return;
-    }
-
-    try {
-      // Load all active employees
-      const employeeModel = createEmployeeModel(dbPath);
-      const allEmployees = await employeeModel.loadEmployees();
-      const activeEmployees = allEmployees.filter((e) => e.status === "active");
-
-      if (activeEmployees.length === 0) {
-        setPotentialPayrollCount(0);
-        return;
-      }
-
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-
-      // Get all months between start and end date
-      const months: { month: number; year: number }[] = [];
-      const currentDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        1
-      );
-      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-
-      while (currentDate <= endMonth) {
-        months.push({
-          month: currentDate.getMonth() + 1,
-          year: currentDate.getFullYear(),
-        });
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-
-      // Load and collect payroll data for each active employee
-      const payrollPromises = activeEmployees.map(async (employee) => {
-        try {
-          // Load payrolls for all relevant months
-          const monthlyPayrollPromises = months.map(({ month, year }) =>
-            Payroll.loadPayrollSummaries(dbPath, employee.id, year, month)
-          );
-
-          const monthlyPayrolls = await Promise.all(monthlyPayrollPromises);
-          const employeePayrolls = monthlyPayrolls.flat();
-
-          // Filter payrolls that exactly fit within date range
-          const filteredPayrolls = employeePayrolls.filter((summary) => {
-            const summaryStartDate = new Date(summary.startDate);
-            const summaryEndDate = new Date(summary.endDate);
-
-            // Normalize all dates to start of day in local timezone
-            const normalizedStartDate = new Date(startDate);
-            normalizedStartDate.setHours(0, 0, 0, 0);
-
-            const normalizedEndDate = new Date(endDate);
-            normalizedEndDate.setHours(23, 59, 59, 999);
-
-            const normalizedSummaryStart = new Date(summaryStartDate);
-            normalizedSummaryStart.setHours(0, 0, 0, 0);
-
-            const normalizedSummaryEnd = new Date(summaryEndDate);
-            normalizedSummaryEnd.setHours(23, 59, 59, 999);
-
-            // Check if both start and end dates are within the selected range
-            return (
-              normalizedSummaryStart >= normalizedStartDate &&
-              normalizedSummaryStart <= normalizedEndDate &&
-              normalizedSummaryEnd >= normalizedStartDate &&
-              normalizedSummaryEnd <= normalizedEndDate
-            );
-          });
-
-          return filteredPayrolls;
-        } catch (error) {
-          return [];
-        }
-      });
-
-      // Wait for all payroll data to be collected
-      const payrollResults = await Promise.all(payrollPromises);
-      const totalPayrolls = payrollResults.flat().length;
-
-      setPotentialPayrollCount(totalPayrolls);
-    } catch (error) {
-      setPotentialPayrollCount(0);
-    }
-  }, [dbPath, dateRange]);
-
-  // Call the calculation function when date range changes
+  // Call the calculation function from the hook when date range changes
   useEffect(() => {
     calculatePotentialPayrollCount();
   }, [calculatePotentialPayrollCount, dateRange]);
@@ -1172,8 +514,9 @@ export default function PayrollPage() {
                     </div>
                     <div className="flex gap-4">
                       <button
-                        onClick={handleGeneratePayslipsForAll}
-                        className="h-[42px] px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 relative"
+                        onClick={generatePayslipsForAll}
+                        disabled={isGeneratingPDF}
+                        className="h-[42px] px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 relative"
                         onMouseEnter={() => setShowPayslipsTooltip(true)}
                         onMouseLeave={() => setShowPayslipsTooltip(false)}
                       >
@@ -1228,8 +571,9 @@ export default function PayrollPage() {
                       </button>
 
                       <button
-                        onClick={handleGeneratePayrollSummariesPDFForAll}
-                        className="h-[42px] px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2 relative"
+                        onClick={generateSummaryForAll}
+                        disabled={isGeneratingPDF}
+                        className="h-[42px] px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2 relative"
                         onMouseEnter={() => setShowSummaryTooltip(true)}
                         onMouseLeave={() => setShowSummaryTooltip(false)}
                       >

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 // Define the calculation settings structure separately
-interface CalculationSettings {
+export interface CalculationSettings {
   grossPay?: { formula: string; description: string };
   others?: { formula: string; description: string };
   totalDeductions?: { formula: string; description: string };

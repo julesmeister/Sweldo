@@ -52,7 +52,6 @@ export function processTimeEntry(
         year,
         timeIn: null,
         timeOut: null,
-        alternativeTimeIns: [],
       },
     };
   }
@@ -75,31 +74,11 @@ export function processTimeEntry(
   let schedule = null;
   if (employmentType) {
     const date = new Date(year, month - 1, dayIndex + 1);
-    const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
-    const dateStr = `${yearMonth}-${String(dayIndex + 1).padStart(2, "0")}`;
+    // const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+    // const dateStr = `${yearMonth}-${String(dayIndex + 1).padStart(2, "0")}`;
 
-    if (isTargetEmployee) {
-      console.log("\nSchedule Lookup:");
-      console.log("Looking for date:", dateStr);
-      console.log("In year-month:", yearMonth);
-      console.log("Employment type:", employmentType.type);
-      console.log("Has monthSchedules:", !!employmentType.monthSchedules);
-      if (employmentType.monthSchedules) {
-        console.log(
-          "Available months:",
-          Object.keys(employmentType.monthSchedules)
-        );
-        if (employmentType.monthSchedules[yearMonth]) {
-          console.log(
-            "Available dates for",
-            yearMonth + ":",
-            Object.keys(employmentType.monthSchedules[yearMonth])
-          );
-        }
-      }
-    }
-
-    // First check month-specific schedule
+    // Remove the check for month-specific schedule here
+    /*
     if (
       employmentType.monthSchedules &&
       employmentType.monthSchedules[yearMonth] &&
@@ -116,32 +95,33 @@ export function processTimeEntry(
       schedule = {
         timeIn: monthSchedule.timeIn,
         timeOut: monthSchedule.timeOut,
-        dayOfWeek: date.getDay() || 7,
+        dayOfWeek: date.getDay() || 7, // dayOfWeek is not in DailySchedule, use date.getDay()
       };
     } else {
-      // Fall back to weekly schedule
-      const dayOfWeek = date.getDay();
-      const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+    */
+    // Fall back to weekly schedule directly
+    const dayOfWeek = date.getDay();
+    const scheduleDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Use 7 for Sunday
 
-      if (isTargetEmployee) {
-        console.log("No month-specific schedule found for", dateStr);
-        console.log("Falling back to weekly schedule");
-        console.log("Day of week:", dayOfWeek);
-        console.log("Schedule day:", scheduleDay);
-        console.log("Weekly schedules:", employmentType.schedules);
-      }
-
-      const weeklySchedule = employmentType.schedules?.find(
-        (s) => s.dayOfWeek === scheduleDay
-      );
-      if (weeklySchedule) {
-        schedule = weeklySchedule;
-      }
-
-      if (isTargetEmployee) {
-        console.log("Using weekly schedule:", schedule);
-      }
+    if (isTargetEmployee) {
+      // console.log("No month-specific schedule found for", dateStr);
+      console.log("Using weekly schedule lookup");
+      console.log("Day of week (0=Sun):", dayOfWeek);
+      console.log("Schedule day (1=Mon, 7=Sun):", scheduleDay);
+      console.log("Weekly schedules defined:", employmentType.schedules);
     }
+
+    const weeklySchedule = employmentType.schedules?.find(
+      (s) => s.dayOfWeek === scheduleDay
+    );
+    if (weeklySchedule) {
+      schedule = weeklySchedule;
+    }
+
+    if (isTargetEmployee) {
+      console.log("Found weekly schedule:", schedule);
+    }
+    // }
   }
 
   // Parse times from current cell and adjacent days
@@ -203,7 +183,6 @@ export function processTimeEntry(
           dayOfWeek: schedule.dayOfWeek,
         }
       : null,
-    alternativeTimeIns: alternativeTimes,
   };
 
   // Create missing time log if needed

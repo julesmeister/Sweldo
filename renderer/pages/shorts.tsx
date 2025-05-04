@@ -233,7 +233,6 @@ export default function ShortsPage() {
         // Create new short
         await shortModel.createShort({
           ...data,
-          id: crypto.randomUUID(),
           employeeId: selectedEmployeeId!,
           date: data.date,
         });

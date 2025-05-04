@@ -58,6 +58,8 @@ export interface PDFGeneratorOptions {
       description: string; // e.g., "Gross pay minus total deductions"
     };
   };
+  preparedBy?: string;
+  approvedBy?: string;
 }
 
 export interface PayrollSummaryModel {

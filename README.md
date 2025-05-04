@@ -12,6 +12,39 @@ This README documents the structure, setup, build process, and key desktop-speci
 *   **State Management:** [Zustand](https://github.com/pmndrs/zustand)
 *   **UI Components:** [shadcn/ui](https://ui.shadcn.com/) (likely, based on project structure)
 
+## PostCSS and Tailwind CSS Configuration
+
+⚠️ **IMPORTANT**: This project has specific requirements for PostCSS and Tailwind CSS configuration.
+
+### Known Issues
+
+1. **Do NOT create custom PostCSS configuration files**:
+   - Creating a custom `postcss.config.js` in the root or renderer directory can break Tailwind CSS processing.
+   - The project uses the built-in PostCSS and Tailwind configuration that comes with Next.js.
+
+2. **Plugin Naming Conflicts**:
+   - If you must use a custom PostCSS config, be aware that there are version-specific requirements.
+   - In newer versions, Tailwind CSS's PostCSS plugin moved to a separate package (`@tailwindcss/postcss`).
+   - In older versions, it's directly available as `tailwindcss`.
+
+3. **Multiple Configuration Files**:
+   - Having PostCSS configuration files in both the root and `renderer/` directories creates conflicts.
+   - Nextron's structure requires careful configuration management.
+
+### Troubleshooting
+
+If you encounter errors like:
+- `Cannot apply unknown utility class: bg-gray-900`
+- `It looks like you're trying to use tailwindcss directly as a PostCSS plugin`
+
+**Solution Steps**:
+1. Remove any custom `postcss.config.js` files you've created.
+2. Let the built-in Next.js PostCSS and Tailwind configuration handle things.
+3. If you must customize, make sure you're using the correct plugin names for your version.
+4. Keep configuration consistent between root and renderer directories.
+
+**For reference**: The Tailwind configuration is located at `renderer/tailwind.config.js` and contains all necessary color and plugin definitions.
+
 ## Project Structure Overview
 
 Nextron enforces a separation between the Electron main process (Node.js environment) and the Next.js renderer process (browser-like environment):
@@ -86,3 +119,77 @@ When planning a web deployment (e.g., Firebase Hosting):
 *   **Remove/Ignore:** `main/` directory, `electron/` directory, Electron-specific dependencies, Electron build/packaging configurations.
 
 This detailed breakdown should help clarify the desktop-specific architecture and identify areas needing attention for future web adaptation.
+
+## Firebase Hosting Deployment (Web Version)
+
+These steps outline how to build and deploy the Next.js **renderer** application to Firebase Hosting, ignoring the Electron-specific parts.
+
+**Prerequisites:**
+*   Firebase CLI installed (`npm install -g firebase-tools`).
+*   Logged into Firebase (`firebase login`).
+*   Firebase project created and Hosting initialized (`firebase init hosting`).
+
+**Steps:**
+
+1.  **Configure Firebase Hosting:**
+    *   Edit the `firebase.json` file in the **root** of your project.
+    *   Locate the `"hosting"` section.
+    *   Change the `"public"` directory from `"public"` (or whatever it was set to during init) to `"renderer/out"`.
+    *   Ensure rewrites are configured for a Next.js SPA (Single Page Application). It should look something like this:
+
+    ```json
+    {
+      "hosting": {
+        "public": "renderer/out", // <-- Important: Point to Next.js build output
+        "ignore": [
+          "firebase.json",
+          "**/.*",
+          "**/node_modules/**",
+          "main/**", // Ignore Electron main process
+          "electron/**", // Ignore Electron main process
+          "dist/**" // Ignore Electron build output
+        ],
+        "rewrites": [
+          {
+            "source": "**",
+            "destination": "/index.html"
+          }
+        ]
+      }
+      // ... other Firebase configurations (functions, firestore) might be here
+    }
+    ```
+
+2.  **Configure Next.js for Static Export:**
+    *   Ensure your `renderer/next.config.js` (or `.mjs`) is configured for static export suitable for simple hosting. Add `output: 'export'` if it's not already present:
+
+    ```javascript
+    /** @type {import('next').NextConfig} */
+    const nextConfig = {
+      // ... other configs like reactStrictMode, experimental, etc.
+      output: 'export', // <-- Add this line for static HTML export
+      images: {
+        unoptimized: true, // Required for static export if using next/image
+      },
+      // Optional: If you have issues with Electron imports during web build:
+      // webpack: (config, { isServer }) => {
+      //   if (!isServer) {
+      //     config.resolve.fallback = { ...config.resolve.fallback, fs: false, path: false, child_process: false };
+      //   }
+      //   return config;
+      // },
+    }
+
+    module.exports = nextConfig
+    ```
+
+3.  **Build the Next.js App:**
+    *   Navigate to the **root** directory (if you were inside `renderer`).
+    *   Run the web-specific build script: `npm run build:web`
+    *   This command should now generate the static site files in the `renderer/out` directory, based on the `next.config.js` setting.
+
+4.  **Deploy to Firebase Hosting:**
+    *   Ensure you are in the **root** directory.
+    *   Run the deploy command: `firebase deploy --only hosting`
+
+Following these steps ensures that only the statically exported Next.js application from `renderer/out` is deployed to Firebase Hosting.

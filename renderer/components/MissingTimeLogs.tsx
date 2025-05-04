@@ -7,10 +7,7 @@ import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
 import { MissingTimeModel, MissingTimeLog } from "@/renderer/model/missingTime";
 import { createEmployeeModel } from "@/renderer/model/employee";
-import {
-  createAttendanceModel,
-  Attendance,
-} from "@/renderer/model/attendance_old";
+import { createAttendanceModel, Attendance } from "@/renderer/model/attendance";
 import { createCompensationModel } from "@/renderer/model/compensation";
 import { createAttendanceSettingsModel } from "@/renderer/model/settings";
 import { MagicCard } from "./magicui/magic-card";

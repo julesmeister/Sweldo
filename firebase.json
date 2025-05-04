@@ -1,0 +1,19 @@
+{
+  "hosting": {
+    "public": "renderer/out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "main/**",
+      "electron/**",
+      "dist/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

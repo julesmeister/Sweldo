@@ -13,8 +13,6 @@ import {
   AttendanceSettingsModel,
   createAttendanceSettingsModel,
   EmploymentType,
-  getScheduleForDay,
-  getScheduleForDate,
 } from "@/renderer/model/settings";
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
@@ -23,6 +21,8 @@ import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 import { evaluateFormula } from "../utils/formula";
 import { processTimeEntries } from "../utils/timeProcessor";
+import { createLoanModel } from "./loan";
+import { Holiday } from "./holiday";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -1603,7 +1603,10 @@ export class Payroll {
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
-      const schedule = getScheduleForDate(employeeSchedule, currentDate);
+      const schedule = await this.attendanceSettingsModel.getScheduleForDate(
+        employeeSchedule,
+        currentDate
+      );
 
       // Check if this date is a holiday
       const isHoliday = holidays.some((holiday) => {
