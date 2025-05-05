@@ -172,50 +172,84 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
         </div>
       </div>
 
-      {/* Column 2: Cloud Sync - Only render if window.electron exists AND companyName is set*/}
-      {window.electron && companyName && (
+      {/* Column 2: Cloud Sync */}
+      {window.electron && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-2">Cloud Sync (Firestore)</h2>
-          <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-purple-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
-                </svg>
+          {companyName ? (
+            <>
+              <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-purple-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-purple-700">
+                      <span className="font-medium">Backup & Sync:</span> Upload
+                      your local database to Firestore for backup or download to
+                      sync data across devices.
+                      <br />
+                      <span className="text-xs italic">
+                        Ensure you have appropriate Firestore setup and
+                        permissions.
+                      </span>
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-purple-700">
-                  <span className="font-medium">Backup & Sync:</span> Upload
-                  your local database to Firestore for backup or download to
-                  sync data across devices.
-                  <br />
-                  <span className="text-xs italic">
-                    Ensure you have appropriate Firestore setup and permissions.
-                  </span>
-                </p>
+              <div className="flex space-x-4">
+                <button
+                  onClick={handleUploadToFirestore}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <IoCloudUploadOutline className="w-5 h-5" />
+                  Upload to Cloud
+                </button>
+                <button
+                  onClick={handleDownloadFromFirestore}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <IoCloudDownloadOutline className="w-5 h-5" />
+                  Download from Cloud
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-yellow-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    <span className="font-medium">Company Name Required:</span>{" "}
+                    To use cloud sync features, please set up your company name
+                    in the Company Settings first.
+                    <br />
+                    <span className="text-xs italic">
+                      This ensures your data is properly organized in Firestore.
+                    </span>
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex space-x-4">
-            <button
-              onClick={handleUploadToFirestore}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <IoCloudUploadOutline className="w-5 h-5" />
-              Upload to Cloud
-            </button>
-            <button
-              onClick={handleDownloadFromFirestore}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-            >
-              <IoCloudDownloadOutline className="w-5 h-5" />
-              Download from Cloud
-            </button>
-          </div>
+          )}
         </div>
       )}
     </div>
