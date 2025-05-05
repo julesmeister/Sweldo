@@ -1,4 +1,12 @@
 import { create } from "zustand";
+import {
+  isWebEnvironment,
+  setFirestoreCompanyName,
+} from "../lib/firestoreService";
+import {
+  loadAppSettingsFirestore,
+  saveAppSettingsFirestore,
+} from "../model/settings_firestore";
 
 // Define the calculation settings structure separately
 export interface CalculationSettings {
@@ -72,6 +80,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
       return; // Don't save if dbPath is missing
     }
 
+    // In web mode, save to Firestore
+    if (isWebEnvironment()) {
+      try {
+        // Extract only the web-relevant settings (not dbPath which is local-only)
+        const webSettings = {
+          theme: "light", // Default values since these aren't currently in the state
+          language: "en",
+          notificationsEnabled: true,
+          timeFormat: "12-hour" as const,
+        };
+
+        await saveAppSettingsFirestore(webSettings, state.companyName);
+        console.log("Settings saved to Firestore");
+      } catch (error) {
+        console.error("Failed to save settings to Firestore:", error);
+      }
+      return;
+    }
+
+    // Desktop mode - save to local file
     const settingsToSave: PersistedSettings = {
       dbPath: state.dbPath,
       logoPath: state.logoPath,
@@ -99,6 +127,25 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     }
   };
 
+  const loadFromFirestore = async (
+    companyName: string
+  ): Promise<Partial<PersistedSettings>> => {
+    try {
+      const appSettings = await loadAppSettingsFirestore(companyName);
+      if (!appSettings) return {};
+
+      // Convert Firestore settings format to our settings format
+      return {
+        // Map other fields as needed
+        // For now we might just keep companyName
+        companyName,
+      };
+    } catch (error) {
+      console.error("Failed to load settings from Firestore:", error);
+      return {};
+    }
+  };
+
   return {
     ...defaultSettings, // Start with defaults
     isInitialized: false,
@@ -113,7 +160,46 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
       let loadedSettings = { ...defaultSettings };
       let successfullyLoadedFromFile = false;
 
-      // --- Attempt to load from file using initialDbPath ---
+      // --- First check if we're in web mode ---
+      if (isWebEnvironment()) {
+        console.log("[SettingsStore Init] Detected web environment");
+
+        // Try to load from localStorage first to get company name
+        try {
+          const lsState = localStorage.getItem("settings-storage");
+          if (lsState) {
+            const parsedLs = JSON.parse(lsState);
+            if (parsedLs && parsedLs.state && parsedLs.state.companyName) {
+              const companyName = parsedLs.state.companyName;
+              console.log(
+                `[SettingsStore Init] Found company name in localStorage: ${companyName}`
+              );
+
+              // Set company name
+              loadedSettings.companyName = companyName;
+
+              // Update the centralized company name in firestoreService
+              setFirestoreCompanyName(companyName);
+
+              // Try to load additional settings from Firestore
+              const firestoreSettings = await loadFromFirestore(companyName);
+              loadedSettings = { ...loadedSettings, ...firestoreSettings };
+              successfullyLoadedFromFile = true;
+            }
+          }
+        } catch (e) {
+          console.error(
+            "[SettingsStore Init] Error processing localStorage in web mode:",
+            e
+          );
+        }
+
+        // Set state and exit
+        set({ ...loadedSettings, isInitialized: true });
+        return;
+      }
+
+      // --- Desktop mode: attempt to load from file using initialDbPath ---
       if (initialDbPath) {
         const filePath = settingsFilePath(initialDbPath);
         console.log(
@@ -145,6 +231,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
                 dbPath: parsedSettings.dbPath,
               };
               successfullyLoadedFromFile = true;
+
+              // Also update the centralized company name if present
+              if (parsedSettings.companyName) {
+                setFirestoreCompanyName(parsedSettings.companyName);
+              }
             } else {
               // File exists but doesn't contain a valid dbPath, use initialDbPath as fallback for path, but load other settings
               console.warn(
@@ -156,6 +247,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
                 dbPath: initialDbPath,
               };
               successfullyLoadedFromFile = true; // Still count as loaded for other settings
+
+              // Also update the centralized company name if present
+              if (parsedSettings.companyName) {
+                setFirestoreCompanyName(parsedSettings.companyName);
+              }
             }
           } else {
             console.log(
@@ -235,6 +331,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
                 console.log(
                   "[SettingsStore Init] Using localStorage fallback for companyName."
                 );
+
+                // Also update the centralized company name
+                setFirestoreCompanyName(parsedLs.state.companyName);
               }
             }
           }
@@ -298,6 +397,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
 
     setCompanyName: (name) => {
       set({ companyName: name });
+
+      // Also update the centralized company name in firestoreService
+      setFirestoreCompanyName(name);
+
       _saveSettings();
     },
 

@@ -1,6 +1,15 @@
 import Papa from "papaparse";
 import { toast } from "sonner";
 import path from "path";
+import {
+  loadEmployeesFirestore,
+  loadActiveEmployeesFirestore,
+  loadEmployeeByIdFirestore,
+  saveOnlyNewEmployeesFirestore,
+  updateEmployeeStatusFirestore,
+  updateEmployeeDetailsFirestore,
+} from "./employee_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 interface LastPaymentPeriod {
   startDate: string;
@@ -109,6 +118,11 @@ export class EmployeeModel {
 
   private async ensureEmployeeFiles(): Promise<void> {
     try {
+      // Skip file operations in web mode
+      if (isWebEnvironment()) {
+        return;
+      }
+
       // Check if JSON file exists, create it if needed
       if (this.useJsonFormat) {
         const jsonExists = await window.electron.fileExists(this.jsonFilePath);
@@ -340,6 +354,13 @@ export class EmployeeModel {
    * Load all employees
    */
   public async loadEmployees(): Promise<Employee[]> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      return loadEmployeesFirestore(companyName);
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       return this.loadEmployeesFromJson();
     } else {
@@ -351,6 +372,13 @@ export class EmployeeModel {
    * Load only active employees
    */
   public async loadActiveEmployees(): Promise<Employee[]> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore with query
+      const companyName = await getCompanyName();
+      return loadActiveEmployeesFirestore(companyName);
+    }
+
+    // Desktop mode - filter locally
     const allEmployees = await this.loadEmployees();
     return allEmployees.filter((employee) => employee.status === "active");
   }
@@ -359,6 +387,13 @@ export class EmployeeModel {
    * Load employee by ID
    */
   public async loadEmployeeById(id: string): Promise<Employee | null> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore with direct document lookup
+      const companyName = await getCompanyName();
+      return loadEmployeeByIdFirestore(id, companyName);
+    }
+
+    // Desktop mode - load all and filter
     const allEmployees = await this.loadEmployees();
     return allEmployees.find((emp) => emp.id === id) || null;
   }
@@ -368,6 +403,14 @@ export class EmployeeModel {
    */
   public async saveOnlyNewEmployees(employees: Employee[]): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await saveOnlyNewEmployeesFirestore(employees, companyName);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       // Load current employees
       const currentEmployees = await this.loadEmployees();
 
@@ -399,6 +442,15 @@ export class EmployeeModel {
    */
   public async updateEmployeeStatus(employee: Employee): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await updateEmployeeStatusFirestore(employee, companyName);
+        toast.success(`Employee status updated to ${employee.status}.`);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       // Load current employees
       const currentEmployees = await this.loadEmployees();
 
@@ -439,6 +491,15 @@ export class EmployeeModel {
    */
   public async updateEmployeeDetails(employee: Employee): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await updateEmployeeDetailsFirestore(employee, companyName);
+        toast.success(`Employee details updated.`);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       // Load current employees
       const currentEmployees = await this.loadEmployees();
 
@@ -491,6 +552,12 @@ export async function migrateCsvToJson(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
+  // Skip migration in web mode
+  if (isWebEnvironment()) {
+    onProgress?.("Migration not needed in web mode.");
+    return;
+  }
+
   const csvFilePath = `${dbPath}/SweldoDB/employees.csv`;
   const jsonFilePath = `${dbPath}/SweldoDB/employees.json`;
 

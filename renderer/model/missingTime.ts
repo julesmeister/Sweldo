@@ -3,6 +3,13 @@ import {
   MissingTimeModel as OldMissingTimeModel,
 } from "./missingTime_old";
 import Papa from "papaparse";
+import {
+  getMissingTimeLogsFirestore,
+  saveMissingTimeLogFirestore,
+  deleteMissingTimeLogFirestore,
+  getAllMissingTimeLogsForEmployeeFirestore,
+} from "./missingTime_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 // Re-export the interface for external use
 export interface MissingTimeLog extends OldMissingTimeLog {}
@@ -70,6 +77,14 @@ export class MissingTimeModel {
     month: number,
     year: number
   ): Promise<void> {
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      await saveMissingTimeLogFirestore(log, month, year, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     const jsonData = await this.readJsonFile(month, year);
 
     let logs: MissingTimeLog[] = [];
@@ -108,6 +123,13 @@ export class MissingTimeModel {
     month: number,
     year: number
   ): Promise<MissingTimeLog[]> {
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      return getMissingTimeLogsFirestore(month, year, companyName);
+    }
+
+    // Desktop mode - use existing implementation
     const jsonData = await this.readJsonFile(month, year);
     if (jsonData) {
       return jsonData.logs;
@@ -135,6 +157,14 @@ export class MissingTimeModel {
     month: number,
     year: number
   ): Promise<void> {
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      await deleteMissingTimeLogFirestore(id, month, year, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     const jsonData = await this.readJsonFile(month, year);
     if (!jsonData) {
       console.warn(
@@ -158,11 +188,36 @@ export class MissingTimeModel {
     }
   }
 
+  // New method to get all missing time logs for an employee across all periods
+  async getAllMissingTimeLogsForEmployee(
+    employeeId: string
+  ): Promise<MissingTimeLog[]> {
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      return getAllMissingTimeLogsForEmployeeFirestore(employeeId, companyName);
+    }
+
+    // Desktop mode implementation would need to be added here
+    // This would require scanning all JSON files for the given employee
+    // For now, we'll return an empty array
+    console.warn(
+      "getAllMissingTimeLogsForEmployee not implemented for desktop mode"
+    );
+    return [];
+  }
+
   // ----- Migration Function -----
   static async migrateCsvToJson(
     dbPath: string,
     onProgress?: (message: string) => void
   ): Promise<void> {
+    // Skip migration in web mode since it's only relevant for desktop operation
+    if (isWebEnvironment()) {
+      onProgress?.("Skipping Missing Time Logs migration in web mode.");
+      return;
+    }
+
     const logsFolderPath = `${dbPath}/SweldoDB/missing_time_logs`;
     const oldModel = new OldMissingTimeModel(dbPath); // Use old model to read CSV
 

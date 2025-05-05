@@ -1,5 +1,12 @@
 import fs from "fs";
 import path from "path";
+import {
+  loadLeavesFirestore,
+  createLeaveFirestore,
+  saveOrUpdateLeaveFirestore,
+  deleteLeaveFirestore,
+} from "./leave_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 export interface Leave {
   id: string;
@@ -62,6 +69,11 @@ export class LeaveModel {
 
   private async ensureDirectoryExists(): Promise<void> {
     try {
+      // Skip directory creation in web mode
+      if (isWebEnvironment()) {
+        return;
+      }
+
       const employeePath = this.basePath;
       await window.electron.ensureDir(employeePath);
     } catch (error) {
@@ -71,11 +83,27 @@ export class LeaveModel {
   }
 
   async createLeave(leave: Leave): Promise<void> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      await createLeaveFirestore(leave, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     await this.saveOrUpdateLeave(leave);
   }
 
   async saveOrUpdateLeave(leave: Leave): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await saveOrUpdateLeaveFirestore(leave, companyName);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       // Ensure directory exists before reading/writing
       await this.ensureDirectoryExists();
 
@@ -177,6 +205,13 @@ export class LeaveModel {
     month: number
   ): Promise<Leave[]> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        return loadLeavesFirestore(employeeId, year, month, companyName);
+      }
+
+      // Desktop mode - use existing implementation
       // Ensure directory exists
       await this.ensureDirectoryExists();
 
@@ -274,6 +309,14 @@ export class LeaveModel {
 
   async deleteLeave(id: string, leave: Leave): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await deleteLeaveFirestore(id, leave, companyName);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const year = leave.startDate.getFullYear();
       const month = leave.startDate.getMonth() + 1;
 
@@ -326,6 +369,12 @@ export async function migrateCsvToJson(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
+  // Skip migration in web mode
+  if (isWebEnvironment()) {
+    onProgress?.("Migration not needed in web mode.");
+    return;
+  }
+
   try {
     onProgress?.("Starting leave CSV to JSON migration...");
 

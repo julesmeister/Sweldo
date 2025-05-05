@@ -1,5 +1,12 @@
 import fs from "fs";
 import path from "path";
+import {
+  loadLoansFirestore,
+  createLoanFirestore,
+  updateLoanFirestore,
+  deleteLoanFirestore,
+} from "./loan_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 export interface Loan {
   id: string;
@@ -73,6 +80,11 @@ export class LoanModel {
   // Ensure the directory exists before writing files
   private async ensureDirectoryExists(): Promise<void> {
     try {
+      // Skip directory creation in web mode
+      if (isWebEnvironment()) {
+        return;
+      }
+
       const employeePath = this.basePath;
       await window.electron.ensureDir(employeePath);
       console.log(`[LoanModel] Ensured directory exists: ${employeePath}`);
@@ -84,6 +96,15 @@ export class LoanModel {
 
   async createLoan(loan: Loan): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await createLoanFirestore(loan, companyName);
+        console.log(`[LoanModel] Successfully saved loan to Firestore`);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       console.log(`[LoanModel] Attempting to save loan`);
       console.log(`[LoanModel] Loan data to save:`, loan);
 
@@ -181,6 +202,15 @@ export class LoanModel {
 
   async updateLoan(loan: Loan): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await updateLoanFirestore(loan, companyName);
+        console.log(`[LoanModel] Successfully updated loan in Firestore`);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       console.log(`[LoanModel] Attempting to update loan`);
 
       // Ensure directory exists
@@ -268,6 +298,22 @@ export class LoanModel {
 
   async loadLoans(year: number, month: number): Promise<Loan[]> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        const loans = await loadLoansFirestore(
+          this.employeeId,
+          year,
+          month,
+          companyName
+        );
+        console.log(
+          `[LoanModel] Successfully loaded ${loans.length} loans from Firestore`
+        );
+        return loans;
+      }
+
+      // Desktop mode - use existing implementation
       console.log(`[LoanModel] Loading loans for ${year}-${month}`);
 
       // Ensure directory exists
@@ -381,6 +427,15 @@ export class LoanModel {
 
   async deleteLoan(id: string, loan: Loan): Promise<void> {
     try {
+      if (isWebEnvironment()) {
+        // Web mode - use Firestore
+        const companyName = await getCompanyName();
+        await deleteLoanFirestore(id, loan, companyName);
+        console.log(`[LoanModel] Successfully deleted loan from Firestore`);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const year = loan.date.getFullYear();
       const month = loan.date.getMonth() + 1;
 
@@ -438,6 +493,12 @@ export async function migrateCsvToJson(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
+  // Skip migration in web mode
+  if (isWebEnvironment()) {
+    onProgress?.("Migration not needed in web mode.");
+    return;
+  }
+
   try {
     onProgress?.("Starting loan CSV to JSON migration...");
 

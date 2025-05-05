@@ -2,6 +2,19 @@ import Papa from "papaparse";
 import path from "path";
 import { Schedule } from "./schedule";
 import { AttendanceSettingsModel as OldAttendanceSettingsModel } from "./settings_old"; // Import old implementation
+import {
+  loadAttendanceSettingsFirestore,
+  saveAttendanceSettingsFirestore,
+  loadTimeSettingsFirestore,
+  saveTimeSettingsFirestore,
+  loadMonthScheduleFirestore,
+  saveMonthScheduleFirestore,
+} from "./settings_firestore";
+import {
+  isWebEnvironment,
+  setFirestoreCompanyName,
+  getCompanyName,
+} from "../lib/firestoreService";
 
 export interface Settings {
   theme: string;
@@ -125,7 +138,7 @@ export const defaultSettings: Settings = {
 type AttendanceSettingsJson = AttendanceSettings;
 
 // Time settings will be stored in an object with an employmentTypes array
-interface TimeSettingsJson {
+export interface TimeSettingsJson {
   employmentTypes: EmploymentType[];
 }
 
@@ -257,10 +270,17 @@ export class AttendanceSettingsModel {
     }
   }
 
-  // --- Public API Methods (Updated for JSON) --- //
+  // --- Public API Methods (Updated for Firestore) --- //
 
   public async loadAttendanceSettings(): Promise<AttendanceSettings> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return loadAttendanceSettingsFirestore(companyName);
+      }
+
+      // Desktop mode - use local file storage
       const jsonData = await this.readAttendanceSettingsJson();
       if (jsonData) {
         // Merge with defaults to ensure all properties exist
@@ -295,6 +315,13 @@ export class AttendanceSettingsModel {
 
   public async loadTimeSettings(): Promise<EmploymentType[]> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return loadTimeSettingsFirestore(companyName);
+      }
+
+      // Desktop mode - use local file storage
       const jsonData = await this.readTimeSettingsJson();
       if (jsonData) {
         // Ensure essential fields exist, remove monthSchedules if present from old saves
@@ -331,6 +358,13 @@ export class AttendanceSettingsModel {
 
   public async saveTimeSettings(settings: EmploymentType[]): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return saveTimeSettingsFirestore(settings, companyName);
+      }
+
+      // Desktop mode - use local file storage
       // Remove monthSchedules before saving to timeSettings.json - No longer needed as it's removed from type
       const jsonData: TimeSettingsJson = { employmentTypes: settings };
       await this.writeTimeSettingsJson(jsonData);
@@ -340,7 +374,7 @@ export class AttendanceSettingsModel {
     }
   }
 
-  // --- New Methods for Monthly Schedules --- //
+  // --- Methods for Monthly Schedules --- //
   public async loadMonthSchedule(
     employmentType: string,
     year: number,
@@ -352,6 +386,19 @@ export class AttendanceSettingsModel {
       );
       return {};
     }
+
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      return loadMonthScheduleFirestore(
+        employmentType,
+        year,
+        month,
+        companyName
+      );
+    }
+
+    // Desktop mode - use local file storage
     const filePath = this.getMonthSchedulePath(employmentType, year, month);
     const result = await this.readMonthScheduleJson(filePath);
     return result;
@@ -369,6 +416,20 @@ export class AttendanceSettingsModel {
       );
       throw new Error("Cannot save month schedule without an employment type.");
     }
+
+    // Web mode - use Firestore
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      return saveMonthScheduleFirestore(
+        employmentType,
+        year,
+        month,
+        schedule,
+        companyName
+      );
+    }
+
+    // Desktop mode - use local file storage
     const filePath = this.getMonthSchedulePath(employmentType, year, month);
     await this.writeMonthScheduleJson(filePath, schedule);
   }
@@ -444,6 +505,13 @@ export class AttendanceSettingsModel {
     settings: AttendanceSettings
   ): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return saveAttendanceSettingsFirestore(settings, companyName);
+      }
+
+      // Desktop mode - use local file storage
       // Directly save the settings object (no need to convert boolean to string for JSON)
       await this.writeAttendanceSettingsJson(settings);
     } catch (error) {

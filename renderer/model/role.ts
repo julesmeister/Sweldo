@@ -1,6 +1,13 @@
 import path from "path";
 import { encryptPinCode, decryptPinCode } from "../lib/encryption";
 import { Role as OldRole, RoleModelImpl as OldRoleModelImpl } from "./role_old"; // Import old implementation for fallback
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+import {
+  getRolesFirestore,
+  createRoleFirestore,
+  updateRoleFirestore,
+  deleteRoleFirestore,
+} from "./role_firestore";
 
 // --- Interfaces --- //
 
@@ -88,6 +95,13 @@ export class RoleModelImpl implements RoleModel {
 
   async getRoles(): Promise<Role[]> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return getRolesFirestore(companyName);
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
 
       if (jsonData) {
@@ -118,6 +132,13 @@ export class RoleModelImpl implements RoleModel {
     roleInput: Omit<Role, "id" | "createdAt" | "updatedAt">
   ): Promise<Role> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return createRoleFirestore(roleInput, companyName);
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = (await this.readJsonFile()) ?? { roles: [] }; // Start with empty if file doesn't exist
       const encryptedPinCode = encryptPinCode(roleInput.pinCode);
 
@@ -148,6 +169,13 @@ export class RoleModelImpl implements RoleModel {
     roleUpdate: Partial<Omit<Role, "id" | "createdAt" | "updatedAt">>
   ): Promise<Role> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return updateRoleFirestore(id, roleUpdate, companyName);
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
       if (!jsonData) {
         throw new Error("[RoleModel] Roles data file not found for update.");
@@ -188,6 +216,14 @@ export class RoleModelImpl implements RoleModel {
 
   async deleteRole(id: string): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await deleteRoleFirestore(id, companyName);
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
       if (!jsonData) {
         console.warn(
@@ -222,6 +258,12 @@ export class RoleModelImpl implements RoleModel {
     dbPath: string,
     onProgress?: (message: string) => void
   ): Promise<void> {
+    // Skip migration in web mode since it's only relevant for desktop operation
+    if (isWebEnvironment()) {
+      onProgress?.("Skipping Roles migration in web mode.");
+      return;
+    }
+
     onProgress?.("Starting Roles CSV to JSON migration...");
     const rolesJsonPath = path.join(dbPath, "SweldoDB", "roles.json");
     const oldModel = new OldRoleModelImpl(dbPath);

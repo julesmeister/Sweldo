@@ -1,4 +1,11 @@
 import Papa from "papaparse";
+import {
+  loadCompensationFirestore,
+  loadEmployeeCompensationFirestore,
+  saveCompensationFirestore,
+  saveOrUpdateCompensationsFirestore,
+} from "./compensation_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 export type DayType = "Regular" | "Holiday" | "Rest Day" | "Special";
 
@@ -29,8 +36,8 @@ export interface Compensation {
   nightDifferentialPay: number;
 }
 
-// New JSON structure interfaces
-interface CompensationJsonDay {
+// New JSON structure interfaces - export them so they can be used by Firestore implementations
+export interface CompensationJsonDay {
   dayType: DayType;
   dailyRate: number;
   hoursWorked?: number;
@@ -53,7 +60,7 @@ interface CompensationJsonDay {
   nightDifferentialPay: number;
 }
 
-interface CompensationJsonMonth {
+export interface CompensationJsonMonth {
   meta: {
     employeeId: string;
     year: number;
@@ -65,7 +72,7 @@ interface CompensationJsonMonth {
   };
 }
 
-interface BackupEntry {
+export interface BackupEntry {
   timestamp: string;
   changes: {
     day: number;
@@ -75,7 +82,7 @@ interface BackupEntry {
   }[];
 }
 
-interface BackupJsonMonth {
+export interface BackupJsonMonth {
   employeeId: string;
   year: number;
   month: number;
@@ -88,6 +95,13 @@ export class CompensationModel {
 
   constructor(filePath: string) {
     this.folderPath = filePath;
+  }
+
+  /**
+   * Detect if running in web mode (as opposed to desktop/Electron mode)
+   */
+  private isWebMode(): boolean {
+    return isWebEnvironment();
   }
 
   /**
@@ -423,8 +437,6 @@ export class CompensationModel {
     }
   }
 
-  // Implement the original public API methods
-
   /**
    * Load compensation records
    */
@@ -435,6 +447,12 @@ export class CompensationModel {
   ): Promise<Compensation[]> {
     if (!month || !year || !employeeId) {
       return [];
+    }
+
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadCompensationFirestore(employeeId, year, month, companyName);
     }
 
     // First try JSON format if that's preferred
@@ -460,6 +478,13 @@ export class CompensationModel {
   public async loadEmployeeRecords(
     employeeId: string
   ): Promise<Compensation[]> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadEmployeeCompensationFirestore(employeeId, companyName);
+    }
+
+    // Desktop mode - use existing implementation
     const allRecords = await this.loadRecords(undefined, undefined, employeeId);
     return allRecords;
   }
@@ -474,6 +499,21 @@ export class CompensationModel {
     records: Compensation[],
     recordsToBackup?: Compensation[]
   ): Promise<void> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      await saveCompensationFirestore(
+        employeeId,
+        year,
+        month,
+        records,
+        recordsToBackup || [],
+        companyName
+      );
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       await this.saveRecordsToJson(
         employeeId,
@@ -524,7 +564,20 @@ export class CompensationModel {
         }
       }
 
-      // Load existing records
+      // If in web mode, use Firestore
+      if (this.isWebMode()) {
+        const companyName = await getCompanyName();
+        await saveOrUpdateCompensationsFirestore(
+          compensationsToSave,
+          month,
+          year,
+          employeeId,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop mode - Load existing records
       const existingRecords = await this.loadRecords(month, year, employeeId);
 
       const recordsToBackup: Compensation[] = [];

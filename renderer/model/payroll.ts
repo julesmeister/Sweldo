@@ -21,6 +21,15 @@ import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 import { evaluateFormula } from "../utils/formula";
 import { processTimeEntries } from "../utils/timeProcessor";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+import {
+  loadPayrollSummariesFirestore,
+  savePayrollSummaryFirestore,
+  deletePayrollSummaryFirestore,
+  updatePayrollStatisticsFirestore,
+  reverseCashAdvanceDeductionFirestore,
+  reverseShortDeductionFirestore,
+} from "./payroll_firestore";
 
 // Import the old Payroll model for fallback logic
 import { Payroll as OldPayroll } from "./payroll_old";
@@ -813,41 +822,55 @@ export class Payroll {
 
       const endMonth = end.getMonth() + 1;
       const endYear = end.getFullYear();
-      const payrollJsonData = await Payroll.readPayrollJsonFile(
-        this.dbPath,
-        employeeId,
-        endYear,
-        endMonth
-      );
 
-      let updatedPayrolls: PayrollSummaryModel[] = [];
-      if (payrollJsonData) {
-        updatedPayrolls = payrollJsonData.payrolls.filter(
-          (p) => p.id !== payrollSummary.id
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await savePayrollSummaryFirestore(
+          payrollSummary,
+          employeeId,
+          endYear,
+          endMonth,
+          companyName
+        );
+      } else {
+        // Desktop mode - use existing implementation
+        const payrollJsonData = await Payroll.readPayrollJsonFile(
+          this.dbPath,
+          employeeId,
+          endYear,
+          endMonth
+        );
+
+        let updatedPayrolls: PayrollSummaryModel[] = [];
+        if (payrollJsonData) {
+          updatedPayrolls = payrollJsonData.payrolls.filter(
+            (p) => p.id !== payrollSummary.id
+          );
+        }
+        updatedPayrolls.push(payrollSummary);
+        updatedPayrolls.sort(
+          (a, b) => b.startDate.getTime() - a.startDate.getTime()
+        );
+
+        const updatedJsonStructure: PayrollJsonStructure = {
+          meta: {
+            employeeId,
+            year: endYear,
+            month: endMonth,
+            lastModified: new Date().toISOString(),
+          },
+          payrolls: updatedPayrolls,
+        };
+
+        await Payroll.writePayrollJsonFile(
+          this.dbPath,
+          employeeId,
+          endYear,
+          endMonth,
+          updatedJsonStructure
         );
       }
-      updatedPayrolls.push(payrollSummary);
-      updatedPayrolls.sort(
-        (a, b) => b.startDate.getTime() - a.startDate.getTime()
-      );
-
-      const updatedJsonStructure: PayrollJsonStructure = {
-        meta: {
-          employeeId,
-          year: endYear,
-          month: endMonth,
-          lastModified: new Date().toISOString(),
-        },
-        payrolls: updatedPayrolls,
-      };
-
-      await Payroll.writePayrollJsonFile(
-        this.dbPath,
-        employeeId,
-        endYear,
-        endMonth,
-        updatedJsonStructure
-      );
 
       await employeeModel.updateEmployeeDetails({
         ...employee,
@@ -859,8 +882,18 @@ export class Payroll {
         },
       });
 
-      const statisticsModel = createStatisticsModel(this.dbPath, endYear);
-      await statisticsModel.updatePayrollStatistics([payrollSummary]);
+      // Update statistics (use Firestore or local implementation based on environment)
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await updatePayrollStatisticsFirestore(
+          [payrollSummary],
+          endYear,
+          companyName
+        );
+      } else {
+        const statisticsModel = createStatisticsModel(this.dbPath, endYear);
+        await statisticsModel.updatePayrollStatistics([payrollSummary]);
+      }
 
       return payrollSummary;
     } catch (error) {
@@ -880,6 +913,44 @@ export class Payroll {
     const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
 
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        const deletedPayroll = await deletePayrollSummaryFirestore(
+          employeeId,
+          startDate,
+          endDate,
+          endYear,
+          endMonth,
+          companyName
+        );
+
+        if (deletedPayroll) {
+          const cashAdvanceDeductions =
+            deletedPayroll.deductions?.cashAdvanceDeductions || 0;
+          if (cashAdvanceDeductions > 0) {
+            await Payroll.reverseCashAdvanceDeduction(
+              dbPath,
+              employeeId,
+              cashAdvanceDeductions,
+              endDate
+            );
+          }
+
+          const shortIDs = deletedPayroll.shortIDs || [];
+          if (shortIDs.length > 0) {
+            await Payroll.reverseShortDeduction(
+              dbPath,
+              employeeId,
+              shortIDs,
+              endDate
+            );
+          }
+        }
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await Payroll.readPayrollJsonFile(
         dbPath,
         employeeId,
@@ -983,6 +1054,18 @@ export class Payroll {
     month: number
   ): Promise<PayrollSummaryModel[]> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return loadPayrollSummariesFirestore(
+          employeeId,
+          year,
+          month,
+          companyName
+        );
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await Payroll.readPayrollJsonFile(
         dbPath,
         employeeId,
@@ -1124,6 +1207,23 @@ export class Payroll {
     isApplyingDeduction: boolean = false
   ): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        if (!isApplyingDeduction) {
+          await reverseCashAdvanceDeductionFirestore(
+            employeeId,
+            deductionAmount,
+            payrollDate,
+            companyName
+          );
+        }
+        // Note: Currently we don't have a Firestore implementation for applying deductions
+        // because that code path isn't used in the current payroll flow
+        return;
+      }
+
+      // Desktop mode - existing implementation
       const months = [];
       let currentDate = new Date(payrollDate);
       for (let i = 0; i < 3; i++) {
@@ -1225,6 +1325,23 @@ export class Payroll {
     isApplyingDeduction: boolean = false
   ): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        if (!isApplyingDeduction) {
+          await reverseShortDeductionFirestore(
+            employeeId,
+            shortIDs,
+            payrollDate,
+            companyName
+          );
+        }
+        // Note: Currently we don't have a Firestore implementation for applying deductions
+        // because that code path isn't used in the current payroll flow
+        return;
+      }
+
+      // Desktop mode - existing implementation
       const months = [];
       let currentDate = new Date(payrollDate);
       for (let i = 0; i < 3; i++) {
@@ -1357,6 +1474,12 @@ export class Payroll {
     dbPath: string,
     onProgress?: (message: string) => void
   ): Promise<void> {
+    // Skip migration in web mode since it's only relevant for desktop operation
+    if (isWebEnvironment()) {
+      onProgress?.("Skipping Payroll Summary migration in web mode.");
+      return;
+    }
+
     const payrollBasePath = `${dbPath}/SweldoDB/payrolls`;
     onProgress?.("Starting Payroll Summary CSV to JSON migration...");
 

@@ -1,5 +1,16 @@
 import { Employee } from "./employee";
 import Papa from "papaparse";
+import {
+  loadAttendanceFirestore,
+  saveAttendanceFirestore,
+  loadAttendanceByDayFirestore,
+  loadAlternativeTimesFirestore,
+  saveAlternativeTimesFirestore,
+  loadAttendanceSettingsFirestore,
+  saveAttendanceSettingsFirestore,
+  queryAttendanceByDateRangeFirestore,
+} from "./attendance_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 // Keep the same interfaces as the original file for API compatibility
 export interface Attendance {
@@ -36,7 +47,7 @@ export interface DateRange {
 }
 
 // New JSON format interfaces
-interface AttendanceJsonDay {
+export interface AttendanceJsonDay {
   timeIn: string | null;
   timeOut: string | null;
   schedule?: {
@@ -46,7 +57,7 @@ interface AttendanceJsonDay {
   } | null;
 }
 
-interface AttendanceJsonMonth {
+export interface AttendanceJsonMonth {
   meta: {
     employeeId: string;
     year: number;
@@ -58,7 +69,7 @@ interface AttendanceJsonMonth {
   };
 }
 
-interface BackupEntry {
+export interface BackupEntry {
   timestamp: string;
   changes: {
     day: number;
@@ -68,7 +79,7 @@ interface BackupEntry {
   }[];
 }
 
-interface BackupJsonMonth {
+export interface BackupJsonMonth {
   employeeId: string;
   year: number;
   month: number;
@@ -81,6 +92,13 @@ export class AttendanceModel {
 
   constructor(folderPath: string) {
     this.folderPath = folderPath;
+  }
+
+  /**
+   * Detect if running in web mode (as opposed to desktop/Electron mode)
+   */
+  private isWebMode(): boolean {
+    return isWebEnvironment();
   }
 
   /**
@@ -392,6 +410,13 @@ export class AttendanceModel {
       return [];
     }
 
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadAttendanceFirestore(id, year, month, companyName);
+    }
+
+    // Desktop mode - use local file storage
     // First try JSON format if that's preferred
     if (this.useJsonFormat) {
       const jsonExists = await this.jsonFileExists(month, year, id);
@@ -418,6 +443,19 @@ export class AttendanceModel {
     year: number,
     employeeId: string
   ): Promise<Attendance | null> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadAttendanceByDayFirestore(
+        day,
+        month,
+        year,
+        employeeId,
+        companyName
+      );
+    }
+
+    // Desktop mode - use local file storage
     const attendances = await this.loadAttendancesById(month, year, employeeId);
     return attendances.find((att) => att.day === day) || null;
   }
@@ -466,6 +504,69 @@ export class AttendanceModel {
   ): Promise<void> {
     if (!attendancesToSave.length) return;
 
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      // Convert to full Attendance objects
+      const fullAttendances: Attendance[] = attendancesToSave.map((att) => ({
+        employeeId,
+        day: att.day,
+        month,
+        year,
+        timeIn: att.timeIn ?? null,
+        timeOut: att.timeOut ?? null,
+        schedule: att.schedule,
+      }));
+
+      // Save to Firestore
+      const companyName = await getCompanyName();
+      await saveAttendanceFirestore(
+        fullAttendances,
+        employeeId,
+        year,
+        month,
+        companyName
+      );
+
+      // Also update alternatives in Firestore if needed
+      try {
+        const currentAlternatives = await this.loadAlternativeTimes(employeeId);
+        const alternativesSet = new Set(currentAlternatives);
+        let alternativesChanged = false;
+
+        // Iterate through the records to save/update
+        for (const record of attendancesToSave) {
+          const timesToAdd = [record.timeIn, record.timeOut];
+
+          for (const time of timesToAdd) {
+            // Check if time is valid (not null/empty and basic HH:MM format)
+            if (
+              time &&
+              typeof time === "string" &&
+              /^\d{1,2}:\d{2}$/.test(time)
+            ) {
+              if (!alternativesSet.has(time)) {
+                alternativesSet.add(time);
+                alternativesChanged = true;
+              }
+            }
+          }
+        }
+
+        if (alternativesChanged) {
+          const updatedAlternatives = Array.from(alternativesSet).sort();
+          await this.saveAlternativeTimes(employeeId, updatedAlternatives);
+        }
+      } catch (altError) {
+        console.warn(
+          `Warning: Failed to update alternative times for employee ${employeeId}:`,
+          altError
+        );
+      }
+
+      return;
+    }
+
+    // Desktop mode - use local file storage
     try {
       // Ensure directory exists
       const directoryPath = `${this.folderPath}/${employeeId}`;
@@ -753,6 +854,13 @@ export class AttendanceModel {
    * Returns an empty list if the file doesn't exist or is invalid.
    */
   public async loadAlternativeTimes(employeeId: string): Promise<string[]> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadAlternativeTimesFirestore(employeeId, companyName);
+    }
+
+    // Desktop mode - use local file storage
     const filePath = this.getAlternativesFilePath(employeeId);
     try {
       const fileExists = await window.electron.fileExists(filePath);
@@ -790,6 +898,13 @@ export class AttendanceModel {
     employeeId: string,
     times: string[]
   ): Promise<void> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return saveAlternativeTimesFirestore(employeeId, times, companyName);
+    }
+
+    // Desktop mode - use local file storage
     const filePath = this.getAlternativesFilePath(employeeId);
     const directoryPath = `${this.folderPath}/${employeeId}`;
     try {
@@ -1297,6 +1412,13 @@ export class AttendanceSettingsModel {
   }
 
   /**
+   * Detect if running in web mode (as opposed to desktop/Electron mode)
+   */
+  private isWebMode(): boolean {
+    return isWebEnvironment();
+  }
+
+  /**
    * Gets the default attendance settings
    */
   private getDefaultSettings(): AttendanceSettings {
@@ -1315,6 +1437,13 @@ export class AttendanceSettingsModel {
    * Load attendance settings
    */
   public async loadSettings(): Promise<AttendanceSettings> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return loadAttendanceSettingsFirestore(companyName);
+    }
+
+    // Desktop mode - use local file storage
     try {
       // Check if file exists
       const fileExists = await window.electron.fileExists(
@@ -1357,6 +1486,13 @@ export class AttendanceSettingsModel {
    * Save attendance settings
    */
   public async saveSettings(settings: AttendanceSettings): Promise<void> {
+    // If in web mode, use Firestore
+    if (this.isWebMode()) {
+      const companyName = await getCompanyName();
+      return saveAttendanceSettingsFirestore(settings, companyName);
+    }
+
+    // Desktop mode - use local file storage
     try {
       // Ensure directory exists
       await window.electron.ensureDir(this.folderPath);

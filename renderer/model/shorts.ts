@@ -1,5 +1,12 @@
 import path from "path";
 import { Short as OldShort, ShortModel as OldShortModel } from "./shorts_old"; // Import old implementation
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+import {
+  loadShortsFirestore,
+  createShortFirestore,
+  updateShortFirestore,
+  deleteShortFirestore,
+} from "./shorts_firestore";
 
 // --- Interfaces --- //
 
@@ -110,6 +117,20 @@ export class ShortModel {
   async createShort(shortInput: Omit<Short, "id">): Promise<void> {
     // Note: The input here doesn't include the ID, we generate it.
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await createShortFirestore(
+          shortInput,
+          this.employeeId,
+          this.month,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = (await this.readJsonFile()) ?? {
         meta: {
           employeeId: this.employeeId,
@@ -141,6 +162,19 @@ export class ShortModel {
 
   async updateShort(shortUpdate: Short): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await updateShortFirestore(
+          shortUpdate,
+          this.month,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
       if (!jsonData) {
         throw new Error(
@@ -181,6 +215,18 @@ export class ShortModel {
       );
     }
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return loadShortsFirestore(
+          this.employeeId,
+          this.month,
+          this.year,
+          companyName
+        );
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
       if (jsonData) {
         // Filter again by employeeId just in case (though should match meta)
@@ -212,6 +258,20 @@ export class ShortModel {
 
   async deleteShort(id: string): Promise<void> {
     try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await deleteShortFirestore(
+          id,
+          this.employeeId,
+          this.month,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop mode - use existing implementation
       const jsonData = await this.readJsonFile();
       let deleted = false;
 
@@ -271,6 +331,12 @@ export class ShortModel {
     dbPath: string,
     onProgress?: (message: string) => void
   ): Promise<void> {
+    // Skip migration in web mode since it's only relevant for desktop operation
+    if (isWebEnvironment()) {
+      onProgress?.("Skipping Shorts migration in web mode.");
+      return;
+    }
+
     const baseShortsPath = path.join(dbPath, "SweldoDB", "shorts");
     onProgress?.("Starting Shorts CSV to JSON migration...");
 

@@ -37,6 +37,15 @@ export interface Statistics {
   yearlyAverage: number;
 }
 
+// Import Firestore implementation
+import {
+  getStatisticsFirestore,
+  updatePayrollStatisticsFirestore,
+  updateDailyRateHistoryFirestore,
+  updateDeductionHistoryFirestore,
+} from "./statistics_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+
 export class StatisticsModel {
   private dbPath: string;
   private year: number;
@@ -64,6 +73,13 @@ export class StatisticsModel {
 
   private async loadStatistics(): Promise<Statistics> {
     try {
+      // Check if we're in web environment (Firestore)
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        return await getStatisticsFirestore(this.year, companyName);
+      }
+
+      // Desktop environment - use file system
       // Ensure directory exists
       await window.electron.ensureDir(`${this.dbPath}/SweldoDB/statistics`);
 
@@ -100,6 +116,12 @@ export class StatisticsModel {
 
   private async saveStatistics(): Promise<void> {
     try {
+      // Check if we're in web environment (no need to save locally)
+      if (isWebEnvironment()) {
+        return;
+      }
+
+      // Desktop environment - save to file system
       // Ensure directory exists
       await window.electron.ensureDir(`${this.dbPath}/SweldoDB/statistics`);
 
@@ -116,6 +138,18 @@ export class StatisticsModel {
 
   async updatePayrollStatistics(payrolls: any[]): Promise<void> {
     try {
+      // Check if we're in web environment
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await updatePayrollStatisticsFirestore(
+          payrolls,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop environment - local file operations
       // Load existing statistics
       await this.loadStatistics();
 
@@ -221,6 +255,19 @@ export class StatisticsModel {
     dailyRate: number
   ): Promise<void> {
     try {
+      // Check if we're in web environment
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await updateDailyRateHistoryFirestore(
+          employeeId,
+          dailyRate,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop environment - local file operations
       // Load existing statistics
       await this.loadStatistics();
 
@@ -245,6 +292,20 @@ export class StatisticsModel {
     deductions: { type: string; amount: number }[]
   ): Promise<void> {
     try {
+      // Check if we're in web environment
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        await updateDeductionHistoryFirestore(
+          employeeId,
+          employeeName,
+          deductions,
+          this.year,
+          companyName
+        );
+        return;
+      }
+
+      // Desktop environment - local file operations
       // Load existing statistics
       await this.loadStatistics();
 
@@ -283,6 +344,10 @@ export class StatisticsModel {
   }
 
   async getStatistics(): Promise<Statistics> {
+    if (isWebEnvironment()) {
+      const companyName = await getCompanyName();
+      return await getStatisticsFirestore(this.year, companyName);
+    }
     return this.loadStatistics();
   }
 }

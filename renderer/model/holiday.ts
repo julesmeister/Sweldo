@@ -1,5 +1,13 @@
 import fs from "fs";
 import path from "path";
+import {
+  loadHolidaysFirestore,
+  createHolidayFirestore,
+  saveOrUpdateHolidayFirestore,
+  deleteHolidayFirestore,
+  saveHolidaysFirestore,
+} from "./holiday_firestore";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 export interface Holiday {
   id: string;
@@ -77,6 +85,11 @@ export class HolidayModel {
 
   private async initializeModel() {
     try {
+      // Skip initialization in web mode
+      if (isWebEnvironment()) {
+        return;
+      }
+
       await window.electron.ensureDir(this.basePath);
     } catch (error) {
       console.error(`Error creating holiday directory:`, error);
@@ -84,6 +97,14 @@ export class HolidayModel {
   }
 
   async createHoliday(holiday: Holiday): Promise<void> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      await createHolidayFirestore(holiday, this.year, this.month, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       await this.createHolidayJson(holiday);
     } else {
@@ -139,6 +160,19 @@ export class HolidayModel {
   }
 
   async saveOrUpdateHoliday(holiday: Holiday): Promise<void> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      await saveOrUpdateHolidayFirestore(
+        holiday,
+        this.year,
+        this.month,
+        companyName
+      );
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       await this.createHolidayJson(holiday); // Same implementation works for both create and update
     } else {
@@ -211,6 +245,13 @@ export class HolidayModel {
   }
 
   async loadHolidays(): Promise<Holiday[]> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      return loadHolidaysFirestore(this.year, this.month, companyName);
+    }
+
+    // Desktop mode - use existing implementation
     // First try JSON format if that's preferred
     if (this.useJsonFormat) {
       const jsonExists = await this.jsonFileExists();
@@ -329,6 +370,14 @@ export class HolidayModel {
   }
 
   async deleteHoliday(id: string): Promise<void> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      await deleteHolidayFirestore(id, this.year, this.month, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       await this.deleteHolidayJson(id);
     } else {
@@ -379,6 +428,14 @@ export class HolidayModel {
   }
 
   async saveHolidays(holidays: Holiday[]): Promise<void> {
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      const companyName = await getCompanyName();
+      await saveHolidaysFirestore(holidays, this.year, this.month, companyName);
+      return;
+    }
+
+    // Desktop mode - use existing implementation
     if (this.useJsonFormat) {
       await this.saveHolidaysJson(holidays);
     } else {
@@ -446,6 +503,12 @@ export async function migrateCsvToJson(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
+  // Skip migration in web mode
+  if (isWebEnvironment()) {
+    onProgress?.("Migration not needed in web mode.");
+    return;
+  }
+
   const holidaysBasePath = `${dbPath}/SweldoDB/holidays`;
 
   try {

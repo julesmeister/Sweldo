@@ -7,6 +7,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   getDocs,
@@ -17,6 +18,7 @@ import {
   serverTimestamp,
   QueryDocumentSnapshot,
 } from "firebase/firestore";
+import { useSettingsStore } from "../stores/settingsStore";
 
 // Initialize Firebase with your config
 // In production, these values should be environment variables
@@ -28,6 +30,9 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
+
+// Centralized variable to cache company name
+let cachedCompanyName: string | null = null;
 
 /**
  * Initializes Firebase if it hasn't been initialized yet
@@ -59,13 +64,56 @@ export const isWebEnvironment = (): boolean => {
 };
 
 /**
- * Gets the company name from settings or environment
+ * Manually sets the company name for Firestore operations
+ * This function can be used during initialization or when switching companies
+ * @param name The company name to use for Firestore operations
+ */
+export const setFirestoreCompanyName = (name: string): void => {
+  if (!name) {
+    console.warn(
+      "Attempted to set empty company name for Firestore operations"
+    );
+    return;
+  }
+  cachedCompanyName = name;
+  console.log(`Company name for Firestore operations set to: ${name}`);
+};
+
+/**
+ * Gets the company name from the settings store
  * @returns Company name
  */
 export const getCompanyName = async (): Promise<string> => {
-  // This should be replaced with actual logic to get company name from settings
-  // For now, use a default or from environment variable
-  return process.env.NEXT_PUBLIC_COMPANY_NAME || "DefaultCompany";
+  // First check if we have a cached company name
+  if (cachedCompanyName) {
+    return cachedCompanyName;
+  }
+
+  try {
+    // Try to get company name from settings store
+    const settingsStore = useSettingsStore.getState();
+
+    if (settingsStore && settingsStore.companyName) {
+      cachedCompanyName = settingsStore.companyName;
+      return settingsStore.companyName;
+    }
+
+    // Fall back to environment variable if settings store doesn't have it
+    const envCompanyName = process.env.NEXT_PUBLIC_COMPANY_NAME;
+    if (envCompanyName) {
+      cachedCompanyName = envCompanyName;
+      return envCompanyName;
+    }
+
+    // Last resort - use a default name
+    console.warn(
+      "No company name found in settings or environment. Using default."
+    );
+    return "DefaultCompany";
+  } catch (error) {
+    console.error("Error fetching company name:", error);
+    return "DefaultCompany";
+  }
 };
 
 /**
@@ -346,6 +394,82 @@ export const migrateToFirestore = async <T extends DocumentData>(
     }
   } catch (error) {
     console.error(`Error migrating data to ${subcollection}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches an entire collection from Firestore
+ * @param subcollection - The subcollection name
+ * @param companyName - Optional company name
+ * @returns Array of all documents in the collection
+ */
+export const fetchCollection = async <T>(
+  subcollection: string,
+  companyName?: string
+): Promise<T[]> => {
+  try {
+    const db = getFirestoreInstance();
+    const company = companyName || (await getCompanyName());
+    const collectionRef = collection(
+      db,
+      `companies/${company}/${subcollection}`
+    );
+    const querySnapshot = await getDocs(collectionRef);
+
+    const results: T[] = [];
+    querySnapshot.forEach((doc) => {
+      results.push(doc.data() as T);
+    });
+
+    return results;
+  } catch (error) {
+    console.error(`Error fetching collection ${subcollection}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Export the deleteField function from Firebase for use in document updates
+ */
+export { deleteField } from "firebase/firestore";
+
+/**
+ * Queries documents in a subcollection with array of query conditions
+ * @param subcollection - The subcollection name
+ * @param conditions - Array of condition arrays [field, operator, value]
+ * @param companyName - Optional company name
+ * @returns Array of documents matching the query
+ */
+export const queryCollection = async <T>(
+  subcollection: string,
+  conditions: [string, string, any][],
+  companyName?: string
+): Promise<T[]> => {
+  try {
+    const db = getFirestoreInstance();
+    const company = companyName || (await getCompanyName());
+    const collectionRef = collection(
+      db,
+      `companies/${company}/${subcollection}`
+    );
+
+    // Convert conditions to QueryConstraints
+    const constraints: QueryConstraint[] = conditions.map(
+      ([field, op, value]) => where(field, op as any, value)
+    );
+
+    const q = query(collectionRef, ...constraints);
+    const querySnapshot = await getDocs(q);
+
+    const results: T[] = [];
+    querySnapshot.forEach((doc) => {
+      results.push(doc.data() as T);
+    });
+
+    return results;
+  } catch (error) {
+    console.error(`Error querying collection ${subcollection}:`, error);
     throw error;
   }
 };
