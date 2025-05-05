@@ -70,7 +70,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
       </div>
 
       {/* Login Dialog */}
-      <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700/50 w-full max-w-md p-6 relative z-10">
+      <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700/50 w-full max-w-md p-6 relative z-10 box-border">
         <div className="flex items-center justify-center mb-6">
           <div className="bg-blue-600/20 p-3 rounded-full">
             <IoLockClosed className="h-6 w-6 text-blue-500" />
@@ -87,7 +87,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
               type={showPin ? "text" : "password"}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200"
+              className="w-full px-4 py-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-md text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200"
               placeholder="Enter PIN"
               required
               minLength={4}
@@ -97,8 +97,10 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
             <button
               type="button"
               onClick={() => setShowPin(!showPin)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+              className="absolute right-3 top-0 bottom-0 my-auto h-full flex items-center text-gray-400 hover:text-gray-300 p-0 m-0"
               disabled={isLoading}
+              tabIndex={-1}
+              aria-label={showPin ? "Hide PIN" : "Show PIN"}
             >
               {showPin ? (
                 <IoEyeOffOutline className="h-5 w-5" />

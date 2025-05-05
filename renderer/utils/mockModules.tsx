@@ -41,7 +41,10 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
   const formatDateForInput = (date: Date | null): string => {
     if (!date) return "";
     try {
-      return date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+      // Accept Date, string, or number
+      const d = date instanceof Date ? date : new Date(date as any);
+      if (isNaN(d.getTime())) return "";
+      return d.toISOString().split("T")[0]; // Format as YYYY-MM-DD
     } catch (error) {
       console.error("Error formatting date:", error);
       return "";

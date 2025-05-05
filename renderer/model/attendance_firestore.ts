@@ -20,8 +20,19 @@ import {
   AttendanceJsonMonth,
   BackupEntry,
   BackupJsonMonth,
+  AttendanceModel,
 } from "./attendance";
-import { Timestamp, DocumentReference } from "firebase/firestore";
+import {
+  Timestamp,
+  DocumentReference,
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  getDocs,
+  DocumentData,
+  QueryDocumentSnapshot,
+} from "firebase/firestore";
 import {
   initializeFirebase,
   getFirestoreInstance,
@@ -35,6 +46,12 @@ import {
   createTimeBasedDocId,
   queryTimeBasedDocuments,
 } from "../lib/firestoreService";
+import {
+  processInBatches,
+  transformToFirestoreFormat,
+  transformFromFirestoreFormat,
+} from "../utils/firestoreSyncUtils";
+import { getFirestoreCollection } from "../utils/firestoreUtils";
 
 /**
  * Load attendance data from Firestore
@@ -471,4 +488,60 @@ export async function queryAttendanceByDateRangeFirestore(
     console.error(`Error querying Firestore attendance by date range:`, error);
     return [];
   }
+}
+
+export function createAttendanceFirestore(model: AttendanceModel) {
+  const db = getFirestoreInstance();
+  const collectionName = getFirestoreCollection("attendance");
+
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        const records = await model.loadAttendances();
+        await processInBatches(
+          records,
+          500,
+          async (record: Attendance) => {
+            const firestoreData = transformToFirestoreFormat(record);
+            const docRef = doc(db, collectionName, record.employeeId);
+            await setDoc(docRef, firestoreData);
+          },
+          onProgress
+        );
+      } catch (error) {
+        console.error("Error syncing attendance to Firestore:", error);
+        throw new Error("Failed to sync attendance to Firestore");
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        const collectionRef = collection(db, collectionName);
+        const snapshot = await getDocs(collectionRef);
+        const records = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
+          ...doc.data(),
+          employeeId: doc.id,
+        })) as Attendance[];
+
+        await processInBatches(
+          records,
+          500,
+          async (record: Attendance) => {
+            const localData = transformFromFirestoreFormat(
+              record
+            ) as Attendance;
+            await model.saveAttendances([localData]);
+          },
+          onProgress
+        );
+      } catch (error) {
+        console.error("Error syncing attendance from Firestore:", error);
+        throw new Error("Failed to sync attendance from Firestore");
+      }
+    },
+  };
 }
