@@ -1,9 +1,17 @@
 import React from "react";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 import { BorderBeam } from "./magicui/border-beam";
 import { useDateRangeStore } from "../stores/dateRangeStore";
 import { IoRefreshOutline } from "react-icons/io5";
+import { getReactDatepicker } from "../utils/mockModules";
+
+// No CSS imports - we handle all CSS loading at runtime
+// This is the only approach that consistently works in both environments
+
+// Use our mock module to get DatePicker without direct imports
+// This completely avoids webpack processing the react-datepicker CSS
+const DatePickerModule = getReactDatepicker();
+const DatePicker = DatePickerModule.default;
 
 interface DateRangePickerProps {
   variant?: "default" | "timesheet";

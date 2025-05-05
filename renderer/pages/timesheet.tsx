@@ -1208,57 +1208,69 @@ const TimesheetPage: React.FC = () => {
   );
 };
 
-<style jsx global>{`
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(75, 85, 99, 0.1);
-    border-radius: 3px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(75, 85, 99, 0.5);
-    border-radius: 3px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(75, 85, 99, 0.7);
-  }
+// Replace the style component with conditional rendering
+{
+  !process.env.IS_NEXTRON && typeof window !== "undefined" && (
+    // In web mode, these styles should be added via styleInjector.js instead
+    <></>
+  );
+}
 
-  /* Modern minimal scrollbar styling */
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+{
+  process.env.IS_NEXTRON && (
+    <style jsx global>{`
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(75, 85, 99, 0.1);
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(75, 85, 99, 0.5);
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(75, 85, 99, 0.7);
+      }
 
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
+      /* Modern minimal scrollbar styling */
+      .scrollbar-thin::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.3);
-    border-radius: 9999px;
-    transition: all 0.2s ease;
-  }
+      .scrollbar-thin::-webkit-scrollbar-track {
+        background: transparent;
+      }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(156, 163, 175, 0.5);
-  }
+      .scrollbar-thin::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.3);
+        border-radius: 9999px;
+        transition: all 0.2s ease;
+      }
 
-  /* Hide scrollbar for Chrome, Safari and Opera when not hovering */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-  }
+      .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(156, 163, 175, 0.5);
+      }
 
-  /* Show scrollbar on hover */
-  .scrollbar-thin:hover {
-    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-  }
+      /* Hide scrollbar for Chrome, Safari and Opera when not hovering */
+      .scrollbar-thin {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+      }
 
-  /* Firefox */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
-`}</style>;
+      /* Show scrollbar on hover */
+      .scrollbar-thin:hover {
+        scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+      }
+
+      /* Firefox */
+      .scrollbar-thin {
+        scrollbar-width: thin;
+      }
+    `}</style>
+  );
+}
 
 export default TimesheetPage;

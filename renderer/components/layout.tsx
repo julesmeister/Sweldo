@@ -340,7 +340,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     }
 
     // Skip unnecessary checks
-    if (!isInitialized || !dbPath) {
+    if (!isInitialized || (!dbPath && !isWebEnvironment())) {
       // (removed debug log)
       setIsCheckingRoles(false);
       return;
@@ -363,6 +363,18 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       isRoleCheckingRef.current = true;
       // (removed debug log)
       try {
+        // In web mode, we don't need to check local roles from files
+        if (isWebEnvironment()) {
+          // For web, we just need to check authentication
+          if (!isAuthenticated) {
+            setShowLogin(true);
+          }
+          hasCheckedRoles.current = true;
+          setHasInitializedThisSession(true);
+          return;
+        }
+
+        // Local Nextron implementation continues below
         // (removed debug log)
         const roleModel = new RoleModelImpl(dbPath);
 
@@ -511,7 +523,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     showLogin &&
     !isCheckingRoles &&
     !isAuthenticated &&
-    (!dbPath || pathname !== "/settings")
+    (isWebEnvironment() || dbPath || pathname === "/settings")
   ) {
     // (removed debug log)
     return (
@@ -531,7 +543,12 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   }
 
   // If no dbPath and not on settings page, show redirect message - ONLY AFTER MOUNTING
-  if (hasMounted && !dbPath && !pathname?.startsWith("/settings")) {
+  if (
+    hasMounted &&
+    !dbPath &&
+    !pathname?.startsWith("/settings") &&
+    !isWebEnvironment()
+  ) {
     return (
       <div className="min-h-screen bg-background font-sans flex items-center justify-center">
         <div className="text-center p-8 max-w-md">
