@@ -8,23 +8,22 @@ const isNextronBuild =
   process.env.NODE_ENV === "production" ||
   fs.existsSync(path.resolve(__dirname, "../resources"));
 
-// Choose appropriate _app file based on environment
-const appTarget = isNextronBuild ? "_app.nextron.tsx" : "_app.web.tsx";
-
-// Copy the environment-specific _app file to _app.tsx if it exists
-try {
-  if (fs.existsSync(path.resolve(__dirname, `./pages/${appTarget}`))) {
-    fs.copyFileSync(
-      path.resolve(__dirname, `./pages/${appTarget}`),
-      path.resolve(__dirname, "./pages/_app.tsx")
-    );
-    console.log(`Using ${appTarget} for this environment`);
-  } else {
-    console.warn(`Could not find ${appTarget}, using existing _app.tsx`);
-  }
-} catch (err) {
-  console.error(`Error setting up environment-specific _app file:`, err);
-}
+// --- AUTO-COPY LOGIC DISABLED ---
+// const appTarget = isNextronBuild ? "_app.nextron.tsx" : "_app.web.tsx";
+// try {
+//   if (fs.existsSync(path.resolve(__dirname, `./pages/${appTarget}`))) {
+//     fs.copyFileSync(
+//       path.resolve(__dirname, `./pages/${appTarget}`),
+//       path.resolve(__dirname, "./pages/_app.tsx")
+//     );
+//     console.log(`Using ${appTarget} for this environment`);
+//   } else {
+//     console.warn(`Could not find ${appTarget}, using existing _app.tsx`);
+//   }
+// } catch (err) {
+//   console.error(`Error setting up environment-specific _app file:`, err);
+// }
+// --- END AUTO-COPY LOGIC ---
 
 module.exports = {
   output: "export",
