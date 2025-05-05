@@ -1,6 +1,5 @@
 "use client";
 import "@/renderer/stores/globalPolyfill";
-import "@/resources/globals.css";
 import Navbar from "../components/Navbar";
 import { Toaster, toast } from "sonner";
 import { LoadingBar } from "./LoadingBar";
@@ -14,6 +13,7 @@ import { RoleModelImpl } from "../model/role";
 import { IoFolderOutline } from "react-icons/io5";
 import path from "path";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 

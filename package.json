@@ -7,9 +7,11 @@
   "main": "app/background.js",
   "scripts": {
     "dev": "nextron",
+    "setup:web": "if not exist renderer\\resources mkdir renderer\\resources && copy resources\\*.css renderer\\resources\\ && copy resources\\*.ttf renderer\\resources\\ && if not exist renderer\\public\\fonts mkdir renderer\\public\\fonts && copy resources\\*.ttf renderer\\public\\fonts\\",
+    "dev:web": "npm run setup:web && cd renderer && next dev",
     "build": "nextron build",
     "build:win32": "nextron build --win --ia32",
-    "build:web": "cd renderer && next build",
+    "build:web": "npm run setup:web && cd renderer && next build",
     "postinstall": "npx electron-builder install-app-deps"
   },
   "dependencies": {

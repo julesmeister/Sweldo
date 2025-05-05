@@ -13,6 +13,7 @@ interface MagicCardProps {
   gradientOpacity?: number;
   gradientFrom?: string;
   gradientTo?: string;
+  borderRadius?: string;
 }
 
 export function MagicCard({
@@ -23,6 +24,7 @@ export function MagicCard({
   gradientOpacity = 0.8,
   gradientFrom = "#9E7AFF",
   gradientTo = "#FE8BBB",
+  borderRadius = "var(--radius)",
 }: MagicCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(-gradientSize);
@@ -38,7 +40,7 @@ export function MagicCard({
         mouseY.set(clientY - top);
       }
     },
-    [mouseX, mouseY],
+    [mouseX, mouseY]
   );
 
   const handleMouseOut = useCallback(
@@ -49,7 +51,7 @@ export function MagicCard({
         mouseY.set(-gradientSize);
       }
     },
-    [handleMouseMove, mouseX, gradientSize, mouseY],
+    [handleMouseMove, mouseX, gradientSize, mouseY]
   );
 
   const handleMouseEnter = useCallback(() => {
@@ -78,11 +80,16 @@ export function MagicCard({
   return (
     <div
       ref={cardRef}
-      className={cn("group relative rounded-[inherit]", className)}
+      className={cn("group relative overflow-hidden", className)}
+      style={{
+        position: "relative",
+        borderRadius: borderRadius,
+      }}
     >
       <motion.div
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-border duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 bg-border duration-300 group-hover:opacity-100"
         style={{
+          borderRadius: borderRadius,
           background: useMotionTemplate`
           radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
           ${gradientFrom}, 
@@ -92,17 +99,23 @@ export function MagicCard({
           `,
         }}
       />
-      <div className="absolute inset-px rounded-[inherit] bg-background" />
+      <div
+        className="absolute inset-px bg-background"
+        style={{ borderRadius: borderRadius }}
+      />
       <motion.div
-        className="pointer-events-none absolute inset-px rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-px opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{
+          borderRadius: borderRadius,
           background: useMotionTemplate`
             radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px, ${gradientColor}, transparent 100%)
           `,
           opacity: gradientOpacity,
         }}
       />
-      <div className="relative">{children}</div>
+      <div className="relative" style={{ zIndex: 5 }}>
+        {children}
+      </div>
     </div>
   );
 }

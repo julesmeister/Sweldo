@@ -8,6 +8,7 @@ import { Payroll, PayrollSummaryModel } from "../model/payroll";
 import { usePayrollStatistics } from "./usePayrollStatistics";
 import { evaluatePayrollFormulas } from "../utils/payrollCalculations";
 import { PDFGeneratorOptions } from "@/renderer/types/payroll"; // Use type from renderer
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 
 interface UsePayrollPDFGenerationProps {
   dbPath: string;
@@ -229,7 +230,7 @@ export function usePayrollPDFGeneration({
 
   // --- Exposed Function 1: Calculate Potential Count ---
   const calculatePotentialPayrollCount = useCallback(async () => {
-    if (!dateRange.startDate || !dateRange.endDate) {
+    if (!dateRange?.startDate || !dateRange?.endDate) {
       setPotentialPayrollCount(0);
       return;
     }
@@ -245,19 +246,107 @@ export function usePayrollPDFGeneration({
     }
   }, [dateRange, fetchAndFilterPayrolls]); // Dependencies: dateRange, fetchAndFilterPayrolls helper
 
+  // --- Web-specific PDF generation helper ---
+  const generateWebPDF = useCallback(
+    async (
+      formattedPayrolls: FormattedPayrollPDFData[],
+      isLandscape: boolean
+    ) => {
+      // In web mode, we'll download CSV data instead of a PDF
+      try {
+        // Create CSV content
+        const headers = [
+          "Employee Name",
+          "Days Worked",
+          "Basic Pay",
+          "Overtime",
+          "Holiday",
+          "Undertime",
+          "Late",
+          "Gross Pay",
+          "SSS",
+          "PhilHealth",
+          "Pag-IBIG",
+          "Cash Advance",
+          "Total Deductions",
+          "Net Pay",
+          "Start Date",
+          "End Date",
+        ];
+
+        const csvRows = [headers.join(",")]; // Start with header row
+
+        for (const payroll of formattedPayrolls) {
+          const formattedStartDate = new Date(
+            payroll.startDate
+          ).toLocaleDateString();
+          const formattedEndDate = new Date(
+            payroll.endDate
+          ).toLocaleDateString();
+
+          const row = [
+            `"${payroll.employeeName}"`,
+            payroll.daysWorked,
+            payroll.basicPay,
+            payroll.overtime,
+            payroll.holidayBonus,
+            payroll.undertimeDeduction,
+            payroll.lateDeduction,
+            payroll.grossPay,
+            payroll.deductions.sss,
+            payroll.deductions.philHealth,
+            payroll.deductions.pagIbig,
+            payroll.deductions.cashAdvanceDeductions,
+            payroll.deductions.totalDeduction,
+            payroll.netPay,
+            formattedStartDate,
+            formattedEndDate,
+          ];
+
+          csvRows.push(row.join(","));
+        }
+
+        const csvContent = csvRows.join("\n");
+
+        // Create downloadable blob
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+
+        // Create download link and trigger it
+        const link = document.createElement("a");
+        const fileName = isLandscape
+          ? "payroll_summary.csv"
+          : "payroll_payslips.csv";
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        return { success: true, filePath: fileName };
+      } catch (error) {
+        console.error("Failed to generate CSV:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+    []
+  );
+
   // --- Exposed Function 2: Generate Payslips PDF ---
   const generatePayslipsForAll = useCallback(async () => {
-    if (!dateRange.startDate || !dateRange.endDate) {
+    if (!dateRange?.startDate || !dateRange?.endDate) {
       toast.error("Please select a date range");
-      return;
-    }
-    if (typeof window === "undefined" || !window.electron) {
-      toast.error("PDF generation is only available in the desktop app.");
       return;
     }
 
     setIsGeneratingPDF(true);
-    const loadingToast = toast.loading("Generating Payslips PDF...");
+    const loadingToast = toast.loading("Generating Payslips...");
     try {
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
@@ -275,38 +364,55 @@ export function usePayrollPDFGeneration({
       // Step 2: Format
       const formattedPayrolls = formatPayrollsForPDF(filteredPayrolls);
 
-      // Step 3: Prepare PDF Options
-      const outputPath = await window.electron.getPath("documents");
-      const pdfOutputPath = path.join(outputPath, "payroll_payslips.pdf");
-      const pdfOptions: PDFGeneratorOptions = {
-        outputPath: pdfOutputPath,
-        logoPath: logoPath || "",
-        companyName: companyName || "Default Company", // Provide a fallback
-        calculationSettings: calculationSettings,
-        dbPath: dbPath,
-        columnColors: columnColors || {}, // Provide a fallback
-        preparedBy: preparedBy || "",
-        approvedBy: approvedBy || "",
-      };
+      // Step 3: Generate based on environment
+      if (isWebEnvironment()) {
+        // Web environment: Generate CSV
+        const result = await generateWebPDF(formattedPayrolls, false);
 
-      // Step 4: Call IPC for PDF Generation
-      const pdfPath = await window.electron.generatePDF(
-        formattedPayrolls,
-        pdfOptions
-      );
+        if (result.success) {
+          toast.success("Payslips CSV generated and downloaded!", {
+            id: loadingToast,
+          });
+        } else {
+          toast.error(`Failed to generate payslips CSV: ${result.error}`, {
+            id: loadingToast,
+          });
+        }
+      } else {
+        // Nextron/Electron environment: Generate PDF
+        // Step 3: Prepare PDF Options
+        const outputPath = await window.electron.getPath("documents");
+        const pdfOutputPath = path.join(outputPath, "payroll_payslips.pdf");
+        const pdfOptions: PDFGeneratorOptions = {
+          outputPath: pdfOutputPath,
+          logoPath: logoPath || "",
+          companyName: companyName || "Default Company", // Provide a fallback
+          calculationSettings: calculationSettings,
+          dbPath: dbPath,
+          columnColors: columnColors || {}, // Provide a fallback
+          preparedBy: preparedBy || "",
+          approvedBy: approvedBy || "",
+        };
 
-      // Step 5: Open PDF and show success
-      await window.electron.openPath(pdfPath);
-      toast.success("Payslips PDF generated successfully!", {
-        id: loadingToast,
-      });
+        // Step 4: Call IPC for PDF Generation
+        const pdfPath = await window.electron.generatePDF(
+          formattedPayrolls,
+          pdfOptions
+        );
+
+        // Step 5: Open PDF and show success
+        await window.electron.openPath(pdfPath);
+        toast.success("Payslips PDF generated successfully!", {
+          id: loadingToast,
+        });
+      }
 
       // Step 6: Update Statistics
       await updateStatisticsForRange(filteredPayrolls, startDate, endDate);
     } catch (error) {
-      console.error("Failed to generate payslips PDF:", error);
+      console.error("Failed to generate payslips:", error);
       toast.error(
-        `Failed to generate payslips PDF: ${
+        `Failed to generate payslips: ${
           error instanceof Error ? error.message : String(error)
         }`,
         { id: loadingToast }
@@ -323,6 +429,7 @@ export function usePayrollPDFGeneration({
     logoPath,
     companyName,
     calculationSettings,
+    generateWebPDF,
     preparedBy,
     approvedBy,
     columnColors, // Ensure all used variables are dependencies
@@ -330,17 +437,13 @@ export function usePayrollPDFGeneration({
 
   // --- Exposed Function 3: Generate Summary PDF ---
   const generateSummaryForAll = useCallback(async () => {
-    if (!dateRange.startDate || !dateRange.endDate) {
+    if (!dateRange?.startDate || !dateRange?.endDate) {
       toast.error("Please select a date range");
-      return;
-    }
-    if (typeof window === "undefined" || !window.electron) {
-      toast.error("PDF generation is only available in the desktop app.");
       return;
     }
 
     setIsGeneratingPDF(true);
-    const loadingToast = toast.loading("Generating Summary PDF...");
+    const loadingToast = toast.loading("Generating Summary...");
     try {
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
@@ -358,41 +461,58 @@ export function usePayrollPDFGeneration({
       // Step 2: Format
       const formattedPayrolls = formatPayrollsForPDF(filteredPayrolls);
 
-      // Step 3: Prepare PDF Options
-      const outputPath = await window.electron.getPath("documents");
-      const pdfOutputPath = path.join(
-        outputPath,
-        "payroll_summaries_landscape.pdf"
-      );
-      const pdfOptions: PDFGeneratorOptions = {
-        outputPath: pdfOutputPath,
-        logoPath: logoPath || "",
-        companyName: companyName || "Default Company", // Provide a fallback
-        columnColors: columnColors || {}, // Provide a fallback
-        calculationSettings: calculationSettings,
-        dbPath: dbPath,
-        preparedBy: preparedBy || "",
-        approvedBy: approvedBy || "",
-      };
+      // Step 3: Generate based on environment
+      if (isWebEnvironment()) {
+        // Web environment: Generate CSV
+        const result = await generateWebPDF(formattedPayrolls, true);
 
-      // Step 4: Call IPC for PDF Generation (Landscape)
-      const pdfPath = await window.electron.generatePDFLandscape(
-        formattedPayrolls,
-        pdfOptions
-      );
+        if (result.success) {
+          toast.success("Summary CSV generated and downloaded!", {
+            id: loadingToast,
+          });
+        } else {
+          toast.error(`Failed to generate summary CSV: ${result.error}`, {
+            id: loadingToast,
+          });
+        }
+      } else {
+        // Nextron/Electron environment: Generate PDF
+        // Step 3: Prepare PDF Options
+        const outputPath = await window.electron.getPath("documents");
+        const pdfOutputPath = path.join(
+          outputPath,
+          "payroll_summaries_landscape.pdf"
+        );
+        const pdfOptions: PDFGeneratorOptions = {
+          outputPath: pdfOutputPath,
+          logoPath: logoPath || "",
+          companyName: companyName || "Default Company", // Provide a fallback
+          columnColors: columnColors || {}, // Provide a fallback
+          calculationSettings: calculationSettings,
+          dbPath: dbPath,
+          preparedBy: preparedBy || "",
+          approvedBy: approvedBy || "",
+        };
 
-      // Step 5: Open PDF and show success
-      await window.electron.openPath(pdfPath);
-      toast.success("Summary PDF generated successfully!", {
-        id: loadingToast,
-      });
+        // Step 4: Call IPC for PDF Generation (Landscape)
+        const pdfPath = await window.electron.generatePDFLandscape(
+          formattedPayrolls,
+          pdfOptions
+        );
+
+        // Step 5: Open PDF and show success
+        await window.electron.openPath(pdfPath);
+        toast.success("Summary PDF generated successfully!", {
+          id: loadingToast,
+        });
+      }
 
       // Step 6: Update Statistics
       await updateStatisticsForRange(filteredPayrolls, startDate, endDate);
     } catch (error) {
-      console.error("Failed to generate summary PDF:", error);
+      console.error("Failed to generate summary:", error);
       toast.error(
-        `Failed to generate summary PDF: ${
+        `Failed to generate summary: ${
           error instanceof Error ? error.message : String(error)
         }`,
         { id: loadingToast }
@@ -410,6 +530,7 @@ export function usePayrollPDFGeneration({
     companyName,
     columnColors,
     calculationSettings,
+    generateWebPDF,
     preparedBy,
     approvedBy, // Ensure all used variables are dependencies
   ]);

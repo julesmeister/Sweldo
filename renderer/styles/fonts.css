@@ -1,0 +1,12 @@
+/* 
+  Regular CSS for fonts
+  This works in both Web and Nextron environments
+*/
+
+@font-face {
+  font-family: 'Pacifico';
+  /* Use a relative path that works in both environments */
+  src: url('/fonts/Pacifico.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+} 

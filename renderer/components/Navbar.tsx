@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import "@/resources/fonts.css";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,8 +26,10 @@ export default function Navbar() {
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const [visibleLinks, setVisibleLinks] = useState<number>(5);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const navContainerRef = useRef<HTMLDivElement>(null);
   const navRefs = useRef<Record<string, HTMLAnchorElement>>({});
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [highlighterStyle, setHighlighterStyle] = useState({
     left: 0,
     width: 0,
@@ -41,6 +42,23 @@ export default function Navbar() {
   // Effect to set hasMounted to true after component mounts
   useEffect(() => {
     setHasMounted(true);
+  }, []);
+
+  // Click outside handler for the More dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsMoreMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   // Calculate visible links based on container width
@@ -114,6 +132,7 @@ export default function Navbar() {
     setLoading(true);
     updateHighlighterPosition(path);
     setIsMobileMenuOpen(false);
+    setIsMoreMenuOpen(false);
 
     setTimeout(() => {
       setActiveLink(path);
@@ -122,6 +141,10 @@ export default function Navbar() {
         setLoading(false);
       }, 100);
     }, 100);
+  };
+
+  const toggleMoreMenu = () => {
+    setIsMoreMenuOpen(!isMoreMenuOpen);
   };
 
   const setNavRef = (path: string, el: HTMLAnchorElement | null) => {
@@ -186,20 +209,25 @@ export default function Navbar() {
                       onClick={(e) => {
                         e.preventDefault();
                         handleLinkClick(path);
-                      }} // prevent default for hydration
+                      }}
                     >
                       {label}
                     </Link>
                   );
                 })}
 
-                {/* Hover dropdown for remaining links */}
+                {/* Click dropdown for remaining links */}
                 {visibleLinks < navLinks.length && (
-                  <div className="relative group">
-                    <button className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10">
+                  <div className="relative" ref={moreMenuRef}>
+                    <button
+                      className="text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10"
+                      onClick={toggleMoreMenu}
+                    >
                       More
                       <svg
-                        className="ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:rotate-180"
+                        className={`ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out ${
+                          isMoreMenuOpen ? "rotate-180" : ""
+                        }`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -213,47 +241,57 @@ export default function Navbar() {
                       </svg>
                     </button>
 
-                    {/* Hover dropdown menu */}
-                    <div className="absolute left-0 mt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out">
-                      <div className="w-[180px] p-2 rounded-xl bg-white/95 shadow-xl shadow-blue-900/10 backdrop-blur-sm border border-white/20 transform-gpu">
-                        {navLinks
-                          .slice(visibleLinks)
-                          .map(({ path, label }, index) => {
-                            const isActive = pathname === path;
-                            return (
-                              <Link
-                                key={path}
-                                href={path}
-                                className={`
-                                relative flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-200
-                                ${
-                                  isActive
-                                    ? "text-blue-600 bg-blue-50/80"
-                                    : "text-gray-600 hover:text-blue-600 hover:bg-blue-50/60"
-                                }
-                              `}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleLinkClick(path);
-                                }} // prevent default for hydration
-                              >
-                                {label}
-                                {isActive && (
-                                  <motion.div
-                                    layoutId="menuActiveIndicator"
-                                    className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-600"
-                                    transition={{
-                                      type: "spring",
-                                      bounce: 0.3,
-                                      duration: 0.5,
+                    {/* Click dropdown menu */}
+                    <AnimatePresence>
+                      {isMoreMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute left-0 mt-1"
+                        >
+                          <div className="w-[180px] p-2 rounded-xl bg-white shadow-xl shadow-blue-900/10 border border-gray-200 transform-gpu">
+                            {navLinks
+                              .slice(visibleLinks)
+                              .map(({ path, label }, index) => {
+                                const isActive = pathname === path;
+                                return (
+                                  <Link
+                                    key={path}
+                                    href={path}
+                                    className={`
+                                    relative flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-200
+                                    ${
+                                      isActive
+                                        ? "text-blue-600 bg-blue-50"
+                                        : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                    }
+                                  `}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      handleLinkClick(path);
                                     }}
-                                  />
-                                )}
-                              </Link>
-                            );
-                          })}
-                      </div>
-                    </div>
+                                  >
+                                    {label}
+                                    {isActive && (
+                                      <motion.div
+                                        layoutId="menuActiveIndicator"
+                                        className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-600"
+                                        transition={{
+                                          type: "spring",
+                                          bounce: 0.3,
+                                          duration: 0.5,
+                                        }}
+                                      />
+                                    )}
+                                  </Link>
+                                );
+                              })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
