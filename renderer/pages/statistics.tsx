@@ -645,19 +645,28 @@ export default function StatisticsPage() {
 
   // Show message if database path is not set
   if (!dbPath) {
+    // Modern, beautiful placeholder for missing database path
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="bg-yellow-50 p-4 rounded-full mb-4">
-            <IoWalletOutline className="w-8 h-8 text-yellow-500 mx-auto" />
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-50/60 to-white">
+        <div className="bg-white/90 rounded-2xl shadow-xl border border-blue-100 px-8 py-12 flex flex-col items-center max-w-lg w-full">
+          <div className="bg-yellow-100 p-6 rounded-full mb-6 shadow-sm flex items-center justify-center">
+            <IoWalletOutline className="w-16 h-16 text-yellow-500" />
           </div>
-          <div className="text-lg font-medium text-gray-700">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2 text-center drop-shadow-sm">
             Database Path Not Set
-          </div>
-          <div className="text-gray-600 max-w-md">
-            Please configure your database path in the settings before viewing
-            statistics.
-          </div>
+          </h2>
+          <p className="text-gray-600 text-center mb-6 text-lg">
+            To view payroll statistics, please configure your database path in
+            the <span className="font-semibold text-blue-700">Settings</span>{" "}
+            page first.
+          </p>
+          <a
+            href="/settings"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors text-base mt-2"
+          >
+            <IoBarChartOutline className="w-5 h-5" />
+            Go to Settings
+          </a>
         </div>
       </div>
     );

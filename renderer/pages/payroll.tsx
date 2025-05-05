@@ -345,9 +345,10 @@ export default function PayrollPage() {
 
   // Check if user has basic access to view payroll
   if (!hasAccess("VIEW_REPORTS")) {
+    // NOTE: On web, the layout may not fill the screen as in Nextron, so we use min-h-screen for better centering.
     return (
       <RootLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-700 mb-2">

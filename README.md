@@ -60,6 +60,41 @@ module.exports = {
 
 **For reference**: The Tailwind configuration is located at `renderer/tailwind.config.js` and contains all necessary color and plugin definitions.
 
+## Web/Nextron Layout Differences: Centering Issues
+
+### Problem: Centered Content Appears Pulled Up on Web
+
+When running Sweldo in **web mode**, certain pages (such as the Payroll page's "Access Restricted" message) may appear visually pulled up or not vertically centered, even though they look correct in Nextron (Electron desktop) mode. This is due to subtle differences in how the layout and parent containers fill the viewport between the two environments.
+
+#### **Symptoms:**
+- The restricted message is too close to the navbar, with excessive empty space below.
+- The same page appears perfectly centered in Nextron.
+
+#### **Cause:**
+- In Nextron, the main layout and window sizing ensure the content area fills the screen, so `min-h-[60vh]` is often enough for vertical centering.
+- In web mode, the parent containers may not fill the viewport, so centering with a percentage height (like `min-h-[60vh]`) does not work as expected.
+
+#### **Solution:**
+- Use `min-h-screen` on the flex container that wraps the restricted message. This ensures the content is always centered relative to the full viewport height, regardless of environment.
+
+##### **Example Fix (in `renderer/pages/payroll.tsx`):**
+
+```tsx
+// Before:
+<div className="flex items-center justify-center min-h-[60vh]">
+  {/* ... */}
+</div>
+
+// After:
+<div className="flex items-center justify-center min-h-screen">
+  {/* ... */}
+</div>
+```
+
+**Note:**
+- This change is safe for both Nextron and web, but is especially important for web deployments.
+- If you have other pages with similar centering issues, apply the same `min-h-screen` strategy.
+
 ## Firebase Hosting Setup Progress
 
 ### ✅ Completed Steps

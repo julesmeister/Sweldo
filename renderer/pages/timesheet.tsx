@@ -647,7 +647,7 @@ const TimesheetPage: React.FC = () => {
   if (!hasAccess("VIEW_TIMESHEETS")) {
     return (
       <RootLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <IoShieldOutline className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-700 mb-2">

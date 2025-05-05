@@ -1969,7 +1969,7 @@ export default function SettingsPage() {
                       Gross Pay Formula
                     </h3>
                     <div
-                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
+                      className={`p-3 border rounded-md bg-gray-50 min-h-screen mb-2 ${
                         !selectedOperator ? "cursor-not-allowed" : ""
                       }`}
                       onDragOver={(e) => {
@@ -2671,7 +2671,7 @@ export default function SettingsPage() {
           setDbPath={setDbPath}
           currentPath={currentPath}
           setCurrentPath={setCurrentPath}
-          companyName={companyName} // Pass companyName
+          companyName={companyName}
         />
       ),
     },
@@ -3003,43 +3003,44 @@ export default function SettingsPage() {
 
   // If no dbPath, only show database configuration section
   // console.log("[SettingsPage] Checking !dbPath:", !dbPath);
-  if (!dbPath) {
+  if (!dbPath)
     return (
-      <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
-        <MagicCard
-          className="p-0.5 rounded-2xl col-span-2"
-          gradientSize={400}
-          gradientColor="#9E7AFF"
-          gradientOpacity={0.8}
-          gradientFrom="#9E7AFF"
-          gradientTo="#FE8BBB"
-        >
-          <div className="px-4 sm:px-0">
-            <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
-              <div className="border-b border-gray-100">
-                <div className="flex items-center gap-1 px-6 bg-gray-50">
-                  <div className="flex items-center gap-2 px-4 py-4 text-sm font-medium text-blue-600">
-                    <MdOutlineDataset className="h-5 w-5" />
-                    <span>Database Management</span>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-50/60 to-white">
+        <main className="max-w-12xl w-full mx-auto py-12 sm:px-6 lg:px-8">
+          <MagicCard
+            className="p-0.5 rounded-2xl col-span-2"
+            gradientSize={400}
+            gradientColor="#9E7AFF"
+            gradientOpacity={0.8}
+            gradientFrom="#9E7AFF"
+            gradientTo="#FE8BBB"
+          >
+            <div className="px-4 sm:px-0">
+              <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
+                <div className="border-b border-gray-100">
+                  <div className="flex items-center gap-1 px-6 bg-gray-50">
+                    <div className="flex items-center gap-2 px-4 py-4 text-sm font-medium text-blue-600">
+                      <MdOutlineDataset className="h-5 w-5" />
+                      <span>Database Management</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="p-6">
-                {/* Use the new component for the initial setup */}
-                <DatabaseManagementSettings
-                  dbPath={dbPath}
-                  setDbPath={setDbPath}
-                  currentPath={currentPath}
-                  setCurrentPath={setCurrentPath}
-                  companyName={companyName} // Pass companyName
-                />
+                <div className="p-6">
+                  {/* Use the new component for the initial setup */}
+                  <DatabaseManagementSettings
+                    dbPath={dbPath}
+                    setDbPath={setDbPath}
+                    currentPath={currentPath}
+                    setCurrentPath={setCurrentPath}
+                    companyName={companyName}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </MagicCard>
-      </main>
+          </MagicCard>
+        </main>
+      </div>
     );
-  }
 
   // Early return for no accessible sections
   if (accessibleSections.length === 0) {
