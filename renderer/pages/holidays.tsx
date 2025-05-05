@@ -302,15 +302,19 @@ export default function HolidaysPage() {
                       />
                     )}
                   </div>
-                  {holidays.filter((holiday) => {
-                    const startDate = new Date(holiday.startDate);
-                    const endDate = new Date(holiday.endDate);
-                    return (
-                      !isNaN(startDate.getTime()) &&
-                      !isNaN(endDate.getTime()) &&
-                      !isNaN(holiday.multiplier)
-                    );
-                  }).length > 0 ? (
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    </div>
+                  ) : holidays.filter((holiday) => {
+                      const startDate = new Date(holiday.startDate);
+                      const endDate = new Date(holiday.endDate);
+                      return (
+                        !isNaN(startDate.getTime()) &&
+                        !isNaN(endDate.getTime()) &&
+                        !isNaN(holiday.multiplier)
+                      );
+                    }).length > 0 ? (
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead>
@@ -446,13 +450,14 @@ export default function HolidaysPage() {
                   ) : (
                     <div className="text-center py-6 bg-gray-50 rounded-lg">
                       <p className="text-sm text-gray-500">
-                        No holidays added yet.
+                        {isLoading
+                          ? "Loading holidays..."
+                          : "No holidays added yet."}
                       </p>
                       <p className="text-sm text-gray-500 mt-1">
                         Click "Add Holiday" or select from suggestions to add
                         one.
                       </p>
-
                       <div className="mt-6">
                         <AddButton
                           text="Add Holiday"
