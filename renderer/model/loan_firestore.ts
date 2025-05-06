@@ -93,8 +93,11 @@ export async function loadLoansFirestore(
 
     return loans;
   } catch (error) {
-    console.error(`Error loading loans from Firestore:`, error);
-    return []; // Return empty array on error
+    console.error(
+      `[LoanFirestore] Error loading loans from Firestore for emp ${employeeId}, ${year}-${month}:`,
+      error
+    );
+    return [];
   }
 }
 
@@ -166,7 +169,10 @@ export async function createLoanFirestore(
       await updateDocument("loans", docId, loanData, companyName);
     }
   } catch (error) {
-    console.error(`Error creating loan in Firestore:`, error);
+    console.error(
+      `[LoanFirestore] Error creating/updating loan in Firestore (ID: ${loan.id}):`,
+      error
+    );
     throw error;
   }
 }
@@ -179,43 +185,13 @@ export async function updateLoanFirestore(
   companyName: string
 ): Promise<void> {
   try {
-    const year = loan.date.getFullYear();
-    const month = loan.date.getMonth() + 1;
-    const docId = createLoanDocId(loan.employeeId, year, month);
-
-    // First check if document exists
-    const existingDoc = await fetchDocument<LoanFirestoreData>(
-      "loans",
-      docId,
-      companyName
-    );
-
-    if (!existingDoc) {
-      // If document doesn't exist, create it (should be rare in update case)
-      await createLoanFirestore(loan, companyName);
-    } else {
-      // Update the loan in the existing document
-      const loanData = {
-        [`loans.${loan.id}`]: {
-          employeeId: loan.employeeId,
-          date: loan.date.toISOString(),
-          amount: loan.amount,
-          type: loan.type,
-          status: loan.status,
-          interestRate: loan.interestRate,
-          term: loan.term,
-          monthlyPayment: loan.monthlyPayment,
-          remainingBalance: loan.remainingBalance,
-          nextPaymentDate: loan.nextPaymentDate.toISOString(),
-          reason: loan.reason,
-        },
-        "meta.lastModified": new Date().toISOString(),
-      };
-
-      await updateDocument("loans", docId, loanData, companyName);
-    }
+    // This essentially calls createLoanFirestore which handles both create and update via replacement of the loan map entry.
+    await createLoanFirestore(loan, companyName);
   } catch (error) {
-    console.error(`Error updating loan in Firestore:`, error);
+    console.error(
+      `[LoanFirestore] Error updating loan in Firestore (ID: ${loan.id}) - (invoked createLoanFirestore):`,
+      error
+    );
     throw error;
   }
 }
@@ -252,7 +228,10 @@ export async function deleteLoanFirestore(
 
     await updateDocument("loans", docId, updateData, companyName);
   } catch (error) {
-    console.error(`Error deleting loan from Firestore:`, error);
+    console.error(
+      `[LoanFirestore] Error deleting loan from Firestore (ID: ${id}):`,
+      error
+    );
     throw error;
   }
 }
@@ -303,10 +282,10 @@ export async function loadAllLoansForEmployeeFirestore(
     return allLoans;
   } catch (error) {
     console.error(
-      `Error loading all loans for employee from Firestore:`,
+      `[LoanFirestore] Error loading all loans for employee ${employeeId} from Firestore:`,
       error
     );
-    return []; // Return empty array on error
+    return [];
   }
 }
 
@@ -329,8 +308,11 @@ export async function loadActiveLoansFirestore(
       (loan) => loan.status !== "Completed" && loan.status !== "Rejected"
     );
   } catch (error) {
-    console.error(`Error loading active loans from Firestore:`, error);
-    return []; // Return empty array on error
+    console.error(
+      `[LoanFirestore] Error loading active loans for employee ${employeeId} from Firestore:`,
+      error
+    );
+    return [];
   }
 }
 
@@ -342,47 +324,54 @@ export function createLoanFirestoreInstance(model: LoanModel) {
     async syncToFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      onProgress?.("Starting loan sync to Firestore...");
       try {
-        // Load all loans from the model
-        const loans = await model.loadLoans(0, 0); // 0 for year/month to get all loans
-        onProgress?.("Starting loan sync to Firestore...");
-
-        // Group loans by employee, year, and month
-        const loansByEmployeeMonth = loans.reduce(
-          (acc: Record<string, Loan[]>, loan: Loan) => {
-            const year = loan.date.getFullYear();
-            const month = loan.date.getMonth() + 1;
-            const key = `${loan.employeeId}_${year}_${month}`;
-            if (!acc[key]) {
-              acc[key] = [];
-            }
-            acc[key].push(loan);
-            return acc;
-          },
-          {}
-        );
-
-        // Process each employee's loans by month
-        const employeeMonths = Object.keys(loansByEmployeeMonth);
-        for (let i = 0; i < employeeMonths.length; i++) {
-          const [employeeId, year, month] = employeeMonths[i].split("_");
-          const monthLoans = loansByEmployeeMonth[employeeMonths[i]];
-
-          onProgress?.(
-            `Processing loans for employee ${employeeId} (${year}-${month}) (${
-              i + 1
-            }/${employeeMonths.length})`
+        const companyName = await getCompanyName();
+        if (!companyName) {
+          console.error(
+            "[LoanFirestore] syncToFirestore: Critical - Company name not found for loan sync."
           );
-
-          // Save each loan individually
-          for (const loan of monthLoans) {
-            await createLoanFirestore(loan, await getCompanyName());
-          }
+          onProgress?.("Error: Company name not found for loan sync.");
+          throw new Error("Company name not found for loan sync.");
         }
 
-        onProgress?.("Loan sync to Firestore completed successfully.");
+        const allLoans = await model.loadAllLoansForSync();
+        onProgress?.(`Loaded ${allLoans.length} local loan records for sync.`);
+
+        if (allLoans.length === 0) {
+          onProgress?.("No local loan data to sync.");
+          return;
+        }
+
+        let processedCount = 0;
+        const totalToProcess = allLoans.length;
+
+        for (const loan of allLoans) {
+          processedCount++;
+          const progressMessage = `Syncing loan ID ${loan.id} for ${loan.employeeId} (${processedCount}/${totalToProcess})`;
+          onProgress?.(progressMessage);
+          try {
+            await createLoanFirestore(loan, companyName);
+          } catch (loanSyncError) {
+            const errorMsg = `Error syncing loan ID ${loan.id} for emp ${
+              loan.employeeId
+            }: ${
+              loanSyncError instanceof Error
+                ? loanSyncError.message
+                : String(loanSyncError)
+            }`;
+            console.error(
+              `[LoanFirestore] syncToFirestore: ${errorMsg}`,
+              loanSyncError
+            );
+            onProgress?.(errorMsg);
+          }
+        }
+        onProgress?.("Loan sync to Firestore completed.");
       } catch (error) {
-        console.error("Error syncing loans to Firestore:", error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error("[LoanFirestore] syncToFirestore: Overall ERROR:", error);
+        onProgress?.(`Overall error in loan sync: ${errorMsg}`);
         throw error;
       }
     },
@@ -390,66 +379,79 @@ export function createLoanFirestoreInstance(model: LoanModel) {
     async syncFromFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      onProgress?.("Starting loan sync from Firestore...");
       try {
-        onProgress?.("Starting loan sync from Firestore...");
         const companyName = await getCompanyName();
-
-        // Query all documents in the loans collection
+        if (!companyName) {
+          console.error(
+            "[LoanFirestore] syncFromFirestore: Critical - Company name not found."
+          );
+          onProgress?.("Error: Company name not found.");
+          throw new Error(
+            "Company name not found for loan sync from Firestore."
+          );
+        }
         const conditions: [string, string, any][] = [];
         const documents = await queryCollection<LoanFirestoreData>(
           "loans",
           conditions,
           companyName
         );
-
         if (!documents || documents.length === 0) {
           onProgress?.("No loans found in Firestore.");
           return;
         }
+        onProgress?.(
+          `Retrieved ${documents.length} loan documents from Firestore.`
+        );
 
-        onProgress?.(`Found ${documents.length} loan documents in Firestore.`);
-
-        // Process each document
         for (let i = 0; i < documents.length; i++) {
           const doc = documents[i];
           if (!doc.loans) continue;
-
-          const loans = Object.entries(doc.loans).map(([id, loan]) => ({
+          const loans = Object.entries(doc.loans).map(([id, loanData]) => ({
             id,
-            employeeId: loan.employeeId,
-            date: new Date(loan.date),
-            amount: loan.amount,
-            type: loan.type,
-            status: loan.status,
-            interestRate: loan.interestRate,
-            term: loan.term,
-            monthlyPayment: loan.monthlyPayment,
-            remainingBalance: loan.remainingBalance,
-            nextPaymentDate: new Date(loan.nextPaymentDate),
-            reason: loan.reason,
+            employeeId: loanData.employeeId,
+            date: new Date(loanData.date),
+            amount: loanData.amount,
+            type: loanData.type,
+            status: loanData.status,
+            interestRate: loanData.interestRate,
+            term: loanData.term,
+            monthlyPayment: loanData.monthlyPayment,
+            remainingBalance: loanData.remainingBalance,
+            nextPaymentDate: new Date(loanData.nextPaymentDate),
+            reason: loanData.reason,
           }));
-
           onProgress?.(
-            `Processing document ${i + 1}/${documents.length} with ${
+            `Processing doc ${i + 1}/${documents.length} with ${
               loans.length
             } loans`
           );
-
-          // Save each loan
           for (const loan of loans) {
             try {
-              await model.createLoan(loan);
+              await model.createLoan(loan); // Using createLoan as it handles add/update logic for local file
             } catch (error) {
-              console.error(`Error saving loan ${loan.id}:`, error);
-              throw new Error("Failed to sync loans from Firestore");
+              console.error(
+                `[LoanFirestore] Error saving loan ID ${loan.id} locally from Firestore sync:`,
+                error
+              );
+              onProgress?.(
+                `Error saving loan ID ${loan.id} locally: ${
+                  error instanceof Error ? error.message : String(error)
+                }`
+              );
             }
           }
         }
-
-        onProgress?.("Loan sync from Firestore completed successfully.");
+        onProgress?.("Loan sync from Firestore completed.");
       } catch (error) {
-        console.error("Error syncing loans from Firestore:", error);
-        throw new Error("Failed to sync loans from Firestore");
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(
+          "[LoanFirestore] syncFromFirestore: Overall ERROR:",
+          error
+        );
+        onProgress?.(`Overall error syncing loans from Firestore: ${errorMsg}`);
+        throw error;
       }
     },
   };

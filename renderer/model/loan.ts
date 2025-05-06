@@ -87,9 +87,12 @@ export class LoanModel {
 
       const employeePath = this.basePath;
       await window.electron.ensureDir(employeePath);
-      console.log(`[LoanModel] Ensured directory exists: ${employeePath}`);
+      // console.log(`[LoanModel] Ensured directory exists: ${employeePath}`); // REMOVED
     } catch (error) {
-      console.error(`[LoanModel] Failed to ensure directory exists: ${error}`);
+      console.error(
+        `[LoanModel] Failed to ensure directory ${this.basePath} exists:`,
+        error
+      );
       throw error;
     }
   }
@@ -361,6 +364,10 @@ export class LoanModel {
             );
             // Fall through to CSV loading
           } else {
+            console.error(
+              `[LoanModel] Error reading/parsing JSON file ${jsonPath}:`,
+              error
+            );
             throw error;
           }
         }
@@ -417,6 +424,7 @@ export class LoanModel {
           );
           return [];
         }
+        console.error(`[LoanModel] Error reading CSV file ${filePath}:`, error);
         throw error;
       }
     } catch (error) {
@@ -465,6 +473,10 @@ export class LoanModel {
             console.log(`[LoanModel] No JSON file found for ${year}-${month}`);
             // Fall through to CSV deletion
           } else {
+            console.error(
+              `[LoanModel] Error processing JSON file ${jsonPath}:`,
+              error
+            );
             throw error;
           }
         }
@@ -483,6 +495,204 @@ export class LoanModel {
       console.error("[LoanModel] Error deleting loan:", error);
       throw error;
     }
+  }
+
+  async loadAllLoansForSync(): Promise<Loan[]> {
+    const loansRootPath = path.dirname(this.basePath); // Should be SweldoDB/loans/
+    // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: START - Scanning for all loans in ${loansRootPath}`); // REMOVED
+    if (isWebEnvironment()) {
+      console.warn(
+        "[loan.ts] LoanModel.loadAllLoansForSync: Should not be called in web environment. Returning empty array."
+      );
+      return [];
+    }
+
+    const allEmployeeLoans: Loan[] = [];
+
+    try {
+      const employeeIdFolders = await window.electron.readDir(loansRootPath);
+      // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Found ${employeeIdFolders.length} potential employee folders in ${loansRootPath}`); // REMOVED
+
+      for (const empFolder of employeeIdFolders) {
+        if (!empFolder.isDirectory) {
+          console.log(
+            `[loan.ts] LoanModel.loadAllLoansForSync: Skipping item ${empFolder.name} as it is not a directory.`
+          );
+          continue;
+        }
+        const currentEmployeeId = empFolder.name;
+        const employeeLoanPath = path.join(loansRootPath, currentEmployeeId);
+        // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing employee folder: ${employeeLoanPath}`); // REMOVED
+
+        try {
+          const loanFiles = await window.electron.readDir(employeeLoanPath);
+          // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Found ${loanFiles.length} files/subdirs in ${employeeLoanPath}`); // REMOVED
+
+          const jsonLoanFiles = loanFiles.filter(
+            (file: { name: string; isFile: boolean }) =>
+              file.isFile && file.name.endsWith("_loans.json")
+          );
+          const csvLoanFiles = loanFiles.filter(
+            (file: { name: string; isFile: boolean }) =>
+              file.isFile && file.name.endsWith("_loans.csv")
+          );
+          // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Employee ${currentEmployeeId} - Found ${jsonLoanFiles.length} JSON files, ${csvLoanFiles.length} CSV files.`); // REMOVED
+
+          for (const jsonFile of jsonLoanFiles) {
+            const filePath = path.join(employeeLoanPath, jsonFile.name);
+            // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing JSON file: ${filePath}`); // REMOVED
+            try {
+              const fileContent = await window.electron.readFile(filePath);
+              if (!fileContent.trim()) {
+                console.log(
+                  `[loan.ts] LoanModel.loadAllLoansForSync: JSON file ${jsonFile.name} is empty. Skipping.`
+                );
+                continue;
+              }
+              const jsonData: LoanJsonData = JSON.parse(fileContent);
+              if (jsonData.meta.employeeId !== currentEmployeeId) {
+                console.warn(
+                  `[LoanModel] Employee ID mismatch in JSON ${jsonFile.name}. Meta: ${jsonData.meta.employeeId}, Folder: ${currentEmployeeId}. Prioritizing folder ID.`
+                );
+              }
+
+              const loansFromFile: Loan[] = Object.entries(jsonData.loans)
+                .map(([id, loanData]) => {
+                  const date = new Date(loanData.date);
+                  const nextPaymentDate = new Date(loanData.nextPaymentDate);
+                  if (
+                    isNaN(date.getTime()) ||
+                    isNaN(nextPaymentDate.getTime())
+                  ) {
+                    console.warn(
+                      `[loan.ts] LoanModel.loadAllLoansForSync: Invalid date in JSON file ${jsonFile.name} for loan id ${id}. Skipping entry.`
+                    );
+                    return null;
+                  }
+                  return {
+                    id,
+                    employeeId: currentEmployeeId, // MODIFIED: Use folder name as employeeId
+                    date,
+                    amount: loanData.amount,
+                    type: loanData.type,
+                    status: loanData.status,
+                    interestRate: loanData.interestRate,
+                    term: loanData.term,
+                    monthlyPayment: loanData.monthlyPayment,
+                    remainingBalance: loanData.remainingBalance,
+                    nextPaymentDate,
+                    reason: loanData.reason,
+                  };
+                })
+                .filter((loan) => loan !== null) as Loan[];
+              allEmployeeLoans.push(...loansFromFile);
+              // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Added ${loansFromFile.length} loans from JSON ${jsonFile.name} for employee ${currentEmployeeId}`); // REMOVED
+            } catch (error) {
+              console.error(
+                `[loan.ts] LoanModel.loadAllLoansForSync: ERROR processing JSON file ${jsonFile.name} for emp ${currentEmployeeId}:`,
+                error
+              );
+            }
+          }
+
+          for (const csvFile of csvLoanFiles) {
+            const baseName = csvFile.name.replace("_loans.csv", "");
+            if (
+              jsonLoanFiles.some((jf: { name: string }) =>
+                jf.name.startsWith(baseName)
+              )
+            ) {
+              console.log(
+                `[loan.ts] LoanModel.loadAllLoansForSync: JSON version for ${csvFile.name} (emp ${currentEmployeeId}) processed. Skipping CSV.`
+              );
+              continue;
+            }
+            const filePath = path.join(employeeLoanPath, csvFile.name);
+            // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing CSV file: ${filePath}`); // REMOVED
+            try {
+              const fileContent = await window.electron.readFile(filePath);
+              if (!fileContent.trim()) {
+                console.log(
+                  `[loan.ts] LoanModel.loadAllLoansForSync: CSV file ${csvFile.name} is empty. Skipping.`
+                );
+                continue;
+              }
+              const lines = fileContent
+                .split("\n")
+                .filter((line) => line.trim().length > 0);
+              const loansFromFile = lines
+                .map((line) => {
+                  const fields = line.split(",");
+                  if (fields.length < 12) {
+                    console.warn(
+                      `[loan.ts] LoanModel.loadAllLoansForSync: Malformed CSV line in ${csvFile.name} (emp ${currentEmployeeId}). Line: "${line}". Skipping.`
+                    );
+                    return null;
+                  }
+                  if (fields[1] !== currentEmployeeId) {
+                    console.warn(
+                      `[LoanModel] Employee ID mismatch in CSV ${csvFile.name}. Line EmpID: ${fields[1]}, Folder: ${currentEmployeeId}. Prioritizing folder ID.`
+                    );
+                  }
+                  const date = new Date(fields[2]);
+                  const nextPaymentDate = new Date(fields[10]);
+                  if (
+                    isNaN(date.getTime()) ||
+                    isNaN(nextPaymentDate.getTime())
+                  ) {
+                    console.warn(
+                      `[loan.ts] LoanModel.loadAllLoansForSync: Invalid date in CSV ${csvFile.name} (emp ${currentEmployeeId}) for loan id ${fields[0]}. Skipping.`
+                    );
+                    return null;
+                  }
+                  let loanType = fields[4] as Loan["type"];
+                  if (
+                    !["Personal", "Housing", "Emergency", "Other"].includes(
+                      loanType
+                    )
+                  )
+                    loanType = "Other";
+                  return {
+                    id: fields[0],
+                    employeeId: currentEmployeeId, // MODIFIED: Use folder name as employeeId
+                    date,
+                    amount: parseFloat(fields[3]),
+                    type: loanType,
+                    status: fields[5] as Loan["status"],
+                    interestRate: parseFloat(fields[6]),
+                    term: parseInt(fields[7]),
+                    monthlyPayment: parseFloat(fields[8]),
+                    remainingBalance: parseFloat(fields[9]),
+                    nextPaymentDate,
+                    reason: fields[11],
+                  } as Loan;
+                })
+                .filter((loan) => loan !== null) as Loan[];
+              allEmployeeLoans.push(...loansFromFile);
+              // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Added ${loansFromFile.length} loans from CSV ${csvFile.name} for employee ${currentEmployeeId}`); // REMOVED
+            } catch (error) {
+              console.error(
+                `[loan.ts] LoanModel.loadAllLoansForSync: ERROR processing CSV file ${csvFile.name} for emp ${currentEmployeeId}:`,
+                error
+              );
+            }
+          }
+        } catch (innerError) {
+          console.error(
+            `[loan.ts] LoanModel.loadAllLoansForSync: ERROR reading files for employee ${currentEmployeeId} in ${employeeLoanPath}:`,
+            innerError
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[loan.ts] LoanModel.loadAllLoansForSync: ERROR scanning ${loansRootPath} directory:`,
+        error
+      );
+      throw error;
+    }
+    // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: END - Loaded a total of ${allEmployeeLoans.length} loans from all employees and files.`); // REMOVED
+    return allEmployeeLoans;
   }
 }
 

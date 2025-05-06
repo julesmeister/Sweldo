@@ -83,8 +83,11 @@ export async function loadLeavesFirestore(
 
     return leaves;
   } catch (error) {
-    console.error(`Error loading leaves from Firestore:`, error);
-    return []; // Return empty array on error
+    console.error(
+      `[LeaveFirestore] Error loading leaves from Firestore for emp ${employeeId}, ${year}-${month}:`,
+      error
+    );
+    return [];
   }
 }
 
@@ -98,7 +101,10 @@ export async function createLeaveFirestore(
   try {
     await saveOrUpdateLeaveFirestore(leave, companyName);
   } catch (error) {
-    console.error(`Error creating leave in Firestore:`, error);
+    console.error(
+      `[LeaveFirestore] Error creating leave in Firestore (ID: ${leave.id}):`,
+      error
+    );
     throw error;
   }
 }
@@ -161,7 +167,10 @@ export async function saveOrUpdateLeaveFirestore(
       await updateDocument("leaves", docId, leaveData, companyName);
     }
   } catch (error) {
-    console.error(`Error saving/updating leave in Firestore:`, error);
+    console.error(
+      `[LeaveFirestore] Error saving/updating leave in Firestore (ID: ${leave.id}):`,
+      error
+    );
     throw error;
   }
 }
@@ -198,7 +207,10 @@ export async function deleteLeaveFirestore(
 
     await updateDocument("leaves", docId, updateData, companyName);
   } catch (error) {
-    console.error(`Error deleting leave from Firestore:`, error);
+    console.error(
+      `[LeaveFirestore] Error deleting leave from Firestore (ID: ${id}):`,
+      error
+    );
     throw error;
   }
 }
@@ -244,10 +256,10 @@ export async function loadAllLeavesForEmployeeFirestore(
     return allLeaves;
   } catch (error) {
     console.error(
-      `Error loading all leaves for employee from Firestore:`,
+      `[LeaveFirestore] Error loading all leaves for employee ${employeeId} from Firestore:`,
       error
     );
-    return []; // Return empty array on error
+    return [];
   }
 }
 
@@ -297,8 +309,11 @@ export async function loadLeavesForDateRangeFirestore(
 
     return allLeaves;
   } catch (error) {
-    console.error(`Error loading leaves for date range from Firestore:`, error);
-    return []; // Return empty array on error
+    console.error(
+      `[LeaveFirestore] Error loading leaves for date range for emp ${employeeId} from Firestore:`,
+      error
+    );
+    return [];
   }
 }
 
@@ -310,43 +325,25 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
     async syncToFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
-      console.log("[leave_firestore.ts] syncToFirestore: START");
       onProgress?.("Starting leave sync to Firestore...");
       try {
-        const companyName = await getCompanyName(); // Moved companyName retrieval to the top
+        const companyName = await getCompanyName();
         if (!companyName) {
           console.error(
-            "[leave_firestore.ts] syncToFirestore: ERROR - Company name not found."
+            "[LeaveFirestore] syncToFirestore: Critical - Company name not found."
           );
           onProgress?.("Error: Company name not found for sync.");
           throw new Error("Company name not found for leave sync.");
         }
-        console.log(
-          `[leave_firestore.ts] syncToFirestore: Company name: ${companyName}`
-        );
 
-        // Load all leaves from the model
-        console.log(
-          "[leave_firestore.ts] syncToFirestore: Attempting to load all local leaves via model.loadAllLeavesForSync()..."
-        );
         const leaves = await model.loadAllLeavesForSync();
-        console.log(
-          `[leave_firestore.ts] syncToFirestore: Loaded ${leaves.length} local leave records for sync.`
-        );
-        onProgress?.(`Loaded ${leaves.length} local leave records for sync.`);
+        onProgress?.(`Loaded ${leaves.length} local leave records.`);
 
         if (leaves.length === 0) {
-          console.log(
-            "[leave_firestore.ts] syncToFirestore: No local leave data to sync."
-          );
           onProgress?.("No local leave data to sync.");
           return;
         }
 
-        // Group leaves by employee, year, and month
-        console.log(
-          "[leave_firestore.ts] syncToFirestore: Grouping leaves by employee, year, and month..."
-        );
         const leavesByEmployeeMonth = leaves.reduce(
           (acc: Record<string, Leave[]>, leave: Leave) => {
             const year = leave.startDate.getFullYear();
@@ -354,13 +351,11 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
             const key = `${leave.employeeId}_${year}_${month}`;
             if (isNaN(year) || isNaN(month)) {
               console.warn(
-                `[leave_firestore.ts] syncToFirestore: Invalid date for leave id ${leave.id}, employee ${leave.employeeId}. Key would be ${key}. Skipping this for grouping.`
+                `[LeaveFirestore] syncToFirestore: Invalid date for leave id ${leave.id}, employee ${leave.employeeId}. Key would be ${key}. Skipping for grouping.`
               );
-              return acc; // Skip entries with invalid dates
+              return acc;
             }
-            if (!acc[key]) {
-              acc[key] = [];
-            }
+            if (!acc[key]) acc[key] = [];
             acc[key].push(leave);
             return acc;
           },
@@ -368,22 +363,16 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
         );
 
         const employeeMonthKeys = Object.keys(leavesByEmployeeMonth);
-        console.log(
-          `[leave_firestore.ts] syncToFirestore: Grouped into ${
-            employeeMonthKeys.length
-          } employee-month documents. Keys: ${employeeMonthKeys.join(", ")}`
-        );
         onProgress?.(
           `Grouped records into ${employeeMonthKeys.length} employee-month documents.`
         );
 
-        // Process each employee's leaves by month
         for (let i = 0; i < employeeMonthKeys.length; i++) {
           const key = employeeMonthKeys[i];
           const parts = key.split("_");
           if (parts.length !== 3) {
             console.warn(
-              `[leave_firestore.ts] syncToFirestore: Invalid group key format '${key}'. Skipping.`
+              `[LeaveFirestore] syncToFirestore: Invalid group key format '${key}'. Skipping.`
             );
             onProgress?.(`Skipping invalid group key: ${key}`);
             continue;
@@ -394,7 +383,7 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
 
           if (isNaN(year) || isNaN(month)) {
             console.warn(
-              `[leave_firestore.ts] syncToFirestore: Parsed NaN year/month from key '${key}'. employeeId: ${employeeId}, year: ${year}, month: ${month}. Skipping.`
+              `[LeaveFirestore] syncToFirestore: Parsed NaN year/month from key '${key}'. Skipping.`
             );
             onProgress?.(
               `Skipping group with invalid year/month from key: ${key}`
@@ -403,27 +392,21 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
           }
 
           const monthLeaves = leavesByEmployeeMonth[key];
-          console.log(
-            `[leave_firestore.ts] syncToFirestore: Processing group ${key}: Employee ${employeeId}, ${year}-${month}. ${
-              monthLeaves.length
-            } leaves. (${i + 1}/${employeeMonthKeys.length})`
-          );
           onProgress?.(
-            `Processing leaves for employee ${employeeId} (${year}-${month}) (${
-              i + 1
-            }/${employeeMonthKeys.length})`
+            `Processing ${
+              monthLeaves.length
+            } leaves for ${employeeId} (${year}-${month}) (${i + 1}/${
+              employeeMonthKeys.length
+            })`
           );
 
           const docId = createLeaveDocId(employeeId, year, month);
-          console.log(
-            `[leave_firestore.ts] syncToFirestore: Generated docId: ${docId} for employee ${employeeId}, ${year}-${month}`
-          );
 
           const leaveDocData: LeaveFirestoreData = {
             meta: {
               employeeId,
-              year: year,
-              month: month,
+              year,
+              month,
               lastModified: new Date().toISOString(),
             },
             leaves: {},
@@ -432,8 +415,7 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
           for (const leave of monthLeaves) {
             if (!leave.id) {
               console.warn(
-                `[leave_firestore.ts] syncToFirestore: Skipping leave with missing ID for employee ${employeeId}, ${year}-${month}. Data:`,
-                leave
+                `[LeaveFirestore] syncToFirestore: Skipping leave with missing ID for employee ${employeeId}, ${year}-${month}.`
               );
               continue;
             }
@@ -446,53 +428,32 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
               reason: leave.reason,
             };
           }
-          console.log(
-            `[leave_firestore.ts] syncToFirestore: Prepared docData for ${docId} with ${
-              Object.keys(leaveDocData.leaves).length
-            } leaves.`
-          );
 
           try {
-            console.log(
-              `[leave_firestore.ts] syncToFirestore: Attempting to save document ${docId} for employee ${employeeId}, ${year}-${month}.`
-            );
             await saveDocument("leaves", docId, leaveDocData, companyName);
-            console.log(
-              `[leave_firestore.ts] syncToFirestore: Successfully saved document ${docId}.`
-            );
-            onProgress?.(
-              `Successfully synced leaves for ${employeeId} (${year}-${month})`
-            );
+            onProgress?.(`Synced ${employeeId} (${year}-${month})`);
           } catch (docSaveError) {
+            const errorMsg =
+              docSaveError instanceof Error
+                ? docSaveError.message
+                : String(docSaveError);
             console.error(
-              `[leave_firestore.ts] syncToFirestore: ERROR saving document ${docId} for employee ${employeeId}, ${year}-${month}. Error:`,
+              `[LeaveFirestore] syncToFirestore: ERROR saving doc ${docId} for emp ${employeeId}, ${year}-${month}:`,
               docSaveError
             );
             onProgress?.(
-              `Error saving leaves for ${employeeId} (${year}-${month}): ${
-                docSaveError instanceof Error
-                  ? docSaveError.message
-                  : String(docSaveError)
-              }`
+              `Error for ${employeeId} (${year}-${month}): ${errorMsg}`
             );
-            // Decide if one error should stop all: throw docSaveError; or continue with others
           }
         }
-
-        console.log(
-          "[leave_firestore.ts] syncToFirestore: END - Leave sync to Firestore completed."
-        );
-        onProgress?.("Leave sync to Firestore completed successfully.");
+        onProgress?.("Leave sync to Firestore completed.");
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
         console.error(
-          "[leave_firestore.ts] syncToFirestore: OVERALL ERROR - Error syncing leaves to Firestore:",
+          "[LeaveFirestore] syncToFirestore: Overall ERROR:",
           error
         );
-        onProgress?.(
-          `Overall error in leave sync: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
+        onProgress?.(`Overall error in leave sync: ${errorMsg}`);
         throw error;
       }
     },
@@ -500,61 +461,75 @@ export function createLeaveFirestoreInstance(model: LeaveModel) {
     async syncFromFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      onProgress?.("Starting leave sync from Firestore...");
       try {
-        onProgress?.("Starting leave sync from Firestore...");
         const companyName = await getCompanyName();
-
-        // Query all documents in the leaves collection
+        if (!companyName) {
+          console.error(
+            "[LeaveFirestore] syncFromFirestore: Critical - Company name not found."
+          );
+          onProgress?.("Error: Company name not found.");
+          throw new Error(
+            "Company name not found for leave sync from Firestore."
+          );
+        }
         const conditions: [string, string, any][] = [];
         const documents = await queryCollection<LeaveFirestoreData>(
           "leaves",
           conditions,
           companyName
         );
-
         if (!documents || documents.length === 0) {
           onProgress?.("No leaves found in Firestore.");
           return;
         }
-
-        onProgress?.(`Found ${documents.length} leave documents in Firestore.`);
-
-        // Process each document
+        onProgress?.(
+          `Retrieved ${documents.length} leave documents from Firestore.`
+        );
         for (let i = 0; i < documents.length; i++) {
           const doc = documents[i];
           if (!doc.leaves) continue;
-
-          const leaves = Object.entries(doc.leaves).map(([id, leave]) => ({
+          const leaves = Object.entries(doc.leaves).map(([id, leaveData]) => ({
             id,
-            employeeId: leave.employeeId,
-            startDate: new Date(leave.startDate),
-            endDate: new Date(leave.endDate),
-            type: leave.type,
-            status: leave.status,
-            reason: leave.reason,
+            employeeId: leaveData.employeeId,
+            startDate: new Date(leaveData.startDate),
+            endDate: new Date(leaveData.endDate),
+            type: leaveData.type,
+            status: leaveData.status,
+            reason: leaveData.reason,
           }));
-
           onProgress?.(
-            `Processing document ${i + 1}/${documents.length} with ${
+            `Processing doc ${i + 1}/${documents.length} with ${
               leaves.length
             } leaves`
           );
-
-          // Save each leave
           for (const leave of leaves) {
             try {
               await model.saveOrUpdateLeave(leave);
             } catch (error) {
-              console.error(`Error saving leave ${leave.id}:`, error);
-              throw new Error("Failed to sync leaves from Firestore");
+              console.error(
+                `[LeaveFirestore] Error saving leave ID ${leave.id} locally from Firestore sync:`,
+                error
+              );
+              onProgress?.(
+                `Error saving leave ID ${leave.id} locally: ${
+                  error instanceof Error ? error.message : String(error)
+                }`
+              );
             }
           }
         }
-
-        onProgress?.("Leave sync from Firestore completed successfully.");
+        onProgress?.("Leave sync from Firestore completed.");
       } catch (error) {
-        console.error("Error syncing leaves from Firestore:", error);
-        throw new Error("Failed to sync leaves from Firestore");
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(
+          "[LeaveFirestore] syncFromFirestore: Overall ERROR:",
+          error
+        );
+        onProgress?.(
+          `Overall error syncing leaves from Firestore: ${errorMsg}`
+        );
+        throw error;
       }
     },
   };
