@@ -185,27 +185,46 @@ export default function SettingsPage() {
     field: keyof AttendanceSettings
   ) => {
     if (!attendanceSettings) return;
+    const newValue =
+      typeof e.target.value === "boolean"
+        ? e.target.value
+        : Number(e.target.value);
+    // console.log(
+    //   `[SettingsPage] handleInputChange: field=${field}, newValue=`,
+    //   newValue
+    // );
     setAttendanceSettings({
       ...attendanceSettings,
-      [field]:
-        typeof e.target.value === "boolean"
-          ? e.target.value
-          : Number(e.target.value),
+      [field]: newValue,
     });
   };
 
   const handleSaveChanges = async () => {
+    // console.log("[SettingsPage] handleSaveChanges called");
     if (!hasAccess("MANAGE_ATTENDANCE")) {
       toast.error("You do not have permission to modify attendance settings");
+      // console.warn(
+      //   "[SettingsPage] handleSaveChanges: Access denied for MANAGE_ATTENDANCE"
+      // );
       return;
     }
     if (!attendanceSettings) {
       toast.error("No attendance settings to save");
+      // console.warn(
+      //   "[SettingsPage] handleSaveChanges: No attendanceSettings state to save."
+      // );
       return;
     }
     try {
+      // console.log(
+      //   "[SettingsPage] handleSaveChanges: Saving attendance settings:",
+      //   attendanceSettings
+      // );
       await attendanceSettingsModel?.saveAttendanceSettings(attendanceSettings);
       toast.success("Attendance settings saved successfully!");
+      // console.log(
+      //   "[SettingsPage] handleSaveChanges: Attendance settings saved successfully."
+      // );
     } catch (error) {
       console.error("Error saving attendance settings:", error);
       toast.error("Failed to save attendance settings. Please try again.");
@@ -213,8 +232,15 @@ export default function SettingsPage() {
   };
 
   const handleSaveHolidayMultipliers = async () => {
+    // console.log(
+    //   "[SettingsPage] handleSaveHolidayMultipliers called with values:",
+    //   holidayMultipliers
+    // );
     if (!hasAccess("MANAGE_ATTENDANCE")) {
       toast.error("You do not have permission to modify holiday settings");
+      // console.warn(
+      //   "[SettingsPage] handleSaveHolidayMultipliers: Access denied for MANAGE_ATTENDANCE"
+      // );
       return;
     }
     try {
@@ -234,8 +260,15 @@ export default function SettingsPage() {
       await attendanceSettingsModel?.setRegularHolidayMultiplier(regular);
       await attendanceSettingsModel?.setSpecialHolidayMultiplier(special);
 
+      // console.log(
+      //   "[SettingsPage] handleSaveHolidayMultipliers: Fetching updated settings after save."
+      // );
       const settings = await attendanceSettingsModel.loadAttendanceSettings();
       setAttendanceSettings(settings);
+      // console.log(
+      //   "[SettingsPage] handleSaveHolidayMultipliers: Updated settings set to state:",
+      //   settings
+      // );
 
       toast.success("Holiday multipliers updated successfully");
     } catch (error) {
@@ -2704,55 +2737,69 @@ export default function SettingsPage() {
       accessibleSections.length > 0 &&
       !accessibleSections.find((section) => section.key === selected)
     ) {
+      // console.log(
+      //   "[SettingsPage] Effect: Selected section was not accessible, defaulting to first accessible section.",
+      //   accessibleSections[0]?.key
+      // );
       setSelected(accessibleSections[0].key);
     }
   }, [selected, accessibleSections]);
 
   useEffect(() => {
     const checkRoles = async () => {
+      if (!dbPath) {
+        // console.log(
+        //   "[SettingsPage] checkRoles Effect: No dbPath, skipping role check."
+        // );
+        setHasRoles(false); // Assume no roles if no dbPath
+        return;
+      }
       try {
+        // console.log(
+        //   "[SettingsPage] checkRoles Effect: Checking roles with dbPath:",
+        //   dbPath
+        // );
         const roleModel = new RoleModelImpl(dbPath);
         const roles = await roleModel.getRoles();
         setHasRoles(roles.length > 0);
+        // console.log(
+        //   `[SettingsPage] checkRoles Effect: Found ${
+        //     roles.length
+        //   } roles, hasRoles set to ${roles.length > 0}`
+        // );
       } catch (error) {
         console.error("Error checking roles:", error);
+        setHasRoles(false); // Default to false on error
       }
     };
     checkRoles();
   }, [dbPath]);
 
   useEffect(() => {
-    const loadAttendanceSettings = async () => {
-      if (!dbPath) return;
-
-      try {
-        const settings = await attendanceSettingsModel.loadAttendanceSettings();
-        const timeSettings = await attendanceSettingsModel.loadTimeSettings();
-        setEmploymentTypes(timeSettings);
-        console.log("[Settings] Attendance settings loaded:", settings);
-        setAttendanceSettings(settings);
-        setHolidayMultipliers({
-          regular: settings.regularHolidayMultiplier.toString(),
-          special: settings.specialHolidayMultiplier.toString(),
-        });
-      } catch (error) {
-        console.error("[Settings] Error loading attendance settings:", error);
-        toast.error("Failed to load attendance settings");
-      }
-    };
-
-    loadAttendanceSettings();
-  }, [dbPath]);
-
-  useEffect(() => {
-    if (!currentPath) return;
+    if (!currentPath) {
+      // console.log(
+      //   "[SettingsPage] Employee load Effect: No currentPath (dbPath), skipping employee load."
+      // );
+      return;
+    }
+    // console.log(
+    //   "[SettingsPage] Employee load Effect: currentPath (dbPath) changed or component mounted with currentPath:",
+    //   currentPath
+    // );
 
     const model = createEmployeeModel(currentPath);
     setEmployeeModel(model);
+    // console.log("[SettingsPage] Employee load Effect: Employee model created.");
 
     const loadAndFilterEmployees = async () => {
       try {
+        // console.log(
+        //   "[SettingsPage] Employee load Effect: Loading employees from model."
+        // );
         const allEmployees = await model.loadEmployees();
+        // console.log(
+        //   `[SettingsPage] Employee load Effect: Loaded ${allEmployees.length} employees raw.`
+        // );
         // Ensure each employee is only in one list
         const activeList = allEmployees.filter(
           (emp) => emp.status === "active"
@@ -2851,14 +2898,24 @@ export default function SettingsPage() {
   };
 
   const handleSaveEmploymentTypes = async (types: EmploymentType[]) => {
+    // console.log(
+    //   "[SettingsPage] handleSaveEmploymentTypes called with types:",
+    //   types
+    // );
     if (!hasAccess("MANAGE_SETTINGS")) {
       toast.error("You do not have permission to modify employment types");
+      // console.warn(
+      //   "[SettingsPage] handleSaveEmploymentTypes: Access denied for MANAGE_SETTINGS"
+      // );
       return;
     }
     try {
-      console.log("SettingsPage received employment types:", types);
+      // console.log("SettingsPage received employment types for saving:", types);
       await attendanceSettingsModel?.saveTimeSettings(types);
       toast.success("Employment types saved successfully");
+      // console.log(
+      //   "[SettingsPage] handleSaveEmploymentTypes: Employment types saved successfully."
+      // );
     } catch (error) {
       console.error("Error saving employment types:", error);
       toast.error("Failed to save employment types");
@@ -2867,25 +2924,43 @@ export default function SettingsPage() {
 
   // Initialize models and data
   const initializeData = React.useCallback(async () => {
+    // console.log("[SettingsPage] initializeData: Starting with dbPath:", dbPath);
     if (!dbPath) {
       setIsLoading(false);
+      // console.log(
+      //   "[SettingsPage] initializeData: No dbPath, aborting initialization."
+      // );
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
+      // console.log("[SettingsPage] initializeData: isLoading set to true.");
 
       // Initialize models
-      const attendanceSettingsModel = createAttendanceSettingsModel(dbPath);
-      const model = createEmployeeModel(dbPath);
-      setEmployeeModel(model);
+      const localAttendanceSettingsModel =
+        createAttendanceSettingsModel(dbPath); // Use local var to avoid stale closure if attendanceSettingsModel is also a state
+      const localEmployeeModel = createEmployeeModel(dbPath); // Use local var
+      setEmployeeModel(localEmployeeModel); // Set state if needed elsewhere, but use local for this func
+      // console.log(
+      //   "[SettingsPage] initializeData: Attendance and Employee models created."
+      // );
 
       // Load attendance settings
-      const settings = await attendanceSettingsModel.loadAttendanceSettings();
-      const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+      // console.log(
+      //   "[SettingsPage] initializeData: Loading attendance settings."
+      // );
+      const settings =
+        await localAttendanceSettingsModel.loadAttendanceSettings();
+      const timeSettings =
+        await localAttendanceSettingsModel.loadTimeSettings();
       setEmploymentTypes(timeSettings);
-      console.log("[Settings] Attendance settings loaded:", settings);
+      // console.log(
+      //   "[SettingsPage] initializeData: Attendance settings & time settings loaded:",
+      //   settings,
+      //   timeSettings
+      // );
       setAttendanceSettings(settings);
       setHolidayMultipliers({
         regular: settings.regularHolidayMultiplier.toString(),
@@ -2893,7 +2968,8 @@ export default function SettingsPage() {
       });
 
       // Load employees
-      const allEmployees = await model.loadEmployees();
+      // console.log("[SettingsPage] initializeData: Loading employees.");
+      const allEmployees = await localEmployeeModel.loadEmployees();
       const activeList = allEmployees.filter((emp) => emp.status === "active");
       const inactiveList = allEmployees.filter(
         (emp) => emp.status === "inactive"
@@ -2901,23 +2977,42 @@ export default function SettingsPage() {
       setSelectedEmployees([]);
       setActiveEmployees(activeList);
       setInactiveEmployees(inactiveList);
+      // console.log(
+      //   `[SettingsPage] initializeData: Employees loaded. Active: ${activeList.length}, Inactive: ${inactiveList.length}`
+      // );
 
       // Check roles
+      // console.log("[SettingsPage] initializeData: Checking roles.");
       const roleModel = new RoleModelImpl(dbPath);
       const roles = await roleModel.getRoles();
       setHasRoles(roles.length > 0);
+      // console.log(
+      //   `[SettingsPage] initializeData: Roles check complete. Has roles: ${
+      //     roles.length > 0
+      //   }`
+      // );
 
       setIsLoading(false);
+      // console.log(
+      //   "[SettingsPage] initializeData: Finished, isLoading set to false."
+      // );
     } catch (error) {
       console.error("[Settings] Error initializing data:", error);
       setError("Failed to load settings data. Please try again.");
       setIsLoading(false);
+      // console.warn(
+      //   "[SettingsPage] initializeData: Error during initialization, isLoading set to false.",
+      //   error
+      // );
     }
-  }, [dbPath]);
+  }, [dbPath]); // attendanceSettingsModel removed from deps as it's created locally or via fixed dbPath
 
   // Effect for initialization
   useEffect(() => {
-    console.log("[Settings] Initializing with dbPath:", dbPath);
+    // console.log(
+    //   "[SettingsPage] Initialization Effect: Triggered. dbPath:",
+    //   dbPath
+    // );
     initializeData();
   }, [dbPath, initializeData]);
 

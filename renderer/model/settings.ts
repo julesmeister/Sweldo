@@ -15,6 +15,11 @@ import {
   setFirestoreCompanyName,
   getCompanyName,
 } from "../lib/firestoreService";
+import {
+  useSettingsStore,
+  PersistedSettings as StorePersistedSettings,
+  defaultSettings as storeDefaultSettings,
+} from "../stores/settingsStore";
 
 export interface Settings {
   theme: string;
@@ -145,12 +150,18 @@ export interface TimeSettingsJson {
 export class AttendanceSettingsModel {
   private settingsJsonPath: string;
   private timeSettingsJsonPath: string;
+  private appSettingsJsonPath: string; // New path for app_settings.json
   private oldModel: OldAttendanceSettingsModel; // Instance of the old CSV model
 
   constructor(public dbPath: string) {
     const basePath = path.join(dbPath, "SweldoDB");
     this.settingsJsonPath = path.join(basePath, "settings.json");
     this.timeSettingsJsonPath = path.join(basePath, "timeSettings.json");
+    this.appSettingsJsonPath = path.join(
+      basePath,
+      "settings",
+      "app_settings.json"
+    ); // Path for general app settings
     this.oldModel = new OldAttendanceSettingsModel(dbPath); // Instantiate old model
   }
 
@@ -212,6 +223,74 @@ export class AttendanceSettingsModel {
       );
     } catch (error) {
       console.error("[SettingsModel] Error writing timeSettings.json:", error);
+      throw error;
+    }
+  }
+
+  // --- New Private Helpers for Persisted App Settings --- //
+  private async readPersistedAppSettingsJson(): Promise<StorePersistedSettings | null> {
+    if (isWebEnvironment()) {
+      console.warn(
+        "[SettingsModel] readPersistedAppSettingsJson should not be called in web environment directly for file reading. Store manages this."
+      );
+      // In web mode, the store directly handles its state, potentially from Firestore via its own init.
+      // This model method is primarily for desktop file operations.
+      return null;
+    }
+    try {
+      const fileExists = await window.electron.fileExists(
+        this.appSettingsJsonPath
+      );
+      if (!fileExists) {
+        console.log(
+          `[SettingsModel] app_settings.json not found at ${this.appSettingsJsonPath}. Returning defaults.`
+        );
+        // Return a structure that includes dbPath for local consistency if needed by consuming logic
+        return { ...storeDefaultSettings, dbPath: this.dbPath };
+      }
+      const content = await window.electron.readFile(this.appSettingsJsonPath);
+      if (!content || content.trim() === "") {
+        console.log(
+          `[SettingsModel] app_settings.json is empty at ${this.appSettingsJsonPath}. Returning defaults.`
+        );
+        return { ...storeDefaultSettings, dbPath: this.dbPath };
+      }
+      const parsedSettings = JSON.parse(content) as StorePersistedSettings;
+      // Ensure dbPath from the file is prioritized if it exists and is valid, otherwise use current model's dbPath
+      parsedSettings.dbPath =
+        parsedSettings.dbPath && typeof parsedSettings.dbPath === "string"
+          ? parsedSettings.dbPath
+          : this.dbPath;
+      return { ...storeDefaultSettings, ...parsedSettings }; // Merge with defaults to ensure all fields
+    } catch (error) {
+      console.error("[SettingsModel] Error reading app_settings.json:", error);
+      // Return defaults including the current dbPath on error
+      return { ...storeDefaultSettings, dbPath: this.dbPath };
+    }
+  }
+
+  private async writePersistedAppSettingsJson(
+    data: StorePersistedSettings
+  ): Promise<void> {
+    if (isWebEnvironment()) {
+      console.warn(
+        "[SettingsModel] writePersistedAppSettingsJson should not be called in web environment directly for file writing. Store manages this via Firestore."
+      );
+      return;
+    }
+    try {
+      await window.electron.ensureDir(path.dirname(this.appSettingsJsonPath));
+      // Ensure dbPath is part of the saved data if it's part of StorePersistedSettings
+      const dataToSave = { ...data, dbPath: this.dbPath };
+      await window.electron.writeFile(
+        this.appSettingsJsonPath,
+        JSON.stringify(dataToSave, null, 2)
+      );
+      console.log(
+        `[SettingsModel] Successfully wrote app_settings.json to ${this.appSettingsJsonPath}`
+      );
+    } catch (error) {
+      console.error("[SettingsModel] Error writing app_settings.json:", error);
       throw error;
     }
   }
@@ -779,6 +858,105 @@ export class AttendanceSettingsModel {
       summary += migratedParts.join(", ") + ".";
     }
     onProgress?.(summary);
+  }
+
+  // --- Public API for Persisted App Settings --- //
+
+  // This method is for settings_firestore.ts to get data to sync TO Firestore
+  public async loadPersistedAppSettings(): Promise<
+    Partial<StorePersistedSettings>
+  > {
+    if (isWebEnvironment()) {
+      // In web mode, get current settings directly from the Zustand store,
+      // as it's the source of truth, potentially hydrated from Firestore by its own init.
+      const storeState = useSettingsStore.getState();
+      console.log(
+        "[SettingsModel] loadPersistedAppSettings (Web): Returning settings from Zustand store:",
+        storeState
+      );
+      // Return a copy, excluding functions, and ensure it aligns with what Firestore expects
+      const {
+        isInitialized,
+        initialize,
+        setDbPath,
+        setLogoPath,
+        setPreparedBy,
+        setApprovedBy,
+        setCompanyName,
+        setColumnColor,
+        setCalculationSettings,
+        ...relevantSettings
+      } = storeState;
+      return relevantSettings;
+    }
+    // Desktop mode: read from app_settings.json
+    console.log(
+      "[SettingsModel] loadPersistedAppSettings (Desktop): Reading from app_settings.json"
+    );
+    return (
+      (await this.readPersistedAppSettingsJson()) || {
+        ...storeDefaultSettings,
+        dbPath: this.dbPath,
+      }
+    );
+  }
+
+  // This method is for settings_firestore.ts to save data synced FROM Firestore
+  public async savePersistedAppSettings(
+    settings: Partial<StorePersistedSettings>
+  ): Promise<void> {
+    console.log(
+      "[SettingsModel] savePersistedAppSettings: Received settings to save/update store:",
+      settings
+    );
+
+    // Update the Zustand store first
+    const {
+      setDbPath,
+      setLogoPath,
+      setPreparedBy,
+      setApprovedBy,
+      setCompanyName,
+      setColumnColor,
+      setCalculationSettings,
+    } = useSettingsStore.getState();
+
+    // We call setters directly to ensure individual save logic (like _saveSettings in store) is triggered
+    // if dbPath is part of settings and different, handle with care or disallow changing dbPath this way.
+    // For now, we assume dbPath is not changed by sync from Firestore directly through this method.
+    if (settings.companyName !== undefined)
+      setCompanyName(settings.companyName);
+    if (settings.logoPath !== undefined) setLogoPath(settings.logoPath);
+    if (settings.preparedBy !== undefined) setPreparedBy(settings.preparedBy);
+    if (settings.approvedBy !== undefined) setApprovedBy(settings.approvedBy);
+    if (settings.columnColors !== undefined) {
+      Object.entries(settings.columnColors).forEach(([key, value]) => {
+        setColumnColor(key, value);
+      });
+    }
+    if (settings.calculationSettings !== undefined) {
+      setCalculationSettings(settings.calculationSettings);
+    }
+
+    // For desktop, also write to the local app_settings.json
+    if (!isWebEnvironment()) {
+      console.log(
+        "[SettingsModel] savePersistedAppSettings (Desktop): Writing updated settings to app_settings.json"
+      );
+      // Load current local settings, merge, then save, to preserve local dbPath
+      const currentLocalSettings =
+        (await this.readPersistedAppSettingsJson()) || {
+          ...storeDefaultSettings,
+          dbPath: this.dbPath,
+        };
+      const mergedSettings = {
+        ...currentLocalSettings,
+        ...settings,
+        dbPath: currentLocalSettings.dbPath,
+      }; // Ensure local dbPath is preserved
+      await this.writePersistedAppSettingsJson(mergedSettings);
+    }
+    // Note: The store setters themselves will trigger _saveSettings, which handles Firestore persistence in web mode.
   }
 }
 

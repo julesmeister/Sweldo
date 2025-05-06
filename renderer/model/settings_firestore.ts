@@ -28,6 +28,23 @@ import {
   constructDocPath,
   getCompanyName,
 } from "../lib/firestoreService";
+import { CalculationSettings } from "../stores/settingsStore"; // Import CalculationSettings
+
+// Interface for App Settings stored in Firestore
+// Mirrors PersistedSettings from settingsStore.ts, excluding dbPath
+export interface AppSettingsFirestore {
+  logoPath?: string; // Optional as it might not always be set
+  preparedBy?: string;
+  approvedBy?: string;
+  companyName: string; // Should generally always be present
+  columnColors?: { [key: string]: string };
+  calculationSettings?: CalculationSettings;
+  // Keep existing fields, make them optional if they aren't primary
+  theme?: string;
+  language?: string;
+  notificationsEnabled?: boolean;
+  timeFormat?: "12-hour" | "24-hour";
+}
 
 /**
  * Load attendance settings from Firestore
@@ -43,7 +60,6 @@ export async function loadAttendanceSettingsFirestore(
     );
 
     if (!settings) {
-      // If settings don't exist, create defaults and save them
       await saveAttendanceSettingsFirestore(
         defaultAttendanceSettings,
         companyName
@@ -86,7 +102,6 @@ export async function loadTimeSettingsFirestore(
     }>("settings", "employment_types", companyName);
 
     if (!settingsDoc || !settingsDoc.employmentTypes) {
-      // If settings don't exist, create defaults and save them
       await saveTimeSettingsFirestore(defaultTimeSettings, companyName);
       return defaultTimeSettings;
     }
@@ -160,6 +175,9 @@ export async function saveMonthScheduleFirestore(
 ): Promise<void> {
   try {
     if (!employmentType) {
+      console.error(
+        "[Firestore] saveMonthScheduleFirestore: Attempted to save schedule without employmentType."
+      );
       throw new Error("Cannot save month schedule without an employment type.");
     }
 
@@ -179,24 +197,19 @@ export async function saveMonthScheduleFirestore(
 /**
  * Load application settings from Firestore
  */
-export async function loadAppSettingsFirestore(companyName: string): Promise<{
-  theme: string;
-  language: string;
-  notificationsEnabled: boolean;
-  timeFormat: "12-hour" | "24-hour";
-} | null> {
+export async function loadAppSettingsFirestore(
+  companyName: string
+): Promise<Partial<AppSettingsFirestore> | null> {
   try {
-    const settings = await fetchDocument<{
-      theme: string;
-      language: string;
-      notificationsEnabled: boolean;
-      timeFormat: "12-hour" | "24-hour";
-    }>("settings", "app_settings", companyName);
-
-    return settings;
+    const settings = await fetchDocument<AppSettingsFirestore>(
+      "settings",
+      "app_settings",
+      companyName
+    );
+    return settings; // settings will be null if document doesn't exist
   } catch (error) {
     console.error("Error loading app settings from Firestore:", error);
-    return null;
+    return null; // Return null on error
   }
 }
 
@@ -204,12 +217,7 @@ export async function loadAppSettingsFirestore(companyName: string): Promise<{
  * Save application settings to Firestore
  */
 export async function saveAppSettingsFirestore(
-  settings: {
-    theme: string;
-    language: string;
-    notificationsEnabled: boolean;
-    timeFormat: "12-hour" | "24-hour";
-  },
+  settings: AppSettingsFirestore, // Expects the full AppSettingsFirestore structure
   companyName: string
 ): Promise<void> {
   try {
@@ -234,22 +242,44 @@ export function createSettingsFirestoreInstance(
         onProgress?.("Starting settings sync to Firestore...");
         const companyName = await getCompanyName();
 
+        // Sync App Settings (General application settings)
+        onProgress?.("Syncing general application settings...");
+        if (typeof (model as any).loadPersistedAppSettings === "function") {
+          const appSettingsToSync = await (
+            model as any
+          ).loadPersistedAppSettings();
+          if (appSettingsToSync && appSettingsToSync.companyName) {
+            await saveAppSettingsFirestore(
+              appSettingsToSync as AppSettingsFirestore,
+              companyName
+            );
+          } else {
+            onProgress?.(
+              "Skipped app settings sync to Firestore (no local data/companyName)."
+            );
+          }
+        } else {
+          onProgress?.(
+            "Skipped app settings sync to Firestore (model method missing)."
+          );
+        }
+
         // Sync attendance settings
         onProgress?.("Syncing attendance settings...");
         const attendanceSettings = await model.loadAttendanceSettings();
         await saveAttendanceSettingsFirestore(attendanceSettings, companyName);
 
         // Sync time settings
-        onProgress?.("Syncing time settings...");
+        onProgress?.("Syncing time settings (employment types)...");
         const timeSettings = await model.loadTimeSettings();
         await saveTimeSettingsFirestore(timeSettings, companyName);
 
         // Sync month schedules
-        onProgress?.("Syncing month schedules...");
-        const employmentTypes = await model.loadTimeSettings();
+        onProgress?.("Syncing current month schedules...");
+        const employmentTypes = await model.loadTimeSettings(); // Assuming these are needed to iterate
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1;
+        const currentMonth = currentDate.getMonth() + 1; // JS months are 0-indexed
 
         for (const type of employmentTypes) {
           const schedule = await model.loadMonthSchedule(
@@ -282,21 +312,42 @@ export function createSettingsFirestoreInstance(
         onProgress?.("Starting settings sync from Firestore...");
         const companyName = await getCompanyName();
 
+        // Sync App Settings from Firestore
+        onProgress?.("Syncing general application settings from Firestore...");
+        const firestoreAppSettings = await loadAppSettingsFirestore(
+          companyName
+        );
+        if (firestoreAppSettings) {
+          if (typeof (model as any).savePersistedAppSettings === "function") {
+            await (model as any).savePersistedAppSettings(firestoreAppSettings);
+          } else {
+            onProgress?.(
+              "Skipped saving Firestore app settings locally (model method missing)."
+            );
+          }
+        } else {
+          onProgress?.(
+            "Skipped app settings sync from Firestore (no data found)."
+          );
+        }
+
         // Sync attendance settings
-        onProgress?.("Syncing attendance settings...");
+        onProgress?.("Syncing attendance settings from Firestore...");
         const attendanceSettings = await loadAttendanceSettingsFirestore(
           companyName
         );
         await model.saveAttendanceSettings(attendanceSettings);
 
         // Sync time settings
-        onProgress?.("Syncing time settings...");
+        onProgress?.(
+          "Syncing time settings (employment types) from Firestore..."
+        );
         const timeSettings = await loadTimeSettingsFirestore(companyName);
         await model.saveTimeSettings(timeSettings);
 
         // Sync month schedules
-        onProgress?.("Syncing month schedules...");
-        const employmentTypes = await model.loadTimeSettings();
+        onProgress?.("Syncing current month schedules from Firestore...");
+        const employmentTypes = await model.loadTimeSettings(); // Load local types to know what schedules to fetch
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;

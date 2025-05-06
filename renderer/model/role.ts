@@ -41,17 +41,36 @@ export class RoleModelImpl implements RoleModel {
     const basePath = path.join(dbPath, "SweldoDB");
     this.rolesJsonPath = path.join(basePath, "roles.json");
     this.oldModel = new OldRoleModelImpl(dbPath); // Instantiate old model
+    // console.log(
+    //   `[RoleModel] Initialized with dbPath: ${dbPath}, rolesJsonPath: ${this.rolesJsonPath}`
+    // );
   }
 
   private async readJsonFile(): Promise<RoleJsonStructure | null> {
+    // console.log(
+    //   `[RoleModel] readJsonFile: Attempting to read ${this.rolesJsonPath}`
+    // );
     try {
       const fileExists = await window.electron.fileExists(this.rolesJsonPath);
-      if (!fileExists) return null;
+      if (!fileExists) {
+        // console.log(
+        //   `[RoleModel] readJsonFile: File not found ${this.rolesJsonPath}`
+        // );
+        return null;
+      }
 
       const content = await window.electron.readFile(this.rolesJsonPath);
-      if (!content || content.trim() === "") return { roles: [] }; // Return empty structure if file is empty
+      if (!content || content.trim() === "") {
+        // console.log(
+        //   `[RoleModel] readJsonFile: File is empty ${this.rolesJsonPath}`
+        // );
+        return { roles: [] }; // Return empty structure if file is empty
+      }
 
       const data = JSON.parse(content) as RoleJsonStructure;
+      // console.log(
+      //   `[RoleModel] readJsonFile: Successfully read and parsed ${this.rolesJsonPath}, found ${data.roles.length} roles before date conversion.`
+      // );
 
       // Convert date strings back to Date objects
       data.roles.forEach((role) => {
@@ -70,6 +89,9 @@ export class RoleModelImpl implements RoleModel {
 
   private async writeJsonFile(data: RoleJsonStructure): Promise<void> {
     try {
+      // console.log(
+      //   `[RoleModel] writeJsonFile: Attempting to write to ${this.rolesJsonPath}, data with ${data.roles.length} roles.`
+      // );
       await window.electron.ensureDir(path.dirname(this.rolesJsonPath));
       // Ensure dates are ISO strings before saving
       const dataToSave = JSON.parse(JSON.stringify(data)); // Deep clone
@@ -87,6 +109,9 @@ export class RoleModelImpl implements RoleModel {
         this.rolesJsonPath,
         JSON.stringify(dataToSave, null, 2)
       );
+      // console.log(
+      //   `[RoleModel] writeJsonFile: Successfully wrote to ${this.rolesJsonPath}`
+      // );
     } catch (error) {
       console.error("[RoleModel] Error writing roles JSON file:", error);
       throw error;
@@ -94,17 +119,31 @@ export class RoleModelImpl implements RoleModel {
   }
 
   async getRoles(): Promise<Role[]> {
+    // console.log("[RoleModel] getRoles: Attempting to get roles.");
     try {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
+        // console.log(
+        //   "[RoleModel] getRoles: Web environment detected, using Firestore."
+        // );
         const companyName = await getCompanyName();
-        return getRolesFirestore(companyName);
+        const firestoreRoles = await getRolesFirestore(companyName);
+        // console.log(
+        //   `[RoleModel] getRoles: Fetched ${firestoreRoles.length} roles from Firestore.`
+        // );
+        return firestoreRoles;
       }
 
       // Desktop mode - use existing implementation
+      // console.log(
+      //   "[RoleModel] getRoles: Desktop environment, attempting to read JSON."
+      // );
       const jsonData = await this.readJsonFile();
 
       if (jsonData) {
+        // console.log(
+        //   `[RoleModel] getRoles: Successfully loaded ${jsonData.roles.length} roles from JSON.`
+        // );
         // Return roles with decrypted PINs
         return jsonData.roles.map((role) => ({
           ...role,
@@ -112,15 +151,19 @@ export class RoleModelImpl implements RoleModel {
         }));
       } else {
         // Fallback to CSV if JSON doesn't exist or failed to load
-        console.warn(
-          "[RoleModel] roles.json not found or invalid, falling back to roles.csv"
-        );
+        // console.warn(
+        //   "[RoleModel] roles.json not found or invalid, falling back to roles.csv"
+        // );
         const csvRoles = await this.oldModel.getRoles();
         // Decrypt PINs from CSV data as well
-        return csvRoles.map((role) => ({
+        const decryptedCsvRoles = csvRoles.map((role) => ({
           ...role,
           pinCode: decryptPinCode(role.pinCode),
         }));
+        // console.log(
+        //   `[RoleModel] getRoles: Loaded and decrypted ${decryptedCsvRoles.length} roles from CSV fallback.`
+        // );
+        return decryptedCsvRoles;
       }
     } catch (error) {
       console.error("[RoleModel] Error getting roles (JSON/CSV):", error);
@@ -131,14 +174,29 @@ export class RoleModelImpl implements RoleModel {
   async createRole(
     roleInput: Omit<Role, "id" | "createdAt" | "updatedAt">
   ): Promise<Role> {
+    // console.log(
+    //   "[RoleModel] createRole: Attempting to create role with input:",
+    //   roleInput
+    // );
     try {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
+        // console.log(
+        //   "[RoleModel] createRole: Web environment detected, using Firestore."
+        // );
         const companyName = await getCompanyName();
-        return createRoleFirestore(roleInput, companyName);
+        const createdRole = await createRoleFirestore(roleInput, companyName);
+        // console.log(
+        //   "[RoleModel] createRole: Role created via Firestore:",
+        //   createdRole
+        // );
+        return createdRole;
       }
 
       // Desktop mode - use existing implementation
+      // console.log(
+      //   "[RoleModel] createRole: Desktop environment, creating role in JSON."
+      // );
       const jsonData = (await this.readJsonFile()) ?? { roles: [] }; // Start with empty if file doesn't exist
       const encryptedPinCode = encryptPinCode(roleInput.pinCode);
 
@@ -152,12 +210,21 @@ export class RoleModelImpl implements RoleModel {
 
       jsonData.roles.push(newRole);
       await this.writeJsonFile(jsonData);
+      // console.log(
+      //   "[RoleModel] createRole: Role created and saved to JSON:",
+      //   newRole
+      // );
 
       // Return the role with the original (decrypted) PIN for immediate use
-      return {
+      const returnRole = {
         ...newRole,
         pinCode: roleInput.pinCode,
       };
+      // console.log(
+      //   "[RoleModel] createRole: Returning role (with decrypted PIN):",
+      //   returnRole
+      // );
+      return returnRole;
     } catch (error) {
       console.error("[RoleModel] Error creating role:", error);
       throw error;
@@ -168,14 +235,33 @@ export class RoleModelImpl implements RoleModel {
     id: string,
     roleUpdate: Partial<Omit<Role, "id" | "createdAt" | "updatedAt">>
   ): Promise<Role> {
+    // console.log(
+    //   `[RoleModel] updateRole: Attempting to update role ID ${id} with data:`,
+    //   roleUpdate
+    // );
     try {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
+        // console.log(
+        //   `[RoleModel] updateRole: Web environment detected, using Firestore for role ID ${id}.`
+        // );
         const companyName = await getCompanyName();
-        return updateRoleFirestore(id, roleUpdate, companyName);
+        const updatedRole = await updateRoleFirestore(
+          id,
+          roleUpdate,
+          companyName
+        );
+        // console.log(
+        //   `[RoleModel] updateRole: Role ID ${id} updated via Firestore:`,
+        //   updatedRole
+        // );
+        return updatedRole;
       }
 
       // Desktop mode - use existing implementation
+      // console.log(
+      //   `[RoleModel] updateRole: Desktop environment, updating role ID ${id} in JSON.`
+      // );
       const jsonData = await this.readJsonFile();
       if (!jsonData) {
         throw new Error("[RoleModel] Roles data file not found for update.");
@@ -202,12 +288,21 @@ export class RoleModelImpl implements RoleModel {
 
       jsonData.roles[roleIndex] = updatedRoleData;
       await this.writeJsonFile(jsonData);
+      // console.log(
+      //   `[RoleModel] updateRole: Role ID ${id} updated and saved to JSON:`,
+      //   updatedRoleData
+      // );
 
       // Return the role with decrypted PIN for immediate use
-      return {
+      const returnRole = {
         ...updatedRoleData,
         pinCode: roleUpdate.pinCode || decryptPinCode(updatedRoleData.pinCode),
       };
+      // console.log(
+      //   `[RoleModel] updateRole: Returning role ID ${id} (with decrypted PIN):`,
+      //   returnRole
+      // );
+      return returnRole;
     } catch (error) {
       console.error("[RoleModel] Error updating role:", error);
       throw error;
@@ -215,15 +310,25 @@ export class RoleModelImpl implements RoleModel {
   }
 
   async deleteRole(id: string): Promise<void> {
+    // console.log(`[RoleModel] deleteRole: Attempting to delete role ID ${id}.`);
     try {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
+        // console.log(
+        //   `[RoleModel] deleteRole: Web environment detected, using Firestore for role ID ${id}.`
+        // );
         const companyName = await getCompanyName();
         await deleteRoleFirestore(id, companyName);
+        // console.log(
+        //   `[RoleModel] deleteRole: Role ID ${id} deletion processed via Firestore.`
+        // );
         return;
       }
 
       // Desktop mode - use existing implementation
+      // console.log(
+      //   `[RoleModel] deleteRole: Desktop environment, deleting role ID ${id} from JSON.`
+      // );
       const jsonData = await this.readJsonFile();
       if (!jsonData) {
         console.warn(
@@ -246,6 +351,9 @@ export class RoleModelImpl implements RoleModel {
       }
 
       await this.writeJsonFile(jsonData);
+      // console.log(
+      //   `[RoleModel] deleteRole: Role ID ${id} removed from JSON data, file rewritten.`
+      // );
     } catch (error) {
       console.error("[RoleModel] Error deleting role:", error);
       throw error;
@@ -259,8 +367,12 @@ export class RoleModelImpl implements RoleModel {
     onProgress?: (message: string) => void
   ): Promise<void> {
     // Skip migration in web mode since it's only relevant for desktop operation
+    // console.log("[RoleModel] migrateCsvToJson: Starting migration process.");
     if (isWebEnvironment()) {
       onProgress?.("Skipping Roles migration in web mode.");
+      // console.log(
+      //   "[RoleModel] migrateCsvToJson: Web environment, skipping migration."
+      // );
       return;
     }
 
