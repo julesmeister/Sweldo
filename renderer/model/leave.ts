@@ -204,31 +204,50 @@ export class LeaveModel {
     year: number,
     month: number
   ): Promise<Leave[]> {
+    console.log(
+      `[leave.ts] LeaveModel.loadLeaves: START - Model EmployeeID: ${this.employeeId}, Args: employeeId='${employeeId}', year=${year}, month=${month}`
+    );
     try {
       if (isWebEnvironment()) {
-        // Web mode - use Firestore
+        console.log(
+          "[leave.ts] LeaveModel.loadLeaves: Web environment detected. Calling loadLeavesFirestore."
+        );
         const companyName = await getCompanyName();
+        // The employeeId argument is used here for Firestore
         return loadLeavesFirestore(employeeId, year, month, companyName);
       }
 
-      // Desktop mode - use existing implementation
-      // Ensure directory exists
-      await this.ensureDirectoryExists();
+      console.log(
+        `[leave.ts] LeaveModel.loadLeaves: Desktop environment. Using this.employeeId (${this.employeeId}) for path construction.`
+      );
+      await this.ensureDirectoryExists(); // ensureDirectoryExists logs internally
 
       if (this.useJsonFormat) {
-        // Try to load from JSON first
         const jsonPath = this.getJsonFilePath(year, month);
-
+        console.log(
+          `[leave.ts] LeaveModel.loadLeaves: Attempting to load from JSON: ${jsonPath}`
+        );
         try {
           const fileContent = await window.electron.readFile(jsonPath);
           const jsonData = JSON.parse(fileContent) as LeaveJsonData;
+          console.log(
+            `[leave.ts] LeaveModel.loadLeaves: Successfully read and parsed JSON file ${jsonPath}. Found ${
+              Object.keys(jsonData.leaves).length
+            } leave entries.`
+          );
 
-          // Convert JSON data to Leave objects
+          if (jsonData.meta.employeeId !== this.employeeId) {
+            console.warn(
+              `[leave.ts] LeaveModel.loadLeaves: Mismatch! JSON meta.employeeId (${jsonData.meta.employeeId}) vs model this.employeeId (${this.employeeId}) in file ${jsonPath}. Using data as is.`
+            );
+          }
+
           const leaves: Leave[] = Object.keys(jsonData.leaves).map((id) => {
             const leaveData = jsonData.leaves[id];
+            // Add individual date parsing checks if necessary, similar to holiday.ts
             return {
               id,
-              employeeId: leaveData.employeeId,
+              employeeId: leaveData.employeeId, // This should ideally match jsonData.meta.employeeId and this.employeeId
               startDate: new Date(leaveData.startDate),
               endDate: new Date(leaveData.endDate),
               type: leaveData.type,
@@ -236,38 +255,49 @@ export class LeaveModel {
               reason: leaveData.reason,
             };
           });
-
+          console.log(
+            `[leave.ts] LeaveModel.loadLeaves: Returning ${leaves.length} leaves from JSON file ${jsonPath}.`
+          );
           return leaves;
         } catch (error: any) {
+          console.log(
+            `[leave.ts] LeaveModel.loadLeaves: Info - Did not load from JSON file ${jsonPath}. Error code: ${error.code}, Message: ${error.message}`
+          );
           if (
             error.code === "ENOENT" ||
             error instanceof SyntaxError ||
             (error instanceof Error && error.message.includes("ENOENT"))
           ) {
             // Fall through to CSV loading
+            console.log(
+              `[leave.ts] LeaveModel.loadLeaves: JSON file ${jsonPath} not found or unparsable. Falling back to CSV if not preferred or if it exists.`
+            );
           } else {
-            throw error;
+            console.error(
+              `[leave.ts] LeaveModel.loadLeaves: Error reading/parsing JSON file ${jsonPath}.`,
+              error
+            );
+            throw error; // Re-throw unexpected errors
           }
         }
       }
 
-      // Load from CSV (original implementation)
-      const filePath = this.getFilePathByMonth(year, month);
-
+      const csvFilePath = this.getFilePathByMonth(year, month);
+      console.log(
+        `[leave.ts] LeaveModel.loadLeaves: Attempting to load from CSV: ${csvFilePath}`
+      );
       try {
-        const data = await window.electron.readFile(filePath);
+        const data = await window.electron.readFile(csvFilePath);
         const lines = data.split("\n");
-
         const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
+        console.log(
+          `[leave.ts] LeaveModel.loadLeaves: Read CSV ${csvFilePath}. Found ${nonEmptyLines.length} non-empty lines.`
+        );
 
         const leaves = nonEmptyLines.map((line) => {
           const fields = line.split(",");
-
-          // Parse the dates from ISO format
           const startDate = new Date(fields[2]);
           const endDate = new Date(fields[3]);
-
-          // Validate leave type
           let leaveType = fields[4] as
             | "Sick"
             | "Vacation"
@@ -276,34 +306,54 @@ export class LeaveModel {
           if (!["Sick", "Vacation", "Emergency", "Other"].includes(leaveType)) {
             leaveType = "Other";
           }
-
           return {
             id: fields[0],
-            employeeId: fields[1],
+            employeeId: fields[1], // This is the employeeId from the CSV line
             startDate,
             endDate,
             type: leaveType,
-            status: fields[5],
+            status: fields[5] as "Pending" | "Approved" | "Rejected",
             reason: fields[6],
           } as Leave;
         });
 
-        // Filter leaves by employeeId
-        const filteredLeaves = leaves;
-
+        // Filter leaves by this.employeeId (model's scope) IF the CSV contains mixed employee data
+        // However, the file path itself is already employee-specific, so this filter might be redundant
+        // unless the CSV files themselves are not strictly per-employee (which they should be by design).
+        const filteredLeaves = leaves.filter(
+          (l) => l.employeeId === this.employeeId
+        );
+        if (leaves.length !== filteredLeaves.length) {
+          console.warn(
+            `[leave.ts] LeaveModel.loadLeaves: CSV file ${csvFilePath} contained leaves for other employees. Loaded ${filteredLeaves.length} for ${this.employeeId} out of ${leaves.length} total.`
+          );
+        }
+        console.log(
+          `[leave.ts] LeaveModel.loadLeaves: Returning ${filteredLeaves.length} leaves from CSV file ${csvFilePath} (for model employee ${this.employeeId}).`
+        );
         return filteredLeaves;
       } catch (error: any) {
         if (
           error.code === "ENOENT" ||
           (error instanceof Error && error.message.includes("ENOENT"))
         ) {
+          console.log(
+            `[leave.ts] LeaveModel.loadLeaves: CSV file ${csvFilePath} not found. Returning empty array.`
+          );
           return [];
         }
+        console.error(
+          `[leave.ts] LeaveModel.loadLeaves: Error reading CSV file ${csvFilePath}.`,
+          error
+        );
         throw error;
       }
     } catch (error) {
-      console.error("Error loading leaves:", error);
-      return [];
+      console.error(
+        `[leave.ts] LeaveModel.loadLeaves: OVERALL ERROR for model EmployeeID ${this.employeeId}, args (emp: '${employeeId}', Y:${year}, M:${month}).`,
+        error
+      );
+      return []; // Return empty array on error to prevent sync stalls, but log it.
     }
   }
 
@@ -359,6 +409,225 @@ export class LeaveModel {
       console.error("Error deleting leave:", error);
       throw error;
     }
+  }
+
+  async loadAllLeavesForSync(): Promise<Leave[]> {
+    // Correctly determine the root path for all employee leave folders.
+    // this.basePath is specific to the employeeId the model was initialized with (e.g., __SYNC_ALL__).
+    // We need to go to the parent directory of this.basePath, which should be 'SweldoDB/leaves'.
+    const leavesRootPath = path.dirname(this.basePath);
+
+    console.log(
+      `[leave.ts] LeaveModel.loadAllLeavesForSync: START - Scanning for all leaves in ${leavesRootPath}`
+    );
+    if (isWebEnvironment()) {
+      console.warn(
+        "[leave.ts] LeaveModel.loadAllLeavesForSync: Should not be called in web environment. Returning empty array."
+      );
+      return [];
+    }
+
+    const allEmployeeLeaves: Leave[] = [];
+
+    try {
+      // 1. List all items in the SweldoDB/leaves directory (these should be employeeId folders)
+      const employeeIdFolders = await window.electron.readDir(leavesRootPath);
+      console.log(
+        `[leave.ts] LeaveModel.loadAllLeavesForSync: Found ${employeeIdFolders.length} potential employee folders in ${leavesRootPath}`
+      );
+
+      for (const empFolder of employeeIdFolders) {
+        if (!empFolder.isDirectory) {
+          console.log(
+            `[leave.ts] LeaveModel.loadAllLeavesForSync: Skipping item ${empFolder.name} as it is not a directory.`
+          );
+          continue;
+        }
+        const currentEmployeeId = empFolder.name;
+        const employeeLeavePath = path.join(leavesRootPath, currentEmployeeId);
+        console.log(
+          `[leave.ts] LeaveModel.loadAllLeavesForSync: Processing employee folder: ${employeeLeavePath}`
+        );
+
+        try {
+          // 2. List all files in the current employee's leave directory
+          const leaveFiles = await window.electron.readDir(employeeLeavePath);
+          console.log(
+            `[leave.ts] LeaveModel.loadAllLeavesForSync: Found ${leaveFiles.length} files/subdirs in ${employeeLeavePath}`
+          );
+
+          // Prioritize JSON files
+          const jsonLeaveFiles = leaveFiles.filter(
+            (file: { name: string; isFile: boolean }) =>
+              file.isFile && file.name.endsWith("_leaves.json")
+          );
+          const csvLeaveFiles = leaveFiles.filter(
+            (file: { name: string; isFile: boolean }) =>
+              file.isFile && file.name.endsWith("_leaves.csv")
+          );
+          console.log(
+            `[leave.ts] LeaveModel.loadAllLeavesForSync: Employee ${currentEmployeeId} - Found ${jsonLeaveFiles.length} JSON files, ${csvLeaveFiles.length} CSV files.`
+          );
+
+          // Process JSON files for this employee
+          for (const jsonFile of jsonLeaveFiles) {
+            const filePath = path.join(employeeLeavePath, jsonFile.name);
+            console.log(
+              `[leave.ts] LeaveModel.loadAllLeavesForSync: Processing JSON file: ${filePath}`
+            );
+            try {
+              const fileContent = await window.electron.readFile(filePath);
+              if (!fileContent.trim()) {
+                console.log(
+                  `[leave.ts] LeaveModel.loadAllLeavesForSync: JSON file ${jsonFile.name} is empty. Skipping.`
+                );
+                continue;
+              }
+              const jsonData: LeaveJsonData = JSON.parse(fileContent);
+              // Basic validation for the JSON structure if needed (e.g., meta.employeeId)
+              if (jsonData.meta.employeeId !== currentEmployeeId) {
+                console.warn(
+                  `[leave.ts] LeaveModel.loadAllLeavesForSync: Employee ID mismatch in JSON ${jsonFile.name}. Meta: ${jsonData.meta.employeeId}, Folder: ${currentEmployeeId}. Using data as is but this might be an issue.`
+                );
+              }
+
+              const leavesFromFile: Leave[] = Object.entries(jsonData.leaves)
+                .map(([id, leaveData]) => {
+                  const startDate = new Date(leaveData.startDate);
+                  const endDate = new Date(leaveData.endDate);
+                  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                    console.warn(
+                      `[leave.ts] LeaveModel.loadAllLeavesForSync: Invalid date in JSON file ${jsonFile.name} for leave id ${id}. Skipping this leave entry.`
+                    );
+                    return null; // Will be filtered out
+                  }
+                  return {
+                    id,
+                    employeeId: leaveData.employeeId, // Ensure this matches currentEmployeeId or jsonData.meta.employeeId for consistency
+                    startDate,
+                    endDate,
+                    type: leaveData.type,
+                    status: leaveData.status,
+                    reason: leaveData.reason,
+                  };
+                })
+                .filter((leave) => leave !== null) as Leave[];
+              allEmployeeLeaves.push(...leavesFromFile);
+              console.log(
+                `[leave.ts] LeaveModel.loadAllLeavesForSync: Added ${leavesFromFile.length} leaves from JSON ${jsonFile.name} for employee ${currentEmployeeId}`
+              );
+            } catch (error) {
+              console.error(
+                `[leave.ts] LeaveModel.loadAllLeavesForSync: ERROR processing JSON file ${jsonFile.name} for employee ${currentEmployeeId}.`,
+                error
+              );
+            }
+          }
+
+          // Process CSV files (if no JSON equivalent was found or as a fallback)
+          for (const csvFile of csvLeaveFiles) {
+            const baseName = csvFile.name.replace("_leaves.csv", "");
+            // Check if a JSON file for the same year_month already contributed for this employee
+            if (
+              jsonLeaveFiles.some((jf: { name: string }) =>
+                jf.name.startsWith(baseName)
+              )
+            ) {
+              console.log(
+                `[leave.ts] LeaveModel.loadAllLeavesForSync: JSON version for ${csvFile.name} (employee ${currentEmployeeId}) already processed. Skipping CSV.`
+              );
+              continue;
+            }
+            const filePath = path.join(employeeLeavePath, csvFile.name);
+            console.log(
+              `[leave.ts] LeaveModel.loadAllLeavesForSync: Processing CSV file: ${filePath}`
+            );
+            try {
+              const fileContent = await window.electron.readFile(filePath);
+              if (!fileContent.trim()) {
+                console.log(
+                  `[leave.ts] LeaveModel.loadAllLeavesForSync: CSV file ${csvFile.name} is empty. Skipping.`
+                );
+                continue;
+              }
+              const lines = fileContent
+                .split("\n")
+                .filter((line) => line.trim().length > 0);
+              const leavesFromFile = lines
+                .map((line) => {
+                  const fields = line.split(",");
+                  if (fields.length < 7) {
+                    console.warn(
+                      `[leave.ts] LeaveModel.loadAllLeavesForSync: Malformed CSV line in ${csvFile.name} (employee ${currentEmployeeId}). Line: "${line}". Skipping.`
+                    );
+                    return null;
+                  }
+                  // Ensure employeeId from CSV matches the folder name for consistency
+                  if (fields[1] !== currentEmployeeId) {
+                    console.warn(
+                      `[leave.ts] LeaveModel.loadAllLeavesForSync: Employee ID mismatch in CSV line in ${csvFile.name}. Line EmpID: ${fields[1]}, Folder EmpID: ${currentEmployeeId}. Using line data.`
+                    );
+                  }
+                  const startDate = new Date(fields[2]);
+                  const endDate = new Date(fields[3]);
+                  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                    console.warn(
+                      `[leave.ts] LeaveModel.loadAllLeavesForSync: Invalid date in CSV file ${csvFile.name} (employee ${currentEmployeeId}) for leave id ${fields[0]}. Skipping.`
+                    );
+                    return null;
+                  }
+                  let leaveType = fields[4] as
+                    | "Sick"
+                    | "Vacation"
+                    | "Emergency"
+                    | "Other";
+                  if (
+                    !["Sick", "Vacation", "Emergency", "Other"].includes(
+                      leaveType
+                    )
+                  )
+                    leaveType = "Other";
+
+                  return {
+                    id: fields[0],
+                    employeeId: fields[1],
+                    startDate,
+                    endDate,
+                    type: leaveType,
+                    status: fields[5] as "Pending" | "Approved" | "Rejected",
+                    reason: fields[6],
+                  } as Leave;
+                })
+                .filter((leave) => leave !== null) as Leave[];
+              allEmployeeLeaves.push(...leavesFromFile);
+              console.log(
+                `[leave.ts] LeaveModel.loadAllLeavesForSync: Added ${leavesFromFile.length} leaves from CSV ${csvFile.name} for employee ${currentEmployeeId}`
+              );
+            } catch (error) {
+              console.error(
+                `[leave.ts] LeaveModel.loadAllLeavesForSync: ERROR processing CSV file ${csvFile.name} for employee ${currentEmployeeId}.`,
+                error
+              );
+            }
+          }
+        } catch (innerError) {
+          console.error(
+            `[leave.ts] LeaveModel.loadAllLeavesForSync: ERROR reading files for employee ${currentEmployeeId} in ${employeeLeavePath}.`,
+            innerError
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[leave.ts] LeaveModel.loadAllLeavesForSync: ERROR scanning ${leavesRootPath} directory.`,
+        error
+      );
+      throw error; // If we can't list employee folders, it's a more significant issue
+    }
+    console.log(
+      `[leave.ts] LeaveModel.loadAllLeavesForSync: END - Loaded a total of ${allEmployeeLeaves.length} leaves from all employees and files.`
+    );
+    return allEmployeeLeaves;
   }
 }
 

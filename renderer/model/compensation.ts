@@ -473,6 +473,96 @@ export class CompensationModel {
   }
 
   /**
+   * Load ALL compensation records from all employees and all their respective files.
+   * This method is intended for full data sync operations.
+   * It mirrors the logic added to AttendanceModel.loadAttendances for sync.
+   */
+  public async loadAllCompensationRecords(): Promise<Compensation[]> {
+    const allCompensations: Compensation[] = [];
+    // this.folderPath is expected to be like `dbPath/SweldoDB/attendances` (or wherever compensations are stored)
+    // NOTE: The path might need adjustment if compensations are not under `attendances` folder.
+    // Assuming they follow the pattern: {folderPath}/{employeeId}/{year}_{month}_compensation.json
+
+    if (this.isWebMode()) {
+      return [];
+    }
+
+    try {
+      // List directories in the base path (expecting employee IDs as directory names)
+      const employeeDirs = await window.electron.readDir(this.folderPath);
+
+      for (const dirEntry of employeeDirs) {
+        if (dirEntry.isDirectory) {
+          const employeeId = dirEntry.name;
+          const employeePath = `${this.folderPath}/${employeeId}`;
+
+          try {
+            const filesInEmployeeDir = await window.electron.readDir(
+              employeePath
+            );
+            for (const fileEntry of filesInEmployeeDir) {
+              // Look for JSON compensation files
+              if (
+                fileEntry.isFile &&
+                fileEntry.name.endsWith("_compensation.json") &&
+                !fileEntry.name.includes("_backup")
+              ) {
+                const filePath = `${employeePath}/${fileEntry.name}`;
+                try {
+                  const fileContent = await window.electron.readFile(filePath);
+                  if (fileContent && fileContent.trim().length > 0) {
+                    const jsonData = JSON.parse(
+                      fileContent
+                    ) as CompensationJsonMonth;
+                    // Convert JSON days to Compensation array
+                    Object.entries(jsonData.days).forEach(
+                      ([dayStr, dayData]) => {
+                        const day = parseInt(dayStr);
+                        if (isNaN(day)) return;
+                        allCompensations.push({
+                          employeeId: jsonData.meta.employeeId,
+                          day,
+                          month: jsonData.meta.month,
+                          year: jsonData.meta.year,
+                          dayType: dayData.dayType,
+                          dailyRate: dayData.dailyRate,
+                          hoursWorked: dayData.hoursWorked,
+                          overtimeMinutes: dayData.overtimeMinutes,
+                          overtimePay: dayData.overtimePay,
+                          undertimeMinutes: dayData.undertimeMinutes,
+                          undertimeDeduction: dayData.undertimeDeduction,
+                          lateMinutes: dayData.lateMinutes,
+                          lateDeduction: dayData.lateDeduction,
+                          holidayBonus: dayData.holidayBonus,
+                          leaveType: dayData.leaveType,
+                          leavePay: dayData.leavePay,
+                          grossPay: dayData.grossPay,
+                          deductions: dayData.deductions,
+                          netPay: dayData.netPay,
+                          manualOverride: dayData.manualOverride,
+                          notes: dayData.notes,
+                          absence: dayData.absence,
+                          nightDifferentialHours:
+                            dayData.nightDifferentialHours || 0,
+                          nightDifferentialPay:
+                            dayData.nightDifferentialPay || 0,
+                        });
+                      }
+                    );
+                  } else {
+                  }
+                } catch (fileReadError) {}
+              }
+            }
+          } catch (readDirError) {}
+        }
+      }
+    } catch (error) {}
+
+    return allCompensations;
+  }
+
+  /**
    * Load compensation records for a specific employee
    */
   public async loadEmployeeRecords(

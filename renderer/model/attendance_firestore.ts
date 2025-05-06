@@ -45,6 +45,7 @@ import {
   saveTimeBasedDocument,
   createTimeBasedDocId,
   queryTimeBasedDocuments,
+  fetchCollection,
 } from "../lib/firestoreService";
 import {
   processInBatches,
@@ -492,7 +493,7 @@ export async function queryAttendanceByDateRangeFirestore(
 
 export function createAttendanceFirestore(model: AttendanceModel) {
   const db = getFirestoreInstance();
-  const collectionName = getFirestoreCollection("attendance");
+  // const collectionName = getFirestoreCollection("attendance"); // Keep commented or remove
 
   return {
     async syncToFirestore(
@@ -500,7 +501,7 @@ export function createAttendanceFirestore(model: AttendanceModel) {
     ): Promise<void> {
       let companyName: string;
       try {
-        console.log("[syncToFirestore] Attempting to get company name...");
+        // console.log("[syncToFirestore] Attempting to get company name..."); // Removed log
         companyName = await getCompanyName();
         if (!companyName) {
           console.error(
@@ -510,28 +511,24 @@ export function createAttendanceFirestore(model: AttendanceModel) {
             "Company name could not be determined. Sync aborted."
           );
         }
-        console.log(`[syncToFirestore] Company name: ${companyName}`);
+        // console.log(`[syncToFirestore] Company name: ${companyName}`); // Removed log
         onProgress?.("Starting attendance sync to Firestore...");
 
-        console.log("[syncToFirestore] Loading all local attendances...");
+        // console.log("[syncToFirestore] Loading all local attendances..."); // Removed log
         const allLocalAttendances = await model.loadAttendances();
         if (!allLocalAttendances || allLocalAttendances.length === 0) {
-          console.log("[syncToFirestore] No local attendance data to sync.");
+          // console.log("[syncToFirestore] No local attendance data to sync."); // Removed log
           onProgress?.("No local attendance data to sync.");
           return;
         }
-        console.log(
-          `[syncToFirestore] Loaded ${allLocalAttendances.length} local attendance records.`
-        );
+        // console.log(`[syncToFirestore] Loaded ${allLocalAttendances.length} local attendance records.`); // Removed log
         onProgress?.(
-          `Loaded \\${allLocalAttendances.length} local attendance records.`
+          `Loaded \${allLocalAttendances.length} local attendance records.`
         );
 
-        console.log(
-          "[syncToFirestore] Grouping attendances by employeeId, year, and month..."
-        );
+        // console.log("[syncToFirestore] Grouping attendances by employeeId, year, and month..."); // Removed log
         const groupedAttendances = allLocalAttendances.reduce((acc, record) => {
-          const key = `\\${record.employeeId}_\\${record.year}_\\${record.month}`;
+          const key = `\${record.employeeId}_\${record.year}_\${record.month}`;
           if (!acc[key]) {
             acc[key] = {
               employeeId: record.employeeId,
@@ -545,23 +542,19 @@ export function createAttendanceFirestore(model: AttendanceModel) {
         }, {} as Record<string, { employeeId: string; year: number; month: number; records: Attendance[] }>);
 
         const totalGroups = Object.keys(groupedAttendances).length;
-        console.log(
-          `[syncToFirestore] Grouped records into ${totalGroups} employee-month documents.`
-        );
+        // console.log(`[syncToFirestore] Grouped records into ${totalGroups} employee-month documents.`); // Removed log
         onProgress?.(
-          `Grouped records into \\${totalGroups} employee-month documents.`
+          `Grouped records into \${totalGroups} employee-month documents.`
         );
         let processedGroups = 0;
 
         for (const groupKey in groupedAttendances) {
           const group = groupedAttendances[groupKey];
           const { employeeId, year, month, records } = group;
-          console.log(
-            `[syncToFirestore] Processing group: ${groupKey}, EmployeeID: ${employeeId}, Year: ${year}, Month: ${month}`
-          );
+          // console.log(`[syncToFirestore] Processing group: ${groupKey}, EmployeeID: ${employeeId}, Year: ${year}, Month: ${month}`); // Removed log
 
           const docId = createTimeBasedDocId(employeeId, year, month);
-          console.log(`[syncToFirestore] Generated docId: ${docId}`);
+          // console.log(`[syncToFirestore] Generated docId: ${docId}`); // Removed log
 
           const daysData: { [day: string]: AttendanceJsonDay } = {};
           records.forEach((att) => {
@@ -581,45 +574,34 @@ export function createAttendanceFirestore(model: AttendanceModel) {
             },
             days: daysData,
           };
-          console.log(
-            `[syncToFirestore] Preparing to save document for ${docId}. Data: ${JSON.stringify(
-              docData,
-              null,
-              2
-            )}`
-          );
+          // console.log(`[syncToFirestore] Preparing to save document for ${docId}. Data: ${JSON.stringify(docData, null, 2)}`); // Removed log
 
-          console.log(
-            `[syncToFirestore] Calling saveDocument for ${docId} in collection 'attendances' for company '${companyName}'...`
-          );
+          // console.log(`[syncToFirestore] Calling saveDocument for ${docId} in collection 'attendances' for company '${companyName}'...`); // Removed log
           await saveDocument("attendances", docId, docData, companyName);
-          console.log(
-            `[syncToFirestore] Successfully saved document ${docId}.`
-          );
+          // console.log(`[syncToFirestore] Successfully saved document ${docId}.`); // Removed log
           processedGroups++;
           onProgress?.(
-            `Synced \\${employeeId} \\${year}-\\${month} (\\${processedGroups}/\\${totalGroups})`
+            `Synced \${employeeId} \${year}-\${month} (\${processedGroups}/\${totalGroups})`
           );
         }
 
-        console.log(
-          "[syncToFirestore] Attendance sync to Firestore completed successfully."
-        );
+        // console.log("[syncToFirestore] Attendance sync to Firestore completed successfully."); // Removed log
         onProgress?.("Attendance sync to Firestore completed successfully.");
       } catch (error) {
         console.error(
           "[syncToFirestore] Error during attendance sync to Firestore:",
           error
         );
+        // Keep error logs
         if (error instanceof Error) {
           console.error(
             `[syncToFirestore] Error details: ${error.message}, Stack: ${error.stack}`
           );
           throw new Error(
-            `Failed to sync attendance to Firestore: \\${error.message}`
+            `Failed to sync attendance to Firestore: \${error.message}`
           );
         }
-        console.error("[syncToFirestore] Unknown error occurred.");
+        // console.error("[syncToFirestore] Unknown error occurred."); // Removed log
         throw new Error(
           "Failed to sync attendance to Firestore due to an unknown error"
         );
@@ -629,28 +611,78 @@ export function createAttendanceFirestore(model: AttendanceModel) {
     async syncFromFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      // Keep existing implementation (which needs improvement like compensation's syncFromFirestore)
+      // But remove any temporary logs if they were added
       try {
-        const collectionRef = collection(db, collectionName);
-        const snapshot = await getDocs(collectionRef);
-        const records = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
-          ...doc.data(),
-          employeeId: doc.id,
-        })) as Attendance[];
+        // Assuming fetchCollection and getCompanyName are imported
+        const companyName = await getCompanyName();
+        if (!companyName) {
+          throw new Error(
+            "Company name could not be determined. Sync aborted."
+          );
+        }
+        onProgress?.("Starting attendance sync from Firestore...");
 
-        await processInBatches(
-          records,
-          500,
-          async (record: Attendance) => {
-            const localData = transformFromFirestoreFormat(
-              record
-            ) as Attendance;
-            await model.saveAttendances([localData]);
-          },
-          onProgress
+        const firestoreDocs = await fetchCollection<AttendanceJsonMonth>(
+          "attendances",
+          companyName
         );
-      } catch (error) {
+
+        if (!firestoreDocs || firestoreDocs.length === 0) {
+          onProgress?.(
+            "No attendance data found in Firestore for this company."
+          );
+          return;
+        }
+        onProgress?.(
+          `Retrieved ${firestoreDocs.length} attendance documents from Firestore.`
+        );
+
+        let allExtractedAttendances: Attendance[] = [];
+        firestoreDocs.forEach((docData: AttendanceJsonMonth) => {
+          const { employeeId, year, month } = docData.meta;
+          Object.entries(docData.days).forEach(
+            ([dayStr, dayData]: [string, AttendanceJsonDay]) => {
+              const day = parseInt(dayStr);
+              if (isNaN(day)) return;
+              allExtractedAttendances.push({
+                employeeId,
+                year,
+                month,
+                day,
+                timeIn: dayData.timeIn,
+                timeOut: dayData.timeOut,
+                schedule:
+                  dayData.schedule === undefined ? null : dayData.schedule, // Handle undefined here too
+              });
+            }
+          );
+        });
+
+        if (allExtractedAttendances.length > 0) {
+          // Save all extracted records at once (assuming model handles this)
+          await model.saveAttendances(allExtractedAttendances);
+          onProgress?.(
+            `Successfully saved/updated ${allExtractedAttendances.length} records locally.`
+          );
+        } else {
+          onProgress?.(
+            "No individual attendance entries extracted from Firestore documents."
+          );
+        }
+
+        onProgress?.("Attendance sync from Firestore completed successfully.");
+      } catch (error: any) {
         console.error("Error syncing attendance from Firestore:", error);
-        throw new Error("Failed to sync attendance from Firestore");
+        // Keep error logs
+        if (error instanceof Error) {
+          console.error(
+            `[syncFromFirestore - Attendance] Error details: ${error.message}, Stack: ${error.stack}`
+          );
+        }
+        throw new Error(
+          `Failed to sync attendance from Firestore: ${error.message || error}`
+        );
       }
     },
   };

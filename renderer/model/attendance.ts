@@ -374,75 +374,63 @@ export class AttendanceModel {
    * This method is intended for full data sync operations.
    */
   public async loadAttendances(): Promise<Attendance[]> {
-    console.log(`[AttendanceModel] loadAttendances (for sync) called. Base path: ${this.folderPath}`);
     const allAttendances: Attendance[] = [];
     // this.folderPath is expected to be like `dbPath/SweldoDB/attendances`
 
     if (this.isWebMode()) {
-      console.warn("[AttendanceModel] loadAttendances (for sync) called in web mode. This method is for local file reading and should ideally not be used for full sync in web mode directly. Firestore sync logic should handle web data retrieval.");
-      // For web mode, syncing should ideally pull from Firestore directly, not load all local files to then send back.
-      // However, if this model is used by a Firestore sync-up function, it might be called.
-      // Returning empty or a specific error might be appropriate if direct local file access isn't intended here.
-      return []; // Or perhaps throw new Error("loadAttendances for sync not supported in web mode from AttendanceModel");
+      return [];
     }
 
     try {
       const employeeDirs = await window.electron.readDir(this.folderPath);
-      console.log(`[AttendanceModel] Found ${employeeDirs.length} entries in ${this.folderPath}`);
 
       for (const dirEntry of employeeDirs) {
         if (dirEntry.isDirectory) {
           const employeeId = dirEntry.name;
           const employeePath = `${this.folderPath}/${employeeId}`;
-          console.log(`[AttendanceModel] Processing employee directory: ${employeePath}`);
 
           try {
-            const filesInEmployeeDir = await window.electron.readDir(employeePath);
+            const filesInEmployeeDir = await window.electron.readDir(
+              employeePath
+            );
             for (const fileEntry of filesInEmployeeDir) {
               // Prioritize JSON files for loading all attendances
-              if (fileEntry.isFile && fileEntry.name.endsWith("_attendance.json") && !fileEntry.name.includes("_backup")) {
+              if (
+                fileEntry.isFile &&
+                fileEntry.name.endsWith("_attendance.json") &&
+                !fileEntry.name.includes("_backup")
+              ) {
                 const filePath = `${employeePath}/${fileEntry.name}`;
-                console.log(`[AttendanceModel] Reading JSON file: ${filePath}`);
                 try {
                   const fileContent = await window.electron.readFile(filePath);
                   if (fileContent && fileContent.trim().length > 0) {
-                    const jsonData = JSON.parse(fileContent) as AttendanceJsonMonth;
-                    // Verify it's the correct employeeId, year, month from metadata if needed, though filename usually dictates this.
-                    // For sync, we assume file data is king.
-                    Object.entries(jsonData.days).forEach(([dayStr, dayData]) => {
-                      const day = parseInt(dayStr);
-                      if (isNaN(day)) return;
-                      allAttendances.push({
-                        employeeId: jsonData.meta.employeeId, // Use employeeId from metadata
-                        day,
-                        month: jsonData.meta.month,   // Use month from metadata
-                        year: jsonData.meta.year,     // Use year from metadata
-                        timeIn: dayData.timeIn,
-                        timeOut: dayData.timeOut,
-                        schedule: dayData.schedule,
-                      });
-                    });
-                    console.log(`[AttendanceModel] Loaded ${Object.keys(jsonData.days).length} records from ${filePath}`);
-                  } else {
-                    console.log(`[AttendanceModel] File is empty, skipping: ${filePath}`);
+                    const jsonData = JSON.parse(
+                      fileContent
+                    ) as AttendanceJsonMonth;
+                    Object.entries(jsonData.days).forEach(
+                      ([dayStr, dayData]) => {
+                        const day = parseInt(dayStr);
+                        if (isNaN(day)) return;
+                        allAttendances.push({
+                          employeeId: jsonData.meta.employeeId,
+                          day,
+                          month: jsonData.meta.month,
+                          year: jsonData.meta.year,
+                          timeIn: dayData.timeIn,
+                          timeOut: dayData.timeOut,
+                          schedule: dayData.schedule,
+                        });
+                      }
+                    );
                   }
-                } catch (fileReadError) {
-                  console.error(`[AttendanceModel] Error reading or parsing file ${filePath}:`, fileReadError);
-                }
+                } catch (fileReadError) {}
               }
             }
-          } catch (readDirError) {
-            console.error(`[AttendanceModel] Error reading employee directory ${employeePath}:`, readDirError);
-          }
+          } catch (readDirError) {}
         }
       }
-    } catch (error) {
-      console.error(`[AttendanceModel] Error reading base attendance directory ${this.folderPath}:`, error);
-      // Depending on desired behavior, might re-throw or return empty.
-      // For sync, if we can't read any, it's probably an issue.
-    }
+    } catch (error) {}
 
-    console.log(`[AttendanceModel] loadAttendances (for sync) completed. Total records loaded: ${allAttendances.length}`);
     return allAttendances;
   }
 

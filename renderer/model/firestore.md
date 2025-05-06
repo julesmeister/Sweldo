@@ -1150,6 +1150,53 @@ export class SyncErrorHandler {
 - Maintain operation logs
 - Provide debugging utilities
 
+### 11. Common Sync Implementation Pitfalls (NEW SECTION)
+
+During implementation, particularly for the full data synchronization features (`syncToFirestore` / `syncFromFirestore`), several common issues were encountered:
+
+**A. Firestore `undefined` Value Error**
+
+*   **Problem:** Firestore's `setDoc` or `updateDoc` functions throw an `invalid data. Unsupported field value: undefined` error if any field in the data object being saved has an `undefined` value.
+*   **Cause:** This commonly occurs when mapping data from local models to Firestore structures, especially if the local model interface has optional fields (`fieldName?: type`). If an optional field is missing (i.e., `undefined`) on the source object, passing it directly results in the error.
+*   **Solution:** Before calling `saveDocument` (or other Firestore write operations), ensure that any potentially `undefined` value is handled. Two common strategies:
+    1.  **Convert to `null`:** Explicitly check for `undefined` and convert it to `null`. Firestore accepts `null`.
+        ```typescript
+        // Example in _firestore.ts syncToFirestore data preparation
+        const dataToSave = {
+          requiredField: source.requiredField,
+          optionalField: source.optionalField === undefined ? null : source.optionalField,
+        };
+        await saveDocument("collection", docId, dataToSave, companyName);
+        ```
+    2.  **Omit the Field:** Conditionally add the field to the object being saved *only* if it's not `undefined`. This results in a smaller Firestore document if the field is often absent.
+        ```typescript
+        // Example in _firestore.ts syncToFirestore data preparation
+        const dataToSave: AnyFirestoreType = {
+          requiredField: source.requiredField,
+        };
+        if (source.optionalField !== undefined) {
+          dataToSave.optionalField = source.optionalField;
+        }
+        await saveDocument("collection", docId, dataToSave, companyName);
+        ```
+    *Choose the strategy that best fits your data model and querying needs. Using `null` is often simpler and more explicit.* 
+
+**B. Incorrect Local Data Loading (`EISDIR` or No Data)**
+
+*   **Problem:** The `syncToFirestore` process reports "No local data to sync" or throws an `EISDIR: illegal operation on a directory, read` error, even when local data files exist.
+*   **Cause:** The method called within `syncToFirestore` to load local data from the base model (e.g., `model.loadAttendances()`) was not designed to load *all* data required for a full sync. It might have been attempting to:
+    *   Read a directory path as if it were a single file (`EISDIR` error).
+    *   Read only a single, specific file based on incorrect assumptions (e.g., loading only the current month/year or a specific hardcoded file).
+    *   Silently fail or return empty on file system errors.
+*   **Solution:** Implement a dedicated method in the base model (e.g., `YourModel.loadAllRecordsForSync()`) specifically designed for bulk loading. This method must:
+    1.  Correctly identify the base directory for the model's data (e.g., `dbPath/SweldoDB/collectionName`).
+    2.  Traverse the expected subdirectory structure (e.g., per-employee folders).
+    3.  Identify and read *all* relevant data files (e.g., all `{year}_{month}_data.json` files within each employee folder).
+    4.  Parse the data from each file.
+    5.  Aggregate the data from all files into a single collection (e.g., `YourDataType[]`).
+    6.  Return the aggregated collection.
+    *The `syncToFirestore` method in the corresponding `_firestore.ts` file must then call this new bulk-loading method.* Migration utility functions within the model files often contain useful logic for directory traversal and file reading that can be adapted.
+
 These lessons learned should help future implementations avoid common pitfalls and follow best practices for Firestore integration.
 
 ## Sync Implementation Details

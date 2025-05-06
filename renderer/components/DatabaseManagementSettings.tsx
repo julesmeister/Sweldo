@@ -28,6 +28,11 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- State for model selection ---
+  const [selectedModels, setSelectedModels] = useState<Record<string, boolean>>(
+    {}
+  );
+
   // Log initial prop status for critical items - simplified
   useEffect(() => {
     console.log(
@@ -45,12 +50,47 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     handleUpload,
     handleDownload,
     modelStatuses,
+    availableModelNames,
   } = useFirestoreSync({
     // Pass only required identifiers to the hook
     dbPath: dbPath || "",
     companyName: companyName || "",
     // employeeId and year are optional in the hook, not needed here for this component's general sync
   });
+
+  // --- Effect to initialize model selection based on availableModelNames ---
+  useEffect(() => {
+    // Only initialize if availableModelNames is populated and selectedModels is empty
+    if (availableModelNames && availableModelNames.length > 0) {
+      console.log(
+        "[DatabaseManagementSettings] Initializing model selection state from availableModelNames:",
+        availableModelNames
+      );
+      setSelectedModels((prevSelected) => {
+        // Prevent re-initialization if already populated
+        if (Object.keys(prevSelected).length > 0) {
+          // Optional: Check if the available models fundamentally changed
+          // (e.g., employeeId/year added/removed causing shorts/stats to appear/disappear)
+          const currentAvailableSet = new Set(Object.keys(prevSelected));
+          const newAvailableSet = new Set(availableModelNames);
+          if (
+            currentAvailableSet.size === newAvailableSet.size &&
+            [...currentAvailableSet].every((name) => newAvailableSet.has(name))
+          ) {
+            return prevSelected; // Sets are identical, don't re-initialize
+          }
+        }
+
+        // Initialize with all available models set to true
+        const initialSelection: Record<string, boolean> = {};
+        availableModelNames.forEach((name) => {
+          initialSelection[name] = true;
+        });
+        return initialSelection;
+      });
+    }
+    // Depend on the availableModelNames array itself
+  }, [availableModelNames]);
 
   // Log modelStatuses whenever it changes or component re-renders
   useEffect(() => {
@@ -109,15 +149,35 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     }
   };
 
-  // Simplify handlers - remove internal model checks
+  // --- Update sync handlers to use selectedModels ---
   const handleUploadToFirestore = () => {
-    // const placeholder for removed check
-    handleUpload();
+    const activeModelsToSync = Object.entries(selectedModels)
+      .filter(([, isChecked]) => isChecked)
+      .map(([name]) => name);
+    if (activeModelsToSync.length === 0) {
+      toast.info("Please select at least one model to sync.");
+      return;
+    }
+    console.log(
+      "[DatabaseManagementSettings] Triggering UPLOAD for models:",
+      activeModelsToSync
+    );
+    handleUpload(activeModelsToSync); // Pass selected models to hook's handleUpload
   };
 
   const handleDownloadFromFirestore = () => {
-    // const placeholder for removed check
-    handleDownload();
+    const activeModelsToSync = Object.entries(selectedModels)
+      .filter(([, isChecked]) => isChecked)
+      .map(([name]) => name);
+    if (activeModelsToSync.length === 0) {
+      toast.info("Please select at least one model to sync.");
+      return;
+    }
+    console.log(
+      "[DatabaseManagementSettings] Triggering DOWNLOAD for models:",
+      activeModelsToSync
+    );
+    handleDownload(activeModelsToSync); // Pass selected models to hook's handleDownload
   };
 
   const areSyncPrerequisitesMet = !!dbPath && !!companyName;
@@ -291,6 +351,88 @@ gap-6`}
                   </div>
                 </div>
               </div>
+
+              {/* Model Selection Checkboxes - Now uses availableModelNames to render */}
+              {/* The rendering logic itself depends on selectedModels state, which is correct */}
+              {Object.keys(selectedModels).length > 0 && (
+                <div className="mb-6 border rounded-md p-4">
+                  <div className="flex justify-between items-center mb-3 border-b pb-2">
+                    <h3 className="text-md font-semibold">
+                      Select models to sync:
+                    </h3>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="select-all-models"
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-1"
+                        checked={
+                          availableModelNames.length > 0 &&
+                          availableModelNames.every(
+                            (name) => selectedModels[name]
+                          )
+                        }
+                        ref={(el) => {
+                          if (el) {
+                            const someSelected = availableModelNames.some(
+                              (name) => selectedModels[name]
+                            );
+                            const allSelected =
+                              availableModelNames.length > 0 &&
+                              availableModelNames.every(
+                                (name) => selectedModels[name]
+                              );
+                            el.indeterminate = someSelected && !allSelected;
+                          }
+                        }}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          const newSelectedModels: Record<string, boolean> = {};
+                          availableModelNames.forEach((name) => {
+                            newSelectedModels[name] = isChecked;
+                          });
+                          setSelectedModels(newSelectedModels);
+                        }}
+                      />
+                      <label
+                        htmlFor="select-all-models"
+                        className="text-sm text-gray-700"
+                      >
+                        Select All
+                      </label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {/* Sort based on the availableModelNames order or alphabetically */}
+                    {availableModelNames.sort().map((modelName) => (
+                      <div key={modelName} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`sync-${modelName}`}
+                          // Check if the model exists in selectedModels state before accessing
+                          checked={
+                            selectedModels[modelName] === undefined
+                              ? true
+                              : selectedModels[modelName]
+                          }
+                          onChange={() =>
+                            setSelectedModels((prev) => ({
+                              ...prev,
+                              [modelName]: !prev[modelName],
+                            }))
+                          }
+                          className="mr-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label
+                          htmlFor={`sync-${modelName}`}
+                          className="capitalize text-sm"
+                        >
+                          {modelName}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Sync Buttons */}
               <div className="flex space-x-4">

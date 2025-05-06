@@ -28,6 +28,8 @@ import {
   createTimeBasedDocId,
   queryTimeBasedDocuments,
   getFirestoreInstance,
+  getCompanyName,
+  fetchCollection,
 } from "../lib/firestoreService";
 import {
   processInBatches,
@@ -482,65 +484,258 @@ export function createCompensationFirestore(model: CompensationModel) {
     async syncToFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      let companyName: string;
       try {
-        const records = await model.loadRecords();
-        await processInBatches(
-          records,
-          500,
-          async (record: Compensation) => {
-            const firestoreData = transformToFirestoreFormat(record);
-            const docRef = doc(
-              db,
-              collectionName,
-              `${record.employeeId}_${record.year}_${record.month}`
-            );
-            await setDoc(docRef, firestoreData);
-          },
-          onProgress
+        companyName = await getCompanyName();
+        if (!companyName) {
+          console.error(
+            "[syncToFirestore - Compensation] Error: Company name could not be determined. Sync aborted."
+          );
+          throw new Error(
+            "Company name could not be determined. Sync aborted."
+          );
+        }
+        onProgress?.("Starting compensation sync to Firestore...");
+
+        const allLocalCompensations = await model.loadAllCompensationRecords();
+
+        if (!allLocalCompensations || allLocalCompensations.length === 0) {
+          onProgress?.("No local compensation data to sync.");
+          return;
+        }
+        onProgress?.(
+          `Loaded ${allLocalCompensations.length} local compensation records.`
         );
+
+        const groupedCompensations = allLocalCompensations.reduce(
+          (acc, record) => {
+            const key = `${record.employeeId}_${record.year}_${record.month}`;
+            if (!acc[key]) {
+              acc[key] = {
+                employeeId: record.employeeId,
+                year: record.year,
+                month: record.month,
+                records: [],
+              };
+            }
+            acc[key].records.push(record);
+            return acc;
+          },
+          {} as Record<
+            string,
+            {
+              employeeId: string;
+              year: number;
+              month: number;
+              records: Compensation[];
+            }
+          >
+        );
+
+        const totalGroups = Object.keys(groupedCompensations).length;
+        onProgress?.(
+          `Grouped records into ${totalGroups} employee-month documents.`
+        );
+        let processedGroups = 0;
+
+        for (const groupKey in groupedCompensations) {
+          const group = groupedCompensations[groupKey];
+          const { employeeId, year, month, records } = group;
+
+          const docId = createTimeBasedDocId(employeeId, year, month);
+
+          const daysData: { [day: string]: CompensationJsonDay } = {};
+          records.forEach((comp) => {
+            const dayEntry: CompensationJsonDay = {
+              dayType: comp.dayType,
+              dailyRate: comp.dailyRate,
+              nightDifferentialHours: comp.nightDifferentialHours,
+              nightDifferentialPay: comp.nightDifferentialPay,
+            };
+
+            if (comp.hoursWorked !== undefined)
+              dayEntry.hoursWorked = comp.hoursWorked;
+            if (comp.overtimeMinutes !== undefined)
+              dayEntry.overtimeMinutes = comp.overtimeMinutes;
+            if (comp.overtimePay !== undefined)
+              dayEntry.overtimePay = comp.overtimePay;
+            if (comp.undertimeMinutes !== undefined)
+              dayEntry.undertimeMinutes = comp.undertimeMinutes;
+            if (comp.undertimeDeduction !== undefined)
+              dayEntry.undertimeDeduction = comp.undertimeDeduction;
+            if (comp.lateMinutes !== undefined)
+              dayEntry.lateMinutes = comp.lateMinutes;
+            if (comp.lateDeduction !== undefined)
+              dayEntry.lateDeduction = comp.lateDeduction;
+            if (comp.holidayBonus !== undefined)
+              dayEntry.holidayBonus = comp.holidayBonus;
+            if (comp.leaveType !== undefined)
+              dayEntry.leaveType = comp.leaveType;
+            if (comp.leavePay !== undefined) dayEntry.leavePay = comp.leavePay;
+            if (comp.grossPay !== undefined) dayEntry.grossPay = comp.grossPay;
+            if (comp.deductions !== undefined)
+              dayEntry.deductions = comp.deductions;
+            if (comp.netPay !== undefined) dayEntry.netPay = comp.netPay;
+            if (comp.manualOverride !== undefined)
+              dayEntry.manualOverride = comp.manualOverride;
+            if (comp.notes !== undefined) dayEntry.notes = comp.notes;
+            if (comp.absence !== undefined) dayEntry.absence = comp.absence;
+
+            daysData[comp.day.toString()] = dayEntry;
+          });
+
+          const docData: CompensationJsonMonth = {
+            meta: {
+              employeeId,
+              year,
+              month,
+              lastModified: new Date().toISOString(),
+            },
+            days: daysData,
+          };
+
+          await saveDocument(collectionName, docId, docData, companyName);
+          processedGroups++;
+          onProgress?.(
+            `Synced ${employeeId} ${year}-${month} (${processedGroups}/${totalGroups})`
+          );
+        }
+
+        onProgress?.("Compensation sync to Firestore completed successfully.");
       } catch (error: any) {
-        console.error("Error syncing compensation to Firestore:", error);
-        throw new Error("Failed to sync compensation to Firestore");
+        console.error(
+          "[syncToFirestore - Compensation] Error during compensation sync to Firestore:",
+          error
+        );
+        if (error instanceof Error) {
+          console.error(
+            `[syncToFirestore - Compensation] Error details: ${error.message}, Stack: ${error.stack}`
+          );
+        }
+        throw new Error(
+          `Failed to sync compensation to Firestore: ${error.message || error}`
+        );
       }
     },
 
     async syncFromFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      let companyName: string;
       try {
-        const collectionRef = collection(db, collectionName);
-        const snapshot = await getDocs(collectionRef);
-        const records = snapshot.docs.map(
-          (doc: QueryDocumentSnapshot<DocumentData>) => {
-            const data = doc.data();
-            return {
-              ...data,
-              employeeId: data.employeeId || doc.id.split("_")[0],
-              year: data.year || parseInt(doc.id.split("_")[1]),
-              month: data.month || parseInt(doc.id.split("_")[2]),
-            } as Compensation;
-          }
+        companyName = await getCompanyName();
+        if (!companyName) {
+          console.error(
+            "[syncFromFirestore - Compensation] Error: Company name could not be determined. Sync aborted."
+          );
+          throw new Error(
+            "Company name could not be determined. Sync aborted."
+          );
+        }
+        onProgress?.("Starting compensation sync from Firestore...");
+
+        const firestoreDocs = await fetchCollection<CompensationJsonMonth>(
+          collectionName,
+          companyName
         );
 
-        await processInBatches(
-          records,
-          500,
-          async (record: Compensation) => {
-            const localData = transformFromFirestoreFormat(
-              record
-            ) as Compensation;
-            await model.saveOrUpdateRecords(
-              record.employeeId,
-              record.year,
-              record.month,
-              [localData]
+        if (!firestoreDocs || firestoreDocs.length === 0) {
+          onProgress?.(
+            "No compensation data found in Firestore for this company."
+          );
+          return;
+        }
+        onProgress?.(
+          `Retrieved ${firestoreDocs.length} compensation documents from Firestore.`
+        );
+
+        let allExtractedCompensations: Compensation[] = [];
+        firestoreDocs.forEach((docData: CompensationJsonMonth) => {
+          const { employeeId, year, month } = docData.meta;
+          Object.entries(docData.days).forEach(
+            ([dayStr, dayData]: [string, CompensationJsonDay]) => {
+              const day = parseInt(dayStr);
+              if (isNaN(day)) return;
+              allExtractedCompensations.push({
+                employeeId,
+                year,
+                month,
+                day,
+                dayType: dayData.dayType,
+                dailyRate: dayData.dailyRate,
+                hoursWorked: dayData.hoursWorked,
+                overtimeMinutes: dayData.overtimeMinutes,
+                overtimePay: dayData.overtimePay,
+                undertimeMinutes: dayData.undertimeMinutes,
+                undertimeDeduction: dayData.undertimeDeduction,
+                lateMinutes: dayData.lateMinutes,
+                lateDeduction: dayData.lateDeduction,
+                holidayBonus: dayData.holidayBonus,
+                leaveType: dayData.leaveType,
+                leavePay: dayData.leavePay,
+                grossPay: dayData.grossPay,
+                deductions: dayData.deductions,
+                netPay: dayData.netPay,
+                manualOverride: dayData.manualOverride,
+                notes: dayData.notes,
+                absence: dayData.absence,
+                nightDifferentialHours: dayData.nightDifferentialHours || 0,
+                nightDifferentialPay: dayData.nightDifferentialPay || 0,
+              });
+            }
+          );
+        });
+
+        if (allExtractedCompensations.length > 0) {
+          const groupedByEmployeeMonthYear = allExtractedCompensations.reduce(
+            (acc, record) => {
+              const key = `${record.employeeId}_${record.year}_${record.month}`;
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(record);
+              return acc;
+            },
+            {} as Record<string, Compensation[]>
+          );
+
+          for (const key in groupedByEmployeeMonthYear) {
+            const [employeeId, yearStr, monthStr] = key.split("_");
+            const year = parseInt(yearStr);
+            const month = parseInt(monthStr);
+            const recordsForMonth = groupedByEmployeeMonthYear[key];
+            await model.saveOrUpdateCompensations(
+              recordsForMonth,
+              month,
+              year,
+              employeeId
             );
-          },
-          onProgress
+          }
+          onProgress?.(
+            `Successfully saved/updated ${allExtractedCompensations.length} records locally.`
+          );
+        } else {
+          onProgress?.(
+            "No individual compensation entries extracted from Firestore documents."
+          );
+        }
+
+        onProgress?.(
+          "Compensation sync from Firestore completed successfully."
         );
       } catch (error: any) {
-        console.error("Error syncing compensation from Firestore:", error);
-        throw new Error("Failed to sync compensation from Firestore");
+        console.error(
+          "[syncFromFirestore - Compensation] Error during compensation sync from Firestore:",
+          error
+        );
+        if (error instanceof Error) {
+          console.error(
+            `[syncFromFirestore - Compensation] Error details: ${error.message}, Stack: ${error.stack}`
+          );
+        }
+        throw new Error(
+          `Failed to sync compensation from Firestore: ${
+            error.message || error
+          }`
+        );
       }
     },
   };
