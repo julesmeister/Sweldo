@@ -5,12 +5,13 @@
  * operations that mirror the local filesystem operations in role.ts.
  */
 
-import { Role } from "./role";
+import { Role, RoleModel } from "./role";
 import { encryptPinCode, decryptPinCode } from "../lib/encryption";
 import {
   fetchDocument,
   saveDocument,
   updateDocument,
+  getCompanyName,
 } from "../lib/firestoreService";
 
 /**
@@ -234,4 +235,69 @@ export async function deleteRoleFirestore(
     console.error(`Error deleting role from Firestore:`, error);
     throw error;
   }
+}
+
+/**
+ * Create a Firestore instance for the role model
+ */
+export function createRoleFirestoreInstance(model: RoleModel) {
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        // Load all roles from the model
+        const roles = await model.getRoles();
+        onProgress?.("Starting role sync to Firestore...");
+
+        // Process each role
+        for (let i = 0; i < roles.length; i++) {
+          const role = roles[i];
+          onProgress?.(
+            `Processing role ${role.name} (${i + 1}/${roles.length})`
+          );
+
+          // Create or update the role in Firestore
+          await createRoleFirestore(
+            {
+              name: role.name,
+              pinCode: role.pinCode,
+              accessCodes: role.accessCodes,
+              description: role.description,
+            },
+            await getCompanyName()
+          );
+        }
+
+        onProgress?.("Role sync to Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing roles to Firestore:", error);
+        throw error;
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        onProgress?.("Starting role sync from Firestore...");
+        const companyName = await getCompanyName();
+
+        // Load all roles from Firestore
+        const roles = await getRolesFirestore(companyName);
+
+        onProgress?.(`Retrieved ${roles.length} roles from Firestore.`);
+
+        // Save each role to the model
+        for (const role of roles) {
+          await model.createRole(role);
+        }
+
+        onProgress?.("Role sync from Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing roles from Firestore:", error);
+        throw error;
+      }
+    },
+  };
 }

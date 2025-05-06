@@ -19,6 +19,7 @@ import {
   CompensationJsonMonth,
   BackupEntry,
   BackupJsonMonth,
+  CompensationModel,
 } from "./compensation";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -26,7 +27,22 @@ import {
   saveDocument,
   createTimeBasedDocId,
   queryTimeBasedDocuments,
+  getFirestoreInstance,
 } from "../lib/firestoreService";
+import {
+  processInBatches,
+  transformToFirestoreFormat,
+  transformFromFirestoreFormat,
+} from "../utils/firestoreSyncUtils";
+import {
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  getDocs,
+  DocumentData,
+  QueryDocumentSnapshot,
+} from "firebase/firestore";
 
 /**
  * Load compensation data from Firestore
@@ -456,4 +472,76 @@ export async function saveCompensationBackupFirestore(
     // Don't throw error for backup failures to avoid blocking main operations
     console.warn("Backup operation failed but main save completed");
   }
+}
+
+export function createCompensationFirestore(model: CompensationModel) {
+  const db = getFirestoreInstance();
+  const collectionName = "compensations";
+
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        const records = await model.loadRecords();
+        await processInBatches(
+          records,
+          500,
+          async (record: Compensation) => {
+            const firestoreData = transformToFirestoreFormat(record);
+            const docRef = doc(
+              db,
+              collectionName,
+              `${record.employeeId}_${record.year}_${record.month}`
+            );
+            await setDoc(docRef, firestoreData);
+          },
+          onProgress
+        );
+      } catch (error: any) {
+        console.error("Error syncing compensation to Firestore:", error);
+        throw new Error("Failed to sync compensation to Firestore");
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        const collectionRef = collection(db, collectionName);
+        const snapshot = await getDocs(collectionRef);
+        const records = snapshot.docs.map(
+          (doc: QueryDocumentSnapshot<DocumentData>) => {
+            const data = doc.data();
+            return {
+              ...data,
+              employeeId: data.employeeId || doc.id.split("_")[0],
+              year: data.year || parseInt(doc.id.split("_")[1]),
+              month: data.month || parseInt(doc.id.split("_")[2]),
+            } as Compensation;
+          }
+        );
+
+        await processInBatches(
+          records,
+          500,
+          async (record: Compensation) => {
+            const localData = transformFromFirestoreFormat(
+              record
+            ) as Compensation;
+            await model.saveOrUpdateRecords(
+              record.employeeId,
+              record.year,
+              record.month,
+              [localData]
+            );
+          },
+          onProgress
+        );
+      } catch (error: any) {
+        console.error("Error syncing compensation from Firestore:", error);
+        throw new Error("Failed to sync compensation from Firestore");
+      }
+    },
+  };
 }

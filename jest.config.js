@@ -3,7 +3,7 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "jsdom",
   moduleNameMapper: {
-    "^@/(.*)$": "<rootDir>/renderer/$1",
+    "^@/(.*)$": "<rootDir>/$1",
   },
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testMatch: ["**/__tests__/**/*.test.ts", "**/__tests__/**/*.test.tsx"],
@@ -12,13 +12,9 @@ module.exports = {
       "ts-jest",
       {
         tsconfig: "tsconfig.json",
+        useESM: true,
       },
     ],
   },
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-  globals: {
-    "ts-jest": {
-      tsconfig: "tsconfig.json",
-    },
-  },
 };

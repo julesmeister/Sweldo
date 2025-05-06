@@ -15,7 +15,9 @@ import {
   fetchDocument,
   saveDocument,
   updateDocument,
+  getCompanyName,
 } from "../lib/firestoreService";
+import { StatisticsModel } from "./statistics";
 
 /**
  * Creates a statistics document ID for a specific year
@@ -321,4 +323,91 @@ export async function updateDeductionHistoryFirestore(
     console.error(`Error updating deductions history in Firestore:`, error);
     throw error;
   }
+}
+
+/**
+ * Creates a Firestore instance for statistics operations
+ */
+export function createStatisticsFirestoreInstance(
+  model: StatisticsModel,
+  year: number
+) {
+  return {
+    /**
+     * Syncs statistics from the model to Firestore
+     */
+    async syncToFirestore(
+      addProgressMessage: (msg: string) => void
+    ): Promise<void> {
+      try {
+        addProgressMessage("Loading statistics from model...");
+        const statistics = await model.getStatistics();
+
+        addProgressMessage("Saving statistics to Firestore...");
+        const docId = createStatisticsDocId(year);
+        const companyName = await getCompanyName();
+        await saveDocument("statistics", docId, statistics, companyName);
+
+        addProgressMessage("Statistics sync completed successfully!");
+      } catch (error) {
+        console.error("Error syncing statistics to Firestore:", error);
+        addProgressMessage("Error syncing statistics to Firestore");
+        throw error;
+      }
+    },
+
+    /**
+     * Syncs statistics from Firestore to the model
+     */
+    async syncFromFirestore(
+      addProgressMessage: (msg: string) => void
+    ): Promise<void> {
+      try {
+        addProgressMessage("Loading statistics from Firestore...");
+        const companyName = await getCompanyName();
+        const statistics = await getStatisticsFirestore(year, companyName);
+
+        addProgressMessage("Updating statistics in model...");
+        // Update payroll statistics
+        if (statistics.monthlyPayrolls.length > 0) {
+          const payrolls = statistics.monthlyPayrolls.map((mp) => ({
+            grossPay: mp.amount,
+            netPay: mp.amount,
+            deductions: { totalDeduction: 0 },
+            overtime: 0,
+            absences: mp.absences,
+            startDate: new Date(
+              year,
+              new Date(`${mp.month} 1, ${year}`).getMonth(),
+              1
+            ).toISOString(),
+            daysWorked: mp.days,
+          }));
+          await model.updatePayrollStatistics(payrolls);
+        }
+
+        // Update daily rate history
+        for (const history of statistics.dailyRateHistory) {
+          await model.updateDailyRateHistory(history.employee, history.rate);
+        }
+
+        // Update deduction history
+        for (const deduction of statistics.deductionsHistory) {
+          for (const change of deduction.changes) {
+            await model.updateDeductionHistory(
+              change.employee,
+              change.employee, // Using employee ID as name since we don't have the name
+              [{ type: deduction.type, amount: change.amount }]
+            );
+          }
+        }
+
+        addProgressMessage("Statistics sync completed successfully!");
+      } catch (error) {
+        console.error("Error syncing statistics from Firestore:", error);
+        addProgressMessage("Error syncing statistics from Firestore");
+        throw error;
+      }
+    },
+  };
 }

@@ -12,13 +12,14 @@
  *    companies/{companyName}/employees/{employeeId}
  */
 
-import { Employee } from "./employee";
+import { Employee, EmployeeModel } from "./employee";
 import {
   fetchDocument,
   fetchCollection,
   saveDocument,
   updateDocument,
   queryCollection,
+  getCompanyName,
 } from "../lib/firestoreService";
 
 /**
@@ -267,4 +268,128 @@ export async function updateEmployeeDetailsFirestore(
     );
     throw error;
   }
+}
+
+/**
+ * Sync employees to Firestore
+ * Uploads all employees to Firestore, handling batch operations and progress tracking
+ */
+export async function syncToFirestore(
+  employees: Employee[],
+  companyName: string,
+  onProgress?: (message: string) => void
+): Promise<void> {
+  try {
+    onProgress?.("Starting employee sync to Firestore...");
+
+    // Process in batches of 500 (Firestore batch limit)
+    const batchSize = 500;
+    for (let i = 0; i < employees.length; i += batchSize) {
+      const batch = employees.slice(i, i + batchSize);
+      onProgress?.(
+        `Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(
+          employees.length / batchSize
+        )}...`
+      );
+
+      // Save each employee in the batch
+      const savePromises = batch.map(async (employee) => {
+        const firestoreEmployee: FirestoreEmployee = {
+          id: employee.id,
+          name: employee.name,
+          position: employee.position,
+          dailyRate: employee.dailyRate,
+          sss: employee.sss,
+          philHealth: employee.philHealth,
+          pagIbig: employee.pagIbig,
+          status: employee.status,
+          employmentType: employee.employmentType,
+          lastPaymentPeriod:
+            employee.lastPaymentPeriod &&
+            typeof employee.lastPaymentPeriod !== "string"
+              ? employee.lastPaymentPeriod
+              : typeof employee.lastPaymentPeriod === "string" &&
+                employee.lastPaymentPeriod
+              ? JSON.parse(employee.lastPaymentPeriod.replace(/\\/g, ""))
+              : null,
+        };
+
+        await saveDocument(
+          "employees",
+          employee.id,
+          firestoreEmployee,
+          companyName
+        );
+      });
+
+      await Promise.all(savePromises);
+    }
+
+    onProgress?.("Employee sync to Firestore completed successfully.");
+  } catch (error) {
+    console.error("Error syncing employees to Firestore:", error);
+    throw error;
+  }
+}
+
+/**
+ * Sync employees from Firestore
+ * Downloads all employees from Firestore, handling batch operations and progress tracking
+ */
+export async function syncFromFirestore(
+  companyName: string,
+  onProgress?: (message: string) => void
+): Promise<Employee[]> {
+  try {
+    onProgress?.("Starting employee sync from Firestore...");
+
+    // Fetch all employees from Firestore
+    const employees = await loadEmployeesFirestore(companyName);
+
+    onProgress?.(`Retrieved ${employees.length} employees from Firestore.`);
+    return employees;
+  } catch (error) {
+    console.error("Error syncing employees from Firestore:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create a Firestore instance for the employee model
+ */
+export function createEmployeeFirestore(model: EmployeeModel) {
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        // Load all employees from the model
+        const employees = await model.loadEmployees();
+
+        // Use the existing syncToFirestore function
+        await syncToFirestore(employees, await getCompanyName(), onProgress);
+      } catch (error) {
+        console.error("Error syncing employees to Firestore:", error);
+        throw error;
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        // Use the existing syncFromFirestore function
+        const employees = await syncFromFirestore(
+          await getCompanyName(),
+          onProgress
+        );
+
+        // Save the employees to the model
+        await model.saveOnlyNewEmployees(employees);
+      } catch (error) {
+        console.error("Error syncing employees from Firestore:", error);
+        throw error;
+      }
+    },
+  };
 }

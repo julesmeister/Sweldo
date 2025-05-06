@@ -126,6 +126,10 @@ export class Payroll {
     }
   }
 
+  public getDbPath(): string {
+    return this.dbPath;
+  }
+
   private async init(rows: any[][]): Promise<void> {
     if (!rows || !Array.isArray(rows)) {
       throw new Error("Invalid rows data provided");
@@ -826,13 +830,7 @@ export class Payroll {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
         const companyName = await getCompanyName();
-        await savePayrollSummaryFirestore(
-          payrollSummary,
-          employeeId,
-          endYear,
-          endMonth,
-          companyName
-        );
+        await savePayrollSummaryFirestore(payrollSummary, companyName);
       } else {
         // Desktop mode - use existing implementation
         const payrollJsonData = await Payroll.readPayrollJsonFile(

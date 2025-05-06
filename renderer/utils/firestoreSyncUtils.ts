@@ -21,6 +21,9 @@ export function transformToFirestoreFormat<T>(data: T): any {
   if (data instanceof Date) {
     return Timestamp.fromDate(data);
   }
+  if (typeof data === "string" && !isNaN(Date.parse(data))) {
+    return Timestamp.fromDate(new Date(data));
+  }
   if (Array.isArray(data)) {
     return data.map(transformToFirestoreFormat);
   }

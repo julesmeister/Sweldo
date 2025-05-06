@@ -5,13 +5,15 @@
  * operations that mirror the local filesystem operations in missingTime.ts.
  */
 
-import { MissingTimeLog } from "./missingTime";
+import { MissingTimeLog, MissingTimeModel } from "./missingTime";
 import {
   fetchDocument,
   saveDocument,
   updateDocument,
   deleteField,
   createTimeBasedDocId,
+  getCompanyName,
+  queryCollection,
 } from "../lib/firestoreService";
 
 /**
@@ -204,4 +206,114 @@ export async function getAllMissingTimeLogsForEmployeeFirestore(
     console.error(`Error loading all missing time logs from Firestore:`, error);
     return []; // Return empty array on error
   }
+}
+
+/**
+ * Create a Firestore instance for the missing time model
+ */
+export function createMissingTimeFirestoreInstance(model: MissingTimeModel) {
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        // Load all missing time logs from the model
+        const logs = await model.getMissingTimeLogs(0, 0); // 0 for year/month to get all logs
+        onProgress?.("Starting missing time sync to Firestore...");
+
+        // Group logs by year and month
+        const logsByMonth = logs.reduce(
+          (acc: Record<string, MissingTimeLog[]>, log: MissingTimeLog) => {
+            const key = `${log.year}_${log.month}`;
+            if (!acc[key]) {
+              acc[key] = [];
+            }
+            acc[key].push(log);
+            return acc;
+          },
+          {}
+        );
+
+        // Process each month's logs
+        const months = Object.keys(logsByMonth);
+        for (let i = 0; i < months.length; i++) {
+          const [year, month] = months[i].split("_");
+          const monthLogs = logsByMonth[months[i]];
+
+          onProgress?.(
+            `Processing missing time logs for ${year}-${month} (${i + 1}/${
+              months.length
+            })`
+          );
+
+          // Save each log individually
+          for (const log of monthLogs) {
+            await saveMissingTimeLogFirestore(
+              log,
+              parseInt(month),
+              parseInt(year),
+              await getCompanyName()
+            );
+          }
+        }
+
+        onProgress?.("Missing time sync to Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing missing time to Firestore:", error);
+        throw error;
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        onProgress?.("Starting missing time sync from Firestore...");
+        const companyName = await getCompanyName();
+
+        // Query all missing time documents
+        const docs = await queryCollection<MissingTimeFirestoreData>(
+          "missing_time_logs",
+          [], // No conditions to get all documents
+          companyName
+        );
+        if (!docs || docs.length === 0) {
+          onProgress?.("No missing time logs found in Firestore.");
+          return;
+        }
+
+        onProgress?.(
+          `Found ${docs.length} missing time documents in Firestore.`
+        );
+
+        // Process each document
+        let totalLogs = 0;
+        for (const doc of docs) {
+          if (!doc.logs || !Array.isArray(doc.logs)) {
+            console.warn(
+              `Invalid document structure in ${doc.meta?.year}-${doc.meta?.month}`
+            );
+            continue;
+          }
+
+          onProgress?.(
+            `Processing ${doc.logs.length} logs for ${doc.meta?.year}-${doc.meta?.month}`
+          );
+
+          // Save each log individually
+          for (const log of doc.logs) {
+            await model.saveMissingTimeLog(log, log.month, log.year);
+            totalLogs++;
+          }
+        }
+
+        onProgress?.(
+          `Missing time sync from Firestore completed successfully. Processed ${totalLogs} logs.`
+        );
+      } catch (error) {
+        console.error("Error syncing missing time from Firestore:", error);
+        throw new Error("Failed to sync missing time from Firestore");
+      }
+    },
+  };
 }

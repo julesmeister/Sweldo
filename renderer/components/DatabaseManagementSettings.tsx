@@ -4,12 +4,16 @@ import {
   IoInformationCircleOutline,
   IoCloudUploadOutline,
   IoCloudDownloadOutline,
+  IoCheckmarkCircleOutline,
+  IoAlertCircleOutline,
+  IoTimeOutline,
 } from "react-icons/io5";
 import { toast } from "sonner";
+import { useFirestoreSync } from "../hooks/useFirestoreSync";
 
 interface DatabaseManagementSettingsProps {
   dbPath: string | null;
-  setDbPath: (path: string) => Promise<void>; // Assuming setDbPath might be async
+  setDbPath: (path: string) => Promise<void>;
   currentPath: string | null;
   setCurrentPath: (path: string | null) => void;
   companyName: string | null;
@@ -24,13 +28,65 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Log initial prop status for critical items - simplified
+  useEffect(() => {
+    console.log(
+      "[DatabaseManagementSettings] Initial props for sync readiness:",
+      {
+        dbPathProvided: !!dbPath,
+        companyNameProvided: !!companyName,
+      }
+    );
+  }, [dbPath, companyName]);
+
+  const {
+    uploadStatus,
+    downloadStatus,
+    handleUpload,
+    handleDownload,
+    modelStatuses,
+  } = useFirestoreSync({
+    // Pass only required identifiers to the hook
+    dbPath: dbPath || "",
+    companyName: companyName || "",
+    // employeeId and year are optional in the hook, not needed here for this component's general sync
+  });
+
+  // Log modelStatuses whenever it changes or component re-renders
+  useEffect(() => {
+    console.log(
+      "[DatabaseManagementSettings] modelStatuses updated or component re-rendered:",
+      JSON.stringify(modelStatuses)
+    );
+  }, [modelStatuses]);
+
+  // Log when uploadStatus changes
+  useEffect(() => {
+    console.log(
+      "[DatabaseManagementSettings] uploadStatus changed:",
+      uploadStatus
+    );
+  }, [uploadStatus]);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "success":
+        return <IoCheckmarkCircleOutline className="w-5 h-5 text-green-500" />;
+      case "error":
+        return <IoAlertCircleOutline className="w-5 h-5 text-red-500" />;
+      case "running":
+        return <IoTimeOutline className="w-5 h-5 text-blue-500 animate-spin" />;
+      default:
+        return <IoTimeOutline className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
   const handleBrowseClick = async () => {
     const folderPath = await window.electron.openFolderDialog();
     if (folderPath) {
       try {
         await setDbPath(folderPath);
         setCurrentPath(folderPath);
-        // Persist path (consider moving this to the store or parent component)
         const persistedState = localStorage.getItem("settings-storage");
         if (persistedState) {
           const parsed = JSON.parse(persistedState);
@@ -45,7 +101,6 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
             })
           );
         }
-        // Reload only after ensuring persistence
         window.location.reload();
       } catch (error) {
         console.error("Error setting database path:", error);
@@ -54,16 +109,20 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     }
   };
 
-  // Placeholder sync functions
+  // Simplify handlers - remove internal model checks
   const handleUploadToFirestore = () => {
-    toast.info("Upload to Firestore functionality not yet implemented.");
-    // TODO: Implement upload logic
+    // const placeholder for removed check
+    handleUpload();
   };
 
   const handleDownloadFromFirestore = () => {
-    toast.info("Download from Firestore functionality not yet implemented.");
-    // TODO: Implement download logic
+    // const placeholder for removed check
+    handleDownload();
   };
+
+  const areSyncPrerequisitesMet = !!dbPath && !!companyName;
+  // Remove areModelsAvailableForSync check
+  // const areModelsAvailableForSync = !!internalAttendanceModel && !!internalCashAdvanceModel;
 
   if (!dbPath) {
     // Initial setup view - remains full width
@@ -97,12 +156,12 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     );
   }
 
-  // Regular view with two columns when dbPath is set
   return (
     <div
       className={`grid grid-cols-1 ${
         window.electron && companyName ? "md:grid-cols-2" : ""
-      } gap-6`}
+      }
+gap-6`}
     >
       {/* Column 1: Database Location */}
       <div className="bg-white rounded-lg shadow p-6">
@@ -149,17 +208,13 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
             {...({ webkitdirectory: "true" } as any)}
             style={{ display: "none" }}
             onChange={(e) => {
-              // This specific onChange might not be needed if browse button handles it
               const files = e.target.files;
               if (files && files.length > 0) {
                 const file = files[0];
-                // Logic to extract directory path from file might be complex/unreliable
-                // It's usually better to use the directory picker dialog
                 console.log(
                   "Selected file:",
                   file.webkitRelativePath || file.path
                 );
-                // Consider if setCurrentPath should be called here or rely on browse
               }
             }}
           />
@@ -173,54 +228,12 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
       </div>
 
       {/* Column 2: Cloud Sync */}
-      {window.electron && (
+      {/* Render based only on dbPath and companyName being available */}
+      {window.electron && areSyncPrerequisitesMet && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-2">Cloud Sync (Firestore)</h2>
-          {companyName ? (
-            <>
-              <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-6">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-purple-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-purple-700">
-                      <span className="font-medium">Backup & Sync:</span> Upload
-                      your local database to Firestore for backup or download to
-                      sync data across devices.
-                      <br />
-                      <span className="text-xs italic">
-                        Ensure you have appropriate Firestore setup and
-                        permissions.
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-4">
-                <button
-                  onClick={handleUploadToFirestore}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <IoCloudUploadOutline className="w-5 h-5" />
-                  Upload to Cloud
-                </button>
-                <button
-                  onClick={handleDownloadFromFirestore}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  <IoCloudDownloadOutline className="w-5 h-5" />
-                  Download from Cloud
-                </button>
-              </div>
-            </>
-          ) : (
+          {!companyName ? (
+            // Show message if companyName is missing
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
@@ -249,6 +262,125 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
                 </div>
               </div>
             </div>
+          ) : (
+            // Company name is present, show the main sync UI
+            <>
+              {/* Backup & Sync info message */}
+              <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-purple-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-purple-700">
+                      <span className="font-medium">Backup & Sync:</span> Upload
+                      your local database to Firestore for backup or download to
+                      sync data across devices.
+                      <br />
+                      <span className="text-xs italic">
+                        Ensure you have appropriate Firestore setup and
+                        permissions.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sync Buttons */}
+              <div className="flex space-x-4">
+                <button
+                  onClick={handleUploadToFirestore}
+                  disabled={uploadStatus === "running"}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${
+                    uploadStatus === "running"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  } text-white rounded-md transition-colors`}
+                >
+                  <IoCloudUploadOutline className="w-5 h-5" />
+                  {uploadStatus === "running"
+                    ? "Uploading..."
+                    : "Upload to Cloud"}
+                </button>
+                <button
+                  onClick={handleDownloadFromFirestore}
+                  disabled={downloadStatus === "running"}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${
+                    downloadStatus === "running"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  } text-white rounded-md transition-colors`}
+                >
+                  <IoCloudDownloadOutline className="w-5 h-5" />
+                  {downloadStatus === "running"
+                    ? "Downloading..."
+                    : "Download from Cloud"}
+                </button>
+              </div>
+
+              {/* Checklist Progress Display */}
+              {(uploadStatus === "running" ||
+                downloadStatus === "running" ||
+                uploadStatus === "success" ||
+                downloadStatus === "success" ||
+                uploadStatus === "error" ||
+                downloadStatus === "error") && (
+                <div className="mt-4">
+                  <div className="text-sm font-medium mb-2">
+                    {uploadStatus === "running"
+                      ? "Uploading to Cloud..."
+                      : downloadStatus === "running"
+                      ? "Downloading from Cloud..."
+                      : uploadStatus === "success" ||
+                        downloadStatus === "success"
+                      ? "Sync Complete"
+                      : "Sync Error"}
+                  </div>
+                  {Object.keys(modelStatuses).length > 0 ? (
+                    <ul className="space-y-3">
+                      {Object.entries(modelStatuses).map(
+                        ([modelName, status]) => (
+                          <li
+                            key={modelName}
+                            className="flex items-center gap-3"
+                          >
+                            {getStatusIcon(status.status)}
+                            <span className="capitalize font-medium">
+                              {modelName}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({status.status})
+                            </span>
+                            {status.progress.length > 0 && (
+                              <span className="ml-2 text-xs text-gray-400">
+                                {status.progress[status.progress.length - 1]}
+                              </span>
+                            )}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  ) : (
+                    (uploadStatus === "success" ||
+                      downloadStatus === "success" ||
+                      uploadStatus === "error" ||
+                      downloadStatus === "error") && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        {uploadStatus === "error" || downloadStatus === "error"
+                          ? "Sync failed to process model data. Check console logs in useFirestoreSync for errors."
+                          : "Sync initiated, but no specific model data was processed. This might happen if models could not be initialized (check logs) or no changes were detected."}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

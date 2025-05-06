@@ -498,21 +498,131 @@ export function createAttendanceFirestore(model: AttendanceModel) {
     async syncToFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
+      let companyName: string;
       try {
-        const records = await model.loadAttendances();
-        await processInBatches(
-          records,
-          500,
-          async (record: Attendance) => {
-            const firestoreData = transformToFirestoreFormat(record);
-            const docRef = doc(db, collectionName, record.employeeId);
-            await setDoc(docRef, firestoreData);
-          },
-          onProgress
+        console.log("[syncToFirestore] Attempting to get company name...");
+        companyName = await getCompanyName();
+        if (!companyName) {
+          console.error(
+            "[syncToFirestore] Error: Company name could not be determined. Sync aborted."
+          );
+          throw new Error(
+            "Company name could not be determined. Sync aborted."
+          );
+        }
+        console.log(`[syncToFirestore] Company name: ${companyName}`);
+        onProgress?.("Starting attendance sync to Firestore...");
+
+        console.log("[syncToFirestore] Loading all local attendances...");
+        const allLocalAttendances = await model.loadAttendances();
+        if (!allLocalAttendances || allLocalAttendances.length === 0) {
+          console.log("[syncToFirestore] No local attendance data to sync.");
+          onProgress?.("No local attendance data to sync.");
+          return;
+        }
+        console.log(
+          `[syncToFirestore] Loaded ${allLocalAttendances.length} local attendance records.`
         );
+        onProgress?.(
+          `Loaded \\${allLocalAttendances.length} local attendance records.`
+        );
+
+        console.log(
+          "[syncToFirestore] Grouping attendances by employeeId, year, and month..."
+        );
+        const groupedAttendances = allLocalAttendances.reduce((acc, record) => {
+          const key = `\\${record.employeeId}_\\${record.year}_\\${record.month}`;
+          if (!acc[key]) {
+            acc[key] = {
+              employeeId: record.employeeId,
+              year: record.year,
+              month: record.month,
+              records: [],
+            };
+          }
+          acc[key].records.push(record);
+          return acc;
+        }, {} as Record<string, { employeeId: string; year: number; month: number; records: Attendance[] }>);
+
+        const totalGroups = Object.keys(groupedAttendances).length;
+        console.log(
+          `[syncToFirestore] Grouped records into ${totalGroups} employee-month documents.`
+        );
+        onProgress?.(
+          `Grouped records into \\${totalGroups} employee-month documents.`
+        );
+        let processedGroups = 0;
+
+        for (const groupKey in groupedAttendances) {
+          const group = groupedAttendances[groupKey];
+          const { employeeId, year, month, records } = group;
+          console.log(
+            `[syncToFirestore] Processing group: ${groupKey}, EmployeeID: ${employeeId}, Year: ${year}, Month: ${month}`
+          );
+
+          const docId = createTimeBasedDocId(employeeId, year, month);
+          console.log(`[syncToFirestore] Generated docId: ${docId}`);
+
+          const daysData: { [day: string]: AttendanceJsonDay } = {};
+          records.forEach((att) => {
+            daysData[att.day.toString()] = {
+              timeIn: att.timeIn,
+              timeOut: att.timeOut,
+              schedule: att.schedule === undefined ? null : att.schedule,
+            };
+          });
+
+          const docData: AttendanceJsonMonth = {
+            meta: {
+              employeeId,
+              year,
+              month,
+              lastModified: new Date().toISOString(),
+            },
+            days: daysData,
+          };
+          console.log(
+            `[syncToFirestore] Preparing to save document for ${docId}. Data: ${JSON.stringify(
+              docData,
+              null,
+              2
+            )}`
+          );
+
+          console.log(
+            `[syncToFirestore] Calling saveDocument for ${docId} in collection 'attendances' for company '${companyName}'...`
+          );
+          await saveDocument("attendances", docId, docData, companyName);
+          console.log(
+            `[syncToFirestore] Successfully saved document ${docId}.`
+          );
+          processedGroups++;
+          onProgress?.(
+            `Synced \\${employeeId} \\${year}-\\${month} (\\${processedGroups}/\\${totalGroups})`
+          );
+        }
+
+        console.log(
+          "[syncToFirestore] Attendance sync to Firestore completed successfully."
+        );
+        onProgress?.("Attendance sync to Firestore completed successfully.");
       } catch (error) {
-        console.error("Error syncing attendance to Firestore:", error);
-        throw new Error("Failed to sync attendance to Firestore");
+        console.error(
+          "[syncToFirestore] Error during attendance sync to Firestore:",
+          error
+        );
+        if (error instanceof Error) {
+          console.error(
+            `[syncToFirestore] Error details: ${error.message}, Stack: ${error.stack}`
+          );
+          throw new Error(
+            `Failed to sync attendance to Firestore: \\${error.message}`
+          );
+        }
+        console.error("[syncToFirestore] Unknown error occurred.");
+        throw new Error(
+          "Failed to sync attendance to Firestore due to an unknown error"
+        );
       }
     },
 

@@ -19,12 +19,14 @@ import {
   defaultAttendanceSettings,
   defaultTimeSettings,
   MonthSchedule,
+  AttendanceSettingsModel,
 } from "./settings";
 import {
   fetchDocument,
   saveDocument,
   fetchCollection,
   constructDocPath,
+  getCompanyName,
 } from "../lib/firestoreService";
 
 /**
@@ -216,4 +218,111 @@ export async function saveAppSettingsFirestore(
     console.error("Error saving app settings to Firestore:", error);
     throw error;
   }
+}
+
+/**
+ * Create a Firestore instance for the settings model
+ */
+export function createSettingsFirestoreInstance(
+  model: AttendanceSettingsModel
+) {
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        onProgress?.("Starting settings sync to Firestore...");
+        const companyName = await getCompanyName();
+
+        // Sync attendance settings
+        onProgress?.("Syncing attendance settings...");
+        const attendanceSettings = await model.loadAttendanceSettings();
+        await saveAttendanceSettingsFirestore(attendanceSettings, companyName);
+
+        // Sync time settings
+        onProgress?.("Syncing time settings...");
+        const timeSettings = await model.loadTimeSettings();
+        await saveTimeSettingsFirestore(timeSettings, companyName);
+
+        // Sync month schedules
+        onProgress?.("Syncing month schedules...");
+        const employmentTypes = await model.loadTimeSettings();
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+
+        for (const type of employmentTypes) {
+          const schedule = await model.loadMonthSchedule(
+            type.type,
+            currentYear,
+            currentMonth
+          );
+          if (schedule) {
+            await saveMonthScheduleFirestore(
+              type.type,
+              currentYear,
+              currentMonth,
+              schedule,
+              companyName
+            );
+          }
+        }
+
+        onProgress?.("Settings sync to Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing settings to Firestore:", error);
+        throw error;
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        onProgress?.("Starting settings sync from Firestore...");
+        const companyName = await getCompanyName();
+
+        // Sync attendance settings
+        onProgress?.("Syncing attendance settings...");
+        const attendanceSettings = await loadAttendanceSettingsFirestore(
+          companyName
+        );
+        await model.saveAttendanceSettings(attendanceSettings);
+
+        // Sync time settings
+        onProgress?.("Syncing time settings...");
+        const timeSettings = await loadTimeSettingsFirestore(companyName);
+        await model.saveTimeSettings(timeSettings);
+
+        // Sync month schedules
+        onProgress?.("Syncing month schedules...");
+        const employmentTypes = await model.loadTimeSettings();
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+
+        for (const type of employmentTypes) {
+          const schedule = await loadMonthScheduleFirestore(
+            type.type,
+            currentYear,
+            currentMonth,
+            companyName
+          );
+          if (schedule) {
+            await model.saveMonthSchedule(
+              type.type,
+              currentYear,
+              currentMonth,
+              schedule
+            );
+          }
+        }
+
+        onProgress?.("Settings sync from Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing settings from Firestore:", error);
+        throw error;
+      }
+    },
+  };
 }

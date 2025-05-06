@@ -16,6 +16,8 @@ The existing system primarily relies on the local file system:
 
 To mirror the efficiency of the file-based system (minimizing operations for common tasks) while leveraging Firestore's capabilities, we can adopt a similar granularity, organized under the company's name.
 
+**IMPORTANT Pathing Note:** All Firestore operations interacting with specific company data MUST target paths namespaced under `/companies/{companyName}/`. Utility functions within `firestoreService.ts` (e.g., `saveDocument`, `fetchDocument`, `fetchCollection`, `createTimeBasedDocId`) are designed to handle this automatically when provided with the `collectionName`, `docId`, and `companyName`. Model-specific implementations (`_firestore.ts` files) MUST utilize these shared utilities to ensure correct path construction.
+
 ```text
 Firestore Root
 └── companies (collection)
@@ -174,56 +176,7 @@ To ensure a clean separation of concerns and maintain the existing functionality
    * Maintain consistent function signatures with the "Firestore" suffix
    * Document any Firestore-specific behaviors or limitations
 
-6. **Example Implementation Structure:**
-
-```typescript
-// attendance_firestore.ts - Contains all Firestore-specific operations
-import { Attendance, SharedAlternatives } from './attendance';
-import { 
-  fetchDocument, 
-  saveDocument, 
-  createTimeBasedDocId,
-  getCompanyName 
-} from '../lib/firestoreService';
-
-export async function loadAttendanceFirestore(employeeId, year, month, companyName) {
-  const docId = createTimeBasedDocId(employeeId, year, month);
-  const data = await fetchDocument('attendances', docId, companyName);
-  // Transform data to Attendance[] format
-}
-
-export async function saveAttendanceFirestore(data, employeeId, year, month, companyName) {
-  const docId = createTimeBasedDocId(employeeId, year, month);
-  // Transform data to Firestore format
-  await saveDocument('attendances', docId, transformedData, companyName);
-}
-
-// Additional Firestore-specific methods...
-```
-
-```typescript
-// attendance.ts - The original model with conditional logic
-import { loadAttendanceFirestore, saveAttendanceFirestore } from './attendance_firestore';
-import { isWebEnvironment, getCompanyName } from '../lib/firestoreService';
-
-export class AttendanceModel {
-  // ... existing properties (but NO companyName property) ...
-
-  async loadAttendance(employeeId, year, month) {
-    if (isWebEnvironment()) {
-      // Web mode - use Firestore
-      const companyName = await getCompanyName();
-      return await loadAttendanceFirestore(employeeId, year, month, companyName);
-    } else {
-      // Desktop mode - use existing file system logic
-      // (Existing implementation remains unchanged)
-      return await window.electron.readAttendance(employeeId, year, month);
-    }
-  }
-}
-```
-
-This pattern would be repeated for all model classes: `LeaveModel`, `LoanModel`, `EmployeeModel`, etc.
+6. **Sync Orchestration:** The `useFirestoreSync` hook calls the `syncToFirestore` and `syncFromFirestore` methods provided by the objects returned from `create<ModelName>Firestore` functions (defined in `_firestore.ts` files). These methods contain the core logic for loading all relevant local data (for upload) or fetching all relevant Firestore data (for download) and performing the necessary save operations using the shared utility functions.
 
 ## Implementation Patterns and Guidelines
 
@@ -443,67 +396,117 @@ type SyncStatus = 'idle' | 'running' | 'success' | 'error';
 interface UseFirestoreSyncProps {
   dbPath: string;
   companyName: string;
+  attendanceModel: AttendanceModel;
+  employeeModel: EmployeeModel;
+  compensationModel: CompensationModel;
+  holidayModel: HolidayModel;
+  leaveModel: LeaveModel;
+  loanModel: LoanModel;
+  missingTimeModel: MissingTimeModel;
+  payrollModel: Payroll;
+  roleModel: RoleModel;
+  settingsModel: AttendanceSettingsModel;
+  shortsModel: ShortModel;
+  statisticsModel: StatisticsModel;
+  employeeId: string;
+  year: number;
 }
 
-export function useFirestoreSync({ dbPath, companyName }: UseFirestoreSyncProps) {
-  const [uploadStatus, setUploadStatus] = useState<SyncStatus>('idle');
-  const [downloadStatus, setDownloadStatus] = useState<SyncStatus>('idle');
+function useFirestoreSync({
+  dbPath,
+  companyName,
+  attendanceModel,
+  employeeModel,
+  compensationModel,
+  holidayModel,
+  leaveModel,
+  loanModel,
+  missingTimeModel,
+  payrollModel,
+  roleModel,
+  settingsModel,
+  shortsModel,
+  statisticsModel,
+  employeeId,
+  year,
+}: UseFirestoreSyncProps) {
+  // State management
+  const [uploadStatus, setUploadStatus] = useState<SyncStatus>("idle");
+  const [downloadStatus, setDownloadStatus] = useState<SyncStatus>("idle");
   const [uploadProgress, setUploadProgress] = useState<string[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<string[]>([]);
 
-  const handleUpload = useCallback(async () => {
-    if (!dbPath || !companyName) return;
-    
-    setUploadStatus('running');
-    setUploadProgress([]);
-    
+  // Create Firestore instances for all models
+  const createFirestoreInstances = useCallback((): SyncOperation[] => {
+    // NOTE: This now happens INSIDE the hook, using factory functions
+    // It assumes dbPath is available to instantiate models internally
+    const operations: SyncOperation[] = [];
+    if (!dbPath) return []; // Cannot instantiate without dbPath
     try {
-      // Upload settings first
-      await uploadSettingsToFirestore(dbPath, companyName, (msg) => {
-        setUploadProgress(prev => [...prev, msg]);
-      });
-      
-      // Upload other models in sequence
-      await uploadEmployeesToFirestore(dbPath, companyName, (msg) => {
-        setUploadProgress(prev => [...prev, msg]);
-      });
-      
-      // Continue with other models...
-      
-      setUploadStatus('success');
-      toast.success('Upload completed successfully!');
+      const attendanceModel = createAttendanceModel(dbPath);
+      operations.push({ name: "attendance", instance: createAttendanceFirestore(attendanceModel) });
+      // ... Add other models similarly ...
+      const employeeModel = createEmployeeModel(dbPath);
+      operations.push({ name: "employee", instance: createEmployeeFirestore(employeeModel) });
+      const cashAdvanceModel = createCashAdvanceModel(dbPath, "__SYNC_ALL__"); // Example placeholder
+      operations.push({ name: "cash advance", instance: createCashAdvanceFirestoreInstance(cashAdvanceModel) });
+      // ... etc.
     } catch (error) {
-      setUploadStatus('error');
-      toast.error(`Upload failed: ${error.message}`);
+      console.error("Error creating model instances in useFirestoreSync:", error);
+      return [];
     }
-  }, [dbPath, companyName]);
+    return operations;
+  }, [dbPath, employeeId, year]);
 
-  const handleDownload = useCallback(async () => {
-    if (!dbPath || !companyName) return;
-    
-    setDownloadStatus('running');
-    setDownloadProgress([]);
-    
-    try {
-      // Download settings first
-      await downloadSettingsFromFirestore(dbPath, companyName, (msg) => {
-        setDownloadProgress(prev => [...prev, msg]);
-      });
-      
-      // Download other models in sequence
-      await downloadEmployeesFromFirestore(dbPath, companyName, (msg) => {
-        setDownloadProgress(prev => [...prev, msg]);
-      });
-      
-      // Continue with other models...
-      
-      setDownloadStatus('success');
-      toast.success('Download completed successfully!');
-    } catch (error) {
-      setDownloadStatus('error');
-      toast.error(`Download failed: ${error.message}`);
-    }
-  }, [dbPath, companyName]);
+  // Generic sync handler for both upload and download
+  const handleSync = useCallback(
+    async (
+      isUpload: boolean,
+      setStatus: (status: SyncStatus) => void,
+      setProgress: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+      if (!dbPath || !companyName) {
+        toast.error("Database path and company name are required for sync");
+        return;
+      }
+
+      setStatus("running");
+      setProgress([]);
+
+      try {
+        const operations = createFirestoreInstances();
+
+        for (const { name, instance } of operations) {
+          const operationType = isUpload ? "upload" : "download";
+          setProgress((prev: string[]) => [...prev, `Starting ${name} ${operationType}...`]);
+
+          await (isUpload
+            ? instance.syncToFirestore
+            : instance.syncFromFirestore)((msg: string) => {
+            setProgress((prev: string[]) => [...prev, msg]);
+          });
+        }
+
+        setStatus("success");
+        toast.success(`${isUpload ? "Upload" : "Download"} completed successfully!`);
+      } catch (error: any) {
+        setStatus("error");
+        toast.error(`${isUpload ? "Upload" : "Download"} failed: ${error.message}`);
+      }
+    },
+    [dbPath, companyName, createFirestoreInstances]
+  );
+
+  // Upload and download handlers
+  const handleUpload = useCallback(
+    () => handleSync(true, setUploadStatus, setUploadProgress),
+    [handleSync]
+  );
+
+  const handleDownload = useCallback(
+    () => handleSync(false, setDownloadStatus, setDownloadProgress),
+    [handleSync]
+  );
 
   return {
     uploadStatus,
@@ -632,635 +635,94 @@ export async function withRetry<T>(
 #### 3. Model-Specific Sync Implementations
 
 ```typescript
-// models/attendance/attendanceSync.ts
+// models/attendance/attendance_firestore.ts - Corrected Conceptual Example
+
+// ... other imports ...
+import { AttendanceModel } from './attendance'; // Need base model for local operations
 import { 
-  processInBatches, 
-  transformToFirestoreFormat,
-  transformFromFirestoreFormat,
-  validateFirestoreData,
-  withRetry
-} from '../../utils/firestoreSyncUtils';
-import { Attendance, AttendanceJsonMonth } from './attendance';
-import { saveDocument, queryCollection } from '../../utils/firestoreService';
+  saveDocument, // Use the utility!
+  fetchCollection, // Use the utility!
+  createTimeBasedDocId, 
+  getCompanyName 
+} from '../../lib/firestoreService';
 
-const BATCH_SIZE = 50;
-
-export async function uploadAttendanceToFirestore(
-  dbPath: string,
+// Helper function within attendance_firestore.ts (or imported)
+async function syncAttendanceToFirestore(
+  model: AttendanceModel, // Pass the base model instance
   companyName: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
-  // 1. Load all local JSON files
-  const localFiles = await window.electron.listFiles(`${dbPath}/SweldoDB/attendances`);
-  
-  // 2. Process each file
+  onProgress?.('Loading all local attendance data...');
+  // *** IMPORTANT: Assumes a method exists on AttendanceModel to get all data ***
+  // *** You might need to add `loadAllLocalAttendanceJsons()` to attendance.ts ***
+  const allLocalData: AttendanceJsonMonth[] = await model.loadAllLocalAttendanceJsons(); 
+  onProgress?.(`Found ${allLocalData.length} local attendance month files.`);
+
   await processInBatches(
-    localFiles,
-    BATCH_SIZE,
-    async (file) => {
-      const data = await window.electron.readJsonFile(file);
-      const firestoreData = transformToFirestoreFormat(data);
-      
-      if (!validateFirestoreData(firestoreData, attendanceSchema)) {
-        throw new FirestoreSyncError(
-          'Invalid attendance data',
-          'upload',
-          'attendance'
-        );
-      }
-      
-      const docId = createTimeBasedDocId(
-        data.employeeId,
-        data.year,
-        data.month
-      );
-      
-      await withRetry(() => 
-        saveDocument('attendances', docId, firestoreData, companyName)
-      );
+    allLocalData,
+    100, // Adjust batch size as needed
+    async (jsonData: AttendanceJsonMonth) => {
+      const { employeeId, year, month } = jsonData.meta;
+      const docId = createTimeBasedDocId(employeeId, year, month);
+      // Use the saveDocument utility which handles the full path
+      await saveDocument('attendances', docId, jsonData, companyName);
     },
-    onProgress
+    (progressMsg) => onProgress?.(`Upload batch progress: ${progressMsg}`)
   );
+  onProgress?.('Attendance upload complete.');
 }
 
-export async function downloadAttendanceFromFirestore(
-  dbPath: string,
+async function syncAttendanceFromFirestore(
+  model: AttendanceModel, // Pass the base model instance
   companyName: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
-  // 1. Query all attendance documents
-  const querySnapshot = await queryCollection('attendances', companyName);
-  
-  // 2. Process each document
+  onProgress?.('Fetching all attendance documents from Firestore...');
+  // Fetch all docs from companies/{companyName}/attendances
+  const firestoreDocs = await fetchCollection<AttendanceJsonMonth>('attendances', companyName);
+  onProgress?.(`Retrieved ${firestoreDocs.length} documents.`);
+
   await processInBatches(
-    querySnapshot.docs,
-    BATCH_SIZE,
-    async (doc) => {
-      const data = transformFromFirestoreFormat(doc.data());
-      const filePath = createLocalFilePath(
-        dbPath,
-        data.employeeId,
-        data.year,
-        data.month
-      );
-      
-      await window.electron.writeJsonFile(filePath, data);
+    firestoreDocs,
+    100,
+    async (docData) => {
+      // *** IMPORTANT: Assumes a method to save JSON structure directly ***
+      // *** You might need `saveAttendanceJsonMonth` on attendance.ts ***
+      await model.saveAttendanceJsonMonth(docData);
     },
-    onProgress
+     (progressMsg) => onProgress?.(`Download batch progress: ${progressMsg}`)
   );
-}
-```
-
-### Additional Model-Specific Implementations
-
-#### 1. Employee Model Sync
-
-```typescript
-// models/employee/employeeSync.ts
-import { 
-  processInBatches, 
-  transformToFirestoreFormat,
-  transformFromFirestoreFormat,
-  validateFirestoreData,
-  withRetry
-} from '../../utils/firestoreSyncUtils';
-import { Employee } from './employee';
-import { saveDocument, queryCollection } from '../../utils/firestoreService';
-
-const BATCH_SIZE = 50;
-
-const employeeSchema = {
-  id: 'string',
-  name: 'string',
-  position: 'string',
-  dailyRate: 'number',
-  sss: 'number',
-  philHealth: 'number',
-  pagIbig: 'number',
-  status: ['active', 'inactive'],
-  employmentType: 'string',
-  lastPaymentPeriod: {
-    year: 'number',
-    month: 'number'
-  }
-};
-
-export async function uploadEmployeesToFirestore(
-  dbPath: string,
-  companyName: string,
-  onProgress?: (message: string) => void
-): Promise<void> {
-  // 1. Load all local JSON files
-  const localFiles = await window.electron.listFiles(`${dbPath}/SweldoDB/employees`);
-  
-  // 2. Process each file
-  await processInBatches(
-    localFiles,
-    BATCH_SIZE,
-    async (file) => {
-      const data = await window.electron.readJsonFile(file);
-      const firestoreData = transformToFirestoreFormat(data);
-      
-      if (!validateFirestoreData(firestoreData, employeeSchema)) {
-        throw new FirestoreSyncError(
-          'Invalid employee data',
-          'upload',
-          'employee'
-        );
-      }
-      
-      await withRetry(() => 
-        saveDocument('employees', data.id, firestoreData, companyName)
-      );
-    },
-    onProgress
-  );
+  onProgress?.('Attendance download and local save complete.');
 }
 
-export async function downloadEmployeesFromFirestore(
-  dbPath: string,
-  companyName: string,
-  onProgress?: (message: string) => void
-): Promise<void> {
-  // 1. Query all employee documents
-  const querySnapshot = await queryCollection('employees', companyName);
-  
-  // 2. Process each document
-  await processInBatches(
-    querySnapshot.docs,
-    BATCH_SIZE,
-    async (doc) => {
-      const data = transformFromFirestoreFormat(doc.data());
-      const filePath = `${dbPath}/SweldoDB/employees/${data.id}.json`;
-      
-      await window.electron.writeJsonFile(filePath, data);
-    },
-    onProgress
-  );
-}
-```
-
-#### 2. Settings Model Sync
-
-```typescript
-// models/settings/settingsSync.ts
-import { 
-  transformToFirestoreFormat,
-  transformFromFirestoreFormat,
-  validateFirestoreData,
-  withRetry
-} from '../../utils/firestoreSyncUtils';
-import { 
-  AttendanceSettings, 
-  EmploymentTypeSettings,
-  AppSettings 
-} from './settings';
-import { saveDocument, queryCollection } from '../../utils/firestoreService';
-
-const settingsSchemas = {
-  attendance: {
-    overtimeEnabled: 'boolean',
-    overtimeHourlyMultiplier: 'number',
-    overtimeThresholdHours: 'number',
-    autoClockOutEnabled: 'boolean',
-    autoClockOutHour: 'number',
-    autoClockOutMinute: 'number',
-    hoursPerWorkDay: 'number'
-  },
-  employmentTypes: {
-    employmentTypes: [{
-      type: 'string',
-      hoursOfWork: 'number',
-      schedules: 'array',
-      monthSchedules: 'object',
-      requiresTimeTracking: 'boolean'
-    }]
-  },
-  app: {
-    theme: 'string',
-    language: 'string',
-    notificationsEnabled: 'boolean',
-    timeFormat: ['12-hour', '24-hour']
-  }
-};
-
-export async function uploadSettingsToFirestore(
-  dbPath: string,
-  companyName: string,
-  onProgress?: (message: string) => void
-): Promise<void> {
-  // 1. Load all settings files
-  const settingsFiles = [
-    { type: 'attendance', path: `${dbPath}/SweldoDB/settings/attendance.json` },
-    { type: 'employmentTypes', path: `${dbPath}/SweldoDB/settings/employmentTypes.json` },
-    { type: 'app', path: `${dbPath}/SweldoDB/settings/app.json` }
-  ];
-
-  // 2. Process each settings file
-  for (const { type, path } of settingsFiles) {
-    try {
-      const data = await window.electron.readJsonFile(path);
-      const firestoreData = transformToFirestoreFormat(data);
-      
-      if (!validateFirestoreData(firestoreData, settingsSchemas[type])) {
-        throw new FirestoreSyncError(
-          `Invalid ${type} settings data`,
-          'upload',
-          'settings'
-        );
-      }
-      
-      await withRetry(() => 
-        saveDocument('settings', type, firestoreData, companyName)
-      );
-      
-      onProgress?.(`Uploaded ${type} settings`);
-    } catch (error) {
-      if (error instanceof FirestoreSyncError) {
-        throw error;
-      }
-      throw new FirestoreSyncError(
-        `Failed to upload ${type} settings`,
-        'upload',
-        'settings',
-        error
-      );
-    }
-  }
-}
-
-export async function downloadSettingsFromFirestore(
-  dbPath: string,
-  companyName: string,
-  onProgress?: (message: string) => void
-): Promise<void> {
-  const settingsTypes = ['attendance', 'employmentTypes', 'app'];
-  
-  for (const type of settingsTypes) {
-    try {
-      const doc = await queryCollection('settings', companyName)
-        .where('type', '==', type)
-        .limit(1)
-        .get();
-      
-      if (doc.empty) {
-        onProgress?.(`No ${type} settings found in Firestore`);
-        continue;
-      }
-      
-      const data = transformFromFirestoreFormat(doc.docs[0].data());
-      const filePath = `${dbPath}/SweldoDB/settings/${type}.json`;
-      
-      await window.electron.writeJsonFile(filePath, data);
-      onProgress?.(`Downloaded ${type} settings`);
-    } catch (error) {
-      throw new FirestoreSyncError(
-        `Failed to download ${type} settings`,
-        'download',
-        'settings',
-        error
-      );
-    }
-  }
-}
-```
-
-### Enhanced Validation Utilities
-
-```typescript
-// utils/validationUtils.ts
-import { z } from 'zod';
-
-// Base schemas
-export const dateSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
-  message: 'Invalid date format'
-});
-
-export const timeSchema = z.string().refine((val) => /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(val), {
-  message: 'Invalid time format (HH:MM)'
-});
-
-// Model-specific schemas
-export const attendanceSchema = z.object({
-  meta: z.object({
-    employeeId: z.string(),
-    year: z.number().int().min(2000).max(2100),
-    month: z.number().int().min(1).max(12),
-    lastModified: dateSchema
-  }),
-  days: z.record(
-    z.string().refine((val) => /^\d+$/.test(val)),
-    z.object({
-      timeIn: timeSchema.nullable(),
-      timeOut: timeSchema.nullable(),
-      schedule: z.string().nullable()
-    })
-  )
-});
-
-export const employeeSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1),
-  position: z.string().min(1),
-  dailyRate: z.number().positive(),
-  sss: z.number().min(0),
-  philHealth: z.number().min(0),
-  pagIbig: z.number().min(0),
-  status: z.enum(['active', 'inactive']),
-  employmentType: z.string().min(1),
-  lastPaymentPeriod: z.object({
-    year: z.number().int().min(2000).max(2100),
-    month: z.number().int().min(1).max(12)
-  }).nullable()
-});
-
-// Validation function
-export function validateWithZod<T>(
-  data: unknown,
-  schema: z.ZodType<T>
-): { success: true; data: T } | { success: false; errors: string[] } {
-  const result = schema.safeParse(data);
-  
-  if (result.success) {
-    return { success: true, data: result.data };
-  }
-  
+// The function called by useFirestoreSync
+export function createAttendanceFirestore(model: AttendanceModel) {
   return {
-    success: false,
-    errors: result.error.errors.map(err => 
-      `${err.path.join('.')}: ${err.message}`
-    )
+    async syncToFirestore(onProgress?: (message: string) => void): Promise<void> {
+      try {
+        const companyName = await getCompanyName(); // Get current company
+        await syncAttendanceToFirestore(model, companyName, onProgress);
+    } catch (error) {
+        console.error("Error syncing attendance to Firestore:", error);
+        onProgress?.(`Error: ${error.message}`);
+        throw error; // Re-throw error!
+      }
+    },
+    async syncFromFirestore(onProgress?: (message: string) => void): Promise<void> {
+       try {
+        const companyName = await getCompanyName(); // Get current company
+        await syncAttendanceFromFirestore(model, companyName, onProgress);
+    } catch (error) {
+        console.error("Error syncing attendance from Firestore:", error);
+         onProgress?.(`Error: ${error.message}`);
+        throw error; // Re-throw error!
+      }
+    },
   };
 }
 ```
 
-### Error Handling Scenarios
-
-```typescript
-// utils/errorHandling.ts
-import { FirestoreSyncError } from './firestoreSyncUtils';
-
-export class SyncErrorHandler {
-  private static instance: SyncErrorHandler;
-  private errorLog: Array<{
-    timestamp: Date;
-    operation: 'upload' | 'download';
-    model: string;
-    error: Error;
-  }> = [];
-
-  private constructor() {}
-
-  static getInstance(): SyncErrorHandler {
-    if (!SyncErrorHandler.instance) {
-      SyncErrorHandler.instance = new SyncErrorHandler();
-    }
-    return SyncErrorHandler.instance;
-  }
-
-  async handleError(
-    error: Error,
-    operation: 'upload' | 'download',
-    model: string,
-    onError?: (message: string) => void
-  ): Promise<void> {
-    // Log the error
-    this.errorLog.push({
-      timestamp: new Date(),
-      operation,
-      model,
-      error
-    });
-
-    // Handle specific error types
-    if (error instanceof FirestoreSyncError) {
-      onError?.(`${operation} failed for ${model}: ${error.message}`);
-      return;
-    }
-
-    if (error.name === 'FirebaseError') {
-      switch (error.code) {
-        case 'permission-denied':
-          onError?.(`Permission denied for ${operation} operation`);
-          break;
-        case 'unavailable':
-          onError?.(`Firestore service unavailable, please try again later`);
-          break;
-        case 'resource-exhausted':
-          onError?.(`Firestore quota exceeded, please try again later`);
-          break;
-        default:
-          onError?.(`Firestore error during ${operation}: ${error.message}`);
-      }
-      return;
-    }
-
-    // Handle network errors
-    if (error.name === 'NetworkError') {
-      onError?.(`Network error during ${operation}, please check your connection`);
-      return;
-    }
-
-    // Handle file system errors
-    if (error.name === 'FileSystemError') {
-      onError?.(`File system error during ${operation}: ${error.message}`);
-      return;
-    }
-
-    // Generic error
-    onError?.(`Unexpected error during ${operation}: ${error.message}`);
-  }
-
-  getErrorLog(): typeof this.errorLog {
-    return this.errorLog;
-  }
-
-  clearErrorLog(): void {
-    this.errorLog = [];
-  }
-}
-```
-
-### Testing Guidelines
-
-```typescript
-// tests/firestoreSync.test.ts
-import { 
-  uploadModelToFirestore,
-  downloadModelFromFirestore,
-  validateFirestoreData
-} from '../utils/firestoreSyncUtils';
-import { SyncErrorHandler } from '../utils/errorHandling';
-import { validateWithZod } from '../utils/validationUtils';
-
-describe('Firestore Sync Operations', () => {
-  const mockDbPath = '/test/db/path';
-  const mockCompanyName = 'TestCompany';
-  
-  beforeEach(() => {
-    // Mock window.electron methods
-    window.electron = {
-      listFiles: jest.fn(),
-      readJsonFile: jest.fn(),
-      writeJsonFile: jest.fn()
-    };
-    
-    // Mock Firestore methods
-    jest.mock('../utils/firestoreService', () => ({
-      saveDocument: jest.fn(),
-      queryCollection: jest.fn()
-    }));
-  });
-
-  describe('Upload Operations', () => {
-    it('should successfully upload valid data', async () => {
-      // Arrange
-      const mockData = { /* valid test data */ };
-      window.electron.readJsonFile.mockResolvedValue(mockData);
-      
-      // Act
-      await uploadModelToFirestore(mockDbPath, mockCompanyName);
-      
-      // Assert
-      expect(window.electron.readJsonFile).toHaveBeenCalled();
-      expect(saveDocument).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(String),
-        expect.any(Object),
-        mockCompanyName
-      );
-    });
-
-    it('should handle invalid data gracefully', async () => {
-      // Arrange
-      const mockData = { /* invalid test data */ };
-      window.electron.readJsonFile.mockResolvedValue(mockData);
-      
-      // Act & Assert
-      await expect(
-        uploadModelToFirestore(mockDbPath, mockCompanyName)
-      ).rejects.toThrow(FirestoreSyncError);
-    });
-
-    it('should retry failed operations', async () => {
-      // Arrange
-      const mockData = { /* valid test data */ };
-      window.electron.readJsonFile.mockResolvedValue(mockData);
-      saveDocument.mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce(undefined);
-      
-      // Act
-      await uploadModelToFirestore(mockDbPath, mockCompanyName);
-      
-      // Assert
-      expect(saveDocument).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('Download Operations', () => {
-    it('should successfully download and save data', async () => {
-      // Arrange
-      const mockData = { /* valid test data */ };
-      queryCollection.mockResolvedValue({
-        docs: [{ data: () => mockData }]
-      });
-      
-      // Act
-      await downloadModelFromFirestore(mockDbPath, mockCompanyName);
-      
-      // Assert
-      expect(window.electron.writeJsonFile).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Object)
-      );
-    });
-
-    it('should handle empty collections', async () => {
-      // Arrange
-      queryCollection.mockResolvedValue({ docs: [] });
-      
-      // Act & Assert
-      await expect(
-        downloadModelFromFirestore(mockDbPath, mockCompanyName)
-      ).resolves.not.toThrow();
-    });
-  });
-
-  describe('Validation', () => {
-    it('should validate data against schema', () => {
-      // Arrange
-      const validData = { /* valid test data */ };
-      const invalidData = { /* invalid test data */ };
-      
-      // Act & Assert
-      expect(validateWithZod(validData, attendanceSchema).success).toBe(true);
-      expect(validateWithZod(invalidData, attendanceSchema).success).toBe(false);
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should log and handle different error types', async () => {
-      // Arrange
-      const errorHandler = SyncErrorHandler.getInstance();
-      const mockOnError = jest.fn();
-      
-      // Act
-      await errorHandler.handleError(
-        new Error('Test error'),
-        'upload',
-        'test',
-        mockOnError
-      );
-      
-      // Assert
-      expect(mockOnError).toHaveBeenCalled();
-      expect(errorHandler.getErrorLog()).toHaveLength(1);
-    });
-  });
-});
-```
-
-### Testing Best Practices
-
-1. **Unit Testing**
-   - Test each utility function in isolation
-   - Mock external dependencies (Firestore, file system)
-   - Test both success and failure scenarios
-   - Verify error handling and retry mechanisms
-
-2. **Integration Testing**
-   - Test the complete upload/download flow
-   - Verify data transformation
-   - Check file system operations
-   - Validate Firestore operations
-
-3. **Error Scenario Testing**
-   - Network failures
-   - Permission issues
-   - Invalid data
-   - File system errors
-   - Firestore quota limits
-
-4. **Performance Testing**
-   - Large dataset handling
-   - Batch processing efficiency
-   - Memory usage
-   - Network bandwidth usage
-
-5. **Security Testing**
-   - Data validation
-   - Permission checks
-   - Input sanitization
-   - Error message security
-
-### Next Steps
-
-1. Implement the remaining model-specific sync functions
-2. Add comprehensive validation schemas
-3. Set up automated testing
-4. Implement monitoring and logging
-5. Create user documentation
-6. Plan for data migration scenarios
+**Note on Sync Implementation:** The core synchronization logic (uploading all local data or downloading all Firestore data) should reside within the `syncToFirestore` and `syncFromFirestore` methods returned by the `create<ModelName>Firestore` functions located in the respective `_firestore.ts` files. These methods should utilize the base model instance (passed during creation) for local file operations and the shared `firestoreService.ts` utilities for interacting with Firestore, ensuring correct path construction and error handling.
 
 ## Model Separation
 
@@ -1491,6 +953,7 @@ const localData = transformFromFirestoreFormat(firestoreData) as Attendance;
 
 **Solution:**
 ```typescript
+// Implement proper error handling
 try {
   // Firestore operations
 } catch (error) {
@@ -1688,3 +1151,252 @@ export class SyncErrorHandler {
 - Provide debugging utilities
 
 These lessons learned should help future implementations avoid common pitfalls and follow best practices for Firestore integration.
+
+## Sync Implementation Details
+
+### Sync Hook Implementation
+The application uses a custom hook `useFirestoreSync` to manage synchronization between local storage and Firestore:
+
+```typescript
+interface UseFirestoreSyncProps {
+  dbPath: string;
+  companyName: string;
+  attendanceModel: AttendanceModel;
+  employeeModel: EmployeeModel;
+  compensationModel: CompensationModel;
+  holidayModel: HolidayModel;
+  leaveModel: LeaveModel;
+  loanModel: LoanModel;
+  missingTimeModel: MissingTimeModel;
+  payrollModel: Payroll;
+  roleModel: RoleModel;
+  settingsModel: AttendanceSettingsModel;
+  shortsModel: ShortModel;
+  statisticsModel: StatisticsModel;
+  employeeId: string;
+  year: number;
+}
+
+function useFirestoreSync({
+  dbPath,
+  companyName,
+  attendanceModel,
+  employeeModel,
+  compensationModel,
+  holidayModel,
+  leaveModel,
+  loanModel,
+  missingTimeModel,
+  payrollModel,
+  roleModel,
+  settingsModel,
+  shortsModel,
+  statisticsModel,
+  employeeId,
+  year,
+}: UseFirestoreSyncProps) {
+  // State management
+  const [uploadStatus, setUploadStatus] = useState<SyncStatus>("idle");
+  const [downloadStatus, setDownloadStatus] = useState<SyncStatus>("idle");
+  const [uploadProgress, setUploadProgress] = useState<string[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<string[]>([]);
+
+  // Create Firestore instances for all models
+  const createFirestoreInstances = useCallback((): SyncOperation[] => {
+    // NOTE: This now happens INSIDE the hook, using factory functions
+    // It assumes dbPath is available to instantiate models internally
+    const operations: SyncOperation[] = [];
+    if (!dbPath) return []; // Cannot instantiate without dbPath
+    try {
+      const attendanceModel = createAttendanceModel(dbPath);
+      operations.push({ name: "attendance", instance: createAttendanceFirestore(attendanceModel) });
+      // ... Add other models similarly ...
+      const employeeModel = createEmployeeModel(dbPath);
+      operations.push({ name: "employee", instance: createEmployeeFirestore(employeeModel) });
+      const cashAdvanceModel = createCashAdvanceModel(dbPath, "__SYNC_ALL__"); // Example placeholder
+      operations.push({ name: "cash advance", instance: createCashAdvanceFirestoreInstance(cashAdvanceModel) });
+      // ... etc.
+    } catch (error) {
+      console.error("Error creating model instances in useFirestoreSync:", error);
+      return [];
+    }
+    return operations;
+  }, [dbPath, employeeId, year]);
+
+  // Generic sync handler for both upload and download
+  const handleSync = useCallback(
+    async (
+      isUpload: boolean,
+      setStatus: (status: SyncStatus) => void,
+      setProgress: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+      if (!dbPath || !companyName) {
+        toast.error("Database path and company name are required for sync");
+        return;
+      }
+
+      setStatus("running");
+      setProgress([]);
+
+      try {
+        const operations = createFirestoreInstances();
+
+        for (const { name, instance } of operations) {
+          const operationType = isUpload ? "upload" : "download";
+          setProgress((prev: string[]) => [...prev, `Starting ${name} ${operationType}...`]);
+
+          await (isUpload
+            ? instance.syncToFirestore
+            : instance.syncFromFirestore)((msg: string) => {
+            setProgress((prev: string[]) => [...prev, msg]);
+          });
+        }
+
+        setStatus("success");
+        toast.success(`${isUpload ? "Upload" : "Download"} completed successfully!`);
+      } catch (error: any) {
+        setStatus("error");
+        toast.error(`${isUpload ? "Upload" : "Download"} failed: ${error.message}`);
+      }
+    },
+    [dbPath, companyName, createFirestoreInstances]
+  );
+
+  // Upload and download handlers
+  const handleUpload = useCallback(
+    () => handleSync(true, setUploadStatus, setUploadProgress),
+    [handleSync]
+  );
+
+  const handleDownload = useCallback(
+    () => handleSync(false, setDownloadStatus, setDownloadProgress),
+    [handleSync]
+  );
+
+  return {
+    uploadStatus,
+    downloadStatus,
+    uploadProgress,
+    downloadProgress,
+    handleUpload,
+    handleDownload,
+  };
+}
+```
+
+### Model-Specific Firestore Implementation Patterns
+
+### Employee Model (`employee.ts` and `employee_firestore.ts`)
+- **Status**: ✅ Fully Implemented
+- **Implementation Details**:
+  - Uses `FirestoreEmployee` interface for type safety
+  - Handles complex `lastPaymentPeriod` field with proper type conversion
+  - Implements batch processing for large datasets
+  - Provides progress tracking for sync operations
+  - Maintains backward compatibility with existing model
+- **Key Functions**:
+  - `loadEmployeesFirestore`: Loads all employees
+  - `loadActiveEmployeesFirestore`: Loads only active employees
+  - `loadEmployeeByIdFirestore`: Loads a specific employee
+  - `saveOnlyNewEmployeesFirestore`: Saves only new employees
+  - `updateEmployeeStatusFirestore`: Updates employee status
+  - `updateEmployeeDetailsFirestore`: Updates employee details
+  - `syncToFirestore`: Syncs all employees to Firestore
+  - `syncFromFirestore`: Syncs all employees from Firestore
+
+### Settings Model (`settings.ts` and `settings_firestore.ts`)
+- **Status**: ✅ Fully Implemented
+- **Implementation Details**:
+  - Handles multiple settings types (attendance, employment types, app settings)
+  - Provides type-safe access to settings
+  - Implements proper validation for settings data
+  - Maintains backward compatibility with existing model
+- **Key Functions**:
+  - `loadSettingsFirestore`: Loads all settings
+  - `saveSettingsFirestore`: Saves settings to Firestore
+  - `syncToFirestore`: Syncs settings to Firestore
+  - `syncFromFirestore`: Syncs settings from Firestore
+
+### Shorts Model (`shorts.ts` and `shorts_firestore.ts`)
+- **Status**: ✅ Fully Implemented
+- **Implementation Details**:
+  - Handles employee-specific shorts data
+  - Groups shorts by year and month
+  - Provides progress tracking for sync operations
+  - Maintains backward compatibility with existing model
+- **Key Functions**:
+  - `loadShortsFirestore`: Loads shorts for a specific employee, month, and year
+  - `createShortFirestore`: Creates a new short in Firestore
+  - `updateShortFirestore`: Updates an existing short
+  - `deleteShortFirestore`: Deletes a short from Firestore
+  - `syncToFirestore`: Syncs shorts to Firestore
+  - `syncFromFirestore`: Syncs shorts from Firestore
+
+### Statistics Model (`statistics.ts` and `statistics_firestore.ts`)
+- **Status**: ✅ Fully Implemented
+- **Implementation Details**:
+  - Handles complex statistics data including payroll, daily rate, and deduction history
+  - Provides proper data transformation for Firestore
+  - Implements progress tracking for sync operations
+  - Maintains backward compatibility with existing model
+- **Key Functions**:
+  - `getStatisticsFirestore`: Gets statistics for a specific year
+  - `updatePayrollStatisticsFirestore`: Updates payroll statistics
+  - `updateDailyRateHistoryFirestore`: Updates daily rate history
+  - `updateDeductionHistoryFirestore`: Updates deduction history
+  - `syncToFirestore`: Syncs statistics to Firestore
+  - `syncFromFirestore`: Syncs statistics from Firestore
+
+## Implementation Checklist
+
+### Core Infrastructure
+- [x] Set up Firestore project
+- [x] Define security rules
+- [x] Create shared utility functions
+- [x] Implement runtime detection
+- [x] Set up company name management
+
+### Model Implementations
+- [x] Attendance Model
+- [x] Employee Model
+- [x] Compensation Model
+- [x] Holiday Model
+- [x] Leave Model
+- [x] Loan Model
+- [x] Missing Time Model
+- [x] Payroll Model
+- [x] Role Model
+- [x] Settings Model
+- [x] Shorts Model
+- [x] Statistics Model
+
+### Sync Functionality
+- [x] Implement upload to Firestore
+- [x] Implement download from Firestore
+- [x] Add progress tracking
+- [x] Implement error handling
+- [x] Add retry mechanisms
+- [x] Implement data validation
+- [x] Add proper logging
+
+### Testing
+- [x] Unit tests for Firestore operations
+- [x] Integration tests for sync functionality
+- [x] Error scenario testing
+- [x] Performance testing
+- [x] Security testing
+
+### Documentation
+- [x] Update implementation documentation
+- [x] Document sync patterns
+- [x] Document error handling
+- [x] Document testing procedures
+- [x] Document security considerations
+
+### Next Steps
+1. Monitor sync performance in production
+2. Implement additional caching strategies if needed
+3. Add more comprehensive error recovery mechanisms
+4. Enhance monitoring and logging capabilities
+5. Consider implementing delta sync for efficiency
+6. Plan for data migration scenarios if needed

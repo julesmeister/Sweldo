@@ -5,7 +5,7 @@
  * operations that mirror the local filesystem operations in holiday.ts.
  */
 
-import { Holiday } from "./holiday";
+import { Holiday, HolidayModel } from "./holiday";
 import {
   fetchDocument,
   saveDocument,
@@ -13,6 +13,7 @@ import {
   deleteField,
   queryCollection,
   createTimeBasedDocId,
+  getCompanyName,
 } from "../lib/firestoreService";
 
 /**
@@ -287,4 +288,91 @@ export async function loadHolidaysForDateRangeFirestore(
     );
     return []; // Return empty array on error
   }
+}
+
+/**
+ * Create a Firestore instance for the holiday model
+ */
+export function createHolidayFirestoreInstance(model: HolidayModel) {
+  return {
+    async syncToFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        // Load all holidays from the model
+        const holidays = await model.loadHolidays();
+        onProgress?.("Starting holiday sync to Firestore...");
+
+        // Group holidays by year and month
+        const holidaysByMonth = holidays.reduce(
+          (acc: Record<string, Holiday[]>, holiday: Holiday) => {
+            const year = holiday.startDate.getFullYear();
+            const month = holiday.startDate.getMonth() + 1;
+            const key = `${year}_${month}`;
+            if (!acc[key]) {
+              acc[key] = [];
+            }
+            acc[key].push(holiday);
+            return acc;
+          },
+          {}
+        );
+
+        // Process each month's holidays
+        const months = Object.keys(holidaysByMonth);
+        for (let i = 0; i < months.length; i++) {
+          const [year, month] = months[i].split("_").map(Number);
+          const monthHolidays = holidaysByMonth[months[i]];
+
+          onProgress?.(
+            `Processing holidays for ${year}-${month} (${i + 1}/${
+              months.length
+            })`
+          );
+          await saveHolidaysFirestore(
+            monthHolidays,
+            year,
+            month,
+            await getCompanyName()
+          );
+        }
+
+        onProgress?.("Holiday sync to Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing holidays to Firestore:", error);
+        throw error;
+      }
+    },
+
+    async syncFromFirestore(
+      onProgress?: (message: string) => void
+    ): Promise<void> {
+      try {
+        onProgress?.("Starting holiday sync from Firestore...");
+        const companyName = await getCompanyName();
+
+        // Get current year and month
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        // Load holidays for current month
+        const holidays = await loadHolidaysFirestore(
+          currentYear,
+          currentMonth,
+          companyName
+        );
+
+        onProgress?.(`Retrieved ${holidays.length} holidays from Firestore.`);
+
+        // Save holidays to the model
+        await model.saveHolidays(holidays);
+
+        onProgress?.("Holiday sync from Firestore completed successfully.");
+      } catch (error) {
+        console.error("Error syncing holidays from Firestore:", error);
+        throw error;
+      }
+    },
+  };
 }

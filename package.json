@@ -7,7 +7,7 @@
   "main": "app/background.js",
   "scripts": {
     "dev": "cd renderer && node switch-env.js nextron && cd .. && nextron",
-    "setup:web": "if not exist renderer\\resources mkdir renderer\\resources && copy resources\\*.css renderer\\resources\\ && copy resources\\*.ttf renderer\\resources\\ && if not exist renderer\\public\\fonts mkdir renderer\\public\\fonts && copy resources\\*.ttf renderer\\public\\fonts\\",
+    "setup:web": "if not exist renderer\\resources mkdir renderer\\resources && copy resources\\*.css renderer\\resources\\ && copy resources\\*.ttf renderer\\resources\\ && if not exist renderer\\public\\fonts mkdir renderer\\public\\fonts && copy resources\\*.ttf renderer\\public\\fonts\\ && if exist .env.local copy .env.local renderer\\.env.local",
     "dev:web": "npm run setup:web && cd renderer && node switch-env.js web && next dev",
     "build": "nextron build",
     "build:win32": "nextron build --win --ia32",
@@ -45,6 +45,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "xlsx-js-style": "^1.2.0",
+    "zod": "^3.24.4",
     "zustand": "^4.5.6"
   },
   "devDependencies": {
