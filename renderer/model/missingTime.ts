@@ -207,6 +207,101 @@ export class MissingTimeModel {
     return [];
   }
 
+  // ----- New Method for Full Sync Data Loading -----
+  async loadAllMissingTimeLogsForSync(): Promise<MissingTimeLog[]> {
+    console.log(
+      `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: START - Scanning ${this.logsFolderPath}`
+    );
+    if (isWebEnvironment()) {
+      console.warn(
+        "[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: Should not be called in web environment. Returning empty array."
+      );
+      return [];
+    }
+
+    const allLogs: MissingTimeLog[] = [];
+    try {
+      await window.electron.ensureDir(this.logsFolderPath); // Ensure base directory exists
+      const files = await window.electron.readDir(this.logsFolderPath);
+      console.log(
+        `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: Found ${files.length} potential files/dirs in ${this.logsFolderPath}`
+      );
+
+      const jsonFiles = files.filter(
+        (file: { name: string; isFile: boolean }) =>
+          file.isFile && file.name.endsWith("_missing_times.json")
+      );
+      console.log(
+        `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: Found ${jsonFiles.length} JSON files to process.`
+      );
+
+      for (const jsonFile of jsonFiles) {
+        const filePath = `${this.logsFolderPath}/${jsonFile.name}`;
+        console.log(
+          `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: Processing JSON file: ${filePath}`
+        );
+        try {
+          const fileContent = await window.electron.readFile(filePath);
+          if (!fileContent.trim()) {
+            console.log(
+              `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: JSON file ${jsonFile.name} is empty. Skipping.`
+            );
+            continue;
+          }
+          const jsonData: MissingTimeJsonStructure = JSON.parse(fileContent);
+          if (jsonData && jsonData.logs && Array.isArray(jsonData.logs)) {
+            // Add validation for individual logs if necessary (e.g., date parsing)
+            const validLogs = jsonData.logs.filter((log) => {
+              // Corrected validation: ensure essential fields exist, including date components
+              if (
+                !log.id ||
+                !log.employeeId ||
+                typeof log.day === "undefined" ||
+                typeof log.month === "undefined" ||
+                typeof log.year === "undefined"
+              ) {
+                console.warn(
+                  `[missingTime.ts] Invalid log entry in ${jsonFile.name}, missing essential fields (id, employeeId, day, month, or year):`,
+                  log
+                );
+                return false;
+              }
+              // Further validation could be to ensure day, month, year can form a valid date
+              // For now, just checking existence.
+              return true;
+            });
+            allLogs.push(...validLogs);
+            console.log(
+              `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: Added ${validLogs.length} logs from ${jsonFile.name}.`
+            );
+          } else {
+            console.warn(
+              `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: JSON file ${jsonFile.name} does not have a valid logs array. Skipping.`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: ERROR processing JSON file ${jsonFile.name}:`,
+            error
+          );
+        }
+      }
+      // Note: CSV fallback for sync loading is not implemented here, assuming JSON is the primary format after migration.
+    } catch (error) {
+      console.error(
+        `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: ERROR scanning directory ${this.logsFolderPath}:`,
+        error
+      );
+      // Depending on desired behavior, might rethrow or return what's been gathered so far.
+      // For now, if directory scan fails, it's a more significant issue.
+      throw error;
+    }
+    console.log(
+      `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: END - Loaded a total of ${allLogs.length} missing time logs.`
+    );
+    return allLogs;
+  }
+
   // ----- Migration Function -----
   static async migrateCsvToJson(
     dbPath: string,

@@ -43,8 +43,11 @@ export async function getMissingTimeLogsFirestore(
   year: number,
   companyName: string
 ): Promise<MissingTimeLog[]> {
+  const docId = createMissingTimeDocId(year, month);
+  console.log(
+    `[Firestore] getMissingTimeLogsFirestore: Fetching for ${docId}, company: ${companyName}`
+  );
   try {
-    const docId = createMissingTimeDocId(year, month);
     const data = await fetchDocument<MissingTimeFirestoreData>(
       "missing_time_logs",
       docId,
@@ -52,9 +55,15 @@ export async function getMissingTimeLogsFirestore(
     );
 
     if (!data || !data.logs) {
+      console.log(
+        `[Firestore] getMissingTimeLogsFirestore: No logs found for ${docId}`
+      );
       return [];
     }
 
+    console.log(
+      `[Firestore] getMissingTimeLogsFirestore: Successfully fetched ${data.logs.length} logs for ${docId}`
+    );
     return data.logs;
   } catch (error) {
     console.error(`Error loading missing time logs from Firestore:`, error);
@@ -71,9 +80,11 @@ export async function saveMissingTimeLogFirestore(
   year: number,
   companyName: string
 ): Promise<void> {
+  const docId = createMissingTimeDocId(year, month);
+  console.log(
+    `[Firestore] saveMissingTimeLogFirestore: Saving log ID ${log.id} to ${docId}, company: ${companyName}`
+  );
   try {
-    const docId = createMissingTimeDocId(year, month);
-
     // First check if document exists
     const existingDoc = await fetchDocument<MissingTimeFirestoreData>(
       "missing_time_logs",
@@ -93,6 +104,9 @@ export async function saveMissingTimeLogFirestore(
       };
 
       await saveDocument("missing_time_logs", docId, newDoc, companyName);
+      console.log(
+        `[Firestore] saveMissingTimeLogFirestore: Created new document ${docId} and saved log ID ${log.id}`
+      );
     } else {
       // Check for duplicate before updating
       const exists = existingDoc.logs.some(
@@ -104,7 +118,7 @@ export async function saveMissingTimeLogFirestore(
 
       if (exists) {
         console.log(
-          "Missing time log already exists in Firestore, skipping:",
+          `[Firestore] Missing time log already exists in Firestore document ${docId}, skipping:`,
           log
         );
         return;
@@ -120,6 +134,9 @@ export async function saveMissingTimeLogFirestore(
       };
 
       await updateDocument("missing_time_logs", docId, updateData, companyName);
+      console.log(
+        `[Firestore] saveMissingTimeLogFirestore: Updated document ${docId} with log ID ${log.id}`
+      );
     }
   } catch (error) {
     console.error(`Error saving missing time log to Firestore:`, error);
@@ -136,9 +153,11 @@ export async function deleteMissingTimeLogFirestore(
   year: number,
   companyName: string
 ): Promise<void> {
+  const docId = createMissingTimeDocId(year, month);
+  console.log(
+    `[Firestore] deleteMissingTimeLogFirestore: Attempting to delete log ID ${id} from ${docId}, company: ${companyName}`
+  );
   try {
-    const docId = createMissingTimeDocId(year, month);
-
     // Check if document exists
     const existingDoc = await fetchDocument<MissingTimeFirestoreData>(
       "missing_time_logs",
@@ -162,8 +181,13 @@ export async function deleteMissingTimeLogFirestore(
       };
 
       await updateDocument("missing_time_logs", docId, updateData, companyName);
+      console.log(
+        `[Firestore] deleteMissingTimeLogFirestore: Successfully deleted log ID ${id} from ${docId}`
+      );
     } else {
-      console.warn(`Log with ID ${id} not found in Firestore document.`);
+      console.warn(
+        `[Firestore] deleteMissingTimeLogFirestore: Log with ID ${id} not found in document ${docId}. No deletion performed.`
+      );
     }
   } catch (error) {
     console.error(`Error deleting missing time log from Firestore:`, error);
@@ -218,8 +242,21 @@ export function createMissingTimeFirestoreInstance(model: MissingTimeModel) {
     ): Promise<void> {
       try {
         // Load all missing time logs from the model
-        const logs = await model.getMissingTimeLogs(0, 0); // 0 for year/month to get all logs
+        const logs = await model.loadAllMissingTimeLogsForSync();
         onProgress?.("Starting missing time sync to Firestore...");
+
+        if (!logs || logs.length === 0) {
+          onProgress?.(
+            "No missing time logs found locally to sync to Firestore."
+          );
+          console.log(
+            "[Firestore] syncToFirestore: No missing time logs found locally. Sync complete."
+          );
+          return;
+        }
+        console.log(
+          `[Firestore] syncToFirestore: Loaded ${logs.length} missing time logs locally to sync.`
+        );
 
         // Group logs by year and month
         const logsByMonth = logs.reduce(

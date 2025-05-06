@@ -33,17 +33,6 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     {}
   );
 
-  // Log initial prop status for critical items - simplified
-  useEffect(() => {
-    console.log(
-      "[DatabaseManagementSettings] Initial props for sync readiness:",
-      {
-        dbPathProvided: !!dbPath,
-        companyNameProvided: !!companyName,
-      }
-    );
-  }, [dbPath, companyName]);
-
   const {
     uploadStatus,
     downloadStatus,
@@ -62,10 +51,6 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
   useEffect(() => {
     // Only initialize if availableModelNames is populated and selectedModels is empty
     if (availableModelNames && availableModelNames.length > 0) {
-      console.log(
-        "[DatabaseManagementSettings] Initializing model selection state from availableModelNames:",
-        availableModelNames
-      );
       setSelectedModels((prevSelected) => {
         // Prevent re-initialization if already populated
         if (Object.keys(prevSelected).length > 0) {
@@ -143,7 +128,7 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
         }
         window.location.reload();
       } catch (error) {
-        console.error("Error setting database path:", error);
+        console.error("[DBMngtSettings] Error setting database path:", error);
         toast.error("Failed to set database path. Please try again.");
       }
     }
