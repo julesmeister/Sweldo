@@ -14,6 +14,16 @@
 - ✅ Web build process setup
 - ✅ Firebase hosting configuration
 - ✅ Firestore integration for web data storage (employees & payroll sync) implemented
+- ✅ Login dialog supports both desktop and web modes with company selection
+- ✅ EmployeeList supports both desktop and web modes, loads employees from Firestore/local DB and sorts by ID ascending
+- ✅ HolidayCalendar and HolidaysPage support web mode with Firestore-based CRUD operations
+- ✅ Dexie-based IndexedDB caching implemented for EmployeeList (Firestore employee queries)
+- ✅ Toast notifications on cache reloads for EmployeeList, HolidaysPage, and HolidayCalendar
+- ✅ Dexie-based IndexedDB caching implemented for Holidays and missingTime logs with toasts on reload
+- ✅ Authentication session persistence in web mode via localStorage (fixed login state being lost on page refresh)
+- ✅ Company name persistence in web mode via localStorage (fixed records not loading after page refresh)
+- ✅ Enhanced company selection UI with dedicated flow for authenticated users
+- ✅ Critical bug fix for login dialog not appearing when company selection needed
 
 ## What's Left to Build
 - 🔲 Alternative to `window.electron` API for web deployment
@@ -21,6 +31,7 @@
 - 🔲 Environment detection for conditional imports
 - 🔲 Layout fixes for web deployment
 - 🔲 Firebase deployment
+- 🔲 Apply Dexie caching to other Firestore-based models (holidays, attendance, payroll, timesheet, etc.)
 
 ## Current Status
 The project is currently in a transition phase from being exclusively a desktop application to supporting both desktop and web deployments. The core application functionality is complete and working in the desktop environment, with the web adaptation in progress.
@@ -33,8 +44,10 @@ The project is currently in a transition phase from being exclusively a desktop 
 
 ### Web Version:
 - **Status**: 🔲 In progress
-- **Data Storage**: 🔲 Planned Firestore integration
 - **Data Storage**: ✅ Firestore integration implemented
+- **Authentication**: ✅ Working with localStorage-based session persistence
+- **Configuration**: ✅ Company name and settings persist across page refreshes
+- **User Flow**: ✅ Enforced company selection with dedicated UI for authenticated users
 - **PDF Generation**: 🔲 Needs implementation
 - **Platform**: 🔲 Firebase Hosting (configured but not deployed)
 

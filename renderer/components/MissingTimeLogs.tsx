@@ -6,6 +6,7 @@ import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
 import { MissingTimeModel, MissingTimeLog } from "@/renderer/model/missingTime";
+import { getMissingTimeLogsFirestore } from "@/renderer/model/missingTime_firestore";
 import { createEmployeeModel } from "@/renderer/model/employee";
 import { createAttendanceModel, Attendance } from "@/renderer/model/attendance";
 import { createCompensationModel } from "@/renderer/model/compensation";
@@ -15,6 +16,9 @@ import { TimeEditDialog } from "./TimeEditDialog";
 import { useMissingTimeEdit } from "@/renderer/hooks/useMissingTimeEdit";
 import { Employee } from "@/renderer/model/employee";
 import { useAuthStore } from "../stores/authStore";
+import { clearMissingTimeLogCache } from "@/renderer/lib/db";
+import { IoReloadOutline } from "react-icons/io5";
+import { isWebEnvironment } from "../lib/firestoreService";
 
 export default function MissingTimeLogs() {
   const [missingLogs, setMissingLogs] = useState<MissingTimeLog[]>([]);
@@ -22,45 +26,99 @@ export default function MissingTimeLogs() {
   const [selectedLog, setSelectedLog] = useState<MissingTimeLog | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [attendance, setAttendance] = useState<Attendance | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false); // Track if data has been loaded
   const [dialogPosition, setDialogPosition] = useState<{
     top: number;
     left: number;
     showAbove?: boolean;
   } | null>(null);
   const { setLoading } = useLoadingStore();
-  const { dbPath } = useSettingsStore();
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
+  const { dbPath, companyName } = useSettingsStore();
   const [storedYear, setStoredYear] = useState<string | null>(null);
+  const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const { accessCodes, hasAccess } = useAuthStore();
+  const monthNum = storedMonth ? parseInt(storedMonth, 10) + 1 : undefined;
+  const yearNum = storedYear ? parseInt(storedYear, 10) : undefined;
 
   const loadMissingLogs = async () => {
-    if (!dbPath || !storedMonth || !storedYear) {
-      return;
+    // Skip if already loading
+    if (isLoading) return;
+
+    setIsLoading(true);
+
+    // Different validation based on environment
+    if (isWebEnvironment()) {
+      if (!storedMonth || !storedYear || !companyName) {
+        setIsLoading(false);
+        return;
+      }
+    } else {
+      if (!dbPath || !storedMonth || !storedYear) {
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
       // Load missing time logs
-      const model = MissingTimeModel.createMissingTimeModel(dbPath);
-      const logs = await model.getMissingTimeLogs(
-        parseInt(storedMonth) + 1,
-        parseInt(storedYear)
-      );
+      const actualMonth = parseInt(storedMonth!) + 1;
+      const actualYear = parseInt(storedYear!);
 
-      // Load all employees to check their status
-      const employeeModel = createEmployeeModel(dbPath);
-      const employees = await employeeModel.loadEmployees();
-      const activeEmployeeIds = new Set(
-        employees.filter((emp) => emp.status === "active").map((emp) => emp.id)
-      );
+      let logs: MissingTimeLog[] = [];
 
-      // Filter logs to only show active employees
-      const filteredLogs = logs.filter((log) =>
-        activeEmployeeIds.has(log.employeeId)
-      );
+      if (isWebEnvironment()) {
+        // In web mode, use Firestore directly
+        if (companyName) {
+          logs = await getMissingTimeLogsFirestore(actualMonth, actualYear, companyName);
+        }
+      } else {
+        // In desktop mode, use the model which handles local files
+        const model = MissingTimeModel.createMissingTimeModel(dbPath!);
+        logs = await model.getMissingTimeLogs(actualMonth, actualYear);
+      }
 
-      setMissingLogs(filteredLogs);
+      // Only update if we got data or haven't loaded data yet
+      if (logs.length > 0 || !dataLoaded) {
+        // Load all employees to check their status
+        let activeEmployeeIds: Set<string>;
+
+        if (isWebEnvironment()) {
+          // In web mode, we might already have activeEmployees state
+          if (activeEmployees.length === 0) {
+            // If not, fetch active employees directly from Firestore
+            activeEmployeeIds = new Set(activeEmployees);
+          } else {
+            activeEmployeeIds = new Set(activeEmployees);
+          }
+        } else {
+          // In desktop mode, load from local files
+          const employeeModel = createEmployeeModel(dbPath!);
+          const employees = await employeeModel.loadEmployees();
+
+          activeEmployeeIds = new Set(
+            employees.filter((emp) => emp.status === "active").map((emp) => emp.id)
+          );
+        }
+
+        // Filter logs to only show active employees if we have active employee IDs
+        let filteredLogs = logs;
+        if (activeEmployeeIds.size > 0) {
+          filteredLogs = logs.filter((log) => activeEmployeeIds.has(log.employeeId));
+        }
+
+        setMissingLogs(filteredLogs);
+        setDataLoaded(true);
+      }
     } catch (error) {
+      console.error('[loadMissingLogs] Error:', error);
+      // Don't clear the data on error if we already have data
+      if (!dataLoaded) {
+        setMissingLogs([]);
+      }
       toast.error("Failed to load missing time logs");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -138,10 +196,40 @@ export default function MissingTimeLogs() {
     loadActiveEmployees();
   }, [dbPath]);
 
+  const reloadMissingLogs = async () => {
+    toast('Reloading missing time logs...', { icon: '🔄' });
+    if (companyName && yearNum !== undefined && monthNum !== undefined) {
+      try {
+        // First clear the cache
+        await clearMissingTimeLogCache(companyName, yearNum, monthNum);
+
+        // Then directly fetch from Firestore, bypassing cache
+        const logs = await getMissingTimeLogsFirestore(monthNum, yearNum, companyName);
+
+        // Update state with the fetched logs if we got data
+        if (logs.length > 0) {
+          setMissingLogs(logs);
+          setDataLoaded(true);
+        }
+
+        toast.success(`Reloaded ${logs.length} missing time logs`);
+      } catch (error) {
+        console.error(`[reloadMissingLogs] Error:`, error);
+        toast.error('Failed to reload missing time logs');
+      }
+    } else {
+      toast.error('Cannot reload - missing company, year or month data');
+    }
+  };
+
   useEffect(() => {
-    if (!dbPath) return;
-    loadMissingLogs();
-  }, [dbPath, setLoading, storedYearInt, storedMonthInt, activeEmployees]);
+    // Only load if we don't have data loaded yet or if essential dependencies changed
+    if ((!dbPath && !isWebEnvironment()) || isLoading) return;
+
+    if (!dataLoaded) {
+      loadMissingLogs();
+    }
+  }, [dbPath, setLoading, storedYearInt, storedMonthInt, activeEmployees, dataLoaded]);
 
   useEffect(() => {
     if (selectedLog) {
@@ -204,9 +292,18 @@ export default function MissingTimeLogs() {
         gradientTo="#FE8BBB"
       >
         <div className="overflow-hidden bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Missing Time Logs
-          </h2>
+          <div className="flex items-center space-x-2 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Missing Time Logs</h2>
+            {yearNum !== undefined && monthNum !== undefined && isWebEnvironment() && (
+              <button
+                type="button"
+                onClick={reloadMissingLogs}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              >
+                <IoReloadOutline className="w-5 h-5" />
+              </button>
+            )}
+          </div>
           <div className="overflow-hidden rounded-lg border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">

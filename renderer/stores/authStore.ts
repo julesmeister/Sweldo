@@ -36,12 +36,41 @@ const defaultAuthState: PersistedAuthState = {
 const authStateFilePath = (dbPath: string): string =>
   `${dbPath}/SweldoDB/settings/auth_state.json`;
 
+// Local storage key for auth state in web mode
+const AUTH_LOCAL_STORAGE_KEY = "sweldo_auth_state";
+
 export const useAuthStore = create<AuthState>()((set, get) => {
   // Track last saved state to avoid unnecessary writes
   let lastSavedState: string = "";
 
   // Internal helper to save auth state to file
   const _saveAuthState = async () => {
+    // Handle web environment - save to localStorage
+    if (isWebEnvironment()) {
+      const state = get();
+      const stateToSave: PersistedAuthState = {
+        currentRole: state.currentRole,
+        isAuthenticated: state.isAuthenticated,
+        accessCodes: state.accessCodes,
+        lastActivity: state.lastActivity,
+      };
+
+      // Only save if state has actually changed
+      const stateJson = JSON.stringify(stateToSave);
+      if (stateJson === lastSavedState) {
+        return;
+      }
+
+      lastSavedState = stateJson;
+      try {
+        localStorage.setItem(AUTH_LOCAL_STORAGE_KEY, stateJson);
+      } catch (error) {
+        console.error("Failed to save auth state to localStorage:", error);
+      }
+      return;
+    }
+
+    // Handle desktop environment - save to file
     const dbPath = useSettingsStore.getState().dbPath;
     if (!dbPath) {
       // Don't save without a valid dbPath
@@ -86,10 +115,50 @@ export const useAuthStore = create<AuthState>()((set, get) => {
         return;
       }
 
-      const dbPath = useSettingsStore.getState().dbPath;
       try {
         let loadedState = { ...defaultAuthState };
 
+        // Handle web environment - load from localStorage
+        if (isWebEnvironment()) {
+          try {
+            const storedState = localStorage.getItem(AUTH_LOCAL_STORAGE_KEY);
+            if (storedState) {
+              const parsedState = JSON.parse(storedState);
+              loadedState = { ...defaultAuthState, ...parsedState };
+
+              const now = Date.now();
+              const timeSinceLastActivity = now - loadedState.lastActivity;
+              const isSessionValid = timeSinceLastActivity < SESSION_TIMEOUT;
+
+              if (!isSessionValid && loadedState.isAuthenticated) {
+                loadedState = { ...defaultAuthState };
+                // Clear invalid session data
+                localStorage.removeItem(AUTH_LOCAL_STORAGE_KEY);
+              }
+            }
+          } catch (error) {
+            console.error(
+              "Error loading auth state from localStorage, using defaults:",
+              error
+            );
+            loadedState = { ...defaultAuthState };
+          }
+
+          set({ ...loadedState, isAuthInitialized: true });
+
+          // Set initial saved state to avoid unnecessary writes
+          lastSavedState = JSON.stringify({
+            currentRole: loadedState.currentRole,
+            isAuthenticated: loadedState.isAuthenticated,
+            accessCodes: loadedState.accessCodes,
+            lastActivity: loadedState.lastActivity,
+          });
+
+          return;
+        }
+
+        // Desktop environment - load from file
+        const dbPath = useSettingsStore.getState().dbPath;
         if (dbPath) {
           const filePath = authStateFilePath(dbPath);
           try {
@@ -231,6 +300,16 @@ export const useAuthStore = create<AuthState>()((set, get) => {
           lastActivity: 0,
         });
         _saveAuthState();
+
+        // In web mode, also clear the sweldo_session_initialized flag
+        if (isWebEnvironment()) {
+          try {
+            localStorage.removeItem("sweldo_session_initialized");
+          } catch (e) {
+            console.error("Failed to clear session initialized flag:", e);
+          }
+        }
+
         toast.info("Logged out");
       }
     },

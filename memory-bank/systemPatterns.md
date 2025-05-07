@@ -49,6 +49,13 @@ Sweldo follows a dual-process architecture typical of Electron applications:
    - Preload script bridging Electron APIs to renderer
    - `window.electron` as the abstraction layer
 
+6. **Dexie-based IndexedDB Caching Pattern**:
+   - On load functions (e.g., `loadActiveEmployeesFirestore`), first check local cache stored in IndexedDB via Dexie
+   - If cache hit, return cached data immediately
+   - If cache miss, query Firestore, then bulk store results in Dexie cache
+   - Provide manual cache invalidation (e.g., refresh button triggering `clearEmployeeCache`) and optional TTL logic
+   - Apply same pattern to other models: `loadHolidaysFirestore`, `getMissingTimeLogsFirestore`, etc., using separate Dexie tables and `clearXCache` utilities
+
 ## Component Relationships
 - **Page Components** → Use → **UI Components**
 - **Page Components** → Use → **Hooks** → Use → **Stores**

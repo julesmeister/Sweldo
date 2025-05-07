@@ -31,40 +31,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Log the actual config being used by the SDK
-console.log(
-  "\n[firestoreService] Firebase Config Used:",
-  JSON.stringify(firebaseConfig, null, 2)
-);
-console.log("--- Raw Env Vars ---");
-console.log(
-  "NEXT_PUBLIC_FIREBASE_API_KEY:",
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-);
-console.log(
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:",
-  process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-);
-console.log(
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID:",
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-);
-console.log(
-  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:",
-  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-);
-console.log(
-  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:",
-  process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-);
-console.log(
-  "NEXT_PUBLIC_FIREBASE_APP_ID:",
-  process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-);
-console.log("NEXT_PUBLIC_COMPANY_NAME:", process.env.NEXT_PUBLIC_COMPANY_NAME);
-console.log("NEXT_PUBLIC_COMPANY_LIST:", process.env.NEXT_PUBLIC_COMPANY_LIST);
-console.log("--------------------\n");
-
 // Centralized variable to cache company name
 let cachedCompanyName: string | null = null;
 
@@ -75,16 +41,8 @@ let cachedCompanyName: string | null = null;
 export const initializeFirebase = (): FirebaseApp => {
   const apps = getApps();
   if (apps.length > 0) {
-    console.log(
-      "[firestoreService] Using existing Firebase app:",
-      apps[0].options.projectId
-    );
     return apps[0];
   }
-  console.log(
-    "[firestoreService] Initializing new Firebase app with project:",
-    firebaseConfig.projectId
-  );
   return initializeApp(firebaseConfig);
 };
 
@@ -95,10 +53,6 @@ export const initializeFirebase = (): FirebaseApp => {
 export const getFirestoreInstance = (): Firestore => {
   initializeFirebase();
   const db = getFirestore();
-  console.log(
-    "[firestoreService] getFirestoreInstance() projectId:",
-    initializeFirebase().options.projectId
-  );
   return db;
 };
 
@@ -123,7 +77,6 @@ export const setFirestoreCompanyName = (name: string): void => {
     return;
   }
   cachedCompanyName = name;
-  console.log(`Company name for Firestore operations set to: ${name}`);
 };
 
 /**
@@ -133,6 +86,9 @@ export const setFirestoreCompanyName = (name: string): void => {
 export const getCompanyName = async (): Promise<string> => {
   // First check if we have a cached company name
   if (cachedCompanyName) {
+    console.log(
+      `[getCompanyName] Using cached company name: ${cachedCompanyName}`
+    );
     return cachedCompanyName;
   }
 
@@ -142,6 +98,9 @@ export const getCompanyName = async (): Promise<string> => {
 
     if (settingsStore && settingsStore.companyName) {
       cachedCompanyName = settingsStore.companyName;
+      console.log(
+        `[getCompanyName] Using company name from settings store: ${cachedCompanyName}`
+      );
       return settingsStore.companyName;
     }
 
@@ -149,6 +108,9 @@ export const getCompanyName = async (): Promise<string> => {
     const envCompanyName = process.env.NEXT_PUBLIC_COMPANY_NAME;
     if (envCompanyName) {
       cachedCompanyName = envCompanyName;
+      console.log(
+        `[getCompanyName] Using company name from environment variable: ${cachedCompanyName}`
+      );
       return envCompanyName;
     }
 
@@ -156,9 +118,13 @@ export const getCompanyName = async (): Promise<string> => {
     console.warn(
       "No company name found in settings or environment. Using default."
     );
+    console.log(`[getCompanyName] Using default company name: DefaultCompany`);
     return "DefaultCompany";
   } catch (error) {
     console.error("Error fetching company name:", error);
+    console.log(
+      `[getCompanyName] Error occurred, using default company name: DefaultCompany`
+    );
     return "DefaultCompany";
   }
 };

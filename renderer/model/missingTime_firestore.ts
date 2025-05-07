@@ -14,7 +14,10 @@ import {
   createTimeBasedDocId,
   getCompanyName,
   queryCollection,
+  getFirestoreInstance,
 } from "../lib/firestoreService";
+import { db } from "../lib/db";
+import { collection, getDocs } from "firebase/firestore";
 
 /**
  * Firestore structure for missing time logs document
@@ -43,23 +46,142 @@ export async function getMissingTimeLogsFirestore(
   year: number,
   companyName: string
 ): Promise<MissingTimeLog[]> {
-  const docId = createMissingTimeDocId(year, month);
   try {
-    const data = await fetchDocument<MissingTimeFirestoreData>(
+    // Attempt to load from cache
+    const cacheKey = [companyName, year, month] as const;
+    const cachedRecords = await db.missingTimeLogs
+      .where("[companyName+year+month]")
+      .equals(cacheKey)
+      .toArray();
+
+    if (cachedRecords.length > 0) {
+      return cachedRecords.map((rec) => rec.data);
+    }
+
+    // Cache miss, query Firestore
+    const docId = createMissingTimeDocId(year, month);
+    let data = await fetchDocument<MissingTimeFirestoreData>(
       "missing_time_logs",
       docId,
       companyName
     );
 
+    // If no data found with the primary ID, try alternative patterns
     if (!data || !data.logs) {
-      return [];
+      data = await tryAlternativeDocIds(
+        "missing_time_logs",
+        year,
+        month,
+        companyName
+      );
+
+      if (!data || !data.logs) {
+        return [];
+      }
     }
 
-    return data.logs;
+    // Store fetched logs in cache
+    const logs = data.logs;
+    const timestamp = Date.now();
+    const records = logs.map((log) => ({
+      companyName,
+      year,
+      month,
+      id: log.id,
+      timestamp,
+      data: log,
+    }));
+    await db.missingTimeLogs.bulkPut(records);
+
+    return logs;
   } catch (error) {
     console.error(`Error loading missing time logs from Firestore:`, error);
     return []; // Return empty array on error
   }
+}
+
+/**
+ * Debugging: Try to find document by alternative naming patterns
+ */
+async function tryAlternativeDocIds(
+  subcollection: string,
+  year: number,
+  month: number,
+  companyName: string
+): Promise<MissingTimeFirestoreData | null> {
+  // Check document IDs with the format we see in Firestore
+  const patterns = [
+    `missing_time_${year}_${month}`,
+    `missing_time_${year}_${month.toString().padStart(2, "0")}`,
+    `missing_time_logs_${year}_${month}`,
+    `missingtime${year}${month}`,
+  ];
+
+  // Also check if the collection path itself might be different
+  const alternativeCollections = [
+    subcollection,
+    "missing_time",
+    "missing_times",
+  ];
+
+  // First try to list documents in collections to find matches
+  for (const collectionName of alternativeCollections) {
+    try {
+      const db = getFirestoreInstance();
+      const collectionRef = collection(
+        db,
+        `companies/${companyName}/${collectionName}`
+      );
+      const querySnapshot = await getDocs(collectionRef);
+
+      if (querySnapshot.empty) continue;
+
+      const docIds: string[] = [];
+      querySnapshot.forEach((doc) => {
+        docIds.push(doc.id);
+      });
+
+      // Check for any ID that contains the year and month
+      const yearMonthPattern = `${year}_${month}`;
+      const matchingIds = docIds.filter((id) => id.includes(yearMonthPattern));
+
+      if (matchingIds.length > 0) {
+        // Try to fetch the first matching document
+        const firstMatchId = matchingIds[0];
+        const data = await fetchDocument<MissingTimeFirestoreData>(
+          collectionName,
+          firstMatchId,
+          companyName
+        );
+
+        if (data && data.logs) {
+          return data;
+        }
+      }
+    } catch (error) {
+      // Continue to next collection on error
+    }
+  }
+
+  // If we didn't find any matching documents by listing,
+  // try direct access with the patterns we defined
+  for (const pattern of patterns) {
+    try {
+      const data = await fetchDocument<MissingTimeFirestoreData>(
+        subcollection,
+        pattern,
+        companyName
+      );
+
+      if (data && data.logs) {
+        return data;
+      }
+    } catch (error) {
+      // Continue to next pattern on error
+    }
+  }
+
+  return null;
 }
 
 /**

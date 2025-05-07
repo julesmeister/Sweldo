@@ -6,10 +6,12 @@ import { Employee, createEmployeeModel } from "@/renderer/model/employee";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { MagicCard } from "./magicui/magic-card";
 import { PaymentHistoryDialog } from "./PaymentHistoryDialog";
-import { IoTimeOutline } from "react-icons/io5";
+import { IoTimeOutline, IoReloadOutline } from "react-icons/io5";
 import { Payroll, PayrollSummaryModel } from "@/renderer/model/payroll";
 import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
+import { clearEmployeeCache } from "@/renderer/lib/db";
+import { toast } from "sonner";
 
 interface LastPaymentPeriod {
   start: string;
@@ -92,76 +94,54 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
     }
   };
 
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      setLoading(true);
-
-      try {
-        // Check if we're in web mode
-        if (isWebEnvironment()) {
-          if (!companyName) {
-            console.warn("[EmployeeList] Company name not set in web mode");
-            setEmployees([]);
-            setLoading(false);
-            return;
-          }
-
-          console.log(`[EmployeeList] Loading employees for company: ${companyName} in web mode`);
-          const firestoreEmployees = await loadActiveEmployeesFirestore(companyName);
-
-          // Sort employees by ID in ascending order
-          const sortedEmployees = firestoreEmployees.sort((a, b) => {
-            // Handle numeric IDs (convert to numbers for proper sorting)
-            const idA = parseInt(a.id) || a.id;
-            const idB = parseInt(b.id) || b.id;
-
-            // If both are numbers, compare numerically
-            if (typeof idA === 'number' && typeof idB === 'number') {
-              return idA - idB;
-            }
-
-            // Otherwise compare as strings
-            return String(a.id).localeCompare(String(b.id));
-          });
-
-          setEmployees(sortedEmployees);
-        } else {
-          // Desktop mode - use dbPath
-          if (!dbPath) {
-            console.warn("[EmployeeList] Database path not set in desktop mode");
-            setEmployees([]);
-            setLoading(false);
-            return;
-          }
-
-          console.log(`[EmployeeList] Loading employees from local DB: ${dbPath}`);
-          const loadedEmployees = await employeeModel.loadActiveEmployees();
-
-          // Sort employees by ID in ascending order
-          const sortedEmployees = loadedEmployees.sort((a, b) => {
-            // Handle numeric IDs (convert to numbers for proper sorting)
-            const idA = parseInt(a.id) || a.id;
-            const idB = parseInt(b.id) || b.id;
-
-            // If both are numbers, compare numerically
-            if (typeof idA === 'number' && typeof idB === 'number') {
-              return idA - idB;
-            }
-
-            // Otherwise compare as strings
-            return String(a.id).localeCompare(String(b.id));
-          });
-
-          setEmployees(sortedEmployees);
+  // Fetch employees with optional cache bypass
+  const fetchEmployees = async () => {
+    setLoading(true);
+    try {
+      if (isWebEnvironment()) {
+        if (!companyName) {
+          console.warn("[EmployeeList] Company name not set in web mode");
+          setEmployees([]);
+          return;
         }
-      } catch (error) {
-        console.error("[EmployeeList] Error loading employees:", error);
-        setEmployees([]);
-      } finally {
-        setLoading(false);
+        // Loading employees in web mode
+        const firestoreEmployees = await loadActiveEmployeesFirestore(companyName);
+        const sortedEmployees = firestoreEmployees.sort((a, b) => {
+          const idA = parseInt(a.id) || a.id;
+          const idB = parseInt(b.id) || b.id;
+          if (typeof idA === 'number' && typeof idB === 'number') {
+            return idA - idB;
+          }
+          return String(a.id).localeCompare(String(b.id));
+        });
+        setEmployees(sortedEmployees);
+      } else {
+        if (!dbPath) {
+          console.warn("[EmployeeList] Database path not set in desktop mode");
+          setEmployees([]);
+          return;
+        }
+        // Loading employees in desktop mode
+        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        const sortedEmployees = loadedEmployees.sort((a, b) => {
+          const idA = parseInt(a.id) || a.id;
+          const idB = parseInt(b.id) || b.id;
+          if (typeof idA === 'number' && typeof idB === 'number') {
+            return idA - idB;
+          }
+          return String(a.id).localeCompare(String(b.id));
+        });
+        setEmployees(sortedEmployees);
       }
-    };
+    } catch (error) {
+      console.error("[EmployeeList] Error loading employees:", error);
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchEmployees();
   }, [dbPath, companyName]); // Re-run when dbPath or companyName changes
 
@@ -190,12 +170,29 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
     >
       <div className="bg-white rounded-lg shadow overflow-hidden hover:has-[.overflow-y-auto]:h-auto group">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {isWebEnvironment() && companyName ? `${companyName} Employees` : "Employee List"}
-          </h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-xl font-semibold text-gray-800">
+              {isWebEnvironment() && companyName ? `${companyName} Employees` : "Employee List"}
+            </h2>
+            {isWebEnvironment() && (
+              <button
+                type="button"
+                onClick={async () => {
+                  toast('Reloading employees...', { icon: '🔄' });
+                  if (companyName) {
+                    await clearEmployeeCache(companyName);
+                  }
+                  await fetchEmployees();
+                  toast.success('Employees reloaded');
+                }}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              >
+                <IoReloadOutline className="w-5 h-5" />
+              </button>
+            )}
+          </div>
           <p className="text-sm font-medium text-gray-500">
-            Active Employees Count:{" "}
-            <span className="font-bold">{employees.length}</span>
+            Active Employees Count: <span className="font-bold">{employees.length}</span>
           </p>
         </div>
         <div className="overflow-x-auto">

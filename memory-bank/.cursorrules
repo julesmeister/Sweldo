@@ -58,3 +58,37 @@ const storage = typeof window !== 'undefined' && typeof window.electron !== 'und
 - `main/` and `electron/` directories contain Electron-specific code
 - `renderer/` contains Next.js application (partially reusable for web)
 - Web-specific adaptations should be in parallel files with clear naming 
+
+## Dexie IndexedDB Caching Pattern
+- Use Dexie (wrapper for IndexedDB) to implement persistent client-side cache for Firestore queries.
+
+```typescript
+// Example cache module (renderer/lib/db.ts)
+import Dexie from 'dexie';
+
+interface EmployeeCacheRecord {
+  companyName: string;
+  id: string;
+  timestamp: number;
+  data: unknown;
+}
+
+class AppDB extends Dexie {
+  employees!: Dexie.Table<EmployeeCacheRecord, [string, string]>;
+
+  constructor() {
+    super('SweldoCacheDB');
+    this.version(1).stores({
+      employees: '&[companyName+id], companyName, id, timestamp'
+    });
+  }
+}
+
+export const db = new AppDB();
+```
+
+- Pattern for Firestore models:
+  1. Attempt to load from Dexie cache: `await db.employees.where('companyName').equals(companyName).toArray()`.
+  2. If cache hit, return cached data.
+  3. If cache miss, query Firestore, then `db.employees.bulkPut(records)` to populate cache.
+  4. Invalidate cache manually via utilities like `clearEmployeeCache(companyName)` or implement TTL. 

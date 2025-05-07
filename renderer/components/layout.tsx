@@ -47,7 +47,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   const initialRender = useRef(true);
   const { isAuthenticated, logout, checkSession, initializeAuth } =
     useAuthStore();
-  const { dbPath, isInitialized, initialize } = useSettingsStore();
+  const { dbPath, isInitialized, initialize, companyName } = useSettingsStore();
   const [showLogin, setShowLogin] = useState(false);
   const [isCheckingRoles, setIsCheckingRoles] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -225,15 +225,14 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   // Initialize auth store based on settings store readiness
   useEffect(() => {
     // Auth store should only be initialized once settings are ready
-    if (!isInitialized || !dbPath) {
+    if (!isInitialized || (!dbPath && !isWebEnvironment())) {
       // (removed debug log)
       return;
     }
 
     // Skip if already initialized
     if (
-      useAuthStore.getState().isAuthInitialized ||
-      hasInitializedThisSession
+      useAuthStore.getState().isAuthInitialized
     ) {
       // (removed debug log)
       return;
@@ -243,11 +242,17 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     initializeAuth()
       .then(() => {
         // (removed debug log)
+        // After auth initialization, check if the user is actually authenticated
+        // and update the hasInitializedThisSession accordingly
+        if (useAuthStore.getState().isAuthenticated) {
+          setHasInitializedThisSession(true);
+          localStorage.setItem("sweldo_session_initialized", "true");
+        }
       })
       .catch((error) => {
         console.error("[Layout] Error calling initializeAuth:", error);
       });
-  }, [isInitialized, dbPath, initializeAuth, hasInitializedThisSession]);
+  }, [isInitialized, dbPath, initializeAuth]);
 
   const [lastActivity, setLastActivity] = useState(Date.now());
 
@@ -310,14 +315,42 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, [pathname]);
 
+  // Check if we need to show the login dialog to select a company in web mode
+  useEffect(() => {
+    // Only applicable in web mode when the user is authenticated
+    if (isWebEnvironment() && isAuthenticated && isInitialized && !isCheckingRoles) {
+      // If no company name is set, show the login dialog
+      if (!companyName) {
+        console.log("[Layout] Web mode: No company name set, showing login dialog to select company");
+        setShowLogin(true);
+      } else {
+        // Company name is set, no need to show login dialog
+        setShowLogin(false);
+      }
+    }
+  }, [isAuthenticated, companyName, isInitialized, isCheckingRoles]);
+
   // Role checking and login prompt logic
   useEffect(() => {
-    // Check localStorage first for the initialization flag - most important check
+    // Check if auth store is initialized and we're authenticated already
+    const isAuthStoreInitialized = useAuthStore.getState().isAuthInitialized;
+    const isUserAuthenticated = useAuthStore.getState().isAuthenticated;
+
+    // If auth store is initialized and the user is authenticated, we can skip role checking
+    if (isAuthStoreInitialized && isUserAuthenticated) {
+      setIsCheckingRoles(false);
+      hasCheckedRoles.current = true;
+      setHasInitializedThisSession(true);
+      localStorage.setItem("sweldo_session_initialized", "true");
+      return;
+    }
+
+    // Check localStorage for the initialization flag
     const isInitializedInLocalStorage =
       localStorage.getItem("sweldo_session_initialized") === "true";
 
     // If we're already initialized per localStorage, skip everything and make sure we're not in loading state
-    if (isInitializedInLocalStorage) {
+    if (isInitializedInLocalStorage && isAuthStoreInitialized) {
       // Silent - don't even log since this happens on every navigation
       if (isCheckingRoles) {
         setIsCheckingRoles(false);
@@ -517,11 +550,33 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Show login dialog when authentication is required
+  // ***** WEB MODE COMPANY CHECK - HIGH PRIORITY *****
+  // If in web mode and authenticated but no company selected, ALWAYS show login dialog for company selection
+  if (isWebEnvironment() && isAuthenticated && isInitialized && !companyName) {
+    console.log("[Layout] CRITICAL: No company selected in web mode, forcing company selection dialog");
+
+    return (
+      <div className="min-h-screen bg-background font-sans">
+        <Toaster position="top-right" richColors />
+        <LoginDialog
+          onSuccess={() => {
+            setShowLogin(false);
+            hasCheckedRoles.current = true;
+            setHasInitializedThisSession(true);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Show login dialog when authentication is required or when we need to select a company in web mode
   if (
     showLogin &&
     !isCheckingRoles &&
-    !isAuthenticated &&
+    (
+      !isAuthenticated ||
+      (isWebEnvironment() && !companyName) // Also show login when in web mode and no company selected
+    ) &&
     (isWebEnvironment() || dbPath || pathname === "/settings")
   ) {
     // (removed debug log)

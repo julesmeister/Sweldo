@@ -11,7 +11,15 @@ import { fetchHolidays } from "@/renderer/services/fetchHolidays";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
-import path from "path";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import {
+  loadHolidaysFirestore,
+  createHolidayFirestore,
+  saveOrUpdateHolidayFirestore,
+  deleteHolidayFirestore
+} from "@/renderer/model/holiday_firestore";
+import { clearHolidayCache } from "@/renderer/lib/db";
+import { IoReloadOutline } from "react-icons/io5";
 
 export default function HolidaysPage() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -25,10 +33,14 @@ export default function HolidaysPage() {
     regularHolidayMultiplier: number;
     specialHolidayMultiplier: number;
   } | null>(null);
-  const { dbPath } = useSettingsStore();
+  const { dbPath, companyName } = useSettingsStore();
 
   const [storedMonth, setStoredMonth] = useState<string | null>(null);
   const [storedYear, setStoredYear] = useState<string | null>(null);
+
+  // Parsed numeric year and month for cache keys
+  const yearNum = storedYear ? parseInt(storedYear, 10) : undefined;
+  const monthNum = storedMonth ? parseInt(storedMonth, 10) + 1 : undefined;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -227,41 +239,133 @@ export default function HolidaysPage() {
     }
   };
 
+  const loadHolidays = async () => {
+    if (!storedYear || !storedMonth) return;
+
+    setIsLoading(true);
+    try {
+      const year = parseInt(storedYear, 10);
+      const month = parseInt(storedMonth, 10) + 1; // Convert from 0-based to 1-based
+
+      // Check if we're in web mode
+      if (isWebEnvironment()) {
+        if (!companyName) {
+          console.warn('[HolidaysPage] Company name not set in web mode');
+          setHolidays([]);
+          setIsLoading(false);
+          return;
+        }
+
+        console.log(`[HolidaysPage] Loading holidays for company: ${companyName} in web mode (${year}-${month})`);
+        const firestoreHolidays = await loadHolidaysFirestore(year, month, companyName);
+        setHolidays(firestoreHolidays);
+      } else {
+        // Desktop mode - use dbPath
+        if (!dbPath) {
+          console.warn('[HolidaysPage] Database path not set in desktop mode');
+          setHolidays([]);
+          setIsLoading(false);
+          return;
+        }
+
+        console.log(`[HolidaysPage] Loading holidays from local DB: ${dbPath} (${year}-${month})`);
+        const holidayModel = createHolidayModel(dbPath, year, month);
+        const loadedHolidays = await holidayModel.loadHolidays();
+        setHolidays(loadedHolidays);
+      }
+    } catch (error) {
+      console.error('[HolidaysPage] Error loading holidays:', error);
+      setHolidays([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadSuggestedHolidays();
-    if (!dbPath) {
-      console.error("Invalid dbPath:", dbPath);
-      return; // Prevent further execution if dbPath is invalid
-    }
-
-    const holidayModel = createHolidayModel(
-      dbPath,
-      parseInt(storedYear!, 10),
-      parseInt(storedMonth!, 10) + 1
-    );
-    holidayModel.loadHolidays().then((loadedHolidays) => {
-      setHolidays(loadedHolidays); // Update the state with loaded holidays
-    });
+    loadHolidays();
   }, [holidays.length, storedYear, storedMonth]);
 
-  useEffect(() => {}, [selectedHoliday]);
+  useEffect(() => { }, [selectedHoliday]);
 
   function handleSaveHoliday(data: Holiday): void {
-    if (!dbPath) {
-      console.error("Invalid dbPath:", dbPath);
+    const year = parseInt(storedYear!, 10);
+    const month = parseInt(storedMonth!, 10) + 1;
+
+    if (isWebEnvironment()) {
+      if (!companyName) {
+        console.error('[HolidaysPage] Cannot save holiday: Company name not set in web mode');
+        toast.error('Failed to save holiday: Company name not set');
+        return;
+      }
+
+      console.log(`[HolidaysPage] Saving holiday in web mode for company: ${companyName}`);
+      saveOrUpdateHolidayFirestore(data, year, month, companyName)
+        .then(() => {
+          toast.success(`Holiday ${data.name} saved successfully`);
+          loadHolidays(); // Reload holidays to refresh the list
+        })
+        .catch(error => {
+          console.error('[HolidaysPage] Error saving holiday in web mode:', error);
+          toast.error('Failed to save holiday');
+        });
+
       return;
     }
 
-    const holidayModel = createHolidayModel(
-      dbPath,
-      parseInt(storedYear!, 10),
-      parseInt(storedMonth!, 10) + 1
-    );
-    holidayModel.saveOrUpdateHoliday(data).then(() => {
-      holidayModel.loadHolidays().then((loadedHolidays) => {
-        setHolidays(loadedHolidays); // Update the state with loaded holidays
+    // Desktop mode
+    if (!dbPath) {
+      console.error('[HolidaysPage] Cannot save holiday: Database path not set in desktop mode');
+      toast.error('Failed to save holiday: Database path not set');
+      return;
+    }
+
+    const holidayModel = createHolidayModel(dbPath, year, month);
+    holidayModel.saveOrUpdateHoliday(data)
+      .then(() => {
+        toast.success(`Holiday ${data.name} saved successfully`);
+        holidayModel.loadHolidays().then(setHolidays);
+      })
+      .catch(error => {
+        console.error('[HolidaysPage] Error saving holiday in desktop mode:', error);
+        toast.error('Failed to save holiday');
       });
-    });
+  }
+
+  async function handleDeleteHoliday(holidayId: string) {
+    const year = parseInt(storedYear!, 10);
+    const month = parseInt(storedMonth!, 10) + 1;
+
+    try {
+      if (isWebEnvironment()) {
+        if (!companyName) {
+          console.error('[HolidaysPage] Cannot delete holiday: Company name not set in web mode');
+          toast.error('Failed to delete holiday: Company name not set');
+          return;
+        }
+
+        await deleteHolidayFirestore(holidayId, year, month, companyName);
+        toast.success('Holiday deleted successfully');
+        loadHolidays(); // Reload holidays to refresh the list
+      } else {
+        // Desktop mode
+        if (!dbPath) {
+          console.error('[HolidaysPage] Cannot delete holiday: Database path not set in desktop mode');
+          toast.error('Failed to delete holiday: Database path not set');
+          return;
+        }
+
+        const holidayModel = createHolidayModel(dbPath, year, month);
+        await holidayModel.deleteHoliday(holidayId);
+        toast.success('Holiday deleted successfully');
+
+        const loadedHolidays = await holidayModel.loadHolidays();
+        setHolidays(loadedHolidays);
+      }
+    } catch (error) {
+      console.error('[HolidaysPage] Error deleting holiday:', error);
+      toast.error('Failed to delete holiday');
+    }
   }
 
   return (
@@ -284,37 +388,66 @@ export default function HolidaysPage() {
               >
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-medium text-gray-900">
-                      Current Holidays
-                    </h2>
-                    {holidays.filter((holiday) => {
-                      const startDate = new Date(holiday.startDate);
-                      const endDate = new Date(holiday.endDate);
-                      return (
-                        !isNaN(startDate.getTime()) &&
-                        !isNaN(endDate.getTime()) &&
-                        !isNaN(holiday.multiplier)
-                      );
-                    }).length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-lg font-medium text-gray-900">
+                        {isWebEnvironment() && companyName
+                          ? `${companyName} Holidays`
+                          : "Current Holidays"}
+                      </h2>
+                      {isWebEnvironment() && companyName && yearNum !== undefined && monthNum !== undefined && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            toast('Reloading holidays...', { icon: '🔄' });
+                            await clearHolidayCache(companyName, yearNum, monthNum);
+                            await loadHolidays();
+                            toast.success('Holidays reloaded');
+                          }}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        >
+                          <IoReloadOutline className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                    {(isWebEnvironment() && companyName) || (!isWebEnvironment() && dbPath) ? (
                       <AddButton
                         text="Add Holiday"
                         onClick={handleNewHolidayClick}
                       />
-                    )}
+                    ) : null}
                   </div>
+
                   {isLoading ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                     </div>
+                  ) : !isWebEnvironment() && !dbPath ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500">
+                        Database path not configured.
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Please set up your database path in the Settings tab.
+                      </p>
+                    </div>
+                  ) : isWebEnvironment() && !companyName ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500">
+                        Company not selected.
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Please select a company at login.
+                      </p>
+                    </div>
                   ) : holidays.filter((holiday) => {
-                      const startDate = new Date(holiday.startDate);
-                      const endDate = new Date(holiday.endDate);
-                      return (
-                        !isNaN(startDate.getTime()) &&
-                        !isNaN(endDate.getTime()) &&
-                        !isNaN(holiday.multiplier)
-                      );
-                    }).length > 0 ? (
+                    const startDate = new Date(holiday.startDate);
+                    const endDate = new Date(holiday.endDate);
+                    return (
+                      !isNaN(startDate.getTime()) &&
+                      !isNaN(endDate.getTime()) &&
+                      !isNaN(holiday.multiplier)
+                    );
+                  }).length > 0 ? (
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead>
@@ -395,11 +528,10 @@ export default function HolidaysPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span
-                                    className={`inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium ${
-                                      holiday.type === "Regular"
-                                        ? "bg-blue-100 text-blue-800"
-                                        : "bg-purple-100 text-purple-800"
-                                    }`}
+                                    className={`inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium ${holiday.type === "Regular"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-purple-100 text-purple-800"
+                                      }`}
                                   >
                                     {holiday.type}
                                   </span>
@@ -418,24 +550,7 @@ export default function HolidaysPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // Handle delete
-                                      const holidayModel = createHolidayModel(
-                                        dbPath,
-                                        parseInt(storedYear!, 10),
-                                        parseInt(storedMonth!, 10) + 1
-                                      );
-                                      holidayModel
-                                        .deleteHoliday(holiday.id)
-                                        .then(() => {
-                                          holidayModel
-                                            .loadHolidays()
-                                            .then((loadedHolidays) => {
-                                              setHolidays(loadedHolidays); // Update the state with loaded holidays
-                                              toast.success(
-                                                `Deleted holiday ${holiday.name}`
-                                              );
-                                            });
-                                        });
+                                      handleDeleteHoliday(holiday.id);
                                     }}
                                     className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out"
                                   >
@@ -544,24 +659,23 @@ export default function HolidaysPage() {
                               </span>
                               {new Date(holiday.startDate).toDateString() !==
                                 new Date(holiday.endDate).toDateString() && (
-                                <>
-                                  <span>-</span>
-                                  <span>
-                                    {new Date(
-                                      holiday.endDate
-                                    ).toLocaleDateString()}
-                                  </span>
-                                </>
-                              )}
+                                  <>
+                                    <span>-</span>
+                                    <span>
+                                      {new Date(
+                                        holiday.endDate
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  </>
+                                )}
                             </div>
                           </div>
                           <div className="ml-4 flex items-center space-x-2">
                             <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                holiday.type === "Regular"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-purple-100 text-purple-800"
-                              }`}
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${holiday.type === "Regular"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-purple-100 text-purple-800"
+                                }`}
                             >
                               {holiday.type}
                             </span>

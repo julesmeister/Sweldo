@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { isWebEnvironment, getFirestoreInstance, initializeFirebase } from "@/renderer/lib/firestoreService";
+import { isWebEnvironment, getFirestoreInstance, initializeFirebase, setFirestoreCompanyName } from "@/renderer/lib/firestoreService";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { IoLockClosed, IoEyeOutline, IoEyeOffOutline, IoChevronDown } from "react-icons/io5";
 import { useAuthStore } from "@/renderer/stores/authStore";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { loadEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import { getAvatarByIndex, generateCardAnimationProps, avatars } from "@/renderer/lib/avatarUtils";
-import { Employee } from "@/renderer/model/employee";
+import { Employee, createEmployeeModel } from "@/renderer/model/employee";
 
 // Import the avatar images directly
 // Since we're in renderer folder already, we can use a relative path to assets
@@ -81,8 +81,8 @@ const positions = [
 ];
 
 export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
-  const { dbPath, setCompanyName } = useSettingsStore();
-  const { login, checkSession } = useAuthStore();
+  const { dbPath, setCompanyName, companyName } = useSettingsStore();
+  const { login, checkSession, isAuthenticated } = useAuthStore();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,6 +97,17 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   // Company's employees for the background
   const [employees, setEmployees] = useState<EmployeeWithAnimation[]>([]);
 
+  // Track if we only need company selection (user is already authenticated)
+  const [companySelectionOnly, setCompanySelectionOnly] = useState(false);
+
+  // Check if the user is already authenticated and just needs to select a company
+  useEffect(() => {
+    if (isWebEnvironment() && isAuthenticated) {
+      console.log("[LoginDialog] User already authenticated, only company selection needed");
+      setCompanySelectionOnly(true);
+    }
+  }, [isAuthenticated]);
+
   // Check if session is still valid
   useEffect(() => {
     if (checkSession()) {
@@ -107,25 +118,17 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   // Load company list in web mode
   useEffect(() => {
     async function loadCompanies() {
-      console.log("[LoginDialog] loadCompanies called, isWebEnvironment:", isWebEnvironment());
-      if (!isWebEnvironment()) {
-        console.log("[LoginDialog] Skipping company load in desktop mode");
-        return;
-      }
+      if (!isWebEnvironment()) return;
+      // Initialize Firebase and Firestore instance
+      const app = initializeFirebase();
+      const db = getFirestoreInstance();
+      // Wait briefly to ensure Firestore is ready
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       try {
-        console.log("[LoginDialog] Ensuring Firebase is initialized...");
-        const app = initializeFirebase();
-        const db = getFirestoreInstance();
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Alternative method to get companies
-        console.log("[LoginDialog] Using alternative method to fetch companies...");
-
         // Method 1: Try to get all documents in the companies collection
         try {
-          console.log("[LoginDialog] Attempting to get companies from collection...");
           const snapshot = await getDocs(collection(db, "companies"));
-          console.log("[LoginDialog] Companies collection snapshot:", snapshot.docs.length, "docs found");
 
           if (snapshot.docs.length > 0) {
             const companyDocs = snapshot.docs.map(doc => doc.id);
@@ -145,7 +148,6 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
               })
             );
 
-            console.log("[LoginDialog] Found companies with employee counts:", companiesWithEmployees);
             setCompanies(companiesWithEmployees);
 
             // Set the first company as default if available
@@ -163,12 +165,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
 
         // Method 2: Check if there's data in known subcollections that would indicate companies
         try {
-          console.log("[LoginDialog] Trying to infer companies from subcollection paths...");
-
           // Hardcode a list of commonly expected companies as fallback
           // This is a temporary solution - in production you should have a proper companies collection
           const commonCompanies = ["Stay", "Pure Care"];
-          console.log("[LoginDialog] Using fallback common company names:", commonCompanies);
 
           // Try to validate each company by checking if it has employees
           const validatedCompanies: CompanyWithEmployees[] = [];
@@ -177,7 +176,6 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
               const employeesRef = collection(db, `companies/${companyName}/employees`);
               const employeesSnapshot = await getDocs(employeesRef);
               const employeeCount = employeesSnapshot.docs.length;
-              console.log(`[LoginDialog] Company "${companyName}" has ${employeeCount} employees`);
 
               if (employeeCount > 0) {
                 validatedCompanies.push({ id: companyName, employeeCount });
@@ -188,7 +186,6 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
           }
 
           if (validatedCompanies.length > 0) {
-            console.log("[LoginDialog] Validated companies with data:", validatedCompanies);
             setCompanies(validatedCompanies);
 
             // Set the first company as default if available
@@ -220,14 +217,48 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
     loadCompanies();
   }, []);
 
-  // Load employees when a company is selected
+  // Load employees for the background (supports both web and desktop modes)
   useEffect(() => {
     async function loadEmployees() {
-      if (!selectedCompany || !isWebEnvironment()) return;
+      // For web mode, we need a selected company
+      if (isWebEnvironment() && !selectedCompany) return;
+
+      // For desktop mode, we need a dbPath
+      if (!isWebEnvironment() && !dbPath) return;
 
       try {
-        console.log(`[LoginDialog] Loading employees for company: ${selectedCompany}`);
-        const fetchedEmployees = await loadEmployeesFirestore(selectedCompany);
+        let fetchedEmployees: Employee[] = [];
+
+        if (isWebEnvironment()) {
+          // Web mode - load from Firestore
+          fetchedEmployees = await loadEmployeesFirestore(selectedCompany);
+        } else {
+          // Desktop mode - load from local database
+          try {
+            const employeeModel = createEmployeeModel(dbPath);
+            fetchedEmployees = await employeeModel.loadEmployees();
+            console.log(`[LoginDialog] Loaded ${fetchedEmployees.length} employees from desktop database`);
+          } catch (error) {
+            console.error("[LoginDialog] Error loading employees from desktop database:", error);
+          }
+        }
+
+        // If we couldn't load any employees, use placeholders
+        if (fetchedEmployees.length === 0) {
+          console.log("[LoginDialog] No real employees found, creating placeholders");
+          // Create placeholder employees for visual effect
+          const placeholderEmployees: PlaceholderEmployee[] = Array(6).fill(0).map((_, i) => ({
+            id: `placeholder-${i}`,
+            name: `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`,
+            position: positions[i % positions.length],
+            status: "active" as const,
+            lastPaymentPeriod: null,
+            animationProps: generateCardAnimationProps()
+          }));
+
+          setEmployees(placeholderEmployees as unknown as EmployeeWithAnimation[]);
+          return;
+        }
 
         // Limit to 10 employees for the background and add animation properties
         const enhancedEmployees: EmployeeWithAnimation[] = fetchedEmployees
@@ -238,24 +269,60 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
           }));
 
         setEmployees(enhancedEmployees);
-        console.log(`[LoginDialog] Loaded ${enhancedEmployees.length} employees for company: ${selectedCompany}`);
       } catch (error) {
         console.error(`[LoginDialog] Error loading employees:`, error);
         // If we can't load employees, create some placeholder ones for visual effect
-        const placeholderEmployees: EmployeeWithAnimation[] = Array(6).fill(0).map((_, i) => ({
+        const placeholderEmployees: PlaceholderEmployee[] = Array(6).fill(0).map((_, i) => ({
           id: `placeholder-${i}`,
-          name: `Employee ${i + 1}`,
-          position: "Staff",
+          name: `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`,
+          position: positions[i % positions.length],
           status: "active" as const,
           lastPaymentPeriod: null,
           animationProps: generateCardAnimationProps()
         }));
-        setEmployees(placeholderEmployees);
+        setEmployees(placeholderEmployees as unknown as EmployeeWithAnimation[]);
       }
     }
 
     loadEmployees();
-  }, [selectedCompany]);
+  }, [selectedCompany, dbPath]);
+
+  // Handle company selection only mode
+  const handleCompanyOnlySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCompany) {
+      toast.error("Please select a company");
+      return;
+    }
+
+    // Set company name in settings store
+    setCompanyName(selectedCompany);
+
+    // Save to localStorage
+    try {
+      // Make sure company name is explicitly set in localStorage
+      const currentSettings = {
+        ...useSettingsStore.getState(),
+        companyName: selectedCompany
+      };
+
+      // Save to localStorage
+      localStorage.setItem("settings-storage", JSON.stringify({
+        state: currentSettings
+      }));
+
+      // Also update in firestoreService
+      setFirestoreCompanyName(selectedCompany);
+
+      toast.success(`Company '${selectedCompany}' selected`);
+
+      // Call success callback
+      onSuccess?.();
+    } catch (e) {
+      console.error("[LoginDialog] Error saving company name:", e);
+      toast.error("Error saving company selection");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +332,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
         toast.error("Please select a company");
         return;
       }
+      // Set company name in settings store
       setCompanyName(selectedCompany);
     }
     if (!pin) return;
@@ -275,6 +343,30 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
     try {
       const success = await login(pin);
       if (success) {
+        // Ensure session initialization flag is set in localStorage
+        localStorage.setItem("sweldo_session_initialized", "true");
+
+        // If in web mode, ensure company name is saved in localStorage
+        if (isWebEnvironment() && selectedCompany) {
+          try {
+            // Make sure company name is explicitly set in localStorage
+            const currentSettings = {
+              ...useSettingsStore.getState(),
+              companyName: selectedCompany
+            };
+
+            // Save to localStorage again to be certain
+            localStorage.setItem("settings-storage", JSON.stringify({
+              state: currentSettings
+            }));
+
+            // Also update in firestoreService
+            setFirestoreCompanyName(selectedCompany);
+          } catch (e) {
+            console.error("[LoginDialog] Error saving company name:", e);
+          }
+        }
+
         // Only call onSuccess if login was successful
         onSuccess?.();
       } else {
@@ -293,6 +385,11 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
   const handleCompanySelect = (companyId: string) => {
     setSelectedCompany(companyId);
     setShowCompanyDropdown(false);
+
+    // Immediately set company name in settings store when selected
+    if (isWebEnvironment() && companyId) {
+      setCompanyName(companyId);
+    }
   };
 
   return (
@@ -360,18 +457,20 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
             {/* Enhanced title with decorative elements */}
             <div className="title-container relative flex flex-col items-center">
               <h2 className="text-2xl font-semibold text-blue-500 mb-1 tracking-wide relative z-10">
-                Enter PIN Code
+                {companySelectionOnly ? "Select Company" : "Enter PIN Code"}
               </h2>
               <div className="title-underline"></div>
               <div className="title-caption text-xs text-gray-400 mt-2">
-                Secure authentication required
+                {companySelectionOnly ?
+                  "Please select which company you want to access" :
+                  "Secure authentication required"}
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="w-full space-y-4">
-            {/* Company Dropdown */}
-            {isWebEnvironment() && (
+          {companySelectionOnly ? (
+            <form onSubmit={handleCompanyOnlySubmit} className="w-full space-y-4">
+              {/* Company Dropdown */}
               <div className="relative">
                 <div
                   className="w-full bg-white border border-gray-200 p-3 text-gray-700 flex justify-between items-center cursor-pointer hover:border-blue-300 transition-colors"
@@ -399,51 +498,99 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({ onSuccess }) => {
                   </div>
                 )}
               </div>
-            )}
 
-            {/* PIN Input */}
-            <div className="relative">
-              <input
-                type={showPin ? "text" : "password"}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="w-full p-3 bg-blue-50 border border-blue-100 text-gray-800 placeholder-blue-300 focus:outline-none focus:border-blue-400 transition-colors"
-                placeholder="Enter PIN"
-                required
-                minLength={4}
-                maxLength={8}
-                disabled={isLoading}
-              />
+              {/* Submit Button for Company Selection Only */}
               <button
-                type="button"
-                onClick={() => setShowPin(!showPin)}
-                className="absolute right-3 inset-y-0 flex items-center text-blue-400 hover:text-blue-500 transition-colors"
-                disabled={isLoading}
-                tabIndex={-1}
-                aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                type="submit"
+                className="modern-button w-full p-3 text-white font-medium transition-all duration-300 ease-out transform hover:translate-y-[-2px] focus:outline-none disabled:opacity-70 disabled:pointer-events-none"
               >
-                {showPin ? (
-                  <IoEyeOffOutline className="h-5 w-5" />
-                ) : (
-                  <IoEyeOutline className="h-5 w-5" />
-                )}
+                <span>Continue</span>
               </button>
-            </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="w-full space-y-4">
+              {/* Company Dropdown */}
+              {isWebEnvironment() && (
+                <div className="relative">
+                  <div
+                    className="w-full bg-white border border-gray-200 p-3 text-gray-700 flex justify-between items-center cursor-pointer hover:border-blue-300 transition-colors"
+                    onClick={() => setShowCompanyDropdown(!showCompanyDropdown)}
+                  >
+                    <span className="text-gray-800">{selectedCompany || "Select Company"}</span>
+                    <IoChevronDown className={`text-blue-500 transition-transform duration-200 ${showCompanyDropdown ? 'rotate-180' : ''}`} />
+                  </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="text-sm text-red-500 font-medium">{error}</div>
-            )}
+                  {/* Dropdown Menu */}
+                  {showCompanyDropdown && (
+                    <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 shadow-lg z-10">
+                      {companies.map((company) => (
+                        <div
+                          key={company.id}
+                          className="p-3 hover:bg-blue-50 cursor-pointer transition-colors"
+                          onClick={() => handleCompanySelect(company.id)}
+                        >
+                          <div className="text-gray-800 font-medium">{company.id}</div>
+                          <div className="text-xs text-blue-500 mt-1">
+                            {company.employeeCount} {company.employeeCount === 1 ? 'employee' : 'employees'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Improved Submit Button with 3D effect */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="modern-button w-full p-3 text-white font-medium transition-all duration-300 ease-out transform hover:translate-y-[-2px] focus:outline-none disabled:opacity-70 disabled:pointer-events-none"
-            >
-              <span>{isLoading ? "Logging in..." : "Login"}</span>
-            </button>
-          </form>
+              {/* Display current company name in desktop mode */}
+              {!isWebEnvironment() && companyName && (
+                <div className="w-full bg-blue-50 p-3 text-gray-700 rounded-md border border-blue-100">
+                  <span className="text-gray-800 font-medium">Company: {companyName}</span>
+                </div>
+              )}
+
+              {/* PIN Input */}
+              <div className="relative">
+                <input
+                  type={showPin ? "text" : "password"}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  className="w-full p-3 bg-blue-50 border border-blue-100 text-gray-800 placeholder-blue-300 focus:outline-none focus:border-blue-400 transition-colors"
+                  placeholder="Enter PIN"
+                  required
+                  minLength={4}
+                  maxLength={8}
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-3 inset-y-0 flex items-center text-blue-400 hover:text-blue-500 transition-colors"
+                  disabled={isLoading}
+                  tabIndex={-1}
+                  aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                >
+                  {showPin ? (
+                    <IoEyeOffOutline className="h-5 w-5" />
+                  ) : (
+                    <IoEyeOutline className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="text-sm text-red-500 font-medium">{error}</div>
+              )}
+
+              {/* Improved Submit Button with 3D effect */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="modern-button w-full p-3 text-white font-medium transition-all duration-300 ease-out transform hover:translate-y-[-2px] focus:outline-none disabled:opacity-70 disabled:pointer-events-none"
+              >
+                <span>{isLoading ? "Logging in..." : "Login"}</span>
+              </button>
+            </form>
+          )}
         </div>
       </div>
 

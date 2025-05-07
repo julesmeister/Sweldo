@@ -14,6 +14,7 @@
 - **Tailwind CSS**: Utility-first CSS framework
 - **shadcn/ui**: Component library built on Radix UI
 - **Zustand**: State management library
+- **Dexie**: Wrapper for IndexedDB used for client-side caching of Firestore queries
 
 ### Backend (Electron Main Process)
 - **Electron IPC**: Inter-process communication

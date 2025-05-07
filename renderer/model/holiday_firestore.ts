@@ -15,6 +15,7 @@ import {
   createTimeBasedDocId,
   getCompanyName,
 } from "../lib/firestoreService";
+import { db } from "../lib/db";
 
 /**
  * Firestore structure for holidays document
@@ -52,6 +53,24 @@ export async function loadHolidaysFirestore(
   companyName: string
 ): Promise<Holiday[]> {
   try {
+    // Attempt to load from Dexie cache
+    const cacheKey = [companyName, year, month] as const;
+    const cachedRecords = await db.holidays
+      .where("[companyName+year+month]")
+      .equals(cacheKey)
+      .toArray();
+    console.log(
+      `[loadHolidaysFirestore] Attempting cache lookup for ${companyName} ${year}-${month}, found ${cachedRecords.length} record(s)`
+    );
+    if (cachedRecords.length > 0) {
+      console.log(
+        `[loadHolidaysFirestore] Cache hit for ${companyName} ${year}-${month}, returning ${cachedRecords.length} record(s)`
+      );
+      return cachedRecords.map((rec) => rec.data);
+    }
+    console.log(
+      `[loadHolidaysFirestore] Cache miss for ${companyName} ${year}-${month}, querying Firestore]`
+    );
     const docId = createHolidayDocId(year, month);
     const data = await fetchDocument<HolidayFirestoreData>(
       "holidays",
@@ -73,6 +92,21 @@ export async function loadHolidaysFirestore(
         type: holiday.type,
         multiplier: holiday.multiplier,
       })
+    );
+
+    // Store fetched holidays in cache
+    const timestamp = Date.now();
+    const records = holidays.map((h) => ({
+      companyName,
+      year,
+      month,
+      id: h.id,
+      timestamp,
+      data: h,
+    }));
+    await db.holidays.bulkPut(records);
+    console.log(
+      `[loadHolidaysFirestore] Stored ${records.length} record(s) in cache for ${companyName} ${year}-${month}`
     );
 
     return holidays;

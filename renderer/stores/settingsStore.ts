@@ -413,9 +413,43 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     setCompanyName: (name) => {
       set({ companyName: name });
 
-      // Also update the centralized company name in firestoreService
-      setFirestoreCompanyName(name);
+      // If in web mode, immediately update localStorage and Firestore
+      if (isWebEnvironment()) {
+        try {
+          // Update centralized company name for Firestore service
+          setFirestoreCompanyName(name);
 
+          // Explicitly save to localStorage to ensure it's available on refresh
+          const currentState = get();
+          const stateToSave = {
+            dbPath: currentState.dbPath,
+            logoPath: currentState.logoPath,
+            preparedBy: currentState.preparedBy,
+            approvedBy: currentState.approvedBy,
+            companyName: name,
+            columnColors: currentState.columnColors,
+            calculationSettings: currentState.calculationSettings,
+          };
+
+          localStorage.setItem(
+            "settings-storage",
+            JSON.stringify({
+              state: stateToSave,
+            })
+          );
+
+          console.log(
+            `[SettingsStore] Company name '${name}' saved to localStorage`
+          );
+        } catch (e) {
+          console.error(
+            "[SettingsStore] Error saving company name to localStorage:",
+            e
+          );
+        }
+      }
+
+      // Call the general save method to handle both web/desktop saving
       _saveSettings();
     },
 

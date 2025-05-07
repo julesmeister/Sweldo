@@ -21,6 +21,7 @@ import {
   queryCollection,
   getCompanyName,
 } from "../lib/firestoreService";
+import { db } from "../lib/db";
 
 /**
  * Type for the Firestore employee document structure
@@ -80,14 +81,32 @@ export async function loadActiveEmployeesFirestore(
   companyName: string
 ): Promise<Employee[]> {
   try {
-    // Query only active employees from the employees collection
+    // Attempt to load from cache
+    const cachedRecords = await db.employees
+      .where("companyName")
+      .equals(companyName)
+      .toArray();
+    console.log(
+      `[loadActiveEmployeesFirestore] Attempting cache lookup for company: ${companyName}, found ${cachedRecords.length} record(s)`
+    );
+    if (cachedRecords.length > 0) {
+      console.log(
+        `[loadActiveEmployeesFirestore] Cache hit for ${companyName}, returning ${cachedRecords.length} record(s)`
+      );
+      return cachedRecords.map((rec) => rec.data);
+    }
+    console.log(
+      `[loadActiveEmployeesFirestore] Cache miss for ${companyName}, querying Firestore`
+    );
+
+    // Cache miss; query active employees from Firestore
     const activeEmployees = await queryCollection<FirestoreEmployee>(
       "employees",
       [["status", "==", "active"]],
       companyName
     );
 
-    return activeEmployees.map((emp) => ({
+    const employeesList = activeEmployees.map((emp) => ({
       ...emp,
       startType: emp.lastPaymentPeriod
         ? typeof emp.lastPaymentPeriod.start
@@ -96,6 +115,21 @@ export async function loadActiveEmployeesFirestore(
         ? typeof emp.lastPaymentPeriod.end
         : "undefined",
     }));
+
+    // Store fetched employees in cache
+    const timestamp = Date.now();
+    const records = employeesList.map((emp) => ({
+      companyName,
+      id: emp.id,
+      timestamp,
+      data: emp,
+    }));
+    await db.employees.bulkPut(records);
+    console.log(
+      `[loadActiveEmployeesFirestore] Stored ${records.length} record(s) in cache for ${companyName}`
+    );
+
+    return employeesList;
   } catch (error) {
     console.error(`Error loading active Firestore employees:`, error);
     return []; // Return empty array on error
