@@ -194,23 +194,13 @@ export class HolidayModel {
 
       let data;
       try {
-        console.log(
-          `[HolidayModel] Ensuring directory exists at: ${path.dirname(
-            filePath
-          )}`
-        );
         await window.electron.ensureDir(path.dirname(filePath));
         data = await window.electron.readFile(filePath);
-        console.log(`[HolidayModel] Existing file found, updating content`);
       } catch (readError: any) {
         // If file doesn't exist, create it
         if (readError.message.includes("ENOENT")) {
-          console.log(`[HolidayModel] File doesn't exist, creating new file`);
           const csvData = formatHolidayToCSV(holiday) + "\n";
           await window.electron.writeFile(filePath, csvData);
-          console.log(
-            `[HolidayModel] Successfully created new file and saved holiday`
-          );
           return; // Exit after creating new file
         }
         // If it's a different error, rethrow it
@@ -225,19 +215,16 @@ export class HolidayModel {
         const fields = line.split(",");
         if (fields[0] === holiday.id) {
           holidayExists = true;
-          console.log(`[HolidayModel] Updating existing holiday entry`);
           return formatHolidayToCSV(holiday);
         }
         return line;
       });
 
       if (!holidayExists) {
-        console.log(`[HolidayModel] Adding new holiday entry`);
         updatedLines.push(formatHolidayToCSV(holiday));
       }
 
       await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
-      console.log(`[HolidayModel] Successfully saved/updated holiday`);
     } catch (error) {
       console.error("[HolidayModel] Error in saveOrUpdateHoliday:", error);
       throw error;
@@ -245,25 +232,14 @@ export class HolidayModel {
   }
 
   async loadHolidays(): Promise<Holiday[]> {
-    console.log(
-      `[holiday.ts] HolidayModel.loadHolidays: START for ${this.year}-${
-        this.month
-      }. Preferred format: ${this.useJsonFormat ? "JSON" : "CSV"}`
-    );
     if (isWebEnvironment()) {
       // Web mode - use Firestore
-      console.log(
-        "[holiday.ts] HolidayModel.loadHolidays: Web environment detected, calling loadHolidaysFirestore."
-      );
       const companyName = await getCompanyName();
       try {
         const firestoreHolidays = await loadHolidaysFirestore(
           this.year,
           this.month,
           companyName
-        );
-        console.log(
-          `[holiday.ts] HolidayModel.loadHolidays: Loaded ${firestoreHolidays.length} holidays from Firestore.`
         );
         return firestoreHolidays;
       } catch (error) {
@@ -275,22 +251,12 @@ export class HolidayModel {
       }
     }
 
-    // Desktop mode - use existing implementation
-    console.log(
-      "[holiday.ts] HolidayModel.loadHolidays: Desktop environment. Checking file formats."
-    );
     // First try JSON format if that's preferred
     if (this.useJsonFormat) {
       const jsonExists = await this.jsonFileExists();
-      console.log(
-        `[holiday.ts] HolidayModel.loadHolidays: JSON preferred. File exists? ${jsonExists}`
-      );
       if (jsonExists) {
         try {
           const jsonHolidays = await this.loadHolidaysFromJson();
-          console.log(
-            `[holiday.ts] HolidayModel.loadHolidays: END - Loaded ${jsonHolidays.length} from JSON.`
-          );
           return jsonHolidays;
         } catch (error) {
           console.error(
@@ -300,14 +266,8 @@ export class HolidayModel {
           // Fall through to CSV if JSON loading fails, but only if CSV exists or JSON wasn't preferred initially
           const csvExists = await this.csvFileExists();
           if (csvExists) {
-            console.log(
-              "[holiday.ts] HolidayModel.loadHolidays: Fallback to CSV. File exists? true"
-            );
             try {
               const csvHolidays = await this.loadHolidaysFromCsv();
-              console.log(
-                `[holiday.ts] HolidayModel.loadHolidays: END - Loaded ${csvHolidays.length} from CSV after JSON error.`
-              );
               return csvHolidays;
             } catch (csvError) {
               console.error(
@@ -317,24 +277,14 @@ export class HolidayModel {
               throw csvError; // Or handle as appropriate, maybe return empty array
             }
           } else {
-            console.log(
-              "[holiday.ts] HolidayModel.loadHolidays: No CSV fallback found after JSON error."
-            );
             throw error; // Re-throw original JSON error if no CSV fallback
           }
         }
       }
     }
 
-    // Fall back to CSV if JSON doesn't exist or is not preferred
-    console.log(
-      "[holiday.ts] HolidayModel.loadHolidays: Attempting to load from CSV (either as fallback or primary). CSV File Path: ${this.getCsvFilePath()}"
-    );
     try {
       const csvHolidays = await this.loadHolidaysFromCsv();
-      console.log(
-        `[holiday.ts] HolidayModel.loadHolidays: END - Loaded ${csvHolidays.length} from CSV.`
-      );
       return csvHolidays;
     } catch (error) {
       console.error(
@@ -343,57 +293,27 @@ export class HolidayModel {
       );
       // If JSON was preferred and didn't exist, and CSV also fails, we might have an issue.
       if (this.useJsonFormat) {
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidays: JSON was preferred, JSON did not exist, and CSV loading failed."
-        );
       }
       throw error;
     }
   }
 
   private async loadHolidaysFromCsv(): Promise<Holiday[]> {
-    console.log(
-      `[holiday.ts] HolidayModel.loadHolidaysFromCsv: START for ${this.year}-${
-        this.month
-      }. File: ${this.getCsvFilePath()}`
-    );
     try {
       const filePath = this.getCsvFilePath();
 
       try {
         // Ensure directory exists before trying to read file
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidaysFromCsv: Ensuring directory exists..."
-        );
         await window.electron.ensureDir(path.dirname(filePath));
-
-        // Check if file exists
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidaysFromCsv: Checking if file exists..."
-        );
         const exists = await window.electron.fileExists(filePath);
         if (!exists) {
-          // Create empty file if it doesn't exist
-          console.log(
-            "[holiday.ts] HolidayModel.loadHolidaysFromCsv: File does not exist. Creating empty file."
-          );
           await window.electron.writeFile(filePath, "");
-          console.log(
-            "[holiday.ts] HolidayModel.loadHolidaysFromCsv: END - Returning empty array (file created)."
-          );
           return [];
         }
-
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidaysFromCsv: Reading file content..."
-        );
         const data = await window.electron.readFile(filePath);
         const lines = data.split("\n");
 
         const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
-        console.log(
-          `[holiday.ts] HolidayModel.loadHolidaysFromCsv: Found ${nonEmptyLines.length} non-empty lines.`
-        );
 
         const holidays = nonEmptyLines.map((line) => {
           const fields = line.split(",");
@@ -411,9 +331,6 @@ export class HolidayModel {
             multiplier: parseFloat(fields[5]),
           } as Holiday;
         });
-        console.log(
-          `[holiday.ts] HolidayModel.loadHolidaysFromCsv: END - Parsed ${holidays.length} holidays.`
-        );
         return holidays;
       } catch (error: any) {
         console.error(
@@ -425,13 +342,7 @@ export class HolidayModel {
           (error instanceof Error && error.message.includes("ENOENT"))
         ) {
           // Create empty file if it doesn't exist
-          console.log(
-            "[holiday.ts] HolidayModel.loadHolidaysFromCsv: ENOENT error. Creating empty file."
-          );
           await window.electron.writeFile(filePath, "");
-          console.log(
-            "[holiday.ts] HolidayModel.loadHolidaysFromCsv: END - Returning empty array (ENOENT, file created)."
-          );
           return [];
         }
         throw error;
@@ -446,30 +357,16 @@ export class HolidayModel {
   }
 
   private async loadHolidaysFromJson(): Promise<Holiday[]> {
-    console.log(
-      `[holiday.ts] HolidayModel.loadHolidaysFromJson: START for ${this.year}-${
-        this.month
-      }. File: ${this.getJsonFilePath()}`
-    );
     try {
       const filePath = this.getJsonFilePath();
 
       // Ensure directory exists
-      console.log(
-        "[holiday.ts] HolidayModel.loadHolidaysFromJson: Ensuring directory exists..."
-      );
       await window.electron.ensureDir(path.dirname(filePath));
 
       // Check if file exists
-      console.log(
-        "[holiday.ts] HolidayModel.loadHolidaysFromJson: Checking if file exists..."
-      );
       const exists = await window.electron.fileExists(filePath);
       if (!exists) {
         // Create empty JSON structure if file doesn't exist
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidaysFromJson: File does not exist. Creating empty JSON structure."
-        );
         const emptyData: HolidayJsonData = {
           meta: {
             year: this.year,
@@ -482,23 +379,12 @@ export class HolidayModel {
           filePath,
           JSON.stringify(emptyData, null, 2)
         );
-        console.log(
-          "[holiday.ts] HolidayModel.loadHolidaysFromJson: END - Returning empty array (file created)."
-        );
         return [];
       }
 
       // Read and parse JSON
-      console.log(
-        "[holiday.ts] HolidayModel.loadHolidaysFromJson: Reading and parsing JSON file..."
-      );
       const data = await window.electron.readFile(filePath);
       const jsonData: HolidayJsonData = JSON.parse(data);
-      console.log(
-        `[holiday.ts] HolidayModel.loadHolidaysFromJson: Successfully parsed JSON. Found ${
-          Object.keys(jsonData.holidays).length
-        } holidays in object.`
-      );
 
       // Convert to Holiday array
       const holidays: Holiday[] = Object.entries(jsonData.holidays).map(
@@ -510,9 +396,6 @@ export class HolidayModel {
           type: holiday.type,
           multiplier: holiday.multiplier,
         })
-      );
-      console.log(
-        `[holiday.ts] HolidayModel.loadHolidaysFromJson: END - Converted to ${holidays.length} Holiday objects.`
       );
       return holidays;
     } catch (error) {
@@ -641,9 +524,6 @@ export class HolidayModel {
   }
 
   async loadAllHolidaysForSync(): Promise<Holiday[]> {
-    console.log(
-      `[holiday.ts] HolidayModel.loadAllHolidaysForSync: START - Loading all holidays from ${this.basePath}`
-    );
     if (isWebEnvironment()) {
       console.warn(
         "[holiday.ts] HolidayModel.loadAllHolidaysForSync: Should not be called in web environment. Returning empty array."
@@ -654,9 +534,6 @@ export class HolidayModel {
     const allHolidays: Holiday[] = [];
     try {
       const files = await window.electron.readDir(this.basePath);
-      console.log(
-        `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Found ${files.length} potential files/dirs in ${this.basePath}`
-      );
 
       const holidayJsonFiles = files.filter(
         (file: { name: string; isFile: boolean }) =>
@@ -667,30 +544,17 @@ export class HolidayModel {
           file.isFile && file.name.endsWith("_holidays.csv")
       );
 
-      console.log(
-        `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Found ${holidayJsonFiles.length} JSON files and ${holidayCsvFiles.length} CSV files.`
-      );
-
       // Process JSON files first
       for (const jsonFile of holidayJsonFiles) {
         const filePath = path.join(this.basePath, jsonFile.name);
-        console.log(
-          `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Processing JSON file: ${filePath}`
-        );
         try {
           const fileContent = await window.electron.readFile(filePath);
           if (!fileContent.trim()) {
-            console.log(
-              `[holiday.ts] HolidayModel.loadAllHolidaysForSync: JSON file ${jsonFile.name} is empty, skipping.`
-            );
             continue;
           }
           const jsonData: HolidayJsonData = JSON.parse(fileContent);
           const holidaysFromFile: Holiday[] = Object.entries(jsonData.holidays)
             .map(([id, holidayData]) => {
-              console.log(
-                `[holiday.ts] loadAllHolidaysForSync: Raw holiday data from JSON ${jsonFile.name}, id ${id}: startDate='${holidayData.startDate}', endDate='${holidayData.endDate}'`
-              );
               const startDate = new Date(holidayData.startDate);
               const endDate = new Date(holidayData.endDate);
 
@@ -712,9 +576,6 @@ export class HolidayModel {
             .filter((holiday) => holiday !== null) as Holiday[]; // Filter out the null (invalid) entries
 
           allHolidays.push(...holidaysFromFile);
-          console.log(
-            `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Added ${holidaysFromFile.length} holidays from ${jsonFile.name}`
-          );
         } catch (error) {
           console.error(
             `[holiday.ts] HolidayModel.loadAllHolidaysForSync: ERROR processing JSON file ${jsonFile.name}.`,
@@ -727,21 +588,10 @@ export class HolidayModel {
       // For simplicity now, we'll just load all CSVs. The sync logic in holiday_firestore groups them by Y/M anyway.
       for (const csvFile of holidayCsvFiles) {
         const filePath = path.join(this.basePath, csvFile.name);
-        // Optional: Check if a JSON for this CSV's Y/M already contributed
-        // const baseName = csvFile.name.replace("_holidays.csv", "");
-        // if (holidayJsonFiles.some(jf => jf.name.startsWith(baseName))) {
-        //   console.log(`[holiday.ts] HolidayModel.loadAllHolidaysForSync: JSON version for ${csvFile.name} already processed, skipping CSV.`);
-        //   continue;
-        // }
-        console.log(
-          `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Processing CSV file: ${filePath}`
-        );
+     
         try {
           const fileContent = await window.electron.readFile(filePath);
           if (!fileContent.trim()) {
-            console.log(
-              `[holiday.ts] HolidayModel.loadAllHolidaysForSync: CSV file ${csvFile.name} is empty, skipping.`
-            );
             continue;
           }
           const lines = fileContent
@@ -759,9 +609,6 @@ export class HolidayModel {
             } as Holiday;
           });
           allHolidays.push(...holidaysFromFile);
-          console.log(
-            `[holiday.ts] HolidayModel.loadAllHolidaysForSync: Added ${holidaysFromFile.length} holidays from ${csvFile.name}`
-          );
         } catch (error) {
           console.error(
             `[holiday.ts] HolidayModel.loadAllHolidaysForSync: ERROR processing CSV file ${csvFile.name}.`,
@@ -778,9 +625,6 @@ export class HolidayModel {
       // For now, rethrow, as this implies a bigger issue if we can't even list files.
       throw error;
     }
-    console.log(
-      `[holiday.ts] HolidayModel.loadAllHolidaysForSync: END - Loaded a total of ${allHolidays.length} holidays from all files.`
-    );
     return allHolidays;
   }
 }

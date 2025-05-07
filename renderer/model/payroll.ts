@@ -597,29 +597,17 @@ export class Payroll {
     }
   ): Promise<PayrollSummaryModel> {
     try {
-      console.log(
-        `[Payroll] Generating summary for Employee ID: ${employeeId}, Period: ${
-          startDate.toISOString().split("T")[0]
-        } to ${endDate.toISOString().split("T")[0]}`
-      );
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) {
         console.error(`[Payroll] Employee not found: ${employeeId}`);
         throw new Error("Employee not found");
       }
-      console.log(`[Payroll] Employee loaded: ${employee.name}`);
 
       const start = startDate instanceof Date ? startDate : new Date(startDate);
       const end = endDate instanceof Date ? endDate : new Date(endDate);
-      console.log(`[Payroll] Calling summarizeCompensations`);
       const summary = await this.summarizeCompensations(employeeId, start, end);
-      console.log("[Payroll] Compensation Summary:", summary);
-
-      console.log(`[Payroll] Loading calculation settings`);
       const calculationSettings = await this.loadCalculationSettings();
-      console.log("[Payroll] Calculation Settings:", calculationSettings);
-
       const variables = {
         basicPay: summary.basicPay,
         overtime: summary.overtime,
@@ -636,20 +624,13 @@ export class Payroll {
         shorts: deductions?.shortDeductions || 0,
         cashAdvanceDeductions: deductions?.cashAdvanceDeductions || 0,
       };
-      console.log("[Payroll] Variables for Formula Evaluation:", variables);
 
       let grossPayValue = summary.grossPay;
-      console.log(
-        `[Payroll] Initial Gross Pay (from summary): ${grossPayValue}`
-      );
       if (calculationSettings.grossPay?.formula) {
         try {
           grossPayValue = evaluateFormula(
             calculationSettings.grossPay.formula,
             variables
-          );
-          console.log(
-            `[Payroll] Calculated Gross Pay (using formula): ${grossPayValue}`
           );
         } catch (error) {
           console.error(
@@ -674,9 +655,6 @@ export class Payroll {
             calculationSettings.others.formula,
             variables
           );
-          console.log(
-            `[Payroll] Calculated Others Value (using formula): ${othersValue}`
-          );
         } catch (error) {
           console.error(
             `[Payroll] Error evaluating others formula: ${
@@ -691,11 +669,6 @@ export class Payroll {
         othersValue =
           (summary.deductions.others || 0) -
           (summary.deductions.shortDeductions || 0);
-        console.log(
-          `[Payroll] Calculated Others Value (manual): ${othersValue} (Summary Others: ${
-            summary.deductions.others || 0
-          }, Summary Shorts: ${summary.deductions.shortDeductions || 0})`
-        );
       }
 
       const deductionVariables = {
@@ -707,23 +680,13 @@ export class Payroll {
         lateDeduction: summary.lateDeduction ?? 0,
         undertimeDeduction: summary.undertimeDeduction ?? 0,
       };
-      console.log(
-        "[Payroll] Variables for Total Deductions:",
-        deductionVariables
-      );
 
       let totalDeductions = 0;
       if (calculationSettings?.totalDeductions?.formula) {
-        console.log(
-          `[Payroll] Using Total Deductions Formula: ${calculationSettings.totalDeductions.formula}`
-        );
         try {
           totalDeductions = evaluateFormula(
             calculationSettings.totalDeductions.formula,
             deductionVariables
-          );
-          console.log(
-            `[Payroll] Calculated Total Deductions (using formula): ${totalDeductions}`
           );
         } catch (error) {
           console.error(
@@ -740,36 +703,20 @@ export class Payroll {
           (sum, val) => sum + (typeof val === "number" ? val : 0),
           0
         );
-        console.log(
-          `[Payroll] Calculated Total Deductions (summing variables): ${totalDeductions}`
-        );
       }
 
       let netPayValue = grossPayValue - totalDeductions;
-      console.log(
-        `[Payroll] Initial Net Pay (Gross - Total Deductions): ${grossPayValue} - ${totalDeductions} = ${netPayValue}`
-      );
       if (calculationSettings.netPay?.formula) {
-        console.log(
-          `[Payroll] Using Net Pay Formula: ${calculationSettings.netPay.formula}`
-        );
         const netPayVariables = {
           ...variables,
           grossPay: grossPayValue,
           totalDeductions,
           others: othersValue,
         };
-        console.log(
-          "[Payroll] Variables for Net Pay Formula:",
-          netPayVariables
-        );
         try {
           netPayValue = evaluateFormula(
             calculationSettings.netPay.formula,
             netPayVariables
-          );
-          console.log(
-            `[Payroll] Calculated Net Pay (using formula): ${netPayValue}`
           );
         } catch (error) {
           console.error(
@@ -810,7 +757,6 @@ export class Payroll {
             : deductions?.shortDeductions ?? 0,
         others: othersValue,
       };
-      console.log("[Payroll] Final Deductions Object:", finalDeductions);
 
       const payrollSummary: PayrollSummaryModel = {
         ...summary,
@@ -835,20 +781,10 @@ export class Payroll {
 
       // Web mode - use Firestore
       if (isWebEnvironment()) {
-        console.log(
-          `[Payroll] Saving payroll summary to Firestore (web environment)`
-        );
         const companyName = await getCompanyName();
-        console.log(`[Payroll] Saving to company: ${companyName}`);
         await savePayrollSummaryFirestore(payrollSummary, companyName);
-        console.log(
-          `[Payroll] Payroll summary saved successfully to Firestore`
-        );
       } else {
         // Desktop mode - use existing implementation
-        console.log(
-          `[Payroll] Saving payroll summary to filesystem (desktop environment)`
-        );
         const payrollJsonData = await Payroll.readPayrollJsonFile(
           this.dbPath,
           employeeId,
@@ -858,14 +794,8 @@ export class Payroll {
 
         let updatedPayrolls: PayrollSummaryModel[] = [];
         if (payrollJsonData) {
-          console.log(
-            `[Payroll] Found existing payroll data with ${payrollJsonData.payrolls.length} entries`
-          );
           updatedPayrolls = payrollJsonData.payrolls.filter(
             (p) => p.id !== payrollSummary.id
-          );
-          console.log(
-            `[Payroll] Filtered out existing entry with same ID, ${updatedPayrolls.length} remaining`
           );
         } else {
           console.log(
@@ -875,9 +805,6 @@ export class Payroll {
         updatedPayrolls.push(payrollSummary);
         updatedPayrolls.sort(
           (a, b) => b.startDate.getTime() - a.startDate.getTime()
-        );
-        console.log(
-          `[Payroll] Total entries to save: ${updatedPayrolls.length}`
         );
 
         const updatedJsonStructure: PayrollJsonStructure = {
@@ -890,7 +817,6 @@ export class Payroll {
           payrolls: updatedPayrolls,
         };
 
-        console.log(`[Payroll] Writing payroll data to JSON file`);
         await Payroll.writePayrollJsonFile(
           this.dbPath,
           employeeId,
@@ -898,10 +824,8 @@ export class Payroll {
           endMonth,
           updatedJsonStructure
         );
-        console.log(`[Payroll] Payroll data saved successfully to JSON file`);
       }
 
-      console.log(`[Payroll] Updating employee's lastPaymentPeriod`);
       await employeeModel.updateEmployeeDetails({
         ...employee,
         lastPaymentPeriod: {
@@ -911,28 +835,19 @@ export class Payroll {
           end: end.toISOString(),
         },
       });
-      console.log(`[Payroll] Employee details updated successfully`);
 
       // Update statistics (use Firestore or local implementation based on environment)
       if (isWebEnvironment()) {
-        console.log(`[Payroll] Updating payroll statistics in Firestore`);
         const companyName = await getCompanyName();
         await updatePayrollStatisticsFirestore(
           [payrollSummary],
           endYear,
           companyName
         );
-        console.log(`[Payroll] Firestore statistics updated successfully`);
       } else {
-        console.log(`[Payroll] Updating local payroll statistics`);
         const statisticsModel = createStatisticsModel(this.dbPath, endYear);
         await statisticsModel.updatePayrollStatistics([payrollSummary]);
-        console.log(`[Payroll] Local statistics updated successfully`);
       }
-
-      console.log(
-        `[Payroll] generatePayrollSummary completed successfully for ${employeeId}`
-      );
       return payrollSummary;
     } catch (error) {
       console.error("[Payroll] Error in generatePayrollSummary:", error);
@@ -949,16 +864,11 @@ export class Payroll {
     const endMonth = endDate.getMonth() + 1;
     const endYear = endDate.getFullYear();
     const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
-    console.log(`[Payroll] deletePayrollSummary called for ID: ${payrollId}`);
 
     try {
       // Web mode - use Firestore
       if (isWebEnvironment()) {
-        console.log(
-          `[Payroll] Deleting payroll summary from Firestore (web environment)`
-        );
         const companyName = await getCompanyName();
-        console.log(`[Payroll] Deleting from company: ${companyName}`);
         const deletedPayroll = await deletePayrollSummaryFirestore(
           employeeId,
           startDate,
@@ -969,38 +879,25 @@ export class Payroll {
         );
 
         if (deletedPayroll) {
-          console.log(
-            `[Payroll] Payroll summary deleted from Firestore, processing deduction reversals`
-          );
           const cashAdvanceDeductions =
             deletedPayroll.deductions?.cashAdvanceDeductions || 0;
           if (cashAdvanceDeductions > 0) {
-            console.log(
-              `[Payroll] Reversing cash advance deduction of ${cashAdvanceDeductions}`
-            );
             await Payroll.reverseCashAdvanceDeduction(
               dbPath,
               employeeId,
               cashAdvanceDeductions,
               endDate
             );
-            console.log(
-              `[Payroll] Cash advance deduction reversed successfully`
-            );
           }
 
           const shortIDs = deletedPayroll.shortIDs || [];
           if (shortIDs.length > 0) {
-            console.log(
-              `[Payroll] Reversing short deductions for ${shortIDs.length} shorts`
-            );
             await Payroll.reverseShortDeduction(
               dbPath,
               employeeId,
               shortIDs,
               endDate
             );
-            console.log(`[Payroll] Short deductions reversed successfully`);
           }
         } else {
           console.log(
@@ -1011,9 +908,6 @@ export class Payroll {
       }
 
       // Desktop mode - use existing implementation
-      console.log(
-        `[Payroll] Deleting payroll summary from filesystem (desktop environment)`
-      );
       const jsonData = await Payroll.readPayrollJsonFile(
         dbPath,
         employeeId,
@@ -1024,16 +918,10 @@ export class Payroll {
       let payrollToDelete: PayrollSummaryModel | undefined = undefined;
 
       if (jsonData) {
-        console.log(
-          `[Payroll] Found JSON data with ${jsonData.payrolls.length} entries`
-        );
         const initialLength = jsonData.payrolls.length;
         payrollToDelete = jsonData.payrolls.find((p) => p.id === payrollId);
         jsonData.payrolls = jsonData.payrolls.filter((p) => p.id !== payrollId);
         if (jsonData.payrolls.length < initialLength) {
-          console.log(
-            `[Payroll] Payroll entry found and filtered out, saving updated JSON`
-          );
           jsonData.meta.lastModified = new Date().toISOString();
           await Payroll.writePayrollJsonFile(
             dbPath,
@@ -1043,7 +931,6 @@ export class Payroll {
             jsonData
           );
           deletedFromJson = true;
-          console.log(`[Payroll] Deleted payroll ${payrollId} from JSON.`);
         } else {
           console.log(`[Payroll] Payroll entry not found in JSON data`);
         }
@@ -1052,9 +939,6 @@ export class Payroll {
       }
 
       if (!deletedFromJson) {
-        console.log(
-          `[Payroll] Payroll ${payrollId} not found in JSON, attempting fallback CSV deletion.`
-        );
         try {
           const oldPayrollStatic = OldPayroll;
           await oldPayrollStatic.deletePayrollSummary(
@@ -1070,9 +954,6 @@ export class Payroll {
             endMonth
           );
           payrollToDelete = csvSummaries.find((p) => p.id === payrollId);
-          console.log(
-            `[Payroll] Deleted payroll ${payrollId} from CSV (fallback).`
-          );
         } catch (csvError) {
           console.error(
             `[Payroll] Error during fallback CSV delete for ${payrollId}:`,
@@ -1092,35 +973,24 @@ export class Payroll {
       }
 
       if (payrollToDelete) {
-        console.log(
-          `[Payroll] Processing deduction reversals for deleted payroll`
-        );
         const cashAdvanceDeductions =
           payrollToDelete.deductions?.cashAdvanceDeductions || 0;
         if (cashAdvanceDeductions > 0) {
-          console.log(
-            `[Payroll] Reversing cash advance deduction of ${cashAdvanceDeductions}`
-          );
           await Payroll.reverseCashAdvanceDeduction(
             dbPath,
             employeeId,
             cashAdvanceDeductions,
             endDate
           );
-          console.log(`[Payroll] Cash advance deduction reversed successfully`);
         }
         const shortIDs = payrollToDelete.shortIDs || [];
         if (shortIDs.length > 0) {
-          console.log(
-            `[Payroll] Reversing short deductions for ${shortIDs.length} shorts`
-          );
           await Payroll.reverseShortDeduction(
             dbPath,
             employeeId,
             shortIDs,
             endDate
           );
-          console.log(`[Payroll] Short deductions reversed successfully`);
         }
       } else if (deletedFromJson || !jsonData) {
         console.warn(
@@ -1128,9 +998,6 @@ export class Payroll {
         );
       }
 
-      console.log(
-        `[Payroll] deletePayrollSummary completed for ID: ${payrollId}`
-      );
     } catch (error) {
       console.error(
         `[Payroll] Error deleting payroll summary ${payrollId}:`,
@@ -1147,32 +1014,19 @@ export class Payroll {
     month: number
   ): Promise<PayrollSummaryModel[]> {
     try {
-      console.log(
-        `[Payroll] loadPayrollSummaries called for employee ${employeeId}, ${year}-${month}`
-      );
       // Web mode - use Firestore
       if (isWebEnvironment()) {
-        console.log(
-          `[Payroll] Using Firestore implementation (web environment)`
-        );
         const companyName = await getCompanyName();
-        console.log(
-          `[Payroll] Fetching from Firestore for company: ${companyName}`
-        );
         const summaries = await loadPayrollSummariesFirestore(
           employeeId,
           year,
           month,
           companyName
         );
-        console.log(
-          `[Payroll] Fetched ${summaries.length} summaries from Firestore`
-        );
         return summaries;
       }
 
       // Desktop mode - use existing implementation
-      console.log(`[Payroll] Using desktop implementation (file system)`);
       const jsonData = await Payroll.readPayrollJsonFile(
         dbPath,
         employeeId,
@@ -1180,9 +1034,6 @@ export class Payroll {
         month
       );
       if (jsonData) {
-        console.log(
-          `[Payroll] Loaded ${jsonData.payrolls.length} payrolls from JSON for ${employeeId} ${year}-${month}`
-        );
         return jsonData.payrolls;
       } else {
         console.warn(
@@ -1190,15 +1041,11 @@ export class Payroll {
         );
         try {
           const oldPayrollStatic = OldPayroll;
-          console.log(`[Payroll] Attempting CSV fallback load`);
           const csvPayrolls = await oldPayrollStatic.loadPayrollSummaries(
             dbPath,
             employeeId,
             year,
             month
-          );
-          console.log(
-            `[Payroll] Loaded ${csvPayrolls.length} payrolls from CSV (fallback) for ${employeeId} ${year}-${month}`
           );
           return csvPayrolls;
         } catch (csvError) {
