@@ -1,0 +1,60 @@
+# Sweldo Project Intelligence
+
+## Desktop vs Web Environment Detection Pattern
+```typescript
+// Check if running in Electron environment
+const isElectron = () => {
+  return typeof window !== 'undefined' && 
+         typeof window.electron !== 'undefined';
+};
+
+// Usage
+if (isElectron()) {
+  // Use Electron-specific APIs
+  window.electron.readFile(path);
+} else {
+  // Use web-compatible alternatives
+  // e.g. Firestore for storage
+}
+```
+
+## File System Operations
+- Local file system operations MUST use the `window.electron` API
+- All file system operations need web alternatives for Firebase deployment
+- File paths should use constant references where possible
+
+## Build Configuration
+- Avoid creating custom PostCSS configs that may break Tailwind CSS processing
+- For web builds, ensure `output: 'export'` is set in Next.js config
+- Use the correct build command based on target platform:
+  - Desktop: `npm run build` followed by `npm run dist`
+  - Web: `npm run build:web` followed by `firebase deploy --only hosting`
+
+## Layout Rules
+- Use `min-h-screen` for flex containers that need vertical centering
+- Be mindful of layout differences between web and desktop environments
+- Test UI components in both environments when possible
+
+## PDF Generation
+- Desktop: Uses Electron IPC to invoke Node.js PDF generation
+- Web: Will need browser-based solution or Firebase Functions
+
+## Data Storage Strategy
+- Desktop: Local file system in `SweldoDB/` directory
+- Web: Will use Firestore database
+
+## Conditional Imports Pattern
+```typescript
+// In components/services that need different implementations
+import { WebStorage } from '../services/webStorage';
+import { LocalStorage } from '../services/localStorage';
+
+const storage = typeof window !== 'undefined' && typeof window.electron !== 'undefined'
+  ? new LocalStorage()
+  : new WebStorage();
+```
+
+## Project Organization
+- `main/` and `electron/` directories contain Electron-specific code
+- `renderer/` contains Next.js application (partially reusable for web)
+- Web-specific adaptations should be in parallel files with clear naming 

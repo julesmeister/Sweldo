@@ -181,8 +181,9 @@ export async function loadPayrollSummariesFirestore(
   try {
     const docId = createPayrollDocId(employeeId, year, month);
     const data = await fetchDocument<PayrollFirestoreData>(
-      `companies/${companyName}/payrolls`,
-      docId
+      "payrolls",
+      docId,
+      companyName
     );
 
     if (!data) {
@@ -208,64 +209,61 @@ export async function loadPayrollSummariesFirestore(
  * Save a payroll summary to Firestore
  */
 export async function savePayrollSummaryFirestore(
-  payrollSummary: PayrollSummaryModel,
+  summary: PayrollSummaryModel,
   companyName: string
 ): Promise<void> {
   try {
-    const endDate = new Date(payrollSummary.endDate);
-    const year = endDate.getFullYear();
-    const month = endDate.getMonth() + 1;
-    const docId = createPayrollDocId(payrollSummary.employeeId, year, month);
-
-    // Get existing data
-    const existingData = await fetchDocument<PayrollFirestoreData>(
-      `companies/${companyName}/payrolls`,
-      docId
+    console.log(
+      `[PayrollFirestore] Saving payroll summary to Firestore for employee ${summary.employeeId}`
     );
 
-    let data: PayrollFirestoreData;
-    if (existingData) {
-      // Update existing data
-      const existingPayrolls = existingData.payrolls || [];
-      const existingIndex = existingPayrolls.findIndex(
-        (p) => p.id === payrollSummary.id
-      );
+    // Extract the date info from the summary
+    const startDate = new Date(summary.startDate);
+    const year = startDate.getFullYear();
+    const month = startDate.getMonth() + 1;
 
-      if (existingIndex >= 0) {
-        existingPayrolls[existingIndex] = payrollSummary;
-      } else {
-        existingPayrolls.push(payrollSummary);
-      }
+    // Create the document ID
+    const docId = createPayrollDocId(summary.employeeId, year, month);
+    console.log(`[PayrollFirestore] Document ID for payroll: ${docId}`);
 
-      data = {
-        meta: existingData.meta,
-        payrolls: existingPayrolls,
-      };
-    } else {
-      // Create new data
-      data = {
-        meta: {
-          employeeId: payrollSummary.employeeId,
-          year,
-          month,
-          lastModified: new Date().toISOString(),
-        },
-        payrolls: [payrollSummary],
-      };
-    }
+    // Get the existing payrolls for this employee/month/year
+    const payrollsRef = doc(db, `companies/${companyName}/payrolls`, docId);
+    const docSnap = await getDoc(payrollsRef);
 
-    // Validate data
-    const validationResult = payrollFirestoreDataSchema.safeParse(data);
-    if (!validationResult.success) {
-      throw new Error(
-        `Invalid payroll data structure: ${validationResult.error.message}`
+    let payrolls: PayrollSummaryModel[] = [];
+    if (docSnap.exists()) {
+      console.log(`[PayrollFirestore] Found existing payroll document`);
+      const data = docSnap.data();
+      payrolls = data.payrolls || [];
+
+      // Filter out any existing entry with the same ID
+      payrolls = payrolls.filter((p) => p.id !== summary.id);
+      console.log(
+        `[PayrollFirestore] Filtered existing payrolls, now have ${payrolls.length}`
       );
     }
 
-    // Save to Firestore
-    await saveDocument(`companies/${companyName}/payrolls`, docId, data);
+    // Add the new summary and sort by date
+    payrolls.push(summary);
+    payrolls.sort(
+      (a, b) =>
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+
+    // Save the updated payrolls
+    console.log(
+      `[PayrollFirestore] Saving ${payrolls.length} payroll summaries`
+    );
+    await setDoc(payrollsRef, { payrolls }, { merge: true });
+
+    // Also update the statistics
+    await updatePayrollStatisticsFirestore([summary], year, companyName);
+
+    console.log(
+      `[PayrollFirestore] Successfully saved payroll summary to Firestore`
+    );
   } catch (error) {
-    console.error("Error saving payroll summary to Firestore:", error);
+    console.error(`[PayrollFirestore] Error saving payroll summary:`, error);
     throw error;
   }
 }
@@ -280,58 +278,61 @@ export async function deletePayrollSummaryFirestore(
   year: number,
   month: number,
   companyName: string
-): Promise<PayrollSummaryModel | undefined> {
+): Promise<PayrollSummaryModel | null> {
   try {
-    const docId = createPayrollDocId(employeeId, year, month);
+    console.log(
+      `[PayrollFirestore] Deleting payroll summary for employee ${employeeId}`
+    );
     const payrollId = `${employeeId}_${startDate.getTime()}_${endDate.getTime()}`;
+    console.log(`[PayrollFirestore] Payroll ID to delete: ${payrollId}`);
 
-    // Get existing data
-    const existingData = await fetchDocument<PayrollFirestoreData>(
-      `companies/${companyName}/payrolls`,
-      docId
-    );
+    // Create document ID
+    const docId = createPayrollDocId(employeeId, year, month);
+    console.log(`[PayrollFirestore] Document ID: ${docId}`);
 
-    if (!existingData) {
-      console.warn(
-        `Payroll document for ${month}/${year} not found in Firestore.`
+    // Get the existing document
+    const payrollsRef = doc(db, `companies/${companyName}/payrolls`, docId);
+    const docSnap = await getDoc(payrollsRef);
+
+    if (!docSnap.exists()) {
+      console.log(
+        `[PayrollFirestore] No payroll document found for ${employeeId} in ${year}-${month}`
       );
-      return undefined;
+      return null;
     }
 
-    // Find the payroll to be deleted
-    const payrollToDelete = existingData.payrolls.find(
-      (p) => p.id === payrollId
-    );
+    const data = docSnap.data();
+    const payrolls = data.payrolls || [];
+    console.log(`[PayrollFirestore] Found ${payrolls.length} payroll entries`);
+
+    // Find the payroll to delete
+    const payrollToDelete = payrolls.find((p) => p.id === payrollId);
     if (!payrollToDelete) {
-      console.warn(
-        `Payroll with ID ${payrollId} not found in Firestore document.`
-      );
-      return undefined;
+      console.log(`[PayrollFirestore] Payroll with ID ${payrollId} not found`);
+      return null;
     }
 
-    // Filter out the payroll with the specified ID
-    const updatedPayrolls = existingData.payrolls.filter(
-      (p) => p.id !== payrollId
+    // Filter out the payroll to delete
+    const updatedPayrolls = payrolls.filter((p) => p.id !== payrollId);
+    console.log(
+      `[PayrollFirestore] Filtered payrolls, now have ${updatedPayrolls.length}`
     );
 
-    // Only update if we actually removed a payroll
-    if (updatedPayrolls.length < existingData.payrolls.length) {
-      const updateData = {
-        payrolls: updatedPayrolls,
-        "meta.lastModified": new Date().toISOString(),
-      };
-
-      await updateDocument(
-        `companies/${companyName}/payrolls`,
-        docId,
-        updateData
+    // Update the document
+    if (updatedPayrolls.length > 0) {
+      console.log(
+        `[PayrollFirestore] Updating document with remaining payrolls`
       );
-      return payrollToDelete;
+      await setDoc(payrollsRef, { payrolls: updatedPayrolls }, { merge: true });
+    } else {
+      console.log(`[PayrollFirestore] No payrolls left, deleting document`);
+      await deleteDoc(payrollsRef);
     }
 
-    return undefined;
+    console.log(`[PayrollFirestore] Successfully deleted payroll summary`);
+    return payrollToDelete;
   } catch (error) {
-    console.error(`Error deleting payroll summary from Firestore:`, error);
+    console.error(`[PayrollFirestore] Error deleting payroll summary:`, error);
     throw error;
   }
 }
@@ -673,92 +674,132 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
       onProgress?: (message: string) => void
     ): Promise<void> {
       try {
-        if (!isWebEnvironment()) {
-          throw new Error(
-            "Firestore sync is only available in web environment"
+        console.log("[PayrollFirestore] Starting syncToFirestore operation");
+
+        // Desktop mode: Prepare and upload data from local storage to Firestore
+        // Web mode: This operation should not be performed (checked in useFirestoreSync)
+        if (isWebEnvironment()) {
+          console.warn(
+            "[PayrollFirestore] syncToFirestore should not be called in web environment"
           );
+          onProgress?.(
+            "Syncing TO Firestore is only available in desktop mode"
+          );
+          return;
         }
 
         onProgress?.("Starting payroll sync to Firestore...");
+        console.log("[PayrollFirestore] Fetching company name");
         const companyName = await getCompanyName();
+        console.log(`[PayrollFirestore] Company name: ${companyName}`);
 
         // Get all employees
         const employeeModel = createEmployeeModel(dbPath);
+        console.log("[PayrollFirestore] Loading employees");
         const employees = await employeeModel.loadEmployees();
+        console.log(
+          `[PayrollFirestore] Found ${employees.length} employees to process`
+        );
         onProgress?.(`Found ${employees.length} employees to process`);
+
+        // Get current date for reference
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+
+        // We'll search for payroll data across the past 12 months
+        const monthsToCheck = 12;
+        console.log(
+          `[PayrollFirestore] Will scan the past ${monthsToCheck} months for payroll data`
+        );
 
         // Process each employee
         for (const employee of employees) {
           try {
+            console.log(
+              `[PayrollFirestore] Processing payroll for employee ${employee.id} (${employee.name})`
+            );
             onProgress?.(`Processing payroll for employee ${employee.name}...`);
 
-            // Get current year and month
-            const currentDate = new Date();
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
+            let employeeHasData = false;
 
-            // Get all payroll summaries for this employee
-            const summaries = await Payroll.loadPayrollSummaries(
-              dbPath,
-              employee.id,
-              year,
-              month
-            );
+            // Check the last 12 months for payroll data
+            for (let i = 0; i < monthsToCheck; i++) {
+              // Calculate the month and year to check (going backward from current)
+              const checkDate = new Date(currentDate);
+              checkDate.setMonth(currentDate.getMonth() - i);
+              const year = checkDate.getFullYear();
+              const month = checkDate.getMonth() + 1;
 
-            if (summaries.length === 0) {
-              // Generate a new payroll summary if none exists
-              const startDate = new Date(year, month - 1, 1);
-              const endDate = new Date(year, month, 0);
-
-              const summary = await model.generatePayrollSummary(
-                employee.id,
-                startDate,
-                endDate,
-                {
-                  sss: employee.sss || 0,
-                  philHealth: employee.philHealth || 0,
-                  pagIbig: employee.pagIbig || 0,
-                  cashAdvanceDeductions: 0,
-                  shortDeductions: 0,
-                }
+              console.log(
+                `[PayrollFirestore] Checking for payroll data: ${year}-${month}`
               );
 
-              if (summary) {
+              // Get all payroll summaries for this employee in this month/year
+              const summaries = await Payroll.loadPayrollSummaries(
+                dbPath,
+                employee.id,
+                year,
+                month
+              );
+
+              if (summaries.length > 0) {
+                console.log(
+                  `[PayrollFirestore] Found ${summaries.length} payroll summaries for ${year}-${month}`
+                );
+                employeeHasData = true;
+
+                // Save existing summaries to Firestore
+                console.log(
+                  `[PayrollFirestore] Saving ${summaries.length} summaries to Firestore`
+                );
                 const docId = createPayrollDocId(employee.id, year, month);
+                console.log(
+                  `[PayrollFirestore] Saving to document ID: ${docId}`
+                );
+
                 await saveDocument(
                   "payrolls",
                   docId,
-                  { payrolls: [summary] },
+                  { payrolls: summaries },
                   companyName
                 );
+
+                // Update statistics
+                console.log(
+                  `[PayrollFirestore] Updating statistics with ${summaries.length} summaries`
+                );
                 await updatePayrollStatisticsFirestore(
-                  [summary],
+                  summaries,
                   year,
                   companyName
                 );
-              }
-            } else {
-              // Save existing summaries to Firestore
-              for (const summary of summaries) {
-                const docId = createPayrollDocId(employee.id, year, month);
-                await saveDocument(
-                  "payrolls",
-                  docId,
-                  { payrolls: [summary] },
-                  companyName
+                console.log(
+                  `[PayrollFirestore] Statistics updated successfully for ${year}-${month}`
+                );
+              } else {
+                console.log(
+                  `[PayrollFirestore] No payroll data found for ${year}-${month}`
                 );
               }
-              await updatePayrollStatisticsFirestore(
-                summaries,
-                year,
-                companyName
-              );
             }
 
-            onProgress?.(`Successfully synced payroll for ${employee.name}`);
+            if (employeeHasData) {
+              onProgress?.(`Successfully synced payroll for ${employee.name}`);
+              console.log(
+                `[PayrollFirestore] Successfully synced payroll for ${employee.name}`
+              );
+            } else {
+              onProgress?.(
+                `No payroll data found for ${employee.name}. Skipping.`
+              );
+              console.log(
+                `[PayrollFirestore] No payroll data found for employee ${employee.id}. Nothing to sync.`
+              );
+            }
           } catch (employeeError) {
             console.error(
-              `Error syncing payroll for employee ${employee.name}:`,
+              `[PayrollFirestore] Error syncing payroll for employee ${employee.name}:`,
               employeeError
             );
             onProgress?.(
@@ -771,8 +812,14 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
         }
 
         onProgress?.("Payroll sync to Firestore completed");
+        console.log(
+          "[PayrollFirestore] Sync to Firestore completed successfully"
+        );
       } catch (error) {
-        console.error("Error in payroll sync to Firestore:", error);
+        console.error(
+          "[PayrollFirestore] Error in payroll sync to Firestore:",
+          error
+        );
         throw error;
       }
     },
@@ -781,90 +828,148 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
       onProgress?: (message: string) => void
     ): Promise<void> {
       try {
+        console.log("[PayrollFirestore] Starting syncFromFirestore operation");
+
+        // Web mode should not sync FROM Firestore (web already uses it directly)
         if (!isWebEnvironment()) {
-          throw new Error(
-            "Firestore sync is only available in web environment"
+          console.log(
+            "[PayrollFirestore] Running in desktop mode - syncing FROM Firestore"
           );
+        } else {
+          console.warn(
+            "[PayrollFirestore] syncFromFirestore should not be called in web environment"
+          );
+          onProgress?.(
+            "Syncing FROM Firestore is only available in desktop mode"
+          );
+          return;
         }
 
         onProgress?.("Starting payroll sync from Firestore...");
+        console.log("[PayrollFirestore] Fetching company name");
         const companyName = await getCompanyName();
+        console.log(`[PayrollFirestore] Company name: ${companyName}`);
 
         // Get all employees
         const employeeModel = createEmployeeModel(dbPath);
+        console.log("[PayrollFirestore] Loading employees");
         const employees = await employeeModel.loadEmployees();
+        console.log(
+          `[PayrollFirestore] Found ${employees.length} employees to process`
+        );
         onProgress?.(`Found ${employees.length} employees to process`);
+
+        // Get current date for reference
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+
+        // We'll search for payroll data across the past 12 months
+        const monthsToCheck = 12;
+        console.log(
+          `[PayrollFirestore] Will scan the past ${monthsToCheck} months for payroll data in Firestore`
+        );
 
         // Process each employee
         for (const employee of employees) {
           try {
+            console.log(
+              `[PayrollFirestore] Processing payroll for employee ${employee.id} (${employee.name})`
+            );
             onProgress?.(`Processing payroll for employee ${employee.name}...`);
 
-            // Get current year and month
-            const currentDate = new Date();
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
+            let employeeHasData = false;
 
-            // Load payroll summaries from Firestore
-            const docId = createPayrollDocId(employee.id, year, month);
-            const data = await fetchDocument<PayrollFirestoreData>(
-              "payrolls",
-              docId,
-              companyName
-            );
+            // Check the last 12 months for payroll data
+            for (let i = 0; i < monthsToCheck; i++) {
+              // Calculate the month and year to check (going backward from current)
+              const checkDate = new Date(currentDate);
+              checkDate.setMonth(currentDate.getMonth() - i);
+              const year = checkDate.getFullYear();
+              const month = checkDate.getMonth() + 1;
 
-            if (!data || !data.payrolls || data.payrolls.length === 0) {
-              onProgress?.(`No payroll summaries found for ${employee.name}`);
-              continue;
-            }
+              console.log(
+                `[PayrollFirestore] Checking for payroll data in Firestore: ${year}-${month}`
+              );
 
-            // Save each summary locally and update Firestore
-            for (const summary of data.payrolls) {
+              // Try to load payroll summaries from Firestore
               try {
-                // Generate the summary locally first
-                const generatedSummary = await model.generatePayrollSummary(
-                  employee.id,
-                  new Date(summary.startDate),
-                  new Date(summary.endDate),
-                  summary.deductions
+                const docId = createPayrollDocId(employee.id, year, month);
+                const payrollsRef = doc(
+                  db,
+                  `companies/${companyName}/payrolls`,
+                  docId
                 );
+                const payrollDoc = await getDoc(payrollsRef);
 
-                if (generatedSummary) {
-                  // Save the generated summary back to Firestore
-                  await saveDocument(
-                    "payrolls",
-                    docId,
-                    { payrolls: [generatedSummary] },
-                    companyName
+                if (payrollDoc.exists()) {
+                  console.log(
+                    `[PayrollFirestore] Found payroll data in Firestore for ${year}-${month}`
+                  );
+                  const data = payrollDoc.data();
+                  const payrolls = data.payrolls || [];
+                  console.log(
+                    `[PayrollFirestore] Retrieved ${payrolls.length} payroll records`
                   );
 
-                  // Update statistics
-                  await updatePayrollStatisticsFirestore(
-                    [generatedSummary],
-                    year,
-                    companyName
+                  if (payrolls.length > 0) {
+                    employeeHasData = true;
+
+                    // Save to local JSON file
+                    console.log(
+                      `[PayrollFirestore] Writing ${payrolls.length} payroll records to local file`
+                    );
+                    const jsonStructure = {
+                      meta: {
+                        employeeId: employee.id,
+                        year,
+                        month,
+                        lastModified: new Date().toISOString(),
+                      },
+                      payrolls: payrolls,
+                    };
+
+                    // Ensure directory exists
+                    const payrollDir = `${dbPath}/SweldoDB/payrolls/${employee.id}`;
+                    await window.electron.ensureDir(payrollDir);
+
+                    // Write the JSON file
+                    const filePath = `${payrollDir}/${year}_${month}_payroll.json`;
+                    await window.electron.writeFile(
+                      filePath,
+                      JSON.stringify(jsonStructure, null, 2)
+                    );
+                    console.log(
+                      `[PayrollFirestore] Successfully wrote payroll data to ${filePath}`
+                    );
+                    onProgress?.(
+                      `Synced ${payrolls.length} payroll records for ${employee.name} (${year}-${month})`
+                    );
+                  }
+                } else {
+                  console.log(
+                    `[PayrollFirestore] No payroll data in Firestore for ${year}-${month}`
                   );
                 }
-
-                onProgress?.(
-                  `Successfully synced payroll for ${employee.name}`
-                );
-              } catch (summaryError) {
+              } catch (firestoreError) {
                 console.error(
-                  `Error syncing payroll summary for ${employee.name}:`,
-                  summaryError
+                  `[PayrollFirestore] Error retrieving Firestore data for ${year}-${month}:`,
+                  firestoreError
                 );
-                onProgress?.(
-                  `Error syncing payroll summary for ${employee.name}: ${
-                    (summaryError as Error).message
-                  }`
-                );
-                // Continue with next summary
               }
+            }
+
+            if (!employeeHasData) {
+              console.log(
+                `[PayrollFirestore] No payroll data found in Firestore for ${employee.name}`
+              );
+              onProgress?.(
+                `No payroll data found in Firestore for ${employee.name}`
+              );
             }
           } catch (employeeError) {
             console.error(
-              `Error syncing payroll for employee ${employee.name}:`,
+              `[PayrollFirestore] Error syncing payroll for employee ${employee.name}:`,
               employeeError
             );
             onProgress?.(
@@ -877,8 +982,14 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
         }
 
         onProgress?.("Payroll sync from Firestore completed");
+        console.log(
+          "[PayrollFirestore] Sync from Firestore completed successfully"
+        );
       } catch (error) {
-        console.error("Error in payroll sync from Firestore:", error);
+        console.error(
+          "[PayrollFirestore] Error in payroll sync from Firestore:",
+          error
+        );
         throw error;
       }
     },

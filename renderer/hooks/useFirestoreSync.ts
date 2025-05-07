@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { getCompanyName } from "../lib/firestoreService";
+import { getCompanyName, isWebEnvironment } from "../lib/firestoreService";
 
 // Import model factory functions and Firestore instance creators
 import { createAttendanceModel, AttendanceModel } from "../model/attendance";
@@ -301,7 +301,29 @@ export function useFirestoreSync({
         return;
       }
 
-      if (!isUpload) {
+      // Check for appropriate direction based on environment
+      const isDesktopEnvironment = !isWebEnvironment();
+      if (isDesktopEnvironment && !isUpload) {
+        // In desktop, we should be uploading TO web, not downloading FROM web
+        const errorMsg =
+          "In desktop mode, you can only upload data TO Firestore, not download FROM it.";
+        console.warn("[useFirestoreSync] " + errorMsg);
+        toast.error("Cannot sync: " + errorMsg);
+        setStatus("error");
+        return;
+      }
+
+      if (!isDesktopEnvironment && isUpload) {
+        // In web, we should be downloading FROM web, not uploading TO web
+        const errorMsg =
+          "In web mode, you can only download data FROM Firestore, not upload TO it.";
+        console.warn("[useFirestoreSync] " + errorMsg);
+        toast.error("Cannot sync: " + errorMsg);
+        setStatus("error");
+        return;
+      }
+
+      if (!isDesktopEnvironment) {
         try {
           const onlineCompanyName = await getCompanyName();
           if (onlineCompanyName !== companyName) {
