@@ -15,12 +15,13 @@ import {
   queryCollection,
   getCompanyName,
   isWebEnvironment,
+  deleteField,
 } from "../lib/firestoreService";
 import { CashAdvance } from "./cashAdvance";
 import { Short } from "./shorts";
 import { z } from "zod";
 import { createEmployeeModel } from "./employee";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { getFirestoreInstance } from "../lib/firestoreService";
 
 /**
@@ -213,6 +214,7 @@ export async function savePayrollSummaryFirestore(
   companyName: string
 ): Promise<void> {
   try {
+    const db = getFirestoreInstance();
     console.log(
       `[PayrollFirestore] Saving payroll summary to Firestore for employee ${summary.employeeId}`
     );
@@ -280,6 +282,7 @@ export async function deletePayrollSummaryFirestore(
   companyName: string
 ): Promise<PayrollSummaryModel | null> {
   try {
+    const db = getFirestoreInstance();
     console.log(
       `[PayrollFirestore] Deleting payroll summary for employee ${employeeId}`
     );
@@ -306,14 +309,18 @@ export async function deletePayrollSummaryFirestore(
     console.log(`[PayrollFirestore] Found ${payrolls.length} payroll entries`);
 
     // Find the payroll to delete
-    const payrollToDelete = payrolls.find((p) => p.id === payrollId);
+    const payrollToDelete = payrolls.find(
+      (p: PayrollSummaryModel) => p.id === payrollId
+    );
     if (!payrollToDelete) {
       console.log(`[PayrollFirestore] Payroll with ID ${payrollId} not found`);
       return null;
     }
 
     // Filter out the payroll to delete
-    const updatedPayrolls = payrolls.filter((p) => p.id !== payrollId);
+    const updatedPayrolls = payrolls.filter(
+      (p: PayrollSummaryModel) => p.id !== payrollId
+    );
     console.log(
       `[PayrollFirestore] Filtered payrolls, now have ${updatedPayrolls.length}`
     );
@@ -828,6 +835,7 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
       onProgress?: (message: string) => void
     ): Promise<void> {
       try {
+        const db = getFirestoreInstance();
         console.log("[PayrollFirestore] Starting syncFromFirestore operation");
 
         // Web mode should not sync FROM Firestore (web already uses it directly)

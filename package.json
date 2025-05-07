@@ -12,6 +12,7 @@
     "build": "nextron build",
     "build:win32": "nextron build --win --ia32",
     "build:web": "npm run setup:web && cd renderer && next build",
+    "deploy": "npm run build:web && firebase deploy --only hosting",
     "postinstall": "npx electron-builder install-app-deps",
     "test": "jest",
     "test:watch": "jest --watch",

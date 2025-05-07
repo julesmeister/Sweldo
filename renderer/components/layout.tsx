@@ -346,6 +346,17 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Handle web mode immediately
+    if (isWebEnvironment()) {
+      if (!isAuthenticated) {
+        setShowLogin(true);
+      }
+      setIsCheckingRoles(false);
+      hasCheckedRoles.current = true;
+      setHasInitializedThisSession(true);
+      return;
+    }
+
     // Skip if we've already checked roles and user is authenticated
     if (hasCheckedRoles.current && isAuthenticated) {
       // (removed debug log)
@@ -363,17 +374,6 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       isRoleCheckingRef.current = true;
       // (removed debug log)
       try {
-        // In web mode, we don't need to check local roles from files
-        if (isWebEnvironment()) {
-          // For web, we just need to check authentication
-          if (!isAuthenticated) {
-            setShowLogin(true);
-          }
-          hasCheckedRoles.current = true;
-          setHasInitializedThisSession(true);
-          return;
-        }
-
         // Local Nextron implementation continues below
         // (removed debug log)
         const roleModel = new RoleModelImpl(dbPath);
@@ -435,9 +435,8 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       <LoadingBar />
       <Navbar />
       <main
-        className={`max-w-12xl ${
-          pathname?.startsWith("/timesheet") ? "" : "mx-auto px-4 pt-4"
-        }`}
+        className={`max-w-12xl ${pathname?.startsWith("/timesheet") ? "" : "mx-auto px-4 pt-4"
+          }`}
       >
         <RefreshWrapper>{children}</RefreshWrapper>
         <Toaster position="top-right" richColors />

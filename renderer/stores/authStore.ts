@@ -4,6 +4,7 @@ import { Role, RoleModelImpl } from "../model/role";
 import { decryptPinCode } from "../lib/encryption";
 import { useSettingsStore } from "./settingsStore"; // Keep for dbPath access
 import { toast } from "sonner";
+import { isWebEnvironment } from "../lib/firestoreService";
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
 
@@ -169,9 +170,16 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     login: async (pinToMatch: string) => {
-      const dbPath = useSettingsStore.getState().dbPath;
-      if (!dbPath) {
+      const settings = useSettingsStore.getState();
+      const dbPath = settings.dbPath;
+      const companyName = settings.companyName;
+      // In desktop mode, dbPath is required; in web mode, companyName is required
+      if (!isWebEnvironment() && !dbPath) {
         toast.error("Cannot login: Database path not set.");
+        return false;
+      }
+      if (isWebEnvironment() && !companyName) {
+        toast.error("Please select a company before logging in.");
         return false;
       }
       if (!pinToMatch) {

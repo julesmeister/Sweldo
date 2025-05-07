@@ -8,6 +8,8 @@ import { MagicCard } from "./magicui/magic-card";
 import { PaymentHistoryDialog } from "./PaymentHistoryDialog";
 import { IoTimeOutline } from "react-icons/io5";
 import { Payroll, PayrollSummaryModel } from "@/renderer/model/payroll";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 
 interface LastPaymentPeriod {
   start: string;
@@ -18,7 +20,8 @@ interface LastPaymentPeriod {
 
 const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const { dbPath } = useSettingsStore();
+  const [loading, setLoading] = useState(false);
+  const { dbPath, companyName } = useSettingsStore();
   const employeeModel = createEmployeeModel(dbPath);
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -30,7 +33,7 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
   );
 
   const loadPaymentHistory = async (employee: Employee) => {
-    if (!dbPath || !employee.id) return;
+    if ((!dbPath && !isWebEnvironment()) || !employee.id) return;
 
     try {
       // Load last 6 months of payroll history
@@ -91,29 +94,84 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
 
   useEffect(() => {
     const fetchEmployees = async () => {
-      if (!dbPath) {
-        console.warn("Database path not set");
-        return;
-      }
+      setLoading(true);
 
       try {
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
-        
-        setEmployees(loadedEmployees);
+        // Check if we're in web mode
+        if (isWebEnvironment()) {
+          if (!companyName) {
+            console.warn("[EmployeeList] Company name not set in web mode");
+            setEmployees([]);
+            setLoading(false);
+            return;
+          }
+
+          console.log(`[EmployeeList] Loading employees for company: ${companyName} in web mode`);
+          const firestoreEmployees = await loadActiveEmployeesFirestore(companyName);
+
+          // Sort employees by ID in ascending order
+          const sortedEmployees = firestoreEmployees.sort((a, b) => {
+            // Handle numeric IDs (convert to numbers for proper sorting)
+            const idA = parseInt(a.id) || a.id;
+            const idB = parseInt(b.id) || b.id;
+
+            // If both are numbers, compare numerically
+            if (typeof idA === 'number' && typeof idB === 'number') {
+              return idA - idB;
+            }
+
+            // Otherwise compare as strings
+            return String(a.id).localeCompare(String(b.id));
+          });
+
+          setEmployees(sortedEmployees);
+        } else {
+          // Desktop mode - use dbPath
+          if (!dbPath) {
+            console.warn("[EmployeeList] Database path not set in desktop mode");
+            setEmployees([]);
+            setLoading(false);
+            return;
+          }
+
+          console.log(`[EmployeeList] Loading employees from local DB: ${dbPath}`);
+          const loadedEmployees = await employeeModel.loadActiveEmployees();
+
+          // Sort employees by ID in ascending order
+          const sortedEmployees = loadedEmployees.sort((a, b) => {
+            // Handle numeric IDs (convert to numbers for proper sorting)
+            const idA = parseInt(a.id) || a.id;
+            const idB = parseInt(b.id) || b.id;
+
+            // If both are numbers, compare numerically
+            if (typeof idA === 'number' && typeof idB === 'number') {
+              return idA - idB;
+            }
+
+            // Otherwise compare as strings
+            return String(a.id).localeCompare(String(b.id));
+          });
+
+          setEmployees(sortedEmployees);
+        }
       } catch (error) {
-        console.error("Error loading employees:", error);
+        console.error("[EmployeeList] Error loading employees:", error);
         setEmployees([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchEmployees();
-  }, [dbPath]); // Only re-run when dbPath changes
+  }, [dbPath, companyName]); // Re-run when dbPath or companyName changes
 
   useEffect(() => {
-    if (!dbPath) {
+    if (!isWebEnvironment() && !dbPath) {
+      setEmployees([]);
+    } else if (isWebEnvironment() && !companyName) {
       setEmployees([]);
     }
-  }, [dbPath]); // Reset employees when dbPath changes
+  }, [dbPath, companyName]); // Reset employees when path changes
 
   const handleRowClick = (employeeId: string) => {
     setSelectedEmployeeId(
@@ -132,7 +190,9 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
     >
       <div className="bg-white rounded-lg shadow overflow-hidden hover:has-[.overflow-y-auto]:h-auto group">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-800">Employee List</h2>
+          <h2 className="text-xl font-semibold text-gray-800">
+            {isWebEnvironment() && companyName ? `${companyName} Employees` : "Employee List"}
+          </h2>
           <p className="text-sm font-medium text-gray-500">
             Active Employees Count:{" "}
             <span className="font-bold">{employees.length}</span>
@@ -140,17 +200,15 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
         </div>
         <div className="overflow-x-auto">
           <div
-            className={`${
-              selectedEmployeeId && !height
-                ? "group-hover:h-auto"
-                : height
+            className={`${selectedEmployeeId && !height
+              ? "group-hover:h-auto"
+              : height
                 ? `h-[${height}]`
-                : `h-[350px] ${
-                    employees.length > 0
-                      ? "group-hover:h-auto transition-all duration-300 ease-in-out"
-                      : ""
-                  }`
-            } overflow-y-auto`}
+                : `h-[350px] ${employees.length > 0
+                  ? "group-hover:h-auto transition-all duration-300 ease-in-out"
+                  : ""
+                }`
+              } overflow-y-auto`}
             style={height ? { height } : undefined}
           >
             <table className="min-w-full divide-y divide-gray-200">
@@ -177,11 +235,35 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {employees.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-12 text-center">
+                      <div className="text-gray-500">
+                        <p className="text-sm">Loading employees...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : employees.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="px-6 py-12 text-center">
                       <div className="space-y-4">
-                        {dbPath ? (
+                        {isWebEnvironment() ? (
+                          companyName ? (
+                            <div className="text-gray-500">
+                              <p className="text-sm">No employees found for {companyName}</p>
+                              <p className="text-xs text-gray-400">
+                                Add new employees in the Employee Management tab
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-gray-500">
+                              <p className="text-sm">Company not selected</p>
+                              <p className="text-xs text-gray-400">
+                                Please select a company at login
+                              </p>
+                            </div>
+                          )
+                        ) : dbPath ? (
                           <div className="text-gray-500">
                             <p className="text-sm">No employees found</p>
                             <p className="text-xs text-gray-400">
@@ -192,8 +274,7 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                           <div className="text-gray-500">
                             <p className="text-sm">Database not configured</p>
                             <p className="text-xs text-gray-400">
-                              Please set up your database path in the Settings
-                              tab
+                              Please set up your database path in the Settings tab
                             </p>
                           </div>
                         )}
@@ -205,9 +286,8 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                     <tr
                       key={employee.id}
                       onClick={() => handleRowClick(employee.id)}
-                      className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50 ${
-                        selectedEmployeeId === employee.id ? "bg-indigo-50" : ""
-                      }`}
+                      className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50 ${selectedEmployeeId === employee.id ? "bg-indigo-50" : ""
+                        }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {employee.id}
@@ -230,8 +310,8 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
                               {employee.position && employee.employmentType
                                 ? `${employee.position} • ${employee.employmentType}`
                                 : employee.position ||
-                                  employee.employmentType ||
-                                  ""}
+                                employee.employmentType ||
+                                ""}
                             </div>
                           </div>
                         </div>
@@ -249,18 +329,18 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
 
                                 return paymentPeriod?.start
                                   ? `${new Date(
-                                      paymentPeriod.start
-                                    ).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    })} - ${new Date(
-                                      paymentPeriod.end
-                                    ).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    })}`
+                                    paymentPeriod.start
+                                  ).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })} - ${new Date(
+                                    paymentPeriod.end
+                                  ).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}`
                                   : "No payments made yet";
                               } catch (error) {
                                 console.error(

@@ -31,14 +31,39 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-console.log("[FIREBASE CONFIG]", {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-});
+// Log the actual config being used by the SDK
+console.log(
+  "\n[firestoreService] Firebase Config Used:",
+  JSON.stringify(firebaseConfig, null, 2)
+);
+console.log("--- Raw Env Vars ---");
+console.log(
+  "NEXT_PUBLIC_FIREBASE_API_KEY:",
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+);
+console.log(
+  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:",
+  process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+);
+console.log(
+  "NEXT_PUBLIC_FIREBASE_PROJECT_ID:",
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+);
+console.log(
+  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:",
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+);
+console.log(
+  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:",
+  process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+);
+console.log(
+  "NEXT_PUBLIC_FIREBASE_APP_ID:",
+  process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+);
+console.log("NEXT_PUBLIC_COMPANY_NAME:", process.env.NEXT_PUBLIC_COMPANY_NAME);
+console.log("NEXT_PUBLIC_COMPANY_LIST:", process.env.NEXT_PUBLIC_COMPANY_LIST);
+console.log("--------------------\n");
 
 // Centralized variable to cache company name
 let cachedCompanyName: string | null = null;
@@ -50,8 +75,16 @@ let cachedCompanyName: string | null = null;
 export const initializeFirebase = (): FirebaseApp => {
   const apps = getApps();
   if (apps.length > 0) {
+    console.log(
+      "[firestoreService] Using existing Firebase app:",
+      apps[0].options.projectId
+    );
     return apps[0];
   }
+  console.log(
+    "[firestoreService] Initializing new Firebase app with project:",
+    firebaseConfig.projectId
+  );
   return initializeApp(firebaseConfig);
 };
 
@@ -61,7 +94,12 @@ export const initializeFirebase = (): FirebaseApp => {
  */
 export const getFirestoreInstance = (): Firestore => {
   initializeFirebase();
-  return getFirestore();
+  const db = getFirestore();
+  console.log(
+    "[firestoreService] getFirestoreInstance() projectId:",
+    initializeFirebase().options.projectId
+  );
+  return db;
 };
 
 /**

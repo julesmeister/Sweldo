@@ -3,7 +3,9 @@ import { Timestamp } from "firebase/firestore";
 /**
  * Type guard to check if a model is Firestore-enabled
  */
-export function isFirestoreEnabled<T>(model: T): model is T & {
+export function isFirestoreEnabled<T extends object>(
+  model: T
+): model is T & {
   syncToFirestore: () => Promise<void>;
   syncFromFirestore: () => Promise<void>;
 } {
