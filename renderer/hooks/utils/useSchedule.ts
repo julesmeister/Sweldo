@@ -60,61 +60,103 @@ export const getScheduleInfo = async (
 
 // Hook version for calculating schedule info for multiple dates
 export const useSchedules = (
-  model: AttendanceSettingsModel | null,
+  attendanceSettingsModel: any,
   employmentType: EmploymentType | null,
-  dates: Date[] | undefined
-): Map<number, ScheduleInfo | null> => {
-  const validDates = dates || [];
-  const [schedulesMap, setSchedulesMap] = useState<
-    Map<number, ScheduleInfo | null>
-  >(new Map(validDates.map((d) => [d.getDate(), null])));
-
-  const datesKey = validDates.map((d) => d.toISOString()).join(",");
+  dates: Date[]
+) => {
+  const [scheduleMap, setScheduleMap] = useState<
+    Map<number, { isRestDay: boolean; hasSchedule: boolean }>
+  >(new Map());
 
   useEffect(() => {
-    if (!model || !employmentType || validDates.length === 0) {
-      setSchedulesMap(
-        new Map(
-          validDates.map((d) => [
-            d.getDate(),
-            {
-              schedule: null,
-              hasSchedule: false,
-              isRestDay: false,
-              formattedSchedule: null,
-            },
-          ])
-        )
-      );
-      return;
-    }
+    const calculateSchedules = async () => {
+      if (!attendanceSettingsModel || !dates.length) {
+        return;
+      }
 
-    let isMounted = true;
-    const fetchSchedules = async () => {
-      const newMap = new Map<number, ScheduleInfo | null>();
-      const promises = validDates.map(async (date) => {
-        const info = await getScheduleInfo(model, employmentType, date);
-        return { date, info };
-      });
+      try {
+        console.log(
+          "useSchedules - Calculating schedules for dates:",
+          dates.length
+        );
 
-      const results = await Promise.all(promises);
+        // Create a map to store schedule information for each day
+        const newScheduleMap = new Map<
+          number,
+          { isRestDay: boolean; hasSchedule: boolean }
+        >();
 
-      if (isMounted) {
-        results.forEach(({ date, info }) => {
-          newMap.set(date.getDate(), info);
-        });
-        setSchedulesMap(newMap);
+        // If we have an employment type, use its schedule
+        if (employmentType) {
+          console.log(
+            "useSchedules - Using employment type schedule:",
+            employmentType.type
+          );
+
+          // Process each date
+          for (const date of dates) {
+            const day = date.getDate();
+            const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
+
+            // Check if this day is a rest day based on employment type settings
+            const isRestDay = employmentType.restDays.includes(dayOfWeek);
+
+            // Determine if there's a schedule for this day
+            const hasSchedule = employmentType.workDays.includes(dayOfWeek);
+
+            // Store schedule info in the map
+            newScheduleMap.set(day, { isRestDay, hasSchedule });
+          }
+        } else {
+          // If no employment type is available, assume all days have a schedule but none are rest days
+          console.log(
+            "useSchedules - No employment type found, using defaults"
+          );
+
+          for (const date of dates) {
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+
+            // Default: Weekends (Saturday and Sunday) are rest days
+            const isRestDay = dayOfWeek === 0 || dayOfWeek === 6;
+
+            // Default: Weekdays have schedules
+            const hasSchedule = dayOfWeek > 0 && dayOfWeek < 6;
+
+            newScheduleMap.set(day, { isRestDay, hasSchedule });
+          }
+        }
+
+        // Load any custom schedules from the settings model
+        try {
+          console.log("useSchedules - Checking for custom schedules");
+
+          // This would be where you'd load custom schedules if implemented
+          // For example:
+          // const customSchedules = await attendanceSettingsModel.loadCustomSchedules();
+          // for (const schedule of customSchedules) {
+          //   // Update the scheduleMap with custom schedule information
+          // }
+        } catch (error) {
+          console.error(
+            "useSchedules - Error loading custom schedules:",
+            error
+          );
+        }
+
+        setScheduleMap(newScheduleMap);
+        console.log(
+          `useSchedules - Completed schedule calculation for ${newScheduleMap.size} days`
+        );
+      } catch (error) {
+        console.error("useSchedules - Error calculating schedules:", error);
       }
     };
 
-    fetchSchedules();
+    calculateSchedules();
+  }, [attendanceSettingsModel, employmentType, dates]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [model, employmentType?.type, datesKey]);
-
-  return schedulesMap;
+  return scheduleMap;
 };
 
 // Legacy hook for single date (refactored for async)

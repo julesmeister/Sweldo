@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
@@ -18,9 +18,17 @@ import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
+import useDateAwareData from "@/renderer/hooks/useDateAwareData";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import {
+  loadCashAdvancesFirestore,
+  saveCashAdvanceFirestore,
+  deleteCashAdvanceFirestore,
+} from "@/renderer/model/cashAdvance_firestore";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 
 export default function CashAdvancesPage() {
-  const [cashAdvances, setCashAdvances] = useState<CashAdvance[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedCashAdvance, setSelectedCashAdvance] =
     useState<CashAdvance | null>(null);
@@ -33,99 +41,137 @@ export default function CashAdvancesPage() {
     caretLeft: number;
   } | null>(null);
 
-  // Initialize month/year from localStorage on first render
-  const [dateContext] = useState(() => {
-    const month =
-      localStorage.getItem("selectedMonth") || new Date().getMonth().toString();
-    const year =
-      localStorage.getItem("selectedYear") ||
-      new Date().getFullYear().toString();
-    return { month, year };
-  });
-
-  const { setLoading, activeLink, setActiveLink } = useLoadingStore();
-  const { dbPath } = useSettingsStore();
+  const { activeLink, setActiveLink } = useLoadingStore();
+  const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
-  const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
-  const cashAdvanceModel = useMemo(() => {
-    if (!selectedEmployeeId || !dbPath) return null;
-    return createCashAdvanceModel(
-      dbPath,
-      selectedEmployeeId,
-      parseInt(dateContext.month, 10) + 1,
-      parseInt(dateContext.year, 10)
-    );
-  }, [dbPath, selectedEmployeeId, dateContext]);
   const { hasAccess } = useAuthStore();
-
   const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
 
-  // Load employee and cash advances data
-  useEffect(() => {
-    let mounted = true;
+  const fetchCashAdvancesAndEmployee = useCallback(
+    async (params: {
+      year: number;
+      month: number;
+      dbPath: string | null;
+      companyName: string | null;
+    }) => {
+      if (!selectedEmployeeId) {
+        setEmployee(null);
+        return null;
+      }
 
-    const loadData = async () => {
-      if (
-        !selectedEmployeeId ||
-        !dbPath ||
-        !employeeModel ||
-        !cashAdvanceModel
-      ) {
+      const { year, month, dbPath: hookDbPath, companyName: hookCompanyName } = params;
+      let advances: CashAdvance[] = [];
+      let emp: Employee | null = null;
+
+      try {
+        if (isWebEnvironment()) {
+          if (!hookCompanyName) {
+            toast.error("Company name not available for web mode.");
+            throw new Error("Company name not available for web mode.");
+          }
+          advances = await loadCashAdvancesFirestore(
+            selectedEmployeeId,
+            month + 1,
+            year,
+            hookCompanyName
+          );
+        } else {
+          if (!hookDbPath) {
+            toast.error("Database path not available for desktop mode.");
+            throw new Error("Database path not available for desktop mode.");
+          }
+          const cashAdvanceModel = createCashAdvanceModel(
+            hookDbPath,
+            selectedEmployeeId,
+            month + 1,
+            year
+          );
+          advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId);
+
+          const employeeModel = createEmployeeModel(hookDbPath);
+          emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
+          setEmployee(emp);
+        }
+        return advances;
+      } catch (error) {
+        console.error("Error loading cash advances data:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load cash advances"
+        );
+        if (isWebEnvironment()) setEmployee(null);
+        return null;
+      }
+    },
+    [selectedEmployeeId]
+  );
+
+  const { data: cashAdvances, isLoading, refetchData } = useDateAwareData<CashAdvance[]>(
+    fetchCashAdvancesAndEmployee
+  );
+
+  const { setLoading } = useLoadingStore();
+
+  useEffect(() => {
+    setLoading(isLoading);
+  }, [isLoading, setLoading]);
+
+  useEffect(() => {
+    const loadSelectedEmployee = async () => {
+      if (!selectedEmployeeId) {
+        setEmployee(null);
         return;
       }
+      if (isWebEnvironment()) {
+        if (!companyNameFromSettings) return;
+        const foundEmp = employees.find(e => e.id === selectedEmployeeId);
+        setEmployee(foundEmp || null);
+      } else {
+        if (!dbPath) return;
+        const employeeModel = createEmployeeModel(dbPath);
+        const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
+        setEmployee(emp);
+      }
+    };
+    loadSelectedEmployee();
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, employees]);
 
-      setLoading(true);
-      try {
-        const [emp, advances] = await Promise.all([
-          employeeModel.loadEmployeeById(selectedEmployeeId),
-          cashAdvanceModel.loadCashAdvances(selectedEmployeeId),
-        ]);
-
-        if (!mounted) return;
-
-        if (emp !== null) setEmployee(emp);
-        setCashAdvances(advances);
-      } catch (error) {
-        console.error("Error loading data:", error);
-        if (mounted) {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to load data"
-          );
+  useEffect(() => {
+    const loadEmps = async () => {
+      if (isWebEnvironment()) {
+        if (!companyNameFromSettings) {
+          setEmployees([]);
+          return;
         }
-      } finally {
-        if (mounted) {
-          setLoading(false);
+        try {
+          const firestoreEmployees = await loadActiveEmployeesFirestore(companyNameFromSettings);
+          setEmployees(firestoreEmployees);
+        } catch (error) {
+          console.error("Error loading active employees from Firestore for dropdown:", error);
+          toast.error("Error loading employees for dropdown (web)");
+          setEmployees([]);
+        }
+      } else {
+        if (!dbPath) {
+          setEmployees([]);
+          return;
+        }
+        try {
+          const model = createEmployeeModel(dbPath);
+          const loaded = await model.loadActiveEmployees();
+          setEmployees(loaded);
+        } catch (error) {
+          console.error("Error loading active employees from local DB for dropdown:", error);
+          toast.error("Error loading employees for dropdown (desktop)");
+          setEmployees([]);
         }
       }
     };
+    loadEmps();
+  }, [dbPath, companyNameFromSettings]);
 
-    loadData();
+  const filteredAdvances = cashAdvances || [];
 
-    return () => {
-      mounted = false;
-    };
-  }, [selectedEmployeeId, dbPath, employeeModel, cashAdvanceModel]);
-
-  // Filter advances based on month/year
-  const filteredAdvances = useMemo(() => {
-    const filtered = cashAdvances.filter((advance) => {
-      const advanceDate = new Date(advance.date);
-      const matches =
-        advanceDate.getMonth() === parseInt(dateContext.month, 10) &&
-        advanceDate.getFullYear() === parseInt(dateContext.year, 10);
-      return matches;
-    });
-
-    return filtered;
-  }, [cashAdvances, dateContext]);
-
-  const storedMonthInt = dateContext.month
-    ? parseInt(dateContext.month, 10) + 1
-    : 0;
-  const yearInt = dateContext.year
-    ? parseInt(dateContext.year, 10)
-    : new Date().getFullYear();
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
@@ -157,22 +203,18 @@ export default function CashAdvancesPage() {
     const dialogWidth = 850;
     const spacing = 8;
 
-    // Calculate vertical position
     const spaceBelow = windowHeight - rect.bottom;
     const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
     const top = showAbove
       ? rect.top - dialogHeight - spacing
       : rect.bottom + spacing;
 
-    // Calculate horizontal position
     let left = rect.left + rect.width / 2 - dialogWidth / 2;
 
-    // Keep dialog within window bounds
     left =
       Math.max(spacing, Math.min(left, windowWidth - dialogWidth - spacing)) -
       60;
 
-    // Calculate caret position relative to the dialog
     const caretLeft = rect.left + rect.width / 2 - left;
 
     setClickPosition({
@@ -194,23 +236,19 @@ export default function CashAdvancesPage() {
     const dialogWidth = 850;
     const spacing = 8;
 
-    // Calculate vertical position
     const spaceBelow = windowHeight - rect.bottom;
     const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
     const top = showAbove
       ? rect.top - dialogHeight - spacing
       : rect.bottom + spacing;
 
-    // Calculate horizontal position
     let left = rect.left + rect.width / 2 - dialogWidth / 2;
 
-    // Keep dialog within window bounds
     left = Math.max(
       spacing,
       Math.min(left, windowWidth - dialogWidth - spacing)
     );
 
-    // Calculate caret position relative to the dialog
     const caretLeft = rect.left + rect.width / 2 - left;
 
     setClickPosition({
@@ -232,58 +270,65 @@ export default function CashAdvancesPage() {
   };
 
   async function handleSaveCashAdvance(data: CashAdvance): Promise<void> {
-    if (!cashAdvanceModel) {
-      toast.error(
-        "System not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set"
-      );
-      return;
-    }
-
     if (!selectedEmployeeId) {
       toast.error("Please select an employee first");
       return;
     }
 
-    if (!dbPath) {
-      toast.error("Database path is not configured");
-      return;
-    }
+    const currentYear = useDateSelectorStore.getState().selectedYear;
+    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
 
     setLoading(true);
     try {
-      if (selectedCashAdvance) {
-        // Update existing cash advance
-        await cashAdvanceModel.updateCashAdvance({
+      if (isWebEnvironment()) {
+        if (!companyNameFromSettings) {
+          toast.error("Company name not set for web mode.");
+          throw new Error("Company name not set for web mode.");
+        }
+        const advanceToSave = {
           ...data,
-          id: selectedCashAdvance.id,
-          employeeId: selectedEmployeeId!,
-          date: data.date, // Use the new date from the form
-        });
-        toast.success("Cash advance updated successfully", {
-          position: "bottom-right",
-          duration: 3000,
-        });
+          id: selectedCashAdvance ? selectedCashAdvance.id : crypto.randomUUID(),
+          employeeId: selectedEmployeeId,
+        };
+        await saveCashAdvanceFirestore(
+          advanceToSave,
+          currentMonth,
+          currentYear,
+          companyNameFromSettings
+        );
       } else {
-        // Create new cash advance
-        await cashAdvanceModel.createCashAdvance({
-          ...data,
-          id: crypto.randomUUID(),
-          employeeId: selectedEmployeeId!,
-          date: data.date,
-        });
-        toast.success("Cash advance created successfully", {
+        if (!dbPath) {
+          toast.error("Database path is not configured");
+          throw new Error("Database path is not configured");
+        }
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          selectedEmployeeId,
+          currentMonth,
+          currentYear
+        );
+        if (selectedCashAdvance) {
+          await cashAdvanceModel.updateCashAdvance({
+            ...data,
+            id: selectedCashAdvance.id,
+            employeeId: selectedEmployeeId!,
+          });
+        } else {
+          await cashAdvanceModel.createCashAdvance({
+            ...data,
+            id: crypto.randomUUID(),
+            employeeId: selectedEmployeeId!,
+          });
+        }
+      }
+      toast.success(
+        `Cash advance ${selectedCashAdvance ? "updated" : "created"} successfully`,
+        {
           position: "bottom-right",
           duration: 3000,
-        });
-      }
-
-      // Reload the cash advances to get the updated list
-      const advances = await cashAdvanceModel.loadCashAdvances(
-        selectedEmployeeId!
+        }
       );
-      setCashAdvances(advances);
-
-      // Close the dialog
+      refetchData();
       handleCloseDialog();
     } catch (error) {
       console.error("Error saving cash advance:", error);
@@ -297,25 +342,48 @@ export default function CashAdvancesPage() {
         }
       );
     } finally {
-      setLoading(false);
     }
   }
 
-  // Add effect to load all employees
-  useEffect(() => {
-    const loadEmployees = async () => {
-      if (!dbPath) return;
-      try {
-        const employeeModel = createEmployeeModel(dbPath);
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
-        setEmployees(loadedEmployees);
-      } catch (error) {
-        toast.error("Error loading employees");
-      }
-    };
+  async function handleDeleteCashAdvance(advanceId: string) {
+    if (!selectedEmployeeId) return;
 
-    loadEmployees();
-  }, [dbPath]);
+    const currentYear = useDateSelectorStore.getState().selectedYear;
+    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
+
+    setLoading(true);
+    try {
+      if (isWebEnvironment()) {
+        if (!companyNameFromSettings) throw new Error("Company name not set.");
+        await deleteCashAdvanceFirestore(
+          advanceId,
+          selectedEmployeeId,
+          currentMonth,
+          currentYear,
+          companyNameFromSettings
+        );
+      } else {
+        if (!dbPath) throw new Error("Database path not set.");
+        const cashAdvanceModel = createCashAdvanceModel(
+          dbPath,
+          selectedEmployeeId,
+          currentMonth,
+          currentYear
+        );
+        await cashAdvanceModel.deleteCashAdvance(advanceId);
+      }
+      toast.success("Cash advance deleted successfully");
+      refetchData();
+    } catch (error) {
+      console.error("Error deleting cash advance:", error);
+      toast.error(
+        error instanceof Error
+          ? `Error deleting cash advance: ${error.message}`
+          : "Error deleting cash advance"
+      );
+    } finally {
+    }
+  }
 
   return (
     <RootLayout>
@@ -331,12 +399,11 @@ export default function CashAdvancesPage() {
           <div className="px-4sm:px-0">
             <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
               <div className="col-span-1 md:col-span-1">
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="bg-white rounded-lg shadow">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900 flex items-center">
                       {selectedEmployeeId ? (
                         <EmployeeDropdown
-                          employees={employees}
                           selectedEmployeeId={selectedEmployeeId}
                           onSelectEmployee={setSelectedEmployeeId}
                           labelPrefix="Cash Advances"
@@ -377,11 +444,8 @@ export default function CashAdvancesPage() {
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">
                               No cash advances found for{" "}
                               {new Date(
-                                parseInt(
-                                  dateContext.year ||
-                                    new Date().getFullYear().toString()
-                                ),
-                                parseInt(dateContext.month),
+                                useDateSelectorStore.getState().selectedYear,
+                                useDateSelectorStore.getState().selectedMonth,
                                 1
                               ).toLocaleString("default", {
                                 month: "long",
@@ -481,20 +545,13 @@ export default function CashAdvancesPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <button
-                                    onClick={async (e) => {
+                                    onClick={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
 
                                       if (!hasDeleteAccess) {
                                         toast.error(
                                           "You don't have permission to delete cash advance records"
-                                        );
-                                        return;
-                                      }
-
-                                      if (!cashAdvanceModel) {
-                                        toast.error(
-                                          "System not properly initialized"
                                         );
                                         return;
                                       }
@@ -506,39 +563,12 @@ export default function CashAdvancesPage() {
                                       ) {
                                         return;
                                       }
-
-                                      setLoading(true);
-                                      try {
-                                        await cashAdvanceModel.deleteCashAdvance(
-                                          advance.id
-                                        );
-                                        const advances =
-                                          await cashAdvanceModel.loadCashAdvances(
-                                            selectedEmployeeId!
-                                          );
-                                        setCashAdvances(advances);
-                                        toast.success(
-                                          "Cash advance deleted successfully"
-                                        );
-                                      } catch (error) {
-                                        console.error(
-                                          "Error deleting cash advance:",
-                                          error
-                                        );
-                                        toast.error(
-                                          error instanceof Error
-                                            ? `Error deleting cash advance: ${error.message}`
-                                            : "Error deleting cash advance"
-                                        );
-                                      } finally {
-                                        setLoading(false);
-                                      }
+                                      handleDeleteCashAdvance(advance.id);
                                     }}
-                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${
-                                      !hasDeleteAccess
-                                        ? "opacity-50 cursor-not-allowed"
-                                        : "cursor-pointer"
-                                    }`}
+                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${!hasDeleteAccess
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : "cursor-pointer"
+                                      }`}
                                     disabled={!hasDeleteAccess}
                                   >
                                     Delete

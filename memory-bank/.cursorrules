@@ -91,4 +91,175 @@ export const db = new AppDB();
   1. Attempt to load from Dexie cache: `await db.employees.where('companyName').equals(companyName).toArray()`.
   2. If cache hit, return cached data.
   3. If cache miss, query Firestore, then `db.employees.bulkPut(records)` to populate cache.
-  4. Invalidate cache manually via utilities like `clearEmployeeCache(companyName)` or implement TTL. 
+  4. Invalidate cache manually via utilities like `clearEmployeeCache(companyName)` or implement TTL.
+
+## CSS and Styling Patterns
+
+### Tailwind Configuration and Usage
+
+1. **Config Location and Structure**
+   - Primary config: `renderer/tailwind.config.js`
+   - Referenced by PostCSS config at root: `postcss.config.js`
+   - Content paths point to renderer components and pages
+   - Safelist includes color variants needed for dynamic class generation
+
+2. **Color System**
+   - Use semantic color variables defined in Tailwind config:
+   ```typescript
+   // In components
+   <div className="bg-primary text-primary-foreground" />
+   <button className="bg-destructive hover:bg-destructive/90" />
+   <div className="border-border" />
+   ```
+   - Use opacity modifiers with slash notation:
+   ```jsx
+   <div className="bg-blue-500/50" /> // 50% opacity
+   <div className="text-primary/80" /> // 80% opacity
+   ```
+
+3. **Dynamic Classes**
+   - Prefer template literals for conditional classes:
+   ```jsx
+   <div className={`px-4 py-2 ${isActive ? 'bg-blue-500' : 'bg-gray-200'}`} />
+   ```
+   - For complex conditionals, use array join pattern:
+   ```jsx
+   <div className={[
+     'px-4 py-2',
+     isActive && 'bg-blue-500',
+     isDisabled && 'opacity-50 cursor-not-allowed'
+   ].filter(Boolean).join(' ')} />
+   ```
+
+4. **Custom Components with Tailwind**
+   - Define component classes in `globals.css` using `@layer components`:
+   ```css
+   @layer components {
+     .btn-blue {
+       @apply text-white font-bold px-4 py-2 rounded bg-blue-600 hover:bg-blue-500;
+     }
+   }
+   ```
+   - Use in components:
+   ```jsx
+   <button className="btn-blue">Submit</button>
+   ```
+
+### Theme Variables Pattern
+- Use CSS variables for theming, defined in `:root` and `.dark` selectors in `globals.css`
+- Access with `var(--variable-name)` in Tailwind config or CSS
+- Example:
+```css
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+}
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+}
+```
+
+### Scrollbar Styling Patterns
+- `.scrollbar-thin`: Minimal scrollbar that appears on hover
+  ```jsx
+  <div className="overflow-auto scrollbar-thin">...</div>
+  ```
+- `.scrollbar-y-none`: Hide vertical scrollbar, keep horizontal
+  ```jsx
+  <div className="overflow-auto scrollbar-y-none">...</div>
+  ```
+- `.custom-scrollbar`: Always visible custom scrollbar
+  ```jsx
+  <div className="overflow-auto custom-scrollbar">...</div>
+  ```
+
+### Animation Patterns
+- Use Tailwind's built-in animation utilities when possible
+- For custom animations, define in `globals.css` and reference via class
+- Available custom animations:
+  ```jsx
+  <div className="animate-shine">Shine effect</div>
+  <div className="animate-blob animation-delay-2000">Blob with delay</div>
+  <div className="animate-pulse">Pulsing element</div>
+  ```
+- Delay utilities: `.animation-delay-1000`, `.animation-delay-2000`, etc.
+
+### Advanced Styling Patterns
+- Border radius inheritance:
+  ```jsx
+  <div className="rounded-lg">
+    <div className="rounded-inherit">Inherits parent's border radius</div>
+  </div>
+  ```
+- Responsive patterns:
+  ```jsx
+  <div className="w-full md:w-1/2 lg:w-1/3">Responsive width</div>
+  <div className="flex-col md:flex-row">Changes direction on breakpoint</div>
+  ```
+- Grid layouts:
+  ```jsx
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div>Item 1</div>
+    <div>Item 2</div>
+    <div>Item 3</div>
+  </div>
+  ```
+
+### Environment-Specific Styling
+- For web mode, runtime style injection via `styleInjector.js`
+- For desktop, standard CSS imports
+- Environment detection for styling:
+  ```jsx
+  <div className={`flex items-center ${isWebEnvironment() ? 'min-h-screen' : 'h-screen'}`}>
+    Content
+  </div>
+  ```
+
+### Web Font Loading Pattern
+- For web deployment, use the JS injection pattern from `injectFonts.js`
+- For Electron, rely on standard CSS `@font-face` declarations
+```javascript
+// injectFonts.js pattern
+export function injectFontStyles() {
+  if (typeof document !== "undefined") {
+    if (document.getElementById("font-styles")) return;
+    const style = document.createElement("style");
+    style.id = "font-styles";
+    style.textContent = `@font-face { /* font declaration */ }`;
+    document.head.appendChild(style);
+  }
+}
+```
+
+### Resource Path Handling
+- For static assets in web mode: prefix with `/`
+- For Electron: use resource path from `window.electron.getResourcePath()` 
+- For fonts specifically, ensure they're copied to both public directories using the `setup:web` script
+
+## Self-contained Component Pattern
+
+### EmployeeDropdown Usage
+```tsx
+// PREFERRED: Self-contained usage - component loads employees internally
+<EmployeeDropdown
+  selectedEmployeeId={selectedEmployeeId}
+  onSelectEmployee={setSelectedEmployeeId}
+  labelPrefix="Cash Advances"
+/>
+
+// OPTIONAL: Provide employees externally when specific filtering is needed
+<EmployeeDropdown
+  employees={filteredEmployees}  // Optional - will be used if provided
+  selectedEmployeeId={selectedEmployeeId}
+  onSelectEmployee={setSelectedEmployeeId}
+  labelPrefix="Cash Advances"
+/>
+```
+
+### Component Design Principles
+- Make data loading optional with internal fallbacks
+- Handle both web and desktop environments internally
+- Include loading and error states
+- Use React Portal for dropdowns to avoid z-index issues
+- Properly handle window resize and scroll events

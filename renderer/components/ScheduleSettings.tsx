@@ -926,11 +926,16 @@ export default function ScheduleSettings({
           for (const monthStr in updatesByMonth[typeId][year]) {
             const month = parseInt(monthStr, 10);
             const monthUpdates = updatesByMonth[typeId][year][month];
-            let existingSchedule =
-              (await handleUpdateSchedule(typeId, new Date(year, month, 1), monthUpdates)) ||
-              {};
-            const finalSchedule = { ...existingSchedule, ...monthUpdates };
-            await handleUpdateSchedule(typeId, new Date(year, month, 1), finalSchedule);
+
+            // Save the entire month schedule at once instead of individual daily updates
+            if (isWebEnvironment()) {
+              if (!companyName) throw new Error("Company name not available for saving schedule.");
+              await saveMonthScheduleFirestore(typeId, year, month, monthUpdates, companyName);
+            } else {
+              if (!dbPath) throw new Error("Database path not available for saving schedule.");
+              const settingsModel = createAttendanceSettingsModel(dbPath);
+              await settingsModel.saveMonthSchedule(typeId, year, month, monthUpdates);
+            }
           }
         }
       }

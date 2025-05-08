@@ -20,6 +20,22 @@ import {
 } from "@/renderer/model/holiday_firestore";
 import { clearHolidayCache } from "@/renderer/lib/db";
 import { IoReloadOutline } from "react-icons/io5";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+
+const months = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 export default function HolidaysPage() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -34,28 +50,11 @@ export default function HolidaysPage() {
     specialHolidayMultiplier: number;
   } | null>(null);
   const { dbPath, companyName } = useSettingsStore();
-
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
-  const [storedYear, setStoredYear] = useState<string | null>(null);
+  const { selectedMonth, selectedYear } = useDateSelectorStore();
 
   // Parsed numeric year and month for cache keys
-  const yearNum = storedYear ? parseInt(storedYear, 10) : undefined;
-  const monthNum = storedMonth ? parseInt(storedMonth, 10) + 1 : undefined;
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedMonth = localStorage.getItem("selectedMonth");
-      setStoredMonth(storedMonth);
-
-      let storedYear = localStorage.getItem("selectedYear");
-      if (!storedYear) {
-        const currentYear = new Date().getFullYear().toString();
-        localStorage.setItem("selectedYear", currentYear);
-        storedYear = currentYear;
-      }
-      setStoredYear(storedYear);
-    }
-  }, []);
+  const yearNum = selectedYear;
+  const monthNum = selectedMonth + 1;
 
   const [clickPosition, setClickPosition] = useState<{
     top: number;
@@ -210,11 +209,11 @@ export default function HolidaysPage() {
   };
 
   const loadSuggestedHolidays = async () => {
-    if (holidays.length === 0 && storedYear && storedMonth) {
+    if (holidays.length === 0 && selectedYear && selectedMonth !== null) {
       setIsLoading(true);
       try {
-        const year = parseInt(storedYear, 10);
-        const month = parseInt(storedMonth, 10) + 1; // Convert from 0-based to 1-based
+        const year = selectedYear;
+        const month = selectedMonth + 1; // Convert from 0-based to 1-based
         const suggestions = await fetchHolidays(year);
 
         // Filter holidays for the selected month
@@ -240,12 +239,12 @@ export default function HolidaysPage() {
   };
 
   const loadHolidays = async () => {
-    if (!storedYear || !storedMonth) return;
+    if (selectedYear === undefined || selectedMonth === undefined) return;
 
     setIsLoading(true);
     try {
-      const year = parseInt(storedYear, 10);
-      const month = parseInt(storedMonth, 10) + 1; // Convert from 0-based to 1-based
+      const year = selectedYear;
+      const month = selectedMonth + 1; // Convert from 0-based to 1-based
 
       // Check if we're in web mode
       if (isWebEnvironment()) {
@@ -284,13 +283,13 @@ export default function HolidaysPage() {
   useEffect(() => {
     loadSuggestedHolidays();
     loadHolidays();
-  }, [holidays.length, storedYear, storedMonth]);
+  }, [selectedYear, selectedMonth, holidays.length, companyName, dbPath]);
 
   useEffect(() => { }, [selectedHoliday]);
 
   function handleSaveHoliday(data: Holiday): void {
-    const year = parseInt(storedYear!, 10);
-    const month = parseInt(storedMonth!, 10) + 1;
+    const year = selectedYear;
+    const month = selectedMonth + 1;
 
     if (isWebEnvironment()) {
       if (!companyName) {
@@ -333,8 +332,8 @@ export default function HolidaysPage() {
   }
 
   async function handleDeleteHoliday(holidayId: string) {
-    const year = parseInt(storedYear!, 10);
-    const month = parseInt(storedMonth!, 10) + 1;
+    const year = selectedYear;
+    const month = selectedMonth + 1;
 
     try {
       if (isWebEnvironment()) {
@@ -392,7 +391,7 @@ export default function HolidaysPage() {
                       <h2 className="text-lg font-medium text-gray-900">
                         {isWebEnvironment() && companyName
                           ? `${companyName} Holidays`
-                          : "Current Holidays"}
+                          : "Current Holidays"} ({months[selectedMonth]} {selectedYear})
                       </h2>
                       {isWebEnvironment() && companyName && yearNum !== undefined && monthNum !== undefined && (
                         <button
@@ -602,11 +601,11 @@ export default function HolidaysPage() {
                   <h2 className="text-lg font-medium text-gray-900 mb-4">
                     Suggested Holidays for{" "}
                     {new Date(
-                      parseInt(storedYear!),
-                      parseInt(storedMonth!),
+                      selectedYear,
+                      selectedMonth,
                       1
                     ).toLocaleString("default", { month: "long" })}{" "}
-                    {storedYear!}
+                    {selectedYear}
                   </h2>
                   <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
                     <div className="flex">

@@ -56,6 +56,45 @@ Sweldo follows a dual-process architecture typical of Electron applications:
    - Provide manual cache invalidation (e.g., refresh button triggering `clearEmployeeCache`) and optional TTL logic
    - Apply same pattern to other models: `loadHolidaysFirestore`, `getMissingTimeLogsFirestore`, etc., using separate Dexie tables and `clearXCache` utilities
 
+7. **CSS Architecture Pattern**:
+   - **Core Structure**:
+     - Tailwind CSS (v3) as the primary styling framework
+     - PostCSS configuration at project root pointing to renderer-specific Tailwind config
+     - `globals.css` with Tailwind directives and custom utilities
+     - CSS variables for theming in both light and dark modes using oklch color format
+     - Component-specific animations and keyframes
+   
+   - **Loading Mechanisms**:
+     - Standard CSS imports in Nextron/desktop mode 
+     - Runtime style injection for web mode using `styleInjector.js`
+     - Early font loading via `_document.js` to prevent FOUC (Flash of Unstyled Content)
+     - Critical styles embedded directly in HTML head
+   
+   - **Style Organization**:
+     - Layer-based organization using Tailwind's `@layer` directive
+     - Custom component classes defined in the components layer
+     - Utility extensions in the utilities layer
+     - Base styles in the base layer including CSS variables
+   
+   - **Custom Styling Solutions**:
+     - Scrollbar customization with progressive enhancement
+     - Animation keyframes for UI microinteractions (pulse, shine, blob, firework)
+     - Semantic theming using CSS variables
+     - Border radius inheritance utilities
+
+8. **Environment-Aware Styling Pattern**:
+   - Detection of runtime environment (web vs desktop) via `isWebEnvironment()`
+   - Environment-specific style loading strategies
+   - Conditional font and style injection in web mode
+   - Different DOM manipulation approaches based on environment
+
+9. **Self-contained Component Pattern**:
+   - Components manage their own data loading rather than requiring all data from parents
+   - Environment-aware data fetching from either local file system or Firestore
+   - Graceful loading and error states handled internally
+   - Optional props to override internal data when needed
+   - Example: EmployeeDropdown manages its own employee data loading
+
 ## Component Relationships
 - **Page Components** → Use → **UI Components**
 - **Page Components** → Use → **Hooks** → Use → **Stores**

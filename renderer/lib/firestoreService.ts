@@ -61,7 +61,9 @@ export const getFirestoreInstance = (): Firestore => {
  * @returns boolean indicating if app is running in web environment
  */
 export const isWebEnvironment = (): boolean => {
-  return typeof window !== "undefined" && !window.electron;
+  const isWeb = typeof window !== "undefined" && !window.electron;
+  console.log(`[firestoreService] isWebEnvironment check: ${isWeb}`);
+  return isWeb;
 };
 
 /**
@@ -76,6 +78,7 @@ export const setFirestoreCompanyName = (name: string): void => {
     );
     return;
   }
+  console.log(`[firestoreService] Setting cached company name: ${name}`);
   cachedCompanyName = name;
 };
 
@@ -95,6 +98,7 @@ export const getCompanyName = async (): Promise<string> => {
   try {
     // Try to get company name from settings store
     const settingsStore = useSettingsStore.getState();
+    console.log(`[getCompanyName] Settings store state:`, settingsStore);
 
     if (settingsStore && settingsStore.companyName) {
       cachedCompanyName = settingsStore.companyName;
@@ -106,6 +110,12 @@ export const getCompanyName = async (): Promise<string> => {
 
     // Fall back to environment variable if settings store doesn't have it
     const envCompanyName = process.env.NEXT_PUBLIC_COMPANY_NAME;
+    console.log(
+      `[getCompanyName] Environment variable company name: ${
+        envCompanyName || "not set"
+      }`
+    );
+
     if (envCompanyName) {
       cachedCompanyName = envCompanyName;
       console.log(

@@ -11,20 +11,6 @@ import { loadEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import { getAvatarByIndex, generateCardAnimationProps, avatars } from "@/renderer/lib/avatarUtils";
 import { Employee, createEmployeeModel } from "@/renderer/model/employee";
 
-// Import the avatar images directly
-// Since we're in renderer folder already, we can use a relative path to assets
-import Avatar1 from "../assets/avatars/Avatar-1.png";
-import Avatar2 from "../assets/avatars/Avatar-2.png";
-import Avatar3 from "../assets/avatars/Avatar-3.png";
-import Avatar4 from "../assets/avatars/Avatar-4.png";
-import Avatar5 from "../assets/avatars/Avatar-5.png";
-import Avatar6 from "../assets/avatars/Avatar-6.png";
-import Avatar7 from "../assets/avatars/Avatar-7.png";
-import Avatar8 from "../assets/avatars/Avatar-8.png";
-import Avatar9 from "../assets/avatars/Avatar-9.png";
-import Avatar10 from "../assets/avatars/Avatar-10.png";
-import Avatar11 from "../assets/avatars/Avatar-11.png";
-import Avatar12 from "../assets/avatars/Avatar-12.png";
 
 interface CompanyWithEmployees {
   id: string;

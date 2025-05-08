@@ -163,6 +163,163 @@ export function injectStyles() {
       scrollbar-width: thin;
     }
 
+    /* Timesheet-specific styles to fix cross-environment rendering issues */
+    /* Fix for table to ensure consistent borders */
+    .timesheet-table {
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+    }
+    
+    .timesheet-table tr {
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .timesheet-table tr:first-child {
+      border-top: 1px solid #e5e7eb;
+    }
+    
+    /* Fix specifically for the day column with sticky positioning */
+    .timesheet-day-cell {
+      position: sticky !important;
+      left: 0 !important;
+      z-index: 10 !important;
+      /* Use box shadow instead of borders for better sticky behavior */
+      box-shadow: inset 0 1px 0 #e5e7eb, inset 0 -1px 0 #e5e7eb !important;
+    }
+    
+    /* Sunday-specific styling */
+    .timesheet-day-cell.sunday {
+      background-color: #fef3c7 !important; /* Yellow-100 equivalent */
+    }
+    
+    /* Weekday styling */
+    .timesheet-day-cell.weekday {
+      background-color: white !important;
+    }
+    
+    /* CompensationDialog styling fixes for web mode */
+    /* Clear button (×) styling */
+    .clear-button {
+      position: absolute !important;
+      right: 10px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      color: rgba(156, 163, 175, 0.7) !important;
+      cursor: pointer !important;
+      font-size: 16px !important;
+      z-index: 10 !important;
+      background: transparent !important;
+      border: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 20px !important;
+      height: 20px !important;
+      border-radius: 50% !important;
+      transition: all 0.2s !important;
+    }
+    
+    .clear-button:hover {
+      color: rgba(107, 114, 128, 1) !important;
+      background-color: rgba(229, 231, 235, 0.4) !important;
+    }
+    
+    /* Input field styling in dark dialog mode */
+    .compensation-dialog input,
+    .compensation-dialog select,
+    .compensation-dialog textarea {
+      background-color: rgba(209, 213, 219, 0.1) !important;
+      border: 1px solid rgba(75, 85, 99, 0.2) !important;
+      color: white !important;
+      border-radius: 0.375rem !important;
+      padding: 0.5rem 0.75rem !important;
+      width: 100% !important;
+      transition: border-color 0.15s ease-in-out !important;
+      font-size: 0.875rem !important;
+    }
+    
+    .compensation-dialog input:focus,
+    .compensation-dialog select:focus,
+    .compensation-dialog textarea:focus {
+      border-color: rgba(99, 102, 241, 0.5) !important;
+      outline: none !important;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+    }
+    
+    .compensation-dialog input:disabled,
+    .compensation-dialog select:disabled,
+    .compensation-dialog textarea:disabled {
+      background-color: rgba(209, 213, 219, 0.05) !important;
+      color: rgba(209, 213, 219, 0.7) !important;
+      cursor: not-allowed !important;
+    }
+    
+    .compensation-dialog input::placeholder {
+      color: rgba(156, 163, 175, 0.7) !important;
+    }
+    
+    /* Form field container positioning */
+    .compensation-dialog .form-field {
+      position: relative !important;
+      margin-bottom: 1rem !important;
+    }
+    
+    /* Label styling */
+    .compensation-dialog label {
+      display: block !important;
+      margin-bottom: 0.5rem !important;
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+      color: rgba(229, 231, 235, 0.9) !important;
+    }
+    
+    /* Toggle switch styling */
+    .compensation-dialog .toggle-switch {
+      position: relative !important;
+      display: inline-block !important;
+      width: 36px !important;
+      height: 20px !important;
+      margin-right: 10px !important;
+    }
+    
+    .compensation-dialog .toggle-switch input {
+      opacity: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    
+    .compensation-dialog .toggle-slider {
+      position: absolute !important;
+      cursor: pointer !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      background-color: rgba(75, 85, 99, 0.4) !important;
+      transition: .4s !important;
+      border-radius: 34px !important;
+    }
+    
+    .compensation-dialog .toggle-slider:before {
+      position: absolute !important;
+      content: "" !important;
+      height: 16px !important;
+      width: 16px !important;
+      left: 2px !important;
+      bottom: 2px !important;
+      background-color: white !important;
+      transition: .4s !important;
+      border-radius: 50% !important;
+    }
+    
+    .compensation-dialog input:checked + .toggle-slider {
+      background-color: rgb(79, 70, 229) !important;
+    }
+    
+    .compensation-dialog input:checked + .toggle-slider:before {
+      transform: translateX(16px) !important;
+    }
+
     /* React DatePicker essential styles */
     .react-datepicker-wrapper {
       display: inline-block;

@@ -34,9 +34,9 @@ export const useComputeAllCompensations = (
   year: number,
   month: number,
   day: number,
-  compensationModel: CompensationModel,
-  attendanceModel: AttendanceModel,
-  attendanceSettingsModel: AttendanceSettingsModel,
+  compensationModel: CompensationModel | null,
+  attendanceModel: AttendanceModel | null,
+  attendanceSettingsModel: AttendanceSettingsModel | null,
   dbPath: string,
   onCompensationsComputed?: (newCompensations: Compensation[]) => void
 ) => {
@@ -45,7 +45,10 @@ export const useComputeAllCompensations = (
     compensationEntries: Compensation[],
     recompute: boolean = false
   ) => {
-    if (!employee || !timesheetEntries.length) return;
+    if (!employee || !timesheetEntries.length || !attendanceSettingsModel) {
+      console.warn("[computeCompensations] Missing required data (employee, entries, or settings model). Skipping computation.");
+      return compensationEntries;
+    }
 
     try {
       const timeSettings = await attendanceSettingsModel.loadTimeSettings();
@@ -95,9 +98,9 @@ export const useComputeAllCompensations = (
         // Use the model instance and await the async call
         const schedule = employmentType
           ? await attendanceSettingsModel.getScheduleForDate(
-              employmentType,
-              entryDate
-            )
+            employmentType,
+            entryDate
+          )
           : null;
 
         // Determine absence status
@@ -128,8 +131,8 @@ export const useComputeAllCompensations = (
           newCompensation.grossPay = isHoliday
             ? dailyRate * (holiday?.multiplier || 1)
             : isPresent
-            ? dailyRate
-            : 0;
+              ? dailyRate
+              : 0;
           newCompensation.netPay = newCompensation.grossPay;
 
           if (foundCompensation && recompute) {
@@ -224,12 +227,17 @@ export const useComputeAllCompensations = (
         }
       }
 
-      await compensationModel.saveOrUpdateRecords(
-        employee.id,
-        year,
-        month,
-        updatedCompensations
-      );
+      // Only save if compensationModel is available (i.e., desktop mode)
+      if (compensationModel) {
+        await compensationModel.saveOrUpdateRecords(
+          employee.id,
+          year,
+          month,
+          updatedCompensations
+        );
+      }
+      // TODO: Add logic here for saving to Firestore in web mode if this hook is responsible for it.
+
       onCompensationsComputed?.(updatedCompensations);
       return updatedCompensations;
     } catch (error) {

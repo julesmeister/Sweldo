@@ -80,7 +80,7 @@ export function MagicCard({
   return (
     <div
       ref={cardRef}
-      className={cn("group relative overflow-hidden", className)}
+      className={cn("relative overflow-hidden", className)}
       style={{
         position: "relative",
         borderRadius: borderRadius,

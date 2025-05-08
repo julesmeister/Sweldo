@@ -94,11 +94,10 @@ const FormField: React.FC<FormFieldProps> = ({
 
   const isFieldReadOnly =
     readOnly || (isComputedField && !manualOverride) || !hasEditAccess;
-  const fieldClassName = `w-full px-3 py-1.5 text-sm ${
-    isFieldReadOnly
-      ? "bg-gray-800/50 text-gray-400 cursor-not-allowed"
-      : "bg-gray-800 text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-  } border border-gray-700 rounded-md ${className}`;
+  const fieldClassName = `w-full px-3 py-1.5 text-sm ${isFieldReadOnly
+    ? "bg-gray-800/50 text-gray-400 cursor-not-allowed"
+    : "bg-gray-800 text-gray-100 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+    } border border-gray-700 rounded-md ${className}`;
 
   // Determine if this is a monetary field (contains 'Pay' or 'Deduction')
   const isMonetaryField = name.includes("Pay") || name.includes("Deduction");
@@ -119,8 +118,8 @@ const FormField: React.FC<FormFieldProps> = ({
           ? Math.round(value)
           : Number(value).toFixed(2)
         : isMinutesField || isHoursField || isLeavePayField
-        ? Math.round(value)
-        : value
+          ? Math.round(value)
+          : value
       : value;
 
   useEffect(() => {
@@ -157,9 +156,8 @@ const FormField: React.FC<FormFieldProps> = ({
 
     return (
       <div
-        className={`absolute ${
-          dropdownPosition === "bottom" ? "top-full" : "bottom-full"
-        } left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-50 p-2 mt-1 w-[300px]`}
+        className={`absolute ${dropdownPosition === "bottom" ? "top-full" : "bottom-full"
+          } left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-50 p-2 mt-1 w-[300px]`}
       >
         <div className="grid grid-cols-5 gap-1">
           {Array.from({ length: 10 }, (_, i) => i + 1).map((hour) => (
@@ -169,10 +167,9 @@ const FormField: React.FC<FormFieldProps> = ({
               className={`
                 px-2 py-1.5 text-sm rounded
                 transition-all duration-150
-                ${
-                  currentHours === hour
-                    ? "bg-blue-600 text-white font-medium"
-                    : "hover:bg-gray-800 text-gray-300"
+                ${currentHours === hour
+                  ? "bg-blue-600 text-white font-medium"
+                  : "hover:bg-gray-800 text-gray-300"
                 }
               `}
             >
@@ -185,7 +182,7 @@ const FormField: React.FC<FormFieldProps> = ({
   };
 
   return (
-    <div>
+    <div className="form-field">
       <label className="block text-sm font-medium text-gray-300 mb-1">
         {label}
       </label>
@@ -234,8 +231,8 @@ const FormField: React.FC<FormFieldProps> = ({
             min="0"
             step={
               name === "overtimePay" ||
-              name === "undertimeDeduction" ||
-              name === "lateDeduction"
+                name === "undertimeDeduction" ||
+                name === "lateDeduction"
                 ? "1"
                 : "0.01"
             }
@@ -250,7 +247,7 @@ const FormField: React.FC<FormFieldProps> = ({
                   onChange({ target: { name, value: "0" } } as any);
                 }
               }}
-              className="absolute right-2 top-1/2 -translate-y-[55%] text-gray-400 hover:text-gray-600 text-xl font-bold"
+              className="clear-button"
               title="Clear value (enables Manual Override)"
             >
               ×
@@ -695,7 +692,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         newData.undertimeDeduction =
           numericValue > gracePeriod
             ? (numericValue - gracePeriod) *
-              (attendanceSettings?.undertimeDeductionPerMinute || 0)
+            (attendanceSettings?.undertimeDeductionPerMinute || 0)
             : 0;
         newData.deductions =
           newData.undertimeDeduction + (formData.lateDeduction || 0);
@@ -707,7 +704,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         newData.lateDeduction =
           numericValue > gracePeriod
             ? (numericValue - gracePeriod) *
-              (attendanceSettings?.lateDeductionPerMinute || 0)
+            (attendanceSettings?.lateDeductionPerMinute || 0)
             : 0;
         newData.deductions =
           (formData.undertimeDeduction || 0) + newData.lateDeduction;
@@ -764,9 +761,9 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
         const key = name as keyof Compensation;
         (newData[key] as string | number) =
           name.includes("Pay") ||
-          name.includes("Deduction") ||
-          name.includes("Hours") ||
-          name.includes("Minutes")
+            name.includes("Deduction") ||
+            name.includes("Hours") ||
+            name.includes("Minutes")
             ? numericValue
             : value;
       }
@@ -898,7 +895,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       }}
     >
       <div
-        className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-7xl overflow-visible"
+        className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-7xl overflow-visible compensation-dialog"
         style={{
           top: position?.top,
           left: position?.left,
@@ -913,13 +910,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             borderRight: "8px solid transparent",
             ...(position?.showAbove
               ? {
-                  bottom: "-8px",
-                  borderTop: "8px solid rgb(55, 65, 81)",
-                }
+                bottom: "-8px",
+                borderTop: "8px solid rgb(55, 65, 81)",
+              }
               : {
-                  top: "-8px",
-                  borderBottom: "8px solid rgb(55, 65, 81)",
-                }),
+                top: "-8px",
+                borderBottom: "8px solid rgb(55, 65, 81)",
+              }),
           }}
         />
         <div
@@ -929,13 +926,13 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
             borderRight: "7px solid transparent",
             ...(position?.showAbove
               ? {
-                  bottom: "-6px",
-                  borderTop: "7px solid rgb(17, 24, 39)",
-                }
+                bottom: "-6px",
+                borderTop: "7px solid rgb(17, 24, 39)",
+              }
               : {
-                  top: "-6px",
-                  borderBottom: "7px solid rgb(17, 24, 39)",
-                }),
+                top: "-6px",
+                borderBottom: "7px solid rgb(17, 24, 39)",
+              }),
           }}
         />
 
@@ -1019,104 +1016,104 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   breakdown={
                     formData.manualOverride
                       ? {
-                          basePay: parseFloat(
+                        basePay: parseFloat(
+                          (
+                            formData.dailyRate ||
+                            employee?.dailyRate ||
+                            0
+                          ).toString()
+                        ),
+                        overtimePay: formData.overtimePay || 0,
+                        nightDifferentialPay:
+                          formData.nightDifferentialPay || 0,
+                        holidayBonus: formData.holidayBonus || 0,
+                        deductions: {
+                          late: formData.lateDeduction || 0,
+                          undertime: formData.undertimeDeduction || 0,
+                          total: formData.deductions || 0,
+                        },
+                        netPay: formData.netPay || 0,
+                        details: {
+                          hourlyRate:
+                            (parseFloat(
+                              (
+                                formData.dailyRate ||
+                                employee?.dailyRate ||
+                                0
+                              ).toString()
+                            ) || 0) / (employmentType?.hoursOfWork || 8),
+                          overtimeHourlyRate:
+                            ((parseFloat(
+                              (
+                                formData.dailyRate ||
+                                employee?.dailyRate ||
+                                0
+                              ).toString()
+                            ) || 0) /
+                              (employmentType?.hoursOfWork || 8)) *
+                            (attendanceSettings.overtimeHourlyMultiplier ||
+                              1.25),
+                          overtimeMinutes: formData.overtimeMinutes || 0,
+                          nightDifferentialHours:
+                            formData.nightDifferentialHours || 0,
+                          lateMinutes: formData.lateMinutes || 0,
+                          undertimeMinutes: formData.undertimeMinutes || 0,
+                          lateGracePeriod:
+                            attendanceSettings.lateGracePeriod || 0,
+                          undertimeGracePeriod:
+                            attendanceSettings.undertimeGracePeriod || 0,
+                          lateDeductionPerMinute:
+                            attendanceSettings.lateDeductionPerMinute || 0,
+                          undertimeDeductionPerMinute:
+                            attendanceSettings.undertimeDeductionPerMinute ||
+                            0,
+                        },
+                      }
+                      : (() => {
+                        const { actual, scheduled } = createTimeObjects(
+                          year,
+                          month,
+                          day,
+                          timeIn || "00:00",
+                          timeOut || "00:00",
+                          scheduleInfo.schedule
+                        );
+                        const timeMetrics = calculateTimeMetrics(
+                          actual,
+                          scheduled,
+                          attendanceSettings,
+                          employmentType
+                        );
+                        const payMetrics = calculatePayMetrics(
+                          timeMetrics,
+                          attendanceSettings,
+                          parseFloat(
                             (
                               formData.dailyRate ||
                               employee?.dailyRate ||
                               0
                             ).toString()
                           ),
-                          overtimePay: formData.overtimePay || 0,
-                          nightDifferentialPay:
-                            formData.nightDifferentialPay || 0,
-                          holidayBonus: formData.holidayBonus || 0,
-                          deductions: {
-                            late: formData.lateDeduction || 0,
-                            undertime: formData.undertimeDeduction || 0,
-                            total: formData.deductions || 0,
-                          },
-                          netPay: formData.netPay || 0,
-                          details: {
-                            hourlyRate:
-                              (parseFloat(
-                                (
-                                  formData.dailyRate ||
-                                  employee?.dailyRate ||
-                                  0
-                                ).toString()
-                              ) || 0) / (employmentType?.hoursOfWork || 8),
-                            overtimeHourlyRate:
-                              ((parseFloat(
-                                (
-                                  formData.dailyRate ||
-                                  employee?.dailyRate ||
-                                  0
-                                ).toString()
-                              ) || 0) /
-                                (employmentType?.hoursOfWork || 8)) *
-                              (attendanceSettings.overtimeHourlyMultiplier ||
-                                1.25),
-                            overtimeMinutes: formData.overtimeMinutes || 0,
-                            nightDifferentialHours:
-                              formData.nightDifferentialHours || 0,
-                            lateMinutes: formData.lateMinutes || 0,
-                            undertimeMinutes: formData.undertimeMinutes || 0,
-                            lateGracePeriod:
-                              attendanceSettings.lateGracePeriod || 0,
-                            undertimeGracePeriod:
-                              attendanceSettings.undertimeGracePeriod || 0,
-                            lateDeductionPerMinute:
-                              attendanceSettings.lateDeductionPerMinute || 0,
-                            undertimeDeductionPerMinute:
-                              attendanceSettings.undertimeDeductionPerMinute ||
-                              0,
-                          },
-                        }
-                      : (() => {
-                          const { actual, scheduled } = createTimeObjects(
-                            year,
-                            month,
-                            day,
-                            timeIn || "00:00",
-                            timeOut || "00:00",
-                            scheduleInfo.schedule
-                          );
-                          const timeMetrics = calculateTimeMetrics(
-                            actual,
-                            scheduled,
-                            attendanceSettings,
-                            employmentType
-                          );
-                          const payMetrics = calculatePayMetrics(
-                            timeMetrics,
-                            attendanceSettings,
-                            parseFloat(
-                              (
-                                formData.dailyRate ||
-                                employee?.dailyRate ||
-                                0
-                              ).toString()
-                            ),
-                            holidays.find((h) => isHolidayDate(date, h)),
-                            actual.timeIn,
-                            actual.timeOut,
-                            scheduled,
-                            employmentType
-                          );
-                          return getPaymentBreakdown(
-                            timeMetrics,
-                            payMetrics,
-                            attendanceSettings,
-                            parseFloat(
-                              (
-                                formData.dailyRate ||
-                                employee?.dailyRate ||
-                                0
-                              ).toString()
-                            ),
-                            employmentType
-                          );
-                        })()
+                          holidays.find((h) => isHolidayDate(date, h)),
+                          actual.timeIn,
+                          actual.timeOut,
+                          scheduled,
+                          employmentType
+                        );
+                        return getPaymentBreakdown(
+                          timeMetrics,
+                          payMetrics,
+                          attendanceSettings,
+                          parseFloat(
+                            (
+                              formData.dailyRate ||
+                              employee?.dailyRate ||
+                              0
+                            ).toString()
+                          ),
+                          employmentType
+                        );
+                      })()
                   }
                   attendanceSettings={attendanceSettings}
                   holiday={holidays.find((h) =>
@@ -1351,21 +1348,18 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                       setFormData((prev) => ({ ...prev, manualOverride: e }));
                     }}
                     disabled={!hasEditAccess}
-                    className={`${
-                      formData.manualOverride ? "bg-blue-600" : "bg-gray-700"
-                    } relative inline-flex h-6 w-11 flex-shrink-0 ${
-                      hasEditAccess
+                    className={`${formData.manualOverride ? "bg-blue-600" : "bg-gray-700"
+                      } relative inline-flex h-6 w-11 flex-shrink-0 ${hasEditAccess
                         ? "cursor-pointer"
                         : "cursor-not-allowed opacity-50"
-                    } rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                      } rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                   >
                     <span className="sr-only">Manual Override</span>
                     <span
-                      className={`${
-                        formData.manualOverride
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      } pointer-events-none inline-block h-5 w-5 rounded-full bg-gray-100 shadow transform transition-transform duration-200 ease-in-out`}
+                      className={`${formData.manualOverride
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                        } pointer-events-none inline-block h-5 w-5 rounded-full bg-gray-100 shadow transform transition-transform duration-200 ease-in-out`}
                     />
                   </Switch>
                   <span>Manual Override</span>
@@ -1380,11 +1374,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   value={formData.notes || ""}
                   onChange={handleInputChange}
                   disabled={!hasEditAccess}
-                  className={`flex-1 px-3 py-2.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 ${
-                    hasEditAccess
-                      ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                      : "opacity-50 cursor-not-allowed"
-                  }`}
+                  className={`flex-1 px-3 py-2.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 ${hasEditAccess
+                    ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
+                    : "opacity-50 cursor-not-allowed"
+                    }`}
                 />
                 <button
                   type="button"
