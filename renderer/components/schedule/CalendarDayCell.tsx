@@ -112,14 +112,13 @@ const CalendarDayCell = React.memo(
                     isOff: !schedule.isOff,
                   });
                 }}
-                className={`px-1.5 py-0.5 text-[10px] rounded transition-colors flex items-center justify-center ${
-                  schedule.isOff
-                    ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    : "bg-blue-100 text-blue-700 hover:bg-blue-200" // Status button styling
-                }`}
+                className={`px-1.5 py-0.5 text-[10px] rounded transition-colors flex items-center justify-center ${schedule.isOff
+                  ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  : "bg-blue-100 text-blue-700 hover:bg-blue-200" // Status button styling
+                  }`}
                 aria-label={schedule.isOff ? "Mark as Working" : "Mark as Off"}
               >
-                {schedule.isOff ? "Work" : "Day Off"}
+                {(!schedule.isOff && (schedule.timeIn !== "" || schedule.timeOut !== "")) ? "Work" : "Day Off"}
               </button>
               {/* Clear button shown on hover only if it's a working day */}
               {!schedule.isOff && (

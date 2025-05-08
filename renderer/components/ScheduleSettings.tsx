@@ -21,6 +21,12 @@ import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import WeeklyPatternSchedule from "./schedule/WeeklyPatternSchedule";
 import MonthSpecificSchedule from "./schedule/MonthSpecificSchedule";
 import RosterSchedule from "./schedule/RosterSchedule";
+import { loadActiveEmployeesFirestore } from "../model/employee_firestore";
+import {
+  loadMonthScheduleFirestore,
+  saveMonthScheduleFirestore,
+} from "../model/settings_firestore";
+import { isWebEnvironment } from "../lib/firestoreService";
 
 interface ScheduleSettingsProps {
   employmentTypes: EmploymentType[];
@@ -119,11 +125,7 @@ export default function ScheduleSettings({
   const [showMonthPicker, setShowMonthPicker] = React.useState(false);
 
   // Need the model instance to load/save monthly schedules
-  const { dbPath, isInitialized } = useSettingsStore();
-  const settingsModel = useMemo(
-    () => createAttendanceSettingsModel(dbPath),
-    [dbPath]
-  ); // Assuming createAttendanceSettingsModel provides the necessary methods
+  const { dbPath, companyName, isInitialized } = useSettingsStore();
   const initialModeChecked = useRef(false); // Ref to run effect only once
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -142,10 +144,9 @@ export default function ScheduleSettings({
 
   // Effect to set initial schedule mode based on data existence
   useEffect(() => {
-    // Ensure settings are initialized, model exists, types loaded, and check hasn't run
+    // Ensure settings are initialized, types loaded, and check hasn't run
     if (
-      !isInitialized ||
-      !settingsModel ||
+      !isInitialized || // Check if store is initialized
       employmentTypes.length === 0 ||
       initialModeChecked.current
     ) {
@@ -163,11 +164,27 @@ export default function ScheduleSettings({
       const initialMonth = selectedMonth.getMonth() + 1;
 
       try {
-        const initialSchedule = await settingsModel.loadMonthSchedule(
-          initialType,
-          initialYear,
-          initialMonth
-        );
+        let initialSchedule: MonthSchedule | null = null;
+        if (isWebEnvironment()) {
+          if (!companyName) {
+            console.warn("[ScheduleSettings InitialModeCheck] Web mode: Company name not yet available.");
+            initialModeChecked.current = true; // Mark as checked even if we didn't fetch
+            return;
+          }
+          initialSchedule = await loadMonthScheduleFirestore(initialType, initialYear, initialMonth, companyName);
+        } else {
+          if (!dbPath) {
+            console.warn("[ScheduleSettings InitialModeCheck] Desktop mode: dbPath not yet available.");
+            initialModeChecked.current = true; // Mark as checked even if we didn't fetch
+            return;
+          }
+          const settingsModel = createAttendanceSettingsModel(dbPath);
+          initialSchedule = await settingsModel.loadMonthSchedule(
+            initialType,
+            initialYear,
+            initialMonth
+          );
+        }
 
         // Check if the loaded schedule is not null AND has keys (is not empty {})
         if (initialSchedule && Object.keys(initialSchedule).length > 0) {
@@ -183,11 +200,17 @@ export default function ScheduleSettings({
     };
 
     checkInitialMode();
-  }, [isInitialized, settingsModel, employmentTypes, selectedMonth]); // Dependencies
+  }, [isInitialized, companyName, dbPath, employmentTypes, selectedMonth]); // Added isInitialized, companyName, dbPath
 
   // Effect to load the specific month schedule when type or month changes
   React.useEffect(() => {
     const loadSchedule = async () => {
+      // Ensure store is initialized before loading
+      if (!isInitialized) {
+        console.log("[ScheduleSettings Load Effect] Store not initialized, skipping schedule load.");
+        return;
+      }
+
       // Load schedules only when in monthly OR roster mode
       if (
         (scheduleMode !== "monthly" && scheduleMode !== "roster") ||
@@ -205,12 +228,21 @@ export default function ScheduleSettings({
         // Load schedule for all employment types
         for (const empType of employmentTypes) {
           if (empType.type) {
-            // Ensure type name exists
-            const schedule = await settingsModel.loadMonthSchedule(
-              empType.type,
-              year,
-              month
-            );
+            let schedule: MonthSchedule | null = null;
+            if (isWebEnvironment()) {
+              if (!companyName) {
+                console.warn(`[ScheduleSettings Load Effect] Web mode: Cannot load schedule for ${empType.type}, company name missing.`);
+                continue; // Skip this type if company name is missing
+              }
+              schedule = await loadMonthScheduleFirestore(empType.type, year, month, companyName);
+            } else {
+              if (!dbPath) {
+                console.warn(`[ScheduleSettings Load Effect] Desktop mode: Cannot load schedule for ${empType.type}, dbPath missing.`);
+                continue; // Skip this type if dbPath is missing
+              }
+              const settingsModel = createAttendanceSettingsModel(dbPath);
+              schedule = await settingsModel.loadMonthSchedule(empType.type, year, month);
+            }
             newSchedules[empType.type] = schedule || {}; // Store schedule (or empty obj) by type name
           } else {
             console.warn(
@@ -233,8 +265,8 @@ export default function ScheduleSettings({
       }
     };
     loadSchedule();
-    // Reload when selectedMonth, scheduleMode (monthly/roster), types, or model changes
-  }, [selectedMonth, scheduleMode, employmentTypes, settingsModel]);
+    // Reload when selectedMonth, scheduleMode, types, or identifiers change
+  }, [isInitialized, companyName, dbPath, selectedMonth, scheduleMode, employmentTypes]); // Added isInitialized, companyName, dbPath
 
   // Function to clear monthly schedules *for the current view*
   const clearCurrentMonthSchedules = () => {
@@ -246,8 +278,12 @@ export default function ScheduleSettings({
     // Clear the specific type from the allMonthSchedules state
     setAllMonthSchedules((prev) => ({ ...prev, [type]: {} }));
 
-    settingsModel
-      .saveMonthSchedule(type, year, month, {}) // Save empty schedule to file
+    // Save empty schedule (handling web/desktop)
+    const savePromise = isWebEnvironment()
+      ? saveMonthScheduleFirestore(type, year, month, {}, companyName || "") // Pass companyName
+      : createAttendanceSettingsModel(dbPath).saveMonthSchedule(type, year, month, {}); // Use model for desktop
+
+    savePromise
       .then(() =>
         toast.success(
           `Schedules cleared for ${selectedMonth.toLocaleString("default", {
@@ -441,14 +477,14 @@ export default function ScheduleSettings({
         requiresTimeTracking,
         schedules: requiresTimeTracking
           ? [
-              { dayOfWeek: 1, timeIn: "", timeOut: "" },
-              { dayOfWeek: 2, timeIn: "", timeOut: "" },
-              { dayOfWeek: 3, timeIn: "", timeOut: "" },
-              { dayOfWeek: 4, timeIn: "", timeOut: "" },
-              { dayOfWeek: 5, timeIn: "", timeOut: "" },
-              { dayOfWeek: 6, timeIn: "", timeOut: "" },
-              { dayOfWeek: 7, timeIn: "", timeOut: "" },
-            ]
+            { dayOfWeek: 1, timeIn: "", timeOut: "" },
+            { dayOfWeek: 2, timeIn: "", timeOut: "" },
+            { dayOfWeek: 3, timeIn: "", timeOut: "" },
+            { dayOfWeek: 4, timeIn: "", timeOut: "" },
+            { dayOfWeek: 5, timeIn: "", timeOut: "" },
+            { dayOfWeek: 6, timeIn: "", timeOut: "" },
+            { dayOfWeek: 7, timeIn: "", timeOut: "" },
+          ]
           : undefined,
       };
     } else {
@@ -508,14 +544,16 @@ export default function ScheduleSettings({
         [typeId]: updatedMonthSchedule,
       }));
 
-      // 2. Save the entire updated month schedule back to its file
+      // 2. Save the entire updated month schedule back to its file/firestore
       try {
-        await settingsModel.saveMonthSchedule(
-          typeId,
-          year,
-          month,
-          updatedMonthSchedule
-        );
+        if (isWebEnvironment()) {
+          if (!companyName) throw new Error("Company name not available for saving schedule.");
+          await saveMonthScheduleFirestore(typeId, year, month, updatedMonthSchedule, companyName);
+        } else {
+          if (!dbPath) throw new Error("Database path not available for saving schedule.");
+          const settingsModel = createAttendanceSettingsModel(dbPath);
+          await settingsModel.saveMonthSchedule(typeId, year, month, updatedMonthSchedule);
+        }
         // Optional: add a subtle save indicator instead of toast on every change
       } catch (error) {
         console.error("Failed to save month schedule update:", error);
@@ -525,7 +563,9 @@ export default function ScheduleSettings({
     },
     [
       allMonthSchedules,
-      settingsModel,
+      isWebEnvironment,
+      companyName,
+      dbPath,
       employmentTypes,
       selectedTypeTab,
       selectedMonth,
@@ -575,13 +615,13 @@ export default function ScheduleSettings({
     handleEmploymentTypeChange(
       index,
       `schedules.${dayIndex}.${field}` as
-        | `schedules.${number}.timeIn`
-        | `schedules.${number}.timeOut`,
+      | `schedules.${number}.timeIn`
+      | `schedules.${number}.timeOut`,
       value
     );
   };
 
-  React.useEffect(() => {}, [scheduleMode]);
+  React.useEffect(() => { }, [scheduleMode]);
 
   const { handlePrintSchedules } = useSchedulePrint({
     employmentTypes,
@@ -593,18 +633,38 @@ export default function ScheduleSettings({
   const [employeesMap, setEmployeesMap] = useState<{
     [type: string]: Employee[];
   }>({});
-  const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
 
   // Add effect to load employees
   useEffect(() => {
     const loadEmployees = async () => {
-      if (!dbPath) {
-        console.warn("Database path not set");
+      // Wait for initialization
+      if (!isInitialized) {
+        console.warn("[ScheduleSettings Employee Load] Store not initialized.");
         return;
       }
 
+      let loadedEmployees: Employee[] = [];
       try {
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
+        if (isWebEnvironment()) {
+          // Web mode - check for companyName and load from Firestore
+          if (!companyName) {
+            console.warn("[ScheduleSettings Employee Load] Web mode: Company name not set.");
+            setEmployeesMap({}); // Clear map if no company name
+            return;
+          }
+          loadedEmployees = await loadActiveEmployeesFirestore(companyName);
+          console.log(`[ScheduleSettings Employee Load] Web: Loaded ${loadedEmployees.length} employees for ${companyName}`);
+        } else {
+          // Desktop mode - check for dbPath and load from local model
+          if (!dbPath) {
+            console.warn("[ScheduleSettings Employee Load] Desktop mode: Database path not set.");
+            setEmployeesMap({}); // Clear map if no dbPath
+            return;
+          }
+          const employeeModel = createEmployeeModel(dbPath);
+          loadedEmployees = await employeeModel.loadActiveEmployees();
+          console.log(`[ScheduleSettings Employee Load] Desktop: Loaded ${loadedEmployees.length} employees from ${dbPath}`);
+        }
 
         // Group employees by employment type
         const groupedEmployees = loadedEmployees.reduce((acc, employee) => {
@@ -625,7 +685,7 @@ export default function ScheduleSettings({
     };
 
     loadEmployees();
-  }, [dbPath, employeeModel]);
+  }, [isInitialized, dbPath, companyName]); // Depend on initialization and identifiers
 
   // Define handleWeeklyScheduleChange
   const handleWeeklyScheduleChange = (
@@ -801,7 +861,7 @@ export default function ScheduleSettings({
     const msPerDay = 1000 * 60 * 60 * 24;
     const copiedIntervalDays = Math.round(
       (copiedRosterData.endDate.getTime() - copiedStartDate.getTime()) /
-        msPerDay
+      msPerDay
     );
 
     // Structure to hold updates grouped by type, year, month for saving
@@ -867,15 +927,10 @@ export default function ScheduleSettings({
             const month = parseInt(monthStr, 10);
             const monthUpdates = updatesByMonth[typeId][year][month];
             let existingSchedule =
-              (await settingsModel.loadMonthSchedule(typeId, year, month)) ||
+              (await handleUpdateSchedule(typeId, new Date(year, month, 1), monthUpdates)) ||
               {};
             const finalSchedule = { ...existingSchedule, ...monthUpdates };
-            await settingsModel.saveMonthSchedule(
-              typeId,
-              year,
-              month,
-              finalSchedule
-            );
+            await handleUpdateSchedule(typeId, new Date(year, month, 1), finalSchedule);
           }
         }
       }
@@ -927,19 +982,26 @@ export default function ScheduleSettings({
       };
     });
 
-    // 2. Save to file
+    // 2. Save to file/firestore
     try {
-      // Get the latest state for the specific type to save
-      const scheduleToSave = {
-        ...(allMonthSchedules[typeId] || {}),
-        [dateStr]: newSchedule,
-      };
-      await settingsModel.saveMonthSchedule(
-        typeId,
-        year,
-        month,
-        scheduleToSave
-      );
+      if (isWebEnvironment()) {
+        if (!companyName) throw new Error("Company name not available for saving schedule.");
+        // Get the latest state for the specific type to save
+        const scheduleToSave = {
+          ...(allMonthSchedules[typeId] || {}),
+          [dateStr]: newSchedule,
+        };
+        await saveMonthScheduleFirestore(typeId, year, month, scheduleToSave, companyName);
+      } else {
+        if (!dbPath) throw new Error("Database path not available for saving schedule.");
+        const settingsModel = createAttendanceSettingsModel(dbPath);
+        // Get the latest state for the specific type to save
+        const scheduleToSave = {
+          ...(allMonthSchedules[typeId] || {}),
+          [dateStr]: newSchedule,
+        };
+        await settingsModel.saveMonthSchedule(typeId, year, month, scheduleToSave);
+      }
       // Optional: toast.success('Schedule updated');
     } catch (error) {
       console.error(
@@ -971,33 +1033,30 @@ export default function ScheduleSettings({
                 <button
                   type="button"
                   onClick={() => setScheduleMode("weekly")}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${
-                    scheduleMode === "weekly"
-                      ? "bg-blue-100 text-blue-700"
-                      : "hover:bg-gray-100"
-                  }`}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${scheduleMode === "weekly"
+                    ? "bg-blue-100 text-blue-700"
+                    : "hover:bg-gray-100"
+                    }`}
                 >
                   Weekly Pattern
                 </button>
                 <button
                   type="button"
                   onClick={() => setScheduleMode("monthly")}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${
-                    scheduleMode === "monthly"
-                      ? "bg-blue-100 text-blue-700"
-                      : "hover:bg-gray-100"
-                  }`}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${scheduleMode === "monthly"
+                    ? "bg-blue-100 text-blue-700"
+                    : "hover:bg-gray-100"
+                    }`}
                 >
                   Month Specific
                 </button>
                 <button
                   type="button"
                   onClick={() => setScheduleMode("roster")}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${
-                    scheduleMode === "roster"
-                      ? "bg-blue-100 text-blue-700"
-                      : "hover:bg-gray-100"
-                  }`}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors duration-150 ${scheduleMode === "roster"
+                    ? "bg-blue-100 text-blue-700"
+                    : "hover:bg-gray-100"
+                    }`}
                 >
                   Roster
                 </button>
@@ -1072,28 +1131,25 @@ export default function ScheduleSettings({
                             <button
                               key={index}
                               onClick={() => setSelectedTypeTab(index)}
-                              className={`group relative min-w-[180px] flex flex-col items-start justify-center gap-2 p-3 rounded-xl font-medium text-sm transition-all duration-200 ${
-                                selectedTypeTab === index
-                                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
-                                  : "bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-sm hover:shadow-md border border-gray-200/50"
-                              }`}
+                              className={`group relative min-w-[180px] flex flex-col items-start justify-center gap-2 p-3 rounded-xl font-medium text-sm transition-all duration-200 ${selectedTypeTab === index
+                                ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                                : "bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-sm hover:shadow-md border border-gray-200/50"
+                                }`}
                             >
                               <div className="relative w-full">
                                 <div className="relative z-10 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <div
-                                      className={`p-1.5 rounded-lg ${
-                                        selectedTypeTab === index
-                                          ? "bg-white/10"
-                                          : "bg-blue-50"
-                                      }`}
+                                      className={`p-1.5 rounded-lg ${selectedTypeTab === index
+                                        ? "bg-white/10"
+                                        : "bg-blue-50"
+                                        }`}
                                     >
                                       <IoWalletOutline
-                                        className={`w-4 h-4 ${
-                                          selectedTypeTab === index
-                                            ? "text-white"
-                                            : "text-blue-500"
-                                        }`}
+                                        className={`w-4 h-4 ${selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-blue-500"
+                                          }`}
                                       />
                                     </div>
                                     <span className="font-semibold">
@@ -1101,11 +1157,10 @@ export default function ScheduleSettings({
                                     </span>
                                   </div>
                                   <span
-                                    className={`px-2 py-0.5 text-[11px] rounded-full transition-all duration-200 font-medium ${
-                                      selectedTypeTab === index
-                                        ? "bg-white/10 text-white"
-                                        : "bg-blue-50 text-blue-600"
-                                    }`}
+                                    className={`px-2 py-0.5 text-[11px] rounded-full transition-all duration-200 font-medium ${selectedTypeTab === index
+                                      ? "bg-white/10 text-white"
+                                      : "bg-blue-50 text-blue-600"
+                                      }`}
                                   >
                                     {/* Conditional Count Display */}
                                     {(() => {
@@ -1149,27 +1204,24 @@ export default function ScheduleSettings({
                                 </div>
                               </div>
                               <div
-                                className={`w-full flex items-center gap-2 text-xs ${
-                                  selectedTypeTab === index
-                                    ? "text-white/90"
-                                    : "text-gray-500"
-                                }`}
+                                className={`w-full flex items-center gap-2 text-xs ${selectedTypeTab === index
+                                  ? "text-white/90"
+                                  : "text-gray-500"
+                                  }`}
                               >
                                 {employeesMap[type.type]?.length === 1 ? (
                                   <span className="flex items-center gap-2">
                                     <div
-                                      className={`h-6 w-6 rounded-full ${
-                                        selectedTypeTab === index
-                                          ? "bg-white/10 ring-2 ring-white/20"
-                                          : "bg-gray-100 ring-2 ring-white"
-                                      } flex items-center justify-center shadow-sm`}
+                                      className={`h-6 w-6 rounded-full ${selectedTypeTab === index
+                                        ? "bg-white/10 ring-2 ring-white/20"
+                                        : "bg-gray-100 ring-2 ring-white"
+                                        } flex items-center justify-center shadow-sm`}
                                     >
                                       <span
-                                        className={`text-xs font-medium ${
-                                          selectedTypeTab === index
-                                            ? "text-white"
-                                            : "text-gray-600"
-                                        }`}
+                                        className={`text-xs font-medium ${selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-gray-600"
+                                          }`}
                                       >
                                         {employeesMap[type.type][0].name
                                           .split(" ")
@@ -1178,11 +1230,10 @@ export default function ScheduleSettings({
                                       </span>
                                     </div>
                                     <span
-                                      className={`font-medium ${
-                                        selectedTypeTab === index
-                                          ? "text-white/90"
-                                          : "text-gray-900"
-                                      }`}
+                                      className={`font-medium ${selectedTypeTab === index
+                                        ? "text-white/90"
+                                        : "text-gray-900"
+                                        }`}
                                     >
                                       {employeesMap[type.type][0].name}
                                     </span>
@@ -1190,18 +1241,16 @@ export default function ScheduleSettings({
                                 ) : (
                                   <span className="flex items-center gap-2">
                                     <div
-                                      className={`px-2 py-1 rounded-md text-xs ${
-                                        selectedTypeTab === index
-                                          ? "bg-white/10"
-                                          : "bg-gray-100"
-                                      }`}
+                                      className={`px-2 py-1 rounded-md text-xs ${selectedTypeTab === index
+                                        ? "bg-white/10"
+                                        : "bg-gray-100"
+                                        }`}
                                     >
                                       <span
-                                        className={`font-medium ${
-                                          selectedTypeTab === index
-                                            ? "text-white"
-                                            : "text-gray-900"
-                                        }`}
+                                        className={`font-medium ${selectedTypeTab === index
+                                          ? "text-white"
+                                          : "text-gray-900"
+                                          }`}
                                       >
                                         {employeesMap[type.type]?.length || 0}
                                       </span>
@@ -1235,9 +1284,8 @@ export default function ScheduleSettings({
                   employmentTypes.map((type, index) => (
                     <div
                       key={index}
-                      className={`${
-                        selectedTypeTab === index ? "block" : "hidden"
-                      }`}
+                      className={`${selectedTypeTab === index ? "block" : "hidden"
+                        }`}
                     >
                       {/* Type-specific controls and schedule view (Weekly/Monthly) */}
                       <div className="grid grid-cols-2 gap-6">
@@ -1300,18 +1348,16 @@ export default function ScheduleSettings({
                                     !type.requiresTimeTracking
                                   )
                                 }
-                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                                  type.requiresTimeTracking
-                                    ? "bg-blue-500"
-                                    : "bg-gray-200"
-                                }`}
+                                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${type.requiresTimeTracking
+                                  ? "bg-blue-500"
+                                  : "bg-gray-200"
+                                  }`}
                               >
                                 <span
-                                  className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${
-                                    type.requiresTimeTracking
-                                      ? "translate-x-6"
-                                      : "translate-x-1"
-                                  }`}
+                                  className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${type.requiresTimeTracking
+                                    ? "translate-x-6"
+                                    : "translate-x-1"
+                                    }`}
                                 />
                               </button>
                             </div>
@@ -1330,18 +1376,16 @@ export default function ScheduleSettings({
                                         !fixedTimeSchedule[index]
                                       )
                                     }
-                                    className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                                      fixedTimeSchedule[index]
-                                        ? "bg-blue-500"
-                                        : "bg-gray-200"
-                                    }`}
+                                    className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${fixedTimeSchedule[index]
+                                      ? "bg-blue-500"
+                                      : "bg-gray-200"
+                                      }`}
                                   >
                                     <span
-                                      className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${
-                                        fixedTimeSchedule[index]
-                                          ? "translate-x-6"
-                                          : "translate-x-1"
-                                      }`}
+                                      className={`inline-block w-4 h-4 transform transition-transform duration-200 ease-in-out rounded-full bg-white shadow-sm ${fixedTimeSchedule[index]
+                                        ? "translate-x-6"
+                                        : "translate-x-1"
+                                        }`}
                                     />
                                   </button>
                                 </div>

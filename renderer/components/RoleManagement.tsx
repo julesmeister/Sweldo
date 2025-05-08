@@ -133,13 +133,7 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
       console.log("[RoleManagement] Found roles for auth:", roles);
       // Try to find a role with matching PIN
       const role = roles.find((r) => {
-        try {
-          const decryptedPin = decryptPinCode(r.pinCode);
-          return decryptedPin === authPinCode;
-        } catch (error) {
-          console.error("[RoleManagement] Error decrypting PIN:", error);
-          return false;
-        }
+        return r.pinCode === authPinCode;
       });
 
       if (role) {
@@ -392,11 +386,10 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
                 <div
                   key={role.id}
                   onClick={() => handleRoleSelect(role)}
-                  className={`group cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 ${
-                    selectedRole?.id === role.id
-                      ? "border-blue-500 bg-blue-50/30 shadow-lg shadow-blue-100"
-                      : "border-gray-200 hover:border-blue-300 bg-white"
-                  }`}
+                  className={`group cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 ${selectedRole?.id === role.id
+                    ? "border-blue-500 bg-blue-50/30 shadow-lg shadow-blue-100"
+                    : "border-gray-200 hover:border-blue-300 bg-white"
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -497,13 +490,12 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
                       {DEFAULT_ACCESS_CODES.map((code) => (
                         <label
                           key={code}
-                          className={`relative flex items-center gap-3 p-3 rounded-lg border-2 transition-all duration-200 ${
-                            !isEditing && !selectedRole
-                              ? "bg-gray-50 cursor-not-allowed border-gray-200"
-                              : formData.accessCodes.includes(code)
+                          className={`relative flex items-center gap-3 p-3 rounded-lg border-2 transition-all duration-200 ${!isEditing && !selectedRole
+                            ? "bg-gray-50 cursor-not-allowed border-gray-200"
+                            : formData.accessCodes.includes(code)
                               ? "border-blue-500 bg-blue-50/50 shadow-sm"
                               : "border-gray-200 hover:border-blue-300"
-                          }`}
+                            }`}
                         >
                           <input
                             type="checkbox"
@@ -515,8 +507,8 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
                                 accessCodes: e.target.checked
                                   ? [...formData.accessCodes, code]
                                   : formData.accessCodes.filter(
-                                      (c) => c !== code
-                                    ),
+                                    (c) => c !== code
+                                  ),
                               });
                             }}
                             disabled={!isEditing && !selectedRole}
@@ -524,11 +516,10 @@ export default function RoleManagement({ roleModel }: RoleManagementProps) {
                           />
                           <div className="flex items-center gap-2">
                             <IoKeyOutline
-                              className={`w-4 h-4 ${
-                                formData.accessCodes.includes(code)
-                                  ? "text-blue-600"
-                                  : "text-gray-400"
-                              }`}
+                              className={`w-4 h-4 ${formData.accessCodes.includes(code)
+                                ? "text-blue-600"
+                                : "text-gray-400"
+                                }`}
                             />
                             <span className="text-sm font-medium text-gray-700">
                               {code}

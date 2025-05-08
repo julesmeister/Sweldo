@@ -149,17 +149,35 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
   ): Promise<Partial<PersistedSettings>> => {
     try {
       const appSettings = await loadAppSettingsFirestore(companyName);
-      if (!appSettings) return {};
+      if (!appSettings) return { companyName }; // Still return companyName if no other settings found
 
       // Convert Firestore settings format to our settings format
-      return {
-        // Map other fields as needed
-        // For now we might just keep companyName
-        companyName,
+      // Ensure all relevant fields from AppSettingsFirestore are mapped
+      const persistedSettings: Partial<PersistedSettings> = {
+        companyName: appSettings.companyName || companyName, // Prioritize appSettings but fallback
       };
+
+      if (appSettings.logoPath !== undefined) {
+        persistedSettings.logoPath = appSettings.logoPath;
+      }
+      if (appSettings.preparedBy !== undefined) {
+        persistedSettings.preparedBy = appSettings.preparedBy;
+      }
+      if (appSettings.approvedBy !== undefined) {
+        persistedSettings.approvedBy = appSettings.approvedBy;
+      }
+      if (appSettings.columnColors !== undefined) {
+        persistedSettings.columnColors = appSettings.columnColors;
+      }
+      if (appSettings.calculationSettings !== undefined) {
+        persistedSettings.calculationSettings = appSettings.calculationSettings;
+      }
+      // dbPath is intentionally not set from Firestore for web mode
+
+      return persistedSettings;
     } catch (error) {
       console.error("Failed to load settings from Firestore:", error);
-      return {};
+      return { companyName }; // Fallback to at least returning companyName on error
     }
   };
 

@@ -36,6 +36,8 @@ import DataMigrationSettings from "../components/DataMigrationSettings";
 import DatabaseManagementSettings from "../components/DatabaseManagementSettings"; // Import the new component
 import { RoleModelImpl } from "../model/role";
 import { Switch } from "@headlessui/react";
+import { isWebEnvironment } from "../lib/firestoreService";
+import { loadEmployeesFirestore } from "../model/employee_firestore"; // Corrected import path
 
 interface SettingSection {
   key: string;
@@ -127,8 +129,8 @@ export default function SettingsPage() {
     setCompanyName,
     setColumnColor,
     setCalculationSettings,
-    isInitialized,
-    initialize,
+    isInitialized, // <--- Get isInitialized from store
+    // initialize, // No longer call initialize from here, it's app-level
   } = useSettingsStore();
   const { hasAccess, isAuthInitialized } = useAuthStore();
   const [logoExists, setLogoExists] = useState(false);
@@ -645,11 +647,10 @@ export default function SettingsPage() {
                           <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-100 rounded-t-xl">
                             <p className="font-semibold text-gray-800 flex items-center">
                               <span
-                                className={`inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full ${
-                                  attendanceSettings?.countEarlyTimeInAsOvertime
-                                    ? "bg-indigo-100 text-indigo-700"
-                                    : "bg-gray-100 text-gray-500"
-                                }`}
+                                className={`inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full ${attendanceSettings?.countEarlyTimeInAsOvertime
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "bg-gray-100 text-gray-500"
+                                  }`}
                               >
                                 {attendanceSettings?.countEarlyTimeInAsOvertime ? (
                                   <svg
@@ -679,11 +680,10 @@ export default function SettingsPage() {
                               </span>
                               Calculation with Toggle{" "}
                               <span
-                                className={`ml-1.5 px-2 py-0.5 text-sm rounded-md ${
-                                  attendanceSettings?.countEarlyTimeInAsOvertime
-                                    ? "bg-indigo-100 text-indigo-700 font-medium"
-                                    : "bg-gray-100 text-gray-500"
-                                }`}
+                                className={`ml-1.5 px-2 py-0.5 text-sm rounded-md ${attendanceSettings?.countEarlyTimeInAsOvertime
+                                  ? "bg-indigo-100 text-indigo-700 font-medium"
+                                  : "bg-gray-100 text-gray-500"
+                                  }`}
                               >
                                 {attendanceSettings?.countEarlyTimeInAsOvertime
                                   ? "ON"
@@ -789,10 +789,10 @@ export default function SettingsPage() {
                                 {attendanceSettings?.overtimeThreshold} min).
                                 {(attendanceSettings?.countEarlyTimeInAsOvertime &&
                                   60 ===
-                                    (attendanceSettings?.overtimeThreshold ??
-                                      0)) ||
-                                (!attendanceSettings?.countEarlyTimeInAsOvertime &&
-                                  30 ===
+                                  (attendanceSettings?.overtimeThreshold ??
+                                    0)) ||
+                                  (!attendanceSettings?.countEarlyTimeInAsOvertime &&
+                                    30 ===
                                     (attendanceSettings?.overtimeThreshold ??
                                       0)) ? (
                                   <span className="block mt-1 italic">
@@ -911,9 +911,9 @@ export default function SettingsPage() {
                             value={
                               attendanceSettings?.nightDifferentialMultiplier
                                 ? (
-                                    attendanceSettings.nightDifferentialMultiplier *
-                                    100
-                                  ).toString()
+                                  attendanceSettings.nightDifferentialMultiplier *
+                                  100
+                                ).toString()
                                 : ""
                             }
                             onChange={(e) => {
@@ -1096,36 +1096,66 @@ export default function SettingsPage() {
       key: "roles",
       title: "Role Management",
       icon: <IoShieldOutline className="w-5 h-5" />,
-      requiredAccess: hasRoles ? "MANAGE_SETTINGS" : "",
-      content: !dbPath ? (
-        <MagicCard>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-50 rounded-lg">
-                <IoFolderOutline className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Database Path Not Set
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Please configure the database path in the Database Management
-                  section before managing roles.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSelected("database")}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
-            >
-              <IoFolderOutline className="w-5 h-5" />
-              Configure Database Path
-            </button>
-          </div>
-        </MagicCard>
-      ) : (
-        <RoleManagement roleModel={new RoleModelImpl(dbPath)} />
-      ),
+      requiredAccess: hasRoles ? "MANAGE_SETTINGS" : "", // 'hasRoles' itself is loaded async
+      content: (() => {
+        if (isWebEnvironment()) {
+          // Web mode: Role Management needs companyName
+          if (!companyName) { // companyName from useSettingsStore()
+            return (
+              <MagicCard>
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-yellow-50 rounded-lg">
+                      <IoFolderOutline className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Company Not Selected
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Please ensure a company is selected to manage roles.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </MagicCard>
+            );
+          }
+          return <RoleManagement roleModel={new RoleModelImpl(companyName)} />;
+        } else {
+          // Desktop mode: Role Management needs dbPath
+          if (!dbPath) {
+            return (
+              <MagicCard>
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-yellow-50 rounded-lg">
+                      <IoFolderOutline className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Database Path Not Set
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Please configure the database path in the Database Management
+                        section before managing roles.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelected("database")}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
+                  >
+                    <IoFolderOutline className="w-5 h-5" />
+                    Configure Database Path
+                  </button>
+                </div>
+              </MagicCard>
+            );
+          }
+          return <RoleManagement roleModel={new RoleModelImpl(dbPath)} />;
+        }
+      })(),
     },
     {
       key: "employeeManagement",
@@ -1155,13 +1185,12 @@ export default function SettingsPage() {
                   {activeEmployees.map((employee) => (
                     <li
                       key={`active-${employee.id}`}
-                      className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${
-                        selectedEmployees.some(
-                          (selected) => selected.id === employee.id
-                        )
-                          ? "bg-blue-100"
-                          : "bg-white"
-                      } hover:border-blue-200 hover:shadow-sm`}
+                      className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${selectedEmployees.some(
+                        (selected) => selected.id === employee.id
+                      )
+                        ? "bg-blue-100"
+                        : "bg-white"
+                        } hover:border-blue-200 hover:shadow-sm`}
                       onClick={() => {
                         setSelectedEmployees((current) => {
                           if (
@@ -1208,7 +1237,7 @@ export default function SettingsPage() {
               {/* Center Controls */}
               <div className="flex flex-col items-center justify-center space-y-4">
                 {selectedEmployees.length > 0 &&
-                selectedEmployees[0].status === "inactive" ? (
+                  selectedEmployees[0].status === "inactive" ? (
                   <button
                     onClick={async () => {
                       if (!employeeModel) return;
@@ -1314,13 +1343,12 @@ export default function SettingsPage() {
                   {inactiveEmployees.map((employee) => (
                     <li
                       key={`inactive-${employee.id}`}
-                      className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${
-                        selectedEmployees.some(
-                          (selected) => selected.id === employee.id
-                        )
-                          ? "bg-blue-100"
-                          : "bg-white"
-                      } hover:border-green-200 hover:shadow-sm`}
+                      className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${selectedEmployees.some(
+                        (selected) => selected.id === employee.id
+                      )
+                        ? "bg-blue-100"
+                        : "bg-white"
+                        } hover:border-green-200 hover:shadow-sm`}
                       onClick={() => {
                         setSelectedEmployees((current) => {
                           if (
@@ -1438,9 +1466,8 @@ export default function SettingsPage() {
               </div>
             ) : !logoPath ? (
               <div
-                className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${
-                  isDragging ? "border-blue-500 bg-blue-50" : ""
-                }`}
+                className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${isDragging ? "border-blue-500 bg-blue-50" : ""
+                  }`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -1614,10 +1641,9 @@ export default function SettingsPage() {
                     absolute right-2 top-1/2 -translate-y-1/2 
                     flex items-center bg-green-50 px-2 py-0.5 rounded-full
                     transition-all duration-200 ease-in-out
-                    ${
-                      showCompanyNameSaved
-                        ? "opacity-100 translate-x-0"
-                        : "opacity-0 translate-x-2"
+                    ${showCompanyNameSaved
+                      ? "opacity-100 translate-x-0"
+                      : "opacity-0 translate-x-2"
                     }
                   `}
                 >
@@ -1685,11 +1711,10 @@ export default function SettingsPage() {
                         absolute right-2 top-1/2 -translate-y-1/2 
                         flex items-center bg-green-50 px-2 py-0.5 rounded-full
                         transition-all duration-200 ease-in-out
-                        ${
-                          showPreparedBySaved
+                        ${showPreparedBySaved
                             ? "opacity-100 translate-x-0"
                             : "opacity-0 translate-x-2"
-                        }
+                          }
                       `}
                       >
                         {showPreparedBySaved && (
@@ -1761,11 +1786,10 @@ export default function SettingsPage() {
                         absolute right-2 top-1/2 -translate-y-1/2 
                         flex items-center bg-green-50 px-2 py-0.5 rounded-full
                         transition-all duration-200 ease-in-out
-                        ${
-                          showApprovedBySaved
+                        ${showApprovedBySaved
                             ? "opacity-100 translate-x-0"
                             : "opacity-0 translate-x-2"
-                        }
+                          }
                       `}
                       >
                         {showApprovedBySaved && (
@@ -2002,9 +2026,8 @@ export default function SettingsPage() {
                       Gross Pay Formula
                     </h3>
                     <div
-                      className={`p-3 border rounded-md bg-gray-50 min-h-screen mb-2 ${
-                        !selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                      className={`p-3 border rounded-md bg-gray-50 min-h-screen mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2089,10 +2112,9 @@ export default function SettingsPage() {
                                 }
                               }}
                               className={`px-3 py-1 border rounded transition-all duration-200 font-mono
-                                ${
-                                  selectedOperator === operator
-                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                ${selectedOperator === operator
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                                 }`}
                             >
                               {operator}
@@ -2117,11 +2139,10 @@ export default function SettingsPage() {
                               return (
                                 <span
                                   key={index}
-                                  className={`${
-                                    isVariable
-                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                      : "text-gray-600"
-                                  }`}
+                                  className={`${isVariable
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                    }`}
                                 >
                                   {part}
                                 </span>
@@ -2158,9 +2179,8 @@ export default function SettingsPage() {
                       Others Formula
                     </h3>
                     <div
-                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
-                        !selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2245,10 +2265,9 @@ export default function SettingsPage() {
                                 }
                               }}
                               className={`px-3 py-1 border rounded transition-all duration-200 font-mono
-                                ${
-                                  selectedOperator === operator
-                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                ${selectedOperator === operator
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                                 }`}
                             >
                               {operator}
@@ -2273,11 +2292,10 @@ export default function SettingsPage() {
                               return (
                                 <span
                                   key={index}
-                                  className={`${
-                                    isVariable
-                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                      : "text-gray-600"
-                                  }`}
+                                  className={`${isVariable
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                    }`}
                                 >
                                   {part}
                                 </span>
@@ -2314,9 +2332,8 @@ export default function SettingsPage() {
                       Total Deductions Formula
                     </h3>
                     <div
-                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
-                        !selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2392,10 +2409,9 @@ export default function SettingsPage() {
                               }
                             }}
                             className={`px-3 py-1 border rounded transition-all duration-200 font-mono
-                              ${
-                                selectedOperator === operator
-                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                              ${selectedOperator === operator
+                                ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                               }`}
                           >
                             {operator}
@@ -2420,11 +2436,10 @@ export default function SettingsPage() {
                             return (
                               <span
                                 key={index}
-                                className={`${
-                                  isVariable
-                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                    : "text-gray-600"
-                                }`}
+                                className={`${isVariable
+                                  ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                  : "text-gray-600"
+                                  }`}
                               >
                                 {part}
                               </span>
@@ -2457,9 +2472,8 @@ export default function SettingsPage() {
                       Net Pay Formula
                     </h3>
                     <div
-                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${
-                        !selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                      className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2533,10 +2547,9 @@ export default function SettingsPage() {
                               }
                             }}
                             className={`px-3 py-1 border rounded transition-all duration-200 font-mono
-                              ${
-                                selectedOperator === operator
-                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                              ${selectedOperator === operator
+                                ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                               }`}
                           >
                             {operator}
@@ -2561,11 +2574,10 @@ export default function SettingsPage() {
                             return (
                               <span
                                 key={index}
-                                className={`${
-                                  isVariable
-                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                    : "text-gray-600"
-                                }`}
+                                className={`${isVariable
+                                  ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                  : "text-gray-600"
+                                  }`}
                               >
                                 {part}
                               </span>
@@ -2725,11 +2737,16 @@ export default function SettingsPage() {
   ];
 
   // Filter accessible sections
-  const accessibleSections = sections.filter((section) =>
-    section.key === "roles" && !hasRoles
+  const accessibleSections = sections.filter((section) => {
+    // First, check if section should be hidden in web mode
+    if (isWebEnvironment() && (section.key === 'database' || section.key === 'dataMigration')) {
+      return false;
+    }
+    // Then, apply original access check
+    return section.key === "roles" && !hasRoles
       ? true
-      : hasAccess(section.requiredAccess)
-  );
+      : hasAccess(section.requiredAccess);
+  });
 
   // Effects
   useEffect(() => {
@@ -2924,88 +2941,111 @@ export default function SettingsPage() {
 
   // Initialize models and data
   const initializeData = React.useCallback(async () => {
-    // console.log("[SettingsPage] initializeData: Starting with dbPath:", dbPath);
-    if (!dbPath) {
+    const storeState = useSettingsStore.getState(); // Get fresh store state
+    const currentDbPath = storeState.dbPath;
+    const currentCompanyNameFromStore = storeState.companyName;
+
+    if (!isWebEnvironment() && !currentDbPath) {
       setIsLoading(false);
-      // console.log(
-      //   "[SettingsPage] initializeData: No dbPath, aborting initialization."
-      // );
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
-      // console.log("[SettingsPage] initializeData: isLoading set to true.");
 
-      // Initialize models
-      const localAttendanceSettingsModel =
-        createAttendanceSettingsModel(dbPath); // Use local var to avoid stale closure if attendanceSettingsModel is also a state
-      const localEmployeeModel = createEmployeeModel(dbPath); // Use local var
-      setEmployeeModel(localEmployeeModel); // Set state if needed elsewhere, but use local for this func
-      // console.log(
-      //   "[SettingsPage] initializeData: Attendance and Employee models created."
-      // );
+      let modelDbPathOrCompany: string;
+      if (isWebEnvironment()) {
+        if (!currentCompanyNameFromStore) {
+          console.warn(
+            "[SettingsPage] Web mode: Company name not yet available from store. Some settings might not load."
+          );
+          setIsLoading(false);
+          return; // Wait for company name
+        }
+        modelDbPathOrCompany = currentCompanyNameFromStore;
+      } else {
+        if (!currentDbPath) {
+          // This case should be caught by the initial check, but as a safeguard:
+          setIsLoading(false);
+          return;
+        }
+        modelDbPathOrCompany = currentDbPath;
+      }
 
-      // Load attendance settings
-      // console.log(
-      //   "[SettingsPage] initializeData: Loading attendance settings."
-      // );
-      const settings =
-        await localAttendanceSettingsModel.loadAttendanceSettings();
-      const timeSettings =
-        await localAttendanceSettingsModel.loadTimeSettings();
+      const localAttendanceSettingsModel = createAttendanceSettingsModel(modelDbPathOrCompany);
+
+      const settings = await localAttendanceSettingsModel.loadAttendanceSettings();
+      const timeSettings = await localAttendanceSettingsModel.loadTimeSettings();
       setEmploymentTypes(timeSettings);
-      // console.log(
-      //   "[SettingsPage] initializeData: Attendance settings & time settings loaded:",
-      //   settings,
-      //   timeSettings
-      // );
       setAttendanceSettings(settings);
-      setHolidayMultipliers({
-        regular: settings.regularHolidayMultiplier.toString(),
-        special: settings.specialHolidayMultiplier.toString(),
-      });
+      if (settings) { // Check if settings is not null/undefined
+        setHolidayMultipliers({
+          regular: settings.regularHolidayMultiplier?.toString() || "",
+          special: settings.specialHolidayMultiplier?.toString() || "",
+        });
+      } else {
+        // Handle case where settings might be null (e.g. Firestore returns null and default isn't applied upstream)
+        setHolidayMultipliers({ regular: "", special: "" });
+      }
 
-      // Load employees
-      // console.log("[SettingsPage] initializeData: Loading employees.");
-      const allEmployees = await localEmployeeModel.loadEmployees();
-      const activeList = allEmployees.filter((emp) => emp.status === "active");
-      const inactiveList = allEmployees.filter(
-        (emp) => emp.status === "inactive"
-      );
-      setSelectedEmployees([]);
-      setActiveEmployees(activeList);
-      setInactiveEmployees(inactiveList);
-      // console.log(
-      //   `[SettingsPage] initializeData: Employees loaded. Active: ${activeList.length}, Inactive: ${inactiveList.length}`
-      // );
+      if (!isWebEnvironment() && currentDbPath) {
+        const localEmployeeModel = createEmployeeModel(currentDbPath);
+        setEmployeeModel(localEmployeeModel);
+        // ... (rest of employee loading) ...
+        const allEmployees = await localEmployeeModel.loadEmployees();
+        const activeList = allEmployees.filter((emp) => emp.status === "active");
+        const inactiveList = allEmployees.filter((emp) => emp.status === "inactive");
+        setSelectedEmployees([]);
+        setActiveEmployees(activeList);
+        setInactiveEmployees(inactiveList);
 
-      // Check roles
-      // console.log("[SettingsPage] initializeData: Checking roles.");
-      const roleModel = new RoleModelImpl(dbPath);
-      const roles = await roleModel.getRoles();
-      setHasRoles(roles.length > 0);
-      // console.log(
-      //   `[SettingsPage] initializeData: Roles check complete. Has roles: ${
-      //     roles.length > 0
-      //   }`
-      // );
+        const roleModel = new RoleModelImpl(currentDbPath);
+        const roles = await roleModel.getRoles();
+        setHasRoles(roles.length > 0);
+      } else if (isWebEnvironment()) {
+        setEmployeeModel(null);
+        setActiveEmployees([]);
+        setInactiveEmployees([]);
+        if (currentCompanyNameFromStore) {
+          // Load employees from Firestore for web mode
+          try {
+            const allFirestoreEmployees = await loadEmployeesFirestore(currentCompanyNameFromStore);
+            const activeList = allFirestoreEmployees.filter((emp: Employee) => emp.status === "active"); // Added Employee type
+            const inactiveList = allFirestoreEmployees.filter((emp: Employee) => emp.status === "inactive"); // Added Employee type
+
+            setSelectedEmployees([]); // Reset selection
+            setActiveEmployees(activeList);
+            setInactiveEmployees(inactiveList);
+            console.log(`[SettingsPage] Loaded ${allFirestoreEmployees.length} employees from Firestore for company: ${currentCompanyNameFromStore}`);
+          } catch (e) {
+            console.error("Error loading employees from Firestore in web mode", e);
+            // Keep employees lists empty or set an error state if preferred
+            setActiveEmployees([]);
+            setInactiveEmployees([]);
+          }
+
+          // Role loading (existing logic)
+          const roleModel = new RoleModelImpl(currentCompanyNameFromStore);
+          try {
+            const roles = await roleModel.getRoles();
+            setHasRoles(roles.length > 0);
+          } catch (e) {
+            console.error("Error loading roles in web mode", e);
+            setHasRoles(false);
+          }
+        } else {
+          setHasRoles(false);
+        }
+      }
 
       setIsLoading(false);
-      // console.log(
-      //   "[SettingsPage] initializeData: Finished, isLoading set to false."
-      // );
     } catch (error) {
       console.error("[Settings] Error initializing data:", error);
       setError("Failed to load settings data. Please try again.");
       setIsLoading(false);
-      // console.warn(
-      //   "[SettingsPage] initializeData: Error during initialization, isLoading set to false.",
-      //   error
-      // );
     }
-  }, [dbPath]); // attendanceSettingsModel removed from deps as it's created locally or via fixed dbPath
+  }, [isWebEnvironment]); // Dependencies: store's isInitialized and companyName will be added to useEffect
 
   // Effect for initialization
   useEffect(() => {
@@ -3013,8 +3053,10 @@ export default function SettingsPage() {
     //   "[SettingsPage] Initialization Effect: Triggered. dbPath:",
     //   dbPath
     // );
-    initializeData();
-  }, [dbPath, initializeData]);
+    if (isInitialized) { // Only run if store is initialized
+      initializeData();
+    }
+  }, [isInitialized, companyName, initializeData]); // <--- Added store's isInitialized and companyName
 
   // Function to handle column color changes
   const handleColumnColorChange = (columnId: string, color: string) => {
@@ -3098,7 +3140,7 @@ export default function SettingsPage() {
 
   // If no dbPath, only show database configuration section
   // console.log("[SettingsPage] Checking !dbPath:", !dbPath);
-  if (!dbPath)
+  if (!isWebEnvironment() && !dbPath)
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-50/60 to-white">
         <main className="max-w-12xl w-full mx-auto py-12 sm:px-6 lg:px-8">
@@ -3172,18 +3214,16 @@ export default function SettingsPage() {
                   <button
                     key={section.key}
                     onClick={() => handleSelectionChange(section.key)}
-                    className={`flex-shrink-0 flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all whitespace-nowrap ${
-                      selected === section.key
-                        ? "text-blue-600"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
+                    className={`flex-shrink-0 flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all whitespace-nowrap ${selected === section.key
+                      ? "text-blue-600"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
                   >
                     <div
-                      className={`transition-colors ${
-                        selected === section.key
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                      }`}
+                      className={`transition-colors ${selected === section.key
+                        ? "text-blue-600"
+                        : "text-gray-400"
+                        }`}
                     >
                       {section.icon}
                     </div>
