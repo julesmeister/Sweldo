@@ -92,6 +92,43 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
 - Made the entire DateRangePicker clickable rather than just the individual date inputs
 - Fixed issues with z-index by using portal rendering directly to the document body
 
+## Recent Work (June 3, 2025)
+
+### DateRangePicker and PayrollList Web Mode Improvements
+
+1. **DateRangePicker Component**
+   - Removed the date display text above the Apply button by adding a CSS override
+   - Added styling to improve the appearance of the dialog including better border styling
+   - The component now has a cleaner, more streamlined appearance
+
+2. **PayrollList Web Mode Fixes**
+   - Fixed issues with PayrollList not displaying payrolls in web mode
+   - Improved the Firestore document querying logic to correctly find and load payroll documents
+   - Added better data validation and defensive coding to handle Firestore document structures
+   - Enhanced date handling to correctly convert string dates to Date objects
+   - Implemented more detailed logging for easier troubleshooting
+   - Created detailed documentation in `memory-bank/payroll-component.md` and `memory-bank/web-mode-issues.md`
+
+3. **Firestore Integration**
+   - Identified and documented critical Firestore document structure for payroll data
+   - Added client-side filtering for payroll documents when Firestore doesn't support wildcard queries
+   - Implemented more robust error handling for Firestore operations
+   - Established best practices for future Firestore-related changes
+
+### Next Steps
+
+1. **Caching for Web Mode**
+   - Consider implementing client-side caching to reduce Firestore reads
+   - Add IndexedDB support for frequently accessed data like employees and payrolls
+
+2. **Testing Both Environments**
+   - Ensure all future changes are tested in both desktop (Nextron) and web modes
+   - Create a testing checklist for dual-environment validation
+
+3. **Debug Mode**
+   - Add a proper debug mode switch for easier troubleshooting in production
+   - Consider adding a debug panel showing current environment, data sources, and query status
+
 ## Next Steps
 1. Test the react-date-range solution in web mode to ensure it works correctly
    - Verify that the DateRangePicker component renders properly

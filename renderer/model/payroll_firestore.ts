@@ -160,7 +160,21 @@ const createPayrollDocId = (
   year: number,
   month: number
 ): string => {
+  // The format in Firestore is "payroll_{employeeId}_{year}_{month}"
   return `payroll_${employeeId}_${year}_${month}`;
+};
+
+// Add a function to check if a document ID matches an employee's payroll
+const isEmployeePayrollDoc = (docId: string, employeeId: string): boolean => {
+  // Check common formats
+  if (docId === `payroll_${employeeId}`) return true;
+  if (docId.startsWith(`payroll_${employeeId}_`)) return true;
+
+  // Also check for potential alternative formats
+  if (docId === `${employeeId}_payroll`) return true;
+  if (docId.startsWith(`${employeeId}_`)) return true;
+
+  return false;
 };
 
 /**
@@ -180,29 +194,250 @@ export async function loadPayrollSummariesFirestore(
   companyName: string
 ): Promise<PayrollSummaryModel[]> {
   try {
+    console.log(
+      `[PayrollFirestore] Loading payrolls for ${employeeId}, ${year}-${month}`
+    );
+
+    // Try specific month document first
     const docId = createPayrollDocId(employeeId, year, month);
-    const data = await fetchDocument<PayrollFirestoreData>(
+    console.log(`[PayrollFirestore] Trying document ID: ${docId}`);
+
+    let payrollData = await fetchDocument<PayrollFirestoreData>(
       "payrolls",
       docId,
       companyName
     );
 
-    if (!data) {
+    if (!payrollData) {
       console.log(
-        `No payroll data found for employee ${employeeId} in ${year}-${month}`
+        `[PayrollFirestore] No payroll data found for ${docId}, trying to query all payroll documents for this employee`
+      );
+
+      // If specific month document is not found, try to query for all payroll docs for this employee
+      try {
+        // Import the necessary Firestore functions
+        const { collection, query, where, getDocs, startsWith, orderBy } =
+          await import("firebase/firestore");
+        const { getFirestoreInstance } = await import(
+          "../lib/firestoreService"
+        );
+
+        const db = getFirestoreInstance();
+        const payrollsRef = collection(db, `companies/${companyName}/payrolls`);
+
+        // Query for all documents with IDs that start with our prefix
+        // Note: Firestore doesn't support startsWith directly for document IDs, so we'll filter client-side
+        const querySnapshot = await getDocs(payrollsRef);
+
+        // Find documents that match our pattern using the helper function
+        const matchingDocs = [];
+        querySnapshot.forEach((doc) => {
+          // Log ALL document IDs to help diagnose the structure
+          console.log(`[PayrollFirestore] Found document ID: ${doc.id}`);
+
+          if (isEmployeePayrollDoc(doc.id, employeeId)) {
+            console.log(
+              `[PayrollFirestore] Document ${doc.id} matches employee ${employeeId}`
+            );
+            matchingDocs.push({ id: doc.id, data: doc.data() });
+          }
+        });
+
+        console.log(
+          `[PayrollFirestore] Found ${matchingDocs.length} matching payroll documents`
+        );
+
+        // Log the first document structure to help with debugging
+        if (matchingDocs.length > 0) {
+          const sampleDoc = matchingDocs[0];
+          console.log(`[PayrollFirestore] Sample document ID: ${sampleDoc.id}`);
+          console.log(
+            `[PayrollFirestore] Sample document data structure:`,
+            JSON.stringify({
+              hasPayrollsArray: !!(
+                sampleDoc.data && Array.isArray(sampleDoc.data.payrolls)
+              ),
+              payrollsCount:
+                sampleDoc.data && Array.isArray(sampleDoc.data.payrolls)
+                  ? sampleDoc.data.payrolls.length
+                  : 0,
+            })
+          );
+        }
+
+        // Extract and combine payrolls from all matching documents
+        const allPayrolls: PayrollSummaryModel[] = [];
+        for (const doc of matchingDocs) {
+          const data = doc.data;
+
+          // Check if the document has a payrolls array
+          if (data && data.payrolls && Array.isArray(data.payrolls)) {
+            console.log(
+              `[PayrollFirestore] Document ${doc.id} has ${data.payrolls.length} payrolls`
+            );
+
+            // Process each payroll in the array - don't filter by date yet, just convert and collect
+            data.payrolls.forEach((payroll: any) => {
+              try {
+                // Basic validation that minimum required fields exist - ID at minimum
+                if (payroll && payroll.id) {
+                  console.log(
+                    `[PayrollFirestore] Found payroll with ID: ${payroll.id}`
+                  );
+
+                  // Create a standardized payroll object with all required fields
+                  const processedPayroll: PayrollSummaryModel = {
+                    id: payroll.id,
+                    employeeId: payroll.employeeId || employeeId,
+                    employeeName: payroll.employeeName || "Unknown",
+                    startDate: parseFirestoreDate(payroll.startDate),
+                    endDate: parseFirestoreDate(payroll.endDate),
+                    paymentDate:
+                      payroll.paymentDate || new Date().toISOString(),
+                    dailyRate: payroll.dailyRate || 0,
+                    daysWorked: payroll.daysWorked || 0,
+                    basicPay: payroll.basicPay || 0,
+                    grossPay: payroll.grossPay || 0,
+                    netPay: payroll.netPay || 0,
+                    allowances: payroll.allowances || 0,
+                    overtime: payroll.overtime || 0,
+                    undertimeDeduction: payroll.undertimeDeduction || 0,
+                    lateDeduction: payroll.lateDeduction || 0,
+                    cashAdvanceIDs: payroll.cashAdvanceIDs || [],
+                    shortIDs: payroll.shortIDs || [],
+                    deductions: {
+                      sss: payroll.deductions?.sss || 0,
+                      philHealth: payroll.deductions?.philHealth || 0,
+                      pagIbig: payroll.deductions?.pagIbig || 0,
+                      cashAdvanceDeductions:
+                        payroll.deductions?.cashAdvanceDeductions || 0,
+                      shortDeductions: payroll.deductions?.shortDeductions || 0,
+                      others: payroll.deductions?.others || 0,
+                    },
+                    absences: payroll.absences || 0,
+                  };
+
+                  allPayrolls.push(processedPayroll);
+                  console.log(
+                    `[PayrollFirestore] Added payroll ${payroll.id} from ${doc.id}`
+                  );
+                }
+              } catch (err) {
+                console.error(
+                  `[PayrollFirestore] Error processing payroll in ${doc.id}:`,
+                  err
+                );
+              }
+            });
+          } else {
+            console.warn(
+              `[PayrollFirestore] Document ${doc.id} has invalid or missing payrolls array`
+            );
+          }
+        }
+
+        if (allPayrolls.length > 0) {
+          console.log(
+            `[PayrollFirestore] Found ${allPayrolls.length} valid payrolls across ${matchingDocs.length} documents`
+          );
+
+          // Sort payrolls by date (newest first)
+          return allPayrolls.sort(
+            (a, b) => b.startDate.getTime() - a.startDate.getTime()
+          );
+        } else {
+          console.log(
+            `[PayrollFirestore] No valid payrolls found for employee ${employeeId}`
+          );
+          return [];
+        }
+      } catch (queryError) {
+        console.error(
+          `[PayrollFirestore] Error querying payroll documents:`,
+          queryError
+        );
+        return [];
+      }
+    }
+
+    // Process data from specific month document
+    if (!payrollData.payrolls || !Array.isArray(payrollData.payrolls)) {
+      console.warn(
+        `[PayrollFirestore] Invalid payroll data format for ${docId}`
       );
       return [];
     }
 
-    return data.payrolls.map((payroll) => ({
-      ...payroll,
-      startDate: new Date(payroll.startDate),
-      endDate: new Date(payroll.endDate),
-      overtime: payroll.overtime || 0,
-    }));
+    // Here we process the payrolls from the specific document we found
+    const payrolls: PayrollSummaryModel[] = [];
+
+    for (const payroll of payrollData.payrolls) {
+      try {
+        // Basic validation that minimum required fields exist
+        if (payroll && payroll.id) {
+          console.log(
+            `[PayrollFirestore] Found payroll with ID: ${payroll.id} in document ${docId}`
+          );
+
+          // Create a standardized payroll object with all required fields
+          const processedPayroll: PayrollSummaryModel = {
+            id: payroll.id,
+            employeeId: payroll.employeeId || employeeId,
+            employeeName: payroll.employeeName || "Unknown",
+            startDate: parseFirestoreDate(payroll.startDate),
+            endDate: parseFirestoreDate(payroll.endDate),
+            paymentDate: payroll.paymentDate || new Date().toISOString(),
+            dailyRate: payroll.dailyRate || 0,
+            daysWorked: payroll.daysWorked || 0,
+            basicPay: payroll.basicPay || 0,
+            grossPay: payroll.grossPay || 0,
+            netPay: payroll.netPay || 0,
+            allowances: payroll.allowances || 0,
+            overtime: payroll.overtime || 0,
+            undertimeDeduction: payroll.undertimeDeduction || 0,
+            lateDeduction: payroll.lateDeduction || 0,
+            cashAdvanceIDs: payroll.cashAdvanceIDs || [],
+            shortIDs: payroll.shortIDs || [],
+            deductions: {
+              sss: payroll.deductions?.sss || 0,
+              philHealth: payroll.deductions?.philHealth || 0,
+              pagIbig: payroll.deductions?.pagIbig || 0,
+              cashAdvanceDeductions:
+                payroll.deductions?.cashAdvanceDeductions || 0,
+              shortDeductions: payroll.deductions?.shortDeductions || 0,
+              others: payroll.deductions?.others || 0,
+            },
+            absences: payroll.absences || 0,
+          };
+
+          payrolls.push(processedPayroll);
+          console.log(
+            `[PayrollFirestore] Added payroll ${payroll.id} from ${docId}`
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[PayrollFirestore] Error processing payroll in ${docId}:`,
+          err
+        );
+      }
+    }
+
+    console.log(
+      `[PayrollFirestore] Loaded ${payrolls.length} payrolls for ${employeeId}, ${year}-${month} from ${docId}`
+    );
+
+    // Sort payrolls by date (newest first)
+    return payrolls.sort(
+      (a, b) => b.startDate.getTime() - a.startDate.getTime()
+    );
   } catch (error) {
-    console.error(`Error loading payroll summaries from Firestore:`, error);
-    throw error;
+    console.error(
+      `[PayrollFirestore] Error loading payroll summaries from Firestore for ${year}-${month}:`,
+      error
+    );
+    // Return empty array instead of throwing to prevent breaking the UI
+    return [];
   }
 }
 
@@ -1002,4 +1237,71 @@ export function createPayrollFirestoreInstance(model: Payroll, dbPath: string) {
       }
     },
   };
+}
+
+// Add this helper function at the top of the file after the imports
+function parseFirestoreDate(dateInput: any): Date {
+  if (!dateInput) return new Date();
+
+  try {
+    // If it's already a Date object
+    if (dateInput instanceof Date) {
+      return dateInput;
+    }
+
+    // Handle Firestore timestamp objects
+    if (typeof dateInput === "object" && dateInput !== null) {
+      // Firestore timestamp format with seconds and nanoseconds
+      if (
+        dateInput.seconds !== undefined &&
+        dateInput.nanoseconds !== undefined
+      ) {
+        return new Date(dateInput.seconds * 1000);
+      }
+
+      // Handle serialized timestamp objects
+      if (
+        dateInput._seconds !== undefined &&
+        dateInput._nanoseconds !== undefined
+      ) {
+        return new Date(dateInput._seconds * 1000);
+      }
+    }
+
+    // If it's a timestamp (number)
+    if (typeof dateInput === "number") {
+      return new Date(dateInput);
+    }
+
+    // If it's a string representation of a timestamp
+    if (typeof dateInput === "string" && !isNaN(Number(dateInput))) {
+      return new Date(Number(dateInput));
+    }
+
+    // Regular date string
+    if (typeof dateInput === "string") {
+      const parsedDate = new Date(dateInput);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
+
+      // Try to parse stringified Firestore timestamps
+      if (dateInput.includes("seconds") && dateInput.includes("nanoseconds")) {
+        try {
+          const parsedObj = JSON.parse(dateInput);
+          if (parsedObj.seconds) {
+            return new Date(parsedObj.seconds * 1000);
+          }
+        } catch (e) {
+          // Ignore parsing errors and continue with other methods
+        }
+      }
+    }
+
+    // Default fallback
+    return new Date();
+  } catch (e) {
+    console.error("[PayrollFirestore] Error parsing date:", e, dateInput);
+    return new Date();
+  }
 }

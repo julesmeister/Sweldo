@@ -36,6 +36,10 @@ import { Tooltip } from "@/renderer/components/Tooltip";
 import { usePayrollPDFGeneration } from "../hooks/usePayrollPDFGeneration";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "../lib/utils";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
+import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
+
+// Add this function to debug Firestore
+const DEBUG_MODE = false; // Set to true to enable debug features
 
 export default function PayrollPage() {
   const { hasAccess } = useAuthStore();
@@ -128,46 +132,133 @@ export default function PayrollPage() {
 
   // Memoize the loadPayrolls function
   const loadPayrolls = useCallback(async () => {
-    if (
-      !dateRange.startDate ||
-      !dateRange.endDate ||
-      !dbPath ||
-      !selectedEmployeeId
-    ) {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      console.log("[Payroll] Date range not set, cannot load payrolls");
+      return;
+    }
+
+    if (!selectedEmployeeId) {
+      console.log("[Payroll] No employee selected, cannot load payrolls");
       return;
     }
 
     try {
       setLoading(true);
+      console.log(`[Payroll] Loading payrolls for employee ${selectedEmployeeId}`);
 
       // Create dates and adjust for timezone
       const startDate = new Date(dateRange.startDate);
       const endDate = new Date(dateRange.endDate);
+      console.log(`[Payroll] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
       // Load employee details
-      const employeeModel = createEmployeeModel(dbPath);
-      const loadedEmployee = await employeeModel.loadEmployeeById(
-        selectedEmployeeId
-      );
-      setEmployee(loadedEmployee);
+      let loadedEmployee: Employee | null = null;
 
-      const month = startDate.getMonth() + 1;
-      const year = startDate.getFullYear();
+      // First try to find employee in the already loaded employees list
+      if (employees.length > 0) {
+        loadedEmployee = employees.find(e => e.id === selectedEmployeeId) || null;
+      }
 
-      const employeePayrolls = await Payroll.loadPayrollSummaries(
-        dbPath,
-        selectedEmployeeId,
-        year,
-        month
-      );
-
-      // Filter payrolls within date range
-      const filteredPayrolls = employeePayrolls.filter(
-        (summary: PayrollSummaryModel) => {
-          const summaryDate = new Date(summary.startDate);
-          return summaryDate >= startDate && summaryDate <= endDate;
+      // If not found in the list, try to load it directly
+      if (!loadedEmployee) {
+        const isWeb = isWebEnvironment();
+        if (isWeb) {
+          const companyName = await getCompanyName();
+          // Import fetchEmployees function dynamically
+          const { fetchEmployeeById } = await import("@/renderer/lib/employeeUtils");
+          loadedEmployee = await fetchEmployeeById(selectedEmployeeId, companyName);
+        } else if (dbPath) {
+          const employeeModel = createEmployeeModel(dbPath);
+          loadedEmployee = await employeeModel.loadEmployeeById(selectedEmployeeId);
         }
-      );
+      }
+
+      setEmployee(loadedEmployee);
+      console.log(`[Payroll] Employee loaded:`, loadedEmployee);
+
+      if (!loadedEmployee) {
+        console.warn(`[Payroll] Could not load details for employee ${selectedEmployeeId}`);
+        toast.error("Employee not found");
+        setPayrolls([]);
+        return;
+      }
+
+      // IMPORTANT: For web mode, we don't need actual dbPath as Firestore uses company name
+      const effectiveDbPath = isWebEnvironment() ? "web" : (dbPath || "");
+      console.log(`[Payroll] Using database path: ${effectiveDbPath}, web mode: ${isWebEnvironment()}`);
+
+      // IMPORTANT: Get payrolls for a wider date range to ensure we catch all payrolls
+      // Load previous 3 months to current month to ensure we catch everything
+      const allPayrolls: PayrollSummaryModel[] = [];
+
+      // Start from current month and go back 3 months
+      for (let i = 0; i < 3; i++) {
+        const targetDate = new Date(startDate);
+        targetDate.setMonth(targetDate.getMonth() - i);
+        const month = targetDate.getMonth() + 1;
+        const year = targetDate.getFullYear();
+
+        console.log(`[Payroll] Loading payroll summaries for ${year}-${month}`);
+        const payrollsForMonth = await Payroll.loadPayrollSummaries(
+          effectiveDbPath,
+          selectedEmployeeId,
+          year,
+          month
+        );
+
+        console.log(`[Payroll] Loaded ${payrollsForMonth.length} payroll summaries for ${year}-${month}`);
+
+        // Add to combined payrolls, avoiding duplicates
+        if (payrollsForMonth.length > 0) {
+          const existingIds = new Set(allPayrolls.map(p => p.id));
+          for (const payroll of payrollsForMonth) {
+            if (!existingIds.has(payroll.id)) {
+              allPayrolls.push(payroll);
+            }
+          }
+        }
+      }
+
+      console.log(`[Payroll] Combined total: ${allPayrolls.length} payroll summaries`);
+
+      // Use more flexible date comparison to fix filtering issues
+      const filteredPayrolls = allPayrolls.filter((summary: PayrollSummaryModel) => {
+        try {
+          // Extract dates for comparison
+          const payrollStart = new Date(summary.startDate);
+          const payrollEnd = new Date(summary.endDate);
+
+          // Normalize dates to remove time component
+          const normalizeDate = (date: Date) => {
+            const newDate = new Date(date);
+            newDate.setHours(0, 0, 0, 0);
+            return newDate;
+          };
+
+          const normalizedPayrollStart = normalizeDate(payrollStart);
+          const normalizedPayrollEnd = normalizeDate(payrollEnd);
+          const normalizedFilterStart = normalizeDate(startDate);
+          const normalizedFilterEnd = normalizeDate(endDate);
+
+          // A payroll is relevant if it overlaps with the filter period at all
+          // (payroll starts before filter ends AND payroll ends after filter starts)
+          const overlaps = normalizedPayrollStart <= normalizedFilterEnd &&
+            normalizedPayrollEnd >= normalizedFilterStart;
+
+          // Log details for debug
+          if (overlaps) {
+            console.log(`[Payroll] Including payroll: ${summary.id} with date range: ${normalizedPayrollStart.toDateString()} - ${normalizedPayrollEnd.toDateString()}`);
+          }
+
+          return overlaps;
+        } catch (error) {
+          console.error(`[Payroll] Date comparison error for payroll:`, error, summary);
+          // Include problematic payrolls rather than filtering them out
+          return true;
+        }
+      });
+
+      console.log(`[Payroll] Filtered to ${filteredPayrolls.length} payrolls within date range`);
 
       // Add employee name to payroll data
       const formattedPayrolls = filteredPayrolls.map(
@@ -178,12 +269,14 @@ export default function PayrollPage() {
       );
 
       setPayrolls(formattedPayrolls);
+      console.log(`[Payroll] Payrolls set to state: ${formattedPayrolls.length} items`);
     } catch (error) {
+      console.error("[Payroll] Failed to load payroll data:", error);
       toast.error("Failed to load payroll data");
     } finally {
       setLoading(false);
     }
-  }, [dbPath, selectedEmployeeId, dateRange, setLoading]);
+  }, [dbPath, selectedEmployeeId, dateRange, setLoading, employees]);
 
   // Modify the refresh handling
   useEffect(() => {
@@ -389,6 +482,7 @@ export default function PayrollPage() {
               </div>
               <DateRangePicker variant="timesheet" />
             </div>
+
             <div className="flex gap-4">
               {hasAccess("MANAGE_PAYROLL") && employee && (
                 <div className="flex flex-col gap-1.5">
@@ -535,24 +629,24 @@ export default function PayrollPage() {
                         {potentialPayrollCount} Employees From{" "}
                         {dateRange.startDate
                           ? new Date(dateRange.startDate).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              }
-                            )
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            }
+                          )
                           : ""}{" "}
                         To{" "}
                         {dateRange.endDate
                           ? new Date(dateRange.endDate).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              }
-                            )
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            }
+                          )
                           : ""}
                       </span>
                     </div>
