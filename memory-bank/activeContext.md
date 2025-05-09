@@ -1,4 +1,46 @@
-# Active Context - Sweldo
+# Active Context
+
+## Current Focus: Web Mode Compatibility
+
+### Overview
+The Sweldo application was originally designed for desktop use with Electron, but is now being adapted to work in web browsers via Firebase/Firestore. This transition requires careful handling of:
+
+1. File system operations that don't exist in web mode
+2. Database access patterns (local JSON files vs Firestore)
+3. Date handling and parsing differences
+4. UI rendering consistency across platforms
+
+### Recent Achievements
+- ✅ Fixed payroll display in web mode
+- ✅ Implemented date parsing for Firestore timestamps
+- ✅ Added filter functionality for payroll records
+
+### Current Challenges
+- Some components still assume local file system access
+- Need to ensure consistent UI behavior between platforms
+- Data synchronization between desktop and web versions
+
+### Immediate Next Steps
+1. Test other filtering mechanisms in web mode
+2. Review other areas that might have similar database path issues
+3. Ensure error handling is robust in web environment
+4. Add additional logging for web-specific operations
+
+### Technical Approach
+For components that need to work in both environments, we're implementing:
+1. Environment detection: `isWebEnvironment()` checks
+2. Path adaptation: Using `effectiveDbPath` pattern to handle both modes
+3. Fallback strategies: Using ID-based lookups when direct paths fail
+4. Enhanced date parsing: Robust handling of various date formats
+
+### Key Takeaways
+The primary pattern for ensuring web compatibility is:
+```typescript
+const isWeb = isWebEnvironment();
+const effectiveDbPath = isWeb ? "web" : dbPath;
+```
+
+This allows components to work consistently in both environments without needing separate codepaths for most operations.
 
 ## Current Work Focus
 The project is currently focused on enabling a web deployment of the Sweldo application via Firebase Hosting, in addition to the existing desktop application, and fixing critical authentication and session persistence issues in web mode.

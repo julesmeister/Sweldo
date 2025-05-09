@@ -153,3 +153,52 @@ The component now serves as a reusable, self-contained employee selector that ca
 - Consistent border styling between desktop and web modes
 - CompensationDialog layout improved with better spacing
 - Still needs interface updates to work properly in web mode (TypeScript compatibility) 
+
+## 2023-05-15: Fixed Payroll Display in Web Mode
+
+### Problem
+The payroll display functionality wasn't working correctly in web mode. Specifically:
+1. Date ranges weren't displaying properly, showing "Invalid Date - Invalid Date"
+2. The filter buttons (Last 3 Months, Last 6 Months, Last Year) were not loading payrolls
+3. The system was showing database path errors in web mode
+4. Only the "Show All" button was working correctly to display payrolls
+
+### Approach
+We identified several key issues:
+1. In web mode, the application was trying to use local file system paths (dbPath) which don't exist in web/Firestore mode
+2. Dates from Firestore weren't being properly parsed and displayed
+3. The filter buttons were relying on effects that weren't handling web mode correctly
+
+### Changes Made
+1. **Fixed database path handling in web mode:**
+   - Added `effectiveDbPath` logic to use "web" as the path in web mode instead of trying to access the local file system
+   - Updated all loading functions to use this approach consistently
+
+2. **Fixed date parsing and display issues:**
+   - Added comprehensive date parsing helpers to handle different date formats from Firestore
+   - Created a robust `parseFirestoreDate` function to properly convert Firestore timestamps to JavaScript Date objects
+   - Enhanced date comparison logic for filtering payrolls by date range
+
+3. **Fixed filter button functionality:**
+   - Made filter buttons directly load payrolls instead of relying on effects
+   - Ensured proper date range expansion for better matches
+   - Added debugging logs to identify any remaining issues
+
+4. **Improved overall robustness:**
+   - Enhanced error handling throughout the payroll loading process
+   - Added fallbacks for date parsing to avoid "Invalid Date" displays
+   - Prevented race conditions between various loading methods
+
+### Outcome
+The payroll display now works correctly in web mode:
+1. Dates display properly in the correct format
+2. All filter buttons (Last 3 Months, Last 6 Months, Last Year) work correctly
+3. No more database path errors in web mode
+4. Payrolls are correctly filtered and displayed according to the selected date range
+
+### Files Modified
+1. `renderer/pages/payroll.tsx` - Fixed database path handling for web mode
+2. `renderer/components/PayrollList.tsx` - Fixed filter buttons and date display
+3. `renderer/model/payroll_firestore.ts` - Added better date parsing for Firestore data
+
+This fix ensures a consistent user experience between the desktop and web versions of the Sweldo application, allowing payroll records to be properly viewed and filtered in both environments. 
