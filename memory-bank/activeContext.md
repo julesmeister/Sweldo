@@ -40,6 +40,25 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
     *   `renderer/pages/shorts.tsx`
 
 ## Recent Changes
+- Fixed component rendering issue with DateRangePicker by ensuring proper function components are returned
+- Added comprehensive error handling and type checking for dynamically loaded components
+- Added UI improvements to the DateRangePicker dialog:
+  - Removed redundant date display text above the Apply button
+  - Changed X button color from black to white for better contrast
+  - Improved dialog border styling for better visual appearance
+- Fixed a runtime error in the SimpleDateRange mock component related to null parameter destructuring
+- Added default parameter values and defensive coding to prevent similar issues
+- Added proper imports for all dependencies (addMonths from date-fns)
+- Implemented a proxy component pattern to completely avoid CSS imports during build time
+- Created DateRangePickerProxy component that dynamically loads the real component at runtime
+- Removed all direct CSS imports from DateRangePicker.tsx, even conditional ones
+- Updated TimesheetHeader to use the proxy component instead of direct imports
+- Used dynamic runtime imports with Function('return require(...)') to avoid webpack processing
+- Fixed issue with react-date-range CSS loading in web mode by implementing a dynamic CSS loader and mock component
+- Created a simplified DateRange component for web mode to avoid problematic CSS imports
+- Implemented dynamic component loading strategy for DateRangePicker to work in both environments
+- Used conditional imports with environment detection to select the appropriate implementation
+- Created comprehensive documentation of the solution in memory-bank/css-solution.md
 - Fixed infinite loop issues in timesheet.tsx by optimizing React hook dependencies
 - Fixed styling inconsistencies between desktop and web modes
 - Implemented an automated CSS synchronization system between globals.css and styleInjector.js
@@ -74,35 +93,41 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
 - Fixed issues with z-index by using portal rendering directly to the document body
 
 ## Next Steps
-1. Finalize the CSS synchronization mechanism:
+1. Test the react-date-range solution in web mode to ensure it works correctly
+   - Verify that the DateRangePicker component renders properly
+   - Ensure date selection works as expected
+   - Check that styles are applied correctly
+   - Fix any remaining visual inconsistencies between environments
+
+2. Finalize the CSS synchronization mechanism:
    - Test with all critical components
    - Ensure proper handling of complex selectors and nested rules
    - Document the approach thoroughly
    - Consider future optimizations to the sync process
 
-2. Fix TypeScript errors and implement web mode logic in `renderer/pages/timesheet.tsx`:
+3. Fix TypeScript errors and implement web mode logic in `renderer/pages/timesheet.tsx`:
    - Update interfaces for hooks (`useComputeAllCompensations`, etc.) and components (`TimesheetRow`, `AttendanceHistoryDialog`) to handle nullable models/props in web mode.
    - Add missing props (`companyName`, `isWebMode`) to `AttendanceHistoryDialog`.
    - Implement Firestore data fetching for history in `AttendanceHistoryDialog` (currently has TODO).
    - Test data loading and interaction in web mode.
 
-3. Develop the `useDateAwareDataFetching` custom hook.
-4. Integrate the hook into `cashAdvances.tsx`.
-5. Test `cashAdvances.tsx` to ensure it correctly loads data based on the `DateSelector`.
-6. Proceed to refactor `loans.tsx`, `leaves.tsx`, and `shorts.tsx` using the new hook.
-7. Address any linter errors that arise during these refactors.
+4. Develop the `useDateAwareDataFetching` custom hook.
+5. Integrate the hook into `cashAdvances.tsx`.
+6. Test `cashAdvances.tsx` to ensure it correctly loads data based on the `DateSelector`.
+7. Proceed to refactor `loans.tsx`, `leaves.tsx`, and `shorts.tsx` using the new hook.
+8. Address any linter errors that arise during these refactors.
 
-8. Handle conditional imports/code for Electron-specific functionality
+9. Handle conditional imports/code for Electron-specific functionality
    - Identify all uses of `window.electron` API
    - Create alternative implementations for web deployment
    - Implement conditional logic to use appropriate APIs based on environment
 
-9. Deploy to Firebase hosting (`firebase deploy --only hosting`)
-   - Ensure all web-compatible code is in place
-   - Run final web build
-   - Execute deployment command
+10. Deploy to Firebase hosting (`firebase deploy --only hosting`)
+    - Ensure all web-compatible code is in place
+    - Run final web build
+    - Execute deployment command
 
-10. Apply Dexie caching pattern to other models (attendance, payroll, timesheet, etc.)
+11. Apply Dexie caching pattern to other models (attendance, payroll, timesheet, etc.)
 
 ## Active Decisions and Considerations
 - **CSS Synchronization Strategy**: Using an automated script to intelligently extract and synchronize styles between globals.css and styleInjector.js, with deduplication logic to prevent duplicates

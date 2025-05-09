@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
-import { DateRangePicker } from "@/renderer/components/DateRangePicker";
+import { DateRangePickerProxy } from "@/renderer/components/DateRangePickerProxy";
 import { Employee } from "@/renderer/model/employee";
 import { IoSettingsOutline } from "react-icons/io5";
 
@@ -47,7 +47,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                 </h2>
                 {employeeId && (
                     <div style={{ width: "480px" }}>
-                        <DateRangePicker
+                        <DateRangePickerProxy
                             variant="timesheet"
                             onRefresh={onRefresh}
                         />

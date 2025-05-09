@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { DateRange, Range, RangeKeyDict } from "react-date-range";
 import { format, addMonths } from "date-fns";
 import { IoRefreshOutline } from "react-icons/io5";
 import { useDateRangeStore } from "../stores/dateRangeStore";
 import { BorderBeam } from "./magicui/border-beam";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 
-// Import styles directly
-import "react-date-range/dist/styles.css";
-import "react-date-range/dist/theme/default.css";
+// Import only types, not the actual implementation
+import type { Range, RangeKeyDict } from "react-date-range";
 
 interface DateRangePickerProps {
   variant?: "default" | "timesheet";
@@ -25,6 +24,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const [portalElement, setPortalElement] = useState<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const [dateRangeComponent, setDateRangeComponent] = useState<React.ComponentType<any> | null>(null);
 
   // Initialize with stored dates or default to today for proper date objects
   const [state, setState] = useState<Range[]>([{
@@ -32,6 +32,109 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     endDate: dateRange?.endDate ? new Date(dateRange.endDate) : addMonths(new Date(), 1),
     key: "selection"
   }]);
+
+  // Dynamically load styles and component 
+  useEffect(() => {
+    const loadDateRangeModules = async () => {
+      try {
+        if (isWebEnvironment() && typeof document !== "undefined") {
+          // In web mode, inject CSS using style tags
+          try {
+            // Fetch CSS content from CDN
+            const stylesResponse = await fetch("https://cdn.jsdelivr.net/npm/react-date-range@1.4.0/dist/styles.css");
+            const themeResponse = await fetch("https://cdn.jsdelivr.net/npm/react-date-range@1.4.0/dist/theme/default.css");
+
+            if (stylesResponse.ok && themeResponse.ok) {
+              const stylesCSS = await stylesResponse.text();
+              const themeCSS = await themeResponse.text();
+
+              // Check if styles are already injected
+              if (!document.getElementById("react-date-range-styles")) {
+                const stylesTag = document.createElement("style");
+                stylesTag.id = "react-date-range-styles";
+                stylesTag.innerHTML = stylesCSS;
+                document.head.appendChild(stylesTag);
+              }
+
+              if (!document.getElementById("react-date-range-theme")) {
+                const themeTag = document.createElement("style");
+                themeTag.id = "react-date-range-theme";
+                themeTag.innerHTML = themeCSS;
+                document.head.appendChild(themeTag);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to load DateRange CSS:", error);
+          }
+
+          // Import our dynamic module for the component
+          const { getReactDateRange } = await import("@/renderer/utils/mockModules");
+          const dateRangeModule = getReactDateRange();
+
+          // Ensure we have a valid component before setting it
+          if (typeof dateRangeModule.DateRange === 'function') {
+            setDateRangeComponent(() => dateRangeModule.DateRange);
+            console.log('Successfully loaded DateRange component for web mode');
+          } else {
+            console.error('DateRange is not a valid component function');
+          }
+        } else {
+          // In Nextron mode, load component dynamically to avoid static imports
+          // This prevents Next.js/webpack from analyzing the import during build
+          try {
+            // Dynamic function evaluation to avoid webpack analyzing the import
+            // @ts-ignore - bypassing TypeScript checking for dynamic evaluation
+            const reactDateRangeModule = Function('return require("react-date-range")')();
+
+            // Verify component is a function
+            if (typeof reactDateRangeModule.DateRange === 'function') {
+              setDateRangeComponent(() => reactDateRangeModule.DateRange);
+              console.log('Successfully loaded DateRange component for Nextron mode');
+            } else {
+              throw new Error('DateRange from react-date-range is not a function component');
+            }
+
+            // Inject styles manually
+            if (typeof document !== "undefined") {
+              // Check if styles are already loaded
+              if (!document.getElementById("react-date-range-styles-link")) {
+                const stylesLink = document.createElement("link");
+                stylesLink.id = "react-date-range-styles-link";
+                stylesLink.rel = "stylesheet";
+                stylesLink.href = "https://cdn.jsdelivr.net/npm/react-date-range@1.4.0/dist/styles.css";
+                document.head.appendChild(stylesLink);
+              }
+
+              if (!document.getElementById("react-date-range-theme-link")) {
+                const themeLink = document.createElement("link");
+                themeLink.id = "react-date-range-theme-link";
+                themeLink.rel = "stylesheet";
+                themeLink.href = "https://cdn.jsdelivr.net/npm/react-date-range@1.4.0/dist/theme/default.css";
+                document.head.appendChild(themeLink);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to load DateRange component in Nextron mode:", error);
+
+            // Fall back to the mock implementation if needed
+            const { getReactDateRange } = await import("@/renderer/utils/mockModules");
+            const dateRangeModule = getReactDateRange();
+
+            if (typeof dateRangeModule.DateRange === 'function') {
+              setDateRangeComponent(() => dateRangeModule.DateRange);
+              console.log('Successfully loaded fallback DateRange component');
+            } else {
+              console.error('Fallback DateRange is not a valid component function');
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error loading DateRange:", error);
+      }
+    };
+
+    loadDateRangeModules();
+  }, []);
 
   // Create portal element on mount
   useEffect(() => {
@@ -172,71 +275,127 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   // Create the date range picker portal content
   const renderDateRangePicker = () => {
-    if (!isOpen || !portalElement) return null;
+    if (!isOpen || !portalElement || !dateRangeComponent) return null;
 
     // Adjusted width to prevent clipping - based on the screenshot
     const calendarWidth = 669; // Increased from 636px to ensure no clipping
 
-    return ReactDOM.createPortal(
-      <div
-        className="fixed inset-0 flex items-center justify-center"
-        style={{
-          backgroundColor: "rgba(0, 0, 0, 0.3)",
-          zIndex: 9999999, // Ultra high z-index
-        }}
-      >
+    try {
+      // Ensure dateRangeComponent is a valid React component function
+      const DateRangeComponent = dateRangeComponent;
+
+      if (typeof DateRangeComponent !== 'function') {
+        console.error('DateRange component is not a function:', DateRangeComponent);
+        return null;
+      }
+
+      return ReactDOM.createPortal(
         <div
-          ref={pickerRef}
-          className="rounded-lg overflow-hidden shadow-2xl border border-gray-200 bg-white"
+          className="fixed inset-0 flex items-center justify-center"
           style={{
-            width: calendarWidth + 'px',
-            maxHeight: "calc(100vh - 40px)",
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+            backgroundColor: "rgba(0, 0, 0, 0.3)",
+            zIndex: 9999999, // Ultra high z-index
           }}
         >
-          {/* Blue header matching screenshot */}
-          <div className="bg-blue-500 px-4 py-3 flex justify-between items-center">
-            <h3 className="text-white font-medium">Select Date Range</h3>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-white/90 hover:text-white p-1 rounded-full hover:bg-white/10"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          <div
+            ref={pickerRef}
+            className="rounded-lg overflow-hidden shadow-2xl border border-blue-300 bg-white"
+            style={{
+              width: calendarWidth + 'px',
+              maxHeight: "calc(100vh - 40px)",
+              boxShadow: "0 25px 50px -12px rgba(59, 130, 246, 0.25)"
+            }}
+          >
+            {/* Blue header matching screenshot */}
+            <div className="bg-blue-500 px-4 py-3 flex justify-between items-center">
+              <h3 className="text-white font-medium">Select Date Range</h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-white hover:text-white/80 p-1 rounded-full hover:bg-white/10 transition-colors"
+                style={{ color: "white" }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-          {/* Calendar body with padding to ensure content is fully visible */}
-          <div className="rdr-wrapper px-0.5" style={{ overflow: "hidden" }}>
-            <DateRange
-              ranges={state}
-              onChange={handleSelect}
-              moveRangeOnFirstSelection={false}
-              months={2}
-              direction="horizontal"
-              rangeColors={["#3b82f6"]}
-              showDateDisplay={true}
-              showMonthAndYearPickers={true}
-              showPreview={true}
-              minDate={undefined}
-              color="#3b82f6"
-            />
-          </div>
+            {/* Calendar body with padding to ensure content is fully visible */}
+            <div className="rdr-wrapper px-0.5" style={{ overflow: "hidden" }}>
+              <DateRangeComponent
+                ranges={state}
+                onChange={handleSelect}
+                moveRangeOnFirstSelection={false}
+                months={2}
+                direction="horizontal"
+                rangeColors={["#3b82f6"]}
+                showDateDisplay={false}
+                showMonthAndYearPickers={true}
+                showPreview={false}
+                minDate={undefined}
+                color="#3b82f6"
+                renderStaticRangeLabel={() => null}
+                staticRanges={[]}
+                inputRanges={[]}
+                editableDateInputs={false}
+                showSelectionPreview={false}
+                footerContent={null}
+              />
+            </div>
 
-          {/* Bottom bar with apply button */}
-          <div className="bg-gray-50 px-4 py-3 flex w-full border-t border-gray-200">
-            <button
-              onClick={() => setIsOpen(false)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md w-full hover:bg-blue-600 transition-colors"
-            >
-              Apply
-            </button>
+            {/* Add comprehensive styles to hide any date display elements */}
+            <style jsx global>{`
+              .rdrDateDisplayWrapper,
+              .rdrDateDisplay,
+              .rdrDateDisplayItem,
+              .rdrStaticRange,
+              .rdrDefinedRangesWrapper,
+              .rdrInputRanges {
+                display: none !important;
+              }
+              
+              /* Specifically target the preview container that might show dates */
+              .rdrDateRangePickerWrapper .rdrDateDisplayWrapper,
+              .rdrDateRangePickerWrapper .rdrDateDisplay,
+              div[class*="DateDisplayItem"],
+              div[class*="DateDisplay"],
+              div[class*="DateWrapper"],
+              div[class*="rdrDateDisplay"] {
+                display: none !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                visibility: hidden !important;
+              }
+              
+              /* Add more specific selectors as needed */
+              [class*="InputRangeInput"],
+              [class*="InputRange"] {
+                display: none !important;
+              }
+              
+              /* Hide the static ranges section completely */
+              .rdrStaticRanges {
+                display: none !important;
+              }
+            `}</style>
+
+            {/* Bottom bar with apply button - removed the date display text */}
+            <div className="bg-gray-50 px-4 py-3 flex w-full border-t border-gray-200">
+              <button
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md w-full hover:bg-blue-600 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
           </div>
-        </div>
-      </div>,
-      portalElement
-    );
+        </div>,
+        portalElement
+      );
+    } catch (error) {
+      console.error('Error rendering DateRange component:', error);
+      return null;
+    }
   };
 
   return (
