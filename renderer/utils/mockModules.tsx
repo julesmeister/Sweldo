@@ -82,9 +82,8 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
           type="date"
           value={formatDateForInput(selected)}
           onChange={handleChange}
-          className={`absolute opacity-0 inset-0 w-full h-full cursor-pointer ${
-            className || ""
-          }`}
+          className={`absolute opacity-0 inset-0 w-full h-full cursor-pointer ${className || ""
+            }`}
           placeholder={placeholderText}
           min={minDate ? formatDateForInput(minDate) : undefined}
         />

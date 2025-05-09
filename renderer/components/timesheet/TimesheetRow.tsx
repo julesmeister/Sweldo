@@ -60,7 +60,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const isAbsent =
         scheduleInfo?.hasSchedule && !scheduleInfo.isRestDay && !hasTimeEntries;
 
-    const rowClass = `cursor-pointer ${isAbsent
+    const rowClass = `cursor-pointer border-t border-b border-gray-200 ${isAbsent
         ? "bg-red-50 hover:bg-red-100"
         : scheduleInfo?.isRestDay
             ? "bg-gray-50/50 hover:bg-gray-100/50"
@@ -239,7 +239,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         <td
                             key={column.key}
                             className={`${column.key === "day"
-                                ? `timesheet-day-cell ${isSunday ? 'sunday' : 'weekday'}`
+                                ? `timesheet-day-cell ${isSunday ? 'sunday' : 'weekday'} sticky left-0 z-10 bg-white`
                                 : ""} px-6 py-4 whitespace-nowrap text-sm ${column.key === "day"
                                     ? "font-medium text-gray-900"
                                     : "text-gray-500"}`}

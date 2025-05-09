@@ -1379,6 +1379,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                     : "opacity-50 cursor-not-allowed"
                     }`}
                 />
+                {/* Invisible spacer to help position buttons correctly in web mode */}
+                <div className="flex-2 opacity-0 pointer-events-none"></div>
                 <button
                   type="button"
                   onClick={onClose}

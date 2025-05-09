@@ -29,17 +29,27 @@ The project uses a hybrid CSS approach with Tailwind CSS as the primary styling 
    - Adds critical utility classes as inline styles
    - Includes component-specific styles (DatePicker, MagicUI, scrollbars)
 
-4. **Document Head Styling (`renderer/pages/_document.js`)**
+4. **Style Synchronization System**
+   - Script at `renderer/scripts/sync-styles.js`
+   - Automatically extracts styles from globals.css and injects them into styleInjector.js
+   - Intelligently handles CSS selector deduplication to prevent duplicate styles
+   - Skips problematic selectors like Tailwind directives (@apply, @layer)
+   - Adds !important flags to ensure styles take precedence in web mode
+   - Organized into named sections with start/end markers
+   - Integrated into the web build process via npm scripts
+
+5. **Document Head Styling (`renderer/pages/_document.js`)**
    - Provides critical styles in the document head
    - Includes font declarations and minimal reset
    - Prevents flash of unstyled content (FOUC)
    - Works in both Nextron and web environments
 
-5. **Styling Structure**
+6. **Styling Structure**
    - `renderer/styles/` - Main styles directory
    - `renderer/styles-actual/` - Backup/alternative styles
    - `renderer/styles/fonts.css` and `fonts.module.css` - Font-specific styling
    - `renderer/styles/injectFonts.js` - Font injection utility
+   - `renderer/scripts/sync-styles.js` - Style synchronization script
 
 ## Environment-Specific Implementation
 
@@ -52,8 +62,39 @@ The project uses a hybrid CSS approach with Tailwind CSS as the primary styling 
 ### Web Mode
 - Uses style injection to bypass Next.js CSS loading issues
 - Loads Tailwind CSS dynamically
-- Injects critical styles inline
+- Injects critical styles inline via styleInjector.js
 - Uses font loading optimization
+- Now uses sync-styles.js to ensure consistency with globals.css
+
+## CSS Synchronization System
+
+The project implements a sophisticated CSS synchronization system to maintain styling consistency between desktop and web modes:
+
+1. **Automated Extraction**
+   - Script extracts specific sections from globals.css using marker comments
+   - Currently extracts timesheet-table styles and rounded-corners styles
+   - Skips Tailwind directives and other problematic selectors
+
+2. **Intelligent Deduplication**
+   - Parses CSS into rule blocks (from { to })
+   - Extracts selector names and checks if they already exist in styleInjector.js
+   - Only adds selectors that don't already exist
+   - Prevents duplicate rules while ensuring style consistency
+
+3. **Format Transformation**
+   - Adds !important flags to CSS properties to ensure they take precedence
+   - Preserves existing !important flags
+   - Maintains CSS rule structure and nesting
+
+4. **Section Management**
+   - Uses special comment markers to define sections in styleInjector.js
+   - Replaces existing sections or adds new ones as needed
+   - Clearly labels auto-generated sections for easy identification
+
+5. **Build Process Integration**
+   - Integrated into web build process via npm scripts
+   - Runs before both development and production builds
+   - Custom npm script (sync:styles) for manual synchronization
 
 ## Custom UI Patterns
 
@@ -77,6 +118,7 @@ The project uses a hybrid CSS approach with Tailwind CSS as the primary styling 
    - DatePicker custom styling
    - MagicUI integration
    - Form element styling (select dropdowns, inputs)
+   - Timesheet table with consistent borders and cell styling
 
 ## Technical Implementation Details
 
@@ -98,6 +140,20 @@ The project uses a hybrid CSS approach with Tailwind CSS as the primary styling 
    - Semantic color variables (primary, secondary, accent, etc.)
    - Separate variables for sidebar theming
 
+## Specific Component Styling Solutions
+
+1. **Timesheet Table**
+   - Fixed inconsistent borders between desktop and web modes
+   - Added consistent border styling with proper cell borders
+   - Ensured sticky day column works in both environments
+   - Fixed z-index issues with sticky headers
+
+2. **CompensationDialog**
+   - Improved form layout with better spacing
+   - Fixed input field heights for consistency
+   - Enhanced grid layout with appropriate gaps
+   - Addressed alignment issues in different environments
+
 ## Environment-Specific Issues
 
 Despite having styles working in both environments, there are some design differences between web mode and Nextron mode:
@@ -116,9 +172,10 @@ Despite having styles working in both environments, there are some design differ
 
 ## Future Improvements
 
-1. **Unified Styling Strategy**
-   - Move toward a more consistent styling approach across environments
-   - Consider using CSS Modules or styled-components for component-specific styles
+1. **Enhanced Synchronization Logic**
+   - Add support for more complex CSS selectors and nested rules
+   - Improve extraction of specific component styles
+   - Better handling of media queries and responsive styles
 
 2. **Optimization Opportunities**
    - Reduce safelist size by better tracking dynamic class usage

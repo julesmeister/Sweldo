@@ -75,11 +75,6 @@ export const useSchedules = (
       }
 
       try {
-        console.log(
-          "useSchedules - Calculating schedules for dates:",
-          dates.length
-        );
-
         // Create a map to store schedule information for each day
         const newScheduleMap = new Map<
           number,
@@ -88,31 +83,29 @@ export const useSchedules = (
 
         // If we have an employment type, use its schedule
         if (employmentType) {
-          console.log(
-            "useSchedules - Using employment type schedule:",
-            employmentType.type
-          );
-
           // Process each date
           for (const date of dates) {
             const day = date.getDate();
             const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
 
             // Check if this day is a rest day based on employment type settings
-            const isRestDay = employmentType.restDays.includes(dayOfWeek);
+            // Add null checks to prevent TypeError
+            const isRestDay =
+              employmentType.restDays && Array.isArray(employmentType.restDays)
+                ? employmentType.restDays.includes(dayOfWeek)
+                : dayOfWeek === 0 || dayOfWeek === 6; // Default to weekends if restDays is missing
 
             // Determine if there's a schedule for this day
-            const hasSchedule = employmentType.workDays.includes(dayOfWeek);
+            const hasSchedule =
+              employmentType.workDays && Array.isArray(employmentType.workDays)
+                ? employmentType.workDays.includes(dayOfWeek)
+                : dayOfWeek > 0 && dayOfWeek < 6; // Default to weekdays if workDays is missing
 
             // Store schedule info in the map
             newScheduleMap.set(day, { isRestDay, hasSchedule });
           }
         } else {
           // If no employment type is available, assume all days have a schedule but none are rest days
-          console.log(
-            "useSchedules - No employment type found, using defaults"
-          );
-
           for (const date of dates) {
             const day = date.getDate();
             const dayOfWeek = date.getDay();
@@ -129,8 +122,6 @@ export const useSchedules = (
 
         // Load any custom schedules from the settings model
         try {
-          console.log("useSchedules - Checking for custom schedules");
-
           // This would be where you'd load custom schedules if implemented
           // For example:
           // const customSchedules = await attendanceSettingsModel.loadCustomSchedules();
@@ -145,9 +136,6 @@ export const useSchedules = (
         }
 
         setScheduleMap(newScheduleMap);
-        console.log(
-          `useSchedules - Completed schedule calculation for ${newScheduleMap.size} days`
-        );
       } catch (error) {
         console.error("useSchedules - Error calculating schedules:", error);
       }

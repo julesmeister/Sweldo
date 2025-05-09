@@ -291,9 +291,9 @@ const TimesheetPage: React.FC = () => {
 
   // Sync data from hook
   useEffect(() => {
-    setTimesheetEntries(loadedTimesheetEntries);
-    setCompensationEntries(loadedCompensationEntries);
-    setValidEntriesCount(loadedValidEntriesCount);
+    setTimesheetEntries(loadedTimesheetEntries || []);
+    setCompensationEntries(loadedCompensationEntries || []);
+    setValidEntriesCount(loadedValidEntriesCount || 0);
   }, [loadedTimesheetEntries, loadedCompensationEntries, loadedValidEntriesCount]);
 
   // Load employment types
@@ -302,6 +302,11 @@ const TimesheetPage: React.FC = () => {
       try {
         if (!attendanceSettingsModel && !isWeb) {
           console.error("Attendance settings model not available");
+          return;
+        }
+
+        // If we already have types loaded, don't reload
+        if (employmentTypes.length > 0 && timeSettings.length > 0) {
           return;
         }
 
@@ -346,7 +351,7 @@ const TimesheetPage: React.FC = () => {
     };
 
     loadEmploymentTypes();
-  }, [attendanceSettingsModel, employee, setColumns, columns, isWeb]);
+  }, [attendanceSettingsModel, employee, setColumns, columns, isWeb, employmentTypes.length, timeSettings.length]);
 
   // Load employees
   useEffect(() => {
@@ -361,10 +366,11 @@ const TimesheetPage: React.FC = () => {
             return;
           }
 
-          console.log("Loading employees from Firestore for company:", companyName);
-          const firestoreEmployees = await loadActiveEmployeesFirestore(companyName);
-          console.log(`Loaded ${firestoreEmployees.length} employees from Firestore`);
-          setEmployees(firestoreEmployees);
+          // Only load if employees array is empty
+          if (employees.length === 0) {
+            const firestoreEmployees = await loadActiveEmployeesFirestore(companyName);
+            setEmployees(firestoreEmployees);
+          }
         } else {
           // Desktop mode - load from local DB
           if (!dbPath) {
@@ -372,9 +378,12 @@ const TimesheetPage: React.FC = () => {
             return;
           }
 
-          const employeeModel = createEmployeeModel(dbPath);
-          const loadedEmployees = await employeeModel.loadActiveEmployees();
-          setEmployees(loadedEmployees);
+          // Only load if employees array is empty
+          if (employees.length === 0) {
+            const employeeModel = createEmployeeModel(dbPath);
+            const loadedEmployees = await employeeModel.loadActiveEmployees();
+            setEmployees(loadedEmployees);
+          }
         }
       } catch (error) {
         toast.error("Error loading employees");
@@ -384,8 +393,11 @@ const TimesheetPage: React.FC = () => {
       }
     };
 
-    loadEmployees();
-  }, [dbPath, companyName, isWeb]);
+    // Only load employees if the array is empty
+    if (employees.length === 0) {
+      loadEmployees();
+    }
+  }, [dbPath, companyName, isWeb, employees.length]);
 
   // Column visibility handler
   const handleColumnVisibilityChange = (columnKey: string) => {
@@ -563,20 +575,25 @@ const TimesheetPage: React.FC = () => {
     });
   }, [timesheetEntries, dateRange?.startDate, dateRange?.endDate, year, storedMonthInt]);
 
-  // Get unique days
+  // Get unique days - stabilize array reference with useMemo
   const memoizedDays = useMemo(() => {
-    return Array.from(
+    const uniqueDays = Array.from(
       new Set(filteredTimesheetEntries.map((entry) => entry.day))
-    );
+    ).sort((a, b) => a - b); // Sort to ensure consistent order
+    return uniqueDays;
   }, [filteredTimesheetEntries]);
 
-  // Compensation lookup map
+  // Compensation lookup map - stabilize reference with useMemo
   const compensationLookup = useMemo(() => {
     const lookup = new Map();
-    compensationEntries.forEach((comp) => {
-      const key = `${comp.year}-${comp.month}-${comp.day}`;
-      lookup.set(key, comp);
-    });
+    if (compensationEntries && compensationEntries.length > 0) {
+      compensationEntries.forEach((comp) => {
+        if (comp && comp.year && comp.month && comp.day) {
+          const key = `${comp.year}-${comp.month}-${comp.day}`;
+          lookup.set(key, comp);
+        }
+      });
+    }
     return lookup;
   }, [compensationEntries]);
 
@@ -600,13 +617,13 @@ const TimesheetPage: React.FC = () => {
     return settings;
   }, [employee, timeSettings]);
 
-  // Create dates array for schedules
+  // Create dates array for schedules with useMemo
   const dates = useMemo(
     () => memoizedDays.map((day) => new Date(year, storedMonthInt - 1, day)),
     [memoizedDays, year, storedMonthInt]
   );
 
-  // Get schedules
+  // Get schedules with more stable references
   const scheduleMap = useSchedules(
     attendanceSettingsModel,
     employmentTypeObj,
@@ -764,10 +781,10 @@ const TimesheetPage: React.FC = () => {
                     hasSelectedEmployee={true}
                   />
                 ) : (
-                  <table className="min-w-full divide-y divide-gray-200 timesheet-table">
+                  <table className="min-w-full divide-y divide-gray-200 border-collapse border-gray-200 timesheet-table">
                     {/* Sticky column headers */}
                     <thead className="bg-gray-50 sticky top-0 z-20">
-                      <tr>
+                      <tr className="border-b border-gray-200">
                         {columns.map(
                           (column) =>
                             column.visible && (

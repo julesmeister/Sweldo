@@ -107,6 +107,150 @@ The main index page shows several design differences between environments:
    - Next.js has strict rules about global CSS imports that must be respected
    - Runtime style injection for web mode and global CSS for Nextron mode provides a flexible solution
 
+## CompensationDialog Component Issues
+
+### Layout and Button Positioning
+
+1. **Issue Description**
+   - In web mode, the Cancel and Save Changes buttons in the CompensationDialog were improperly positioned
+   - Buttons would "float" in the middle of the form instead of appearing at the bottom next to each other
+   - The Notes input and footer section had inconsistent alignment
+   - CSS differences between web and desktop mode caused layout discrepancies
+
+2. **Clear Buttons (×) Styling Issues**
+   - The clear buttons (×) next to form fields had inconsistent positioning and appearance in web mode
+   - Hover effects were missing or inconsistent
+   - Button placement relative to the input fields was problematic
+
+3. **Input Field Styling Issues**
+   - Form fields had inconsistent background colors and borders in web mode
+   - Disabled fields lacked proper styling to indicate their disabled state
+   - Focus effects were not consistently applied
+
+4. **Select Dropdown Arrow Positioning**
+   - Dropdown arrows in select elements were positioned too close to the right edge in web mode
+   - Made it difficult to differentiate the arrow from the border
+
+### Solutions Implemented
+
+1. **Added CompensationDialog-specific Styles to styleInjector.js**
+   - Created comprehensive CSS for dialog styling in web mode:
+   ```javascript
+   // Add the compensation-dialog class to the main dialog container
+   <div className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-7xl overflow-visible compensation-dialog">
+   ```
+
+2. **Clear Button (×) Styling Fix**
+   - Added consistent styling for the clear buttons:
+   ```css
+   .clear-button {
+     position: absolute !important;
+     right: 10px !important;
+     top: 50% !important;
+     transform: translateY(-50%) !important;
+     color: rgba(156, 163, 175, 0.7) !important;
+     cursor: pointer !important;
+     font-size: 16px !important;
+     z-index: 10 !important;
+     background: transparent !important;
+     border: none !important;
+     display: flex !important;
+     align-items: center !important;
+     justify-content: center !important;
+     width: 20px !important;
+     height: 20px !important;
+     border-radius: 50% !important;
+     transition: all 0.2s !important;
+   }
+   
+   .clear-button:hover {
+     color: rgba(107, 114, 128, 1) !important;
+     background-color: rgba(229, 231, 235, 0.4) !important;
+   }
+   ```
+   - Updated the button in the FormField component:
+   ```jsx
+   <button
+     onClick={(e) => {
+       // handler code
+     }}
+     className="clear-button"
+     title="Clear value (enables Manual Override)"
+   >
+     ×
+   </button>
+   ```
+
+3. **Form Field Container Fix**
+   - Added proper form-field class to each field container:
+   ```jsx
+   <div className="form-field">
+     <label className="block text-sm font-medium text-gray-300 mb-1">
+       {label}
+     </label>
+     { /* field content */ }
+   </div>
+   ```
+   - Added corresponding CSS:
+   ```css
+   .compensation-dialog .form-field {
+     position: relative !important;
+     margin-bottom: 1rem !important;
+   }
+   ```
+
+4. **Button Alignment Fix with Spacer Element**
+   - Added an invisible spacer element to push buttons to the correct position:
+   ```jsx
+   <div className="col-span-7 flex items-center space-x-3">
+     <input
+       type="text"
+       name="notes"
+       placeholder="Notes"
+       { /* other props */ }
+     />
+     {/* Invisible spacer to help position buttons correctly in web mode */}
+     <div className="flex-2 opacity-0 pointer-events-none"></div>
+     <button
+       type="button"
+       onClick={onClose}
+       className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
+     >
+       {hasEditAccess ? "Cancel" : "Close"}
+     </button>
+     { /* Save button */ }
+   </div>
+   ```
+   - The spacer uses `flex-2` to take up extra space, is invisible (`opacity-0`), and doesn't interfere with interactions (`pointer-events-none`)
+
+5. **Select Element Arrow Position Fix**
+   - Added CSS to adjust dropdown arrow positioning:
+   ```css
+   .compensation-dialog select {
+     padding-right: 2.5rem !important;
+     background-position: right 1rem center !important;
+   }
+   ```
+   - This moves the dropdown arrow further from the right edge for better visibility
+
+### Key Lessons
+
+1. **Web vs Desktop Rendering Differences**
+   - The same Tailwind classes can produce different layouts in web browsers vs Electron
+   - Flex layout behavior can vary significantly between environments
+   - Adding explicit CSS with specific selectors and `!important` flags helps overcome environment differences
+
+2. **Practical Solutions for Cross-Environment Components**
+   - Using invisible spacer elements can be an effective workaround for layout issues
+   - The styleInjector.js approach allows targeted CSS fixes for web mode without affecting desktop mode
+   - CSS specificity is crucial - use class hierarchies to target specific elements
+   - Test in both environments after each significant UI change
+
+3. **Form Design Consistency**
+   - Maintain consistent spacing and alignment for form elements
+   - Pay special attention to interactive elements like buttons and select dropdowns
+   - Use direct element inspection (DevTools) to identify subtle layout differences
+
 ## Root Causes
 
 The primary causes for these differences include:

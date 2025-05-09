@@ -170,12 +170,13 @@ export function injectStyles() {
       border-spacing: 0 !important;
     }
     
-    .timesheet-table tr {
-      border-bottom: 1px solid #e5e7eb;
+    .timesheet-table th,
+    .timesheet-table td {
+      border-bottom: 1px solid #e5e7eb !important;
     }
     
-    .timesheet-table tr:first-child {
-      border-top: 1px solid #e5e7eb;
+    .timesheet-table tr:last-child td {
+      border-bottom-width: 1px !important;
     }
     
     /* Fix specifically for the day column with sticky positioning */
@@ -184,7 +185,8 @@ export function injectStyles() {
       left: 0 !important;
       z-index: 10 !important;
       /* Use box shadow instead of borders for better sticky behavior */
-      box-shadow: inset 0 1px 0 #e5e7eb, inset 0 -1px 0 #e5e7eb !important;
+      background-color: inherit !important;
+      border-right: 1px solid #e5e7eb !important;
     }
     
     /* Sunday-specific styling */
@@ -261,7 +263,21 @@ export function injectStyles() {
     /* Form field container positioning */
     .compensation-dialog .form-field {
       position: relative !important;
-      margin-bottom: 1rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+    
+    /* Grid layout improvements for the form */
+    .compensation-dialog form > div {
+      display: grid !important;
+      grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+      gap: 0.75rem !important;
+      row-gap: 0.5rem !important;
+    }
+    
+    /* Ensure input fields have consistent height */
+    .compensation-dialog input,
+    .compensation-dialog select {
+      height: 38px !important;
     }
     
     /* Label styling */
@@ -318,6 +334,27 @@ export function injectStyles() {
     
     .compensation-dialog input:checked + .toggle-slider:before {
       transform: translateX(16px) !important;
+    }
+
+    /* Fix button alignment in CompensationDialog */
+    .compensation-dialog .col-span-7.flex {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      margin-top: 1rem !important;
+    }
+
+    .compensation-dialog .col-span-7.flex input {
+      margin-right: auto !important;
+    }
+
+    .compensation-dialog .col-span-7.flex button {
+      height: 38px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 0.875rem !important;
+      margin-left: 0.75rem !important;
     }
 
     /* React DatePicker essential styles */
@@ -462,7 +499,117 @@ export function injectStyles() {
       border-width: 8px 0 8px 8px;
       border-color: transparent transparent transparent #000;
     }
-  `;
+
+    /* Fix form layout and button positioning in CompensationDialog */
+    .compensation-dialog form {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    
+    /* Ensure the footer stays at the bottom */
+    .compensation-dialog .col-span-7.flex {
+      grid-column: span 7 / span 7 !important;
+      display: flex !important;
+      width: 100% !important;
+      margin-top: 0rem !important;
+      position: relative !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
+      padding: 0.75rem 0 !important;
+      z-index: 50 !important;
+    }
+    
+    /* Position the toggle separately */
+    .compensation-dialog .col-start-7 {
+      grid-column-start: 7 !important;
+    }
+    
+    /* Style the footer buttons consistently */
+    .compensation-dialog .col-span-7.flex input {
+      flex: 1 1 auto !important;
+      margin-right: 1rem !important;
+    }
+    
+    .compensation-dialog .col-span-7.flex button {
+      flex: 0 0 auto !important;
+      height: 38px !important;
+      min-width: 100px !important;
+      margin-left: 0.5rem !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    
+    /* Fix the Cancel and Save buttons to always be side by side */
+    .compensation-dialog .col-span-7.flex button:nth-last-child(2),
+    .compensation-dialog .col-span-7.flex button:last-child {
+      position: relative !important;
+      margin-left: 0.5rem !important;
+    }
+
+    /* Adjust select dropdown arrow spacing */
+    .compensation-dialog select {
+      padding-right: 2.5rem !important;
+      background-position: right 1rem center !important;
+    }
+  
+
+    /* timesheet-table section - auto-generated */
+    .timesheet-table th,
+    /* end timesheet-table section */
+
+    /* scrollbar section - auto-generated */
+    .btn-blue {
+    @apply text-white font-bold px-4 py-2 rounded bg-blue-600 hover:bg-blue-500;
+    }
+    /* Fix for sticky day cells in timesheet to ensure consistent borders in both web and desktop */
+    .sticky-day-cell {
+    position: relative !important;
+    }
+    .sticky-day-cell::before,
+    .sticky-day-cell::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 1px !important;
+    background-color: #e5e7eb !important;
+    z-index: 11 !important;
+    }
+    .sticky-day-cell::before { top: 0; }
+    .sticky-day-cell::after { bottom: 0; }
+    /* Timesheet-specific styles for consistent borders across environments */
+    .timesheet-table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    }
+    .timesheet-table tr {
+    border-bottom: 1px solid #e5e7eb !important;
+    }
+    .timesheet-table tr:first-child {
+    border-top: 1px solid #e5e7eb !important;
+    }
+    .timesheet-day-cell {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    }
+    .timesheet-day-cell.sunday {
+    background-color: #fef3c7 !important; /* Yellow-100 equivalent */
+    }
+    .timesheet-day-cell.weekday {
+    background-color: white !important;
+    }
+    }
+    /* end scrollbar section */
+
+    /* rounded-corners section - auto-generated */
+    .rounded-inherit {
+    border-radius: inherit !important;
+    }
+    /* end rounded-corners section */`;
   document.head.appendChild(baseStyle);
 
   // Create a link element for Tailwind

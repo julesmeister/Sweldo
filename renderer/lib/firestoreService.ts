@@ -62,7 +62,6 @@ export const getFirestoreInstance = (): Firestore => {
  */
 export const isWebEnvironment = (): boolean => {
   const isWeb = typeof window !== "undefined" && !window.electron;
-  console.log(`[firestoreService] isWebEnvironment check: ${isWeb}`);
   return isWeb;
 };
 
@@ -78,7 +77,6 @@ export const setFirestoreCompanyName = (name: string): void => {
     );
     return;
   }
-  console.log(`[firestoreService] Setting cached company name: ${name}`);
   cachedCompanyName = name;
 };
 
@@ -89,38 +87,23 @@ export const setFirestoreCompanyName = (name: string): void => {
 export const getCompanyName = async (): Promise<string> => {
   // First check if we have a cached company name
   if (cachedCompanyName) {
-    console.log(
-      `[getCompanyName] Using cached company name: ${cachedCompanyName}`
-    );
     return cachedCompanyName;
   }
 
   try {
     // Try to get company name from settings store
     const settingsStore = useSettingsStore.getState();
-    console.log(`[getCompanyName] Settings store state:`, settingsStore);
 
     if (settingsStore && settingsStore.companyName) {
       cachedCompanyName = settingsStore.companyName;
-      console.log(
-        `[getCompanyName] Using company name from settings store: ${cachedCompanyName}`
-      );
       return settingsStore.companyName;
     }
 
     // Fall back to environment variable if settings store doesn't have it
     const envCompanyName = process.env.NEXT_PUBLIC_COMPANY_NAME;
-    console.log(
-      `[getCompanyName] Environment variable company name: ${
-        envCompanyName || "not set"
-      }`
-    );
 
     if (envCompanyName) {
       cachedCompanyName = envCompanyName;
-      console.log(
-        `[getCompanyName] Using company name from environment variable: ${cachedCompanyName}`
-      );
       return envCompanyName;
     }
 
@@ -128,13 +111,9 @@ export const getCompanyName = async (): Promise<string> => {
     console.warn(
       "No company name found in settings or environment. Using default."
     );
-    console.log(`[getCompanyName] Using default company name: DefaultCompany`);
     return "DefaultCompany";
   } catch (error) {
     console.error("Error fetching company name:", error);
-    console.log(
-      `[getCompanyName] Error occurred, using default company name: DefaultCompany`
-    );
     return "DefaultCompany";
   }
 };

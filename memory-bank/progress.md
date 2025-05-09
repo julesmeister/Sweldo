@@ -41,6 +41,11 @@
 - ✅ `HolidaysPage` (`holidays.tsx`) now correctly uses `useDateSelectorStore` to react to global date changes, fetching data from Firestore in web mode and local DB in desktop mode.
 - ✅ `TimesheetService` is properly implemented to handle both web and desktop environments.
 - ✅ `timesheet_test.tsx` correctly handles web mode by checking environment and using appropriate data sources.
+- ✅ Automated CSS synchronization between globals.css and styleInjector.js for consistent styling in desktop and web modes.
+- ✅ Fixed infinite loop issues in the timesheet component by optimizing effect dependencies.
+- ✅ Fixed table border styling issues in the timesheet to ensure consistent appearance in both modes.
+- ✅ Enhanced CompensationDialog layout with improved spacing and visual consistency.
+- ✅ Intelligent deduplication of CSS selectors to prevent duplicates in styleInjector.js.
 
 ## What's Left to Build / Improve
 
@@ -71,12 +76,17 @@
     *   Implement a user-friendly backup and restore mechanism for the local SQLite database.
 8.  **Finalize Caching Strategy:**
     *   Review and extend Dexie.js caching to other relevant Firestore data (e.g., monthly schedules, payroll summaries) to improve performance and reduce Firestore reads.
+9.  **Further CSS Synchronization Improvements:**
+    *   Test the CSS synchronization script with additional components and styles.
+    *   Add support for handling more complex CSS rules and selector patterns.
+    *   Document the approach thoroughly and consider performance optimizations.
 
 ## Current Status
 
 *   The application is partially functional in both desktop (JSON files as Database) and web (Firestore) modes.
 *   Focus is on achieving full feature parity and stability for web mode, particularly data fetching and state management tied to global date selection.
-*   The timesheet components work in the test environment, but the full timesheet interface has TypeScript compatibility issues that need resolution.
+*   Styling is now consistent between desktop and web modes through an automated CSS synchronization system.
+*   The timesheet components work in the test environment, and styling issues have been fixed in the main interface.
 
 ## Known Issues
 
@@ -86,6 +96,12 @@
 *   Some pages (`cashAdvances.tsx`, `loans.tsx`, `leaves.tsx`, `shorts.tsx`) do not yet react to `DateSelector` changes; this is the next refactoring target.
 *   Web mode data persistence for user-specific data (like selected company) across sessions needs to be robustly handled (currently relies on `authStore` initialization).
 *   The overall data flow and state management for date-sensitive information across different pages needs to be streamlined (the planned custom hook should address this).
+
+### CSS Synchronization
+- The CSS synchronization script now properly handles copying styles from globals.css to styleInjector.js
+- It includes intelligent deduplication of CSS selectors to prevent duplicates
+- It skips Tailwind directives and other problematic selectors
+- It's integrated into the web build and development process
 
 ### PostCSS and Tailwind CSS Configuration
 - Creating a custom `postcss.config.js` in the root or renderer directory can break Tailwind CSS processing
@@ -133,5 +149,7 @@ The component now serves as a reusable, self-contained employee selector that ca
 ### Timesheet Components
 - `timesheet_test.tsx` now correctly handles web mode
 - `TimesheetService` supports both web and desktop modes
-- Main timesheet interface (`timesheet.tsx`) needs interface updates to work properly in web mode (ongoing).
-- Adapter functions needed for some component props to handle type compatibility. 
+- Main timesheet interface has fixed styling and infinite loop issues
+- Consistent border styling between desktop and web modes
+- CompensationDialog layout improved with better spacing
+- Still needs interface updates to work properly in web mode (TypeScript compatibility) 
