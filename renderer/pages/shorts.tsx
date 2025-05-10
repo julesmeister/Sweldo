@@ -16,6 +16,10 @@ import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
+import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 
 export default function ShortsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -31,30 +35,39 @@ export default function ShortsPage() {
   } | null>(null);
   const [showTip, setShowTip] = useState(false);
 
-  // Initialize month/year from localStorage on first render
-  const [dateContext] = useState(() => {
-    const month =
-      localStorage.getItem("selectedMonth") || new Date().getMonth().toString();
-    const year =
-      localStorage.getItem("selectedYear") ||
-      new Date().getFullYear().toString();
+  // Initialize month/year from localStorage on first render - RETAIN for initial default, but prefer store for updates
+  const [/* dateContext */, setDateContext] = useState(() => { // Renamed to avoid conflict, setDateContext might be useful if we want to sync back
+    const month = localStorage.getItem("selectedMonth") || new Date().getMonth().toString();
+    const year = localStorage.getItem("selectedYear") || new Date().getFullYear().toString();
     return { month, year };
   });
 
+  // Get date from Zustand store
+  const { selectedMonth: storeSelectedMonth, selectedYear: storeSelectedYear } = useDateSelectorStore();
+
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
-  const { dbPath } = useSettingsStore();
+  const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const pathname = usePathname();
-  const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
+  const employeeModel = useMemo(() => {
+    // For desktop mode, employeeModel is still useful
+    if (!isWebEnvironment() && dbPath) {
+      return createEmployeeModel(dbPath);
+    }
+    return null;
+  }, [dbPath]);
+
   const shortModel = useMemo(() => {
-    if (!selectedEmployeeId || !dbPath) return null;
+    if (!selectedEmployeeId || !dbPath) return null; // Desktop mode still needs dbPath for shortModel
+    // This model primarily serves desktop mode now for loading.
+    // CUD operations will be further refactored.
     return createShortModel(
       dbPath,
       selectedEmployeeId,
-      parseInt(dateContext.month, 10) + 1,
-      parseInt(dateContext.year, 10)
+      parseInt(storeSelectedMonth, 10) + 1,
+      parseInt(storeSelectedYear, 10)
     );
-  }, [dbPath, selectedEmployeeId, dateContext]);
+  }, [dbPath, selectedEmployeeId, storeSelectedMonth, storeSelectedYear]);
   const { hasAccess } = useAuthStore();
 
   const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
@@ -63,26 +76,53 @@ export default function ShortsPage() {
     let mounted = true;
 
     const loadData = async () => {
-      if (!selectedEmployeeId || !dbPath || !employeeModel || !shortModel) {
+      if (!selectedEmployeeId) {
+        setShorts([]);
+        // setLoading(false); // setLoading is handled by the new employee loading effect mostly
         return;
       }
 
-      setLoading(true);
+      // setLoading(true); // setLoading primarily handled by employee loading effect, or here if still needed
       try {
-        const [emp, shortItems] = await Promise.all([
-          employeeModel.loadEmployeeById(selectedEmployeeId),
-          shortModel.loadShorts(selectedEmployeeId),
-        ]);
+        let shortItems: Short[] = [];
+        // Use month/year from the Zustand store directly
+        const currentShortMonth = storeSelectedMonth + 1; // Zustand month is 0-indexed
+        const currentShortYear = storeSelectedYear;
+
+        if (isWebEnvironment()) {
+          console.log(`[ShortsPage WEB] Starting to load shorts for employee: ${selectedEmployeeId}`);
+          if (!companyNameFromSettings) {
+            toast.error("Company name not configured for web mode. Cannot load shorts.");
+            if (mounted) setLoading(false);
+            return;
+          }
+
+          // Load shorts from Firestore
+          console.log(`[ShortsPage WEB] Loading shorts for ${selectedEmployeeId}, ${currentShortMonth}/${currentShortYear}, company: ${companyNameFromSettings}`);
+          shortItems = await loadShortsFirestore(selectedEmployeeId, currentShortMonth, currentShortYear, companyNameFromSettings);
+          console.log(`[ShortsPage WEB] Loaded ${shortItems.length} shorts from Firestore.`);
+
+        } else {
+          // Desktop mode
+          console.log(`[ShortsPage DESKTOP] Starting to load shorts for employee: ${selectedEmployeeId}`);
+          if (!dbPath || !employeeModel || !shortModel) {
+            toast.error("System not fully initialized for desktop mode. Cannot load shorts.");
+            if (mounted) setLoading(false);
+            return;
+          }
+          shortItems = await shortModel.loadShorts(selectedEmployeeId);
+          console.log(`[ShortsPage DESKTOP] Loaded ${shortItems.length} shorts using shortModel.`);
+        }
 
         if (!mounted) return;
 
-        if (emp !== null) setEmployee(emp);
         setShorts(shortItems);
+
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error("Error loading shorts data:", error);
         if (mounted) {
           toast.error(
-            error instanceof Error ? error.message : "Failed to load data"
+            error instanceof Error ? error.message : "Failed to load shorts data"
           );
         }
       } finally {
@@ -97,26 +137,94 @@ export default function ShortsPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedEmployeeId, dbPath, employeeModel, shortModel]);
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, shortModel, storeSelectedMonth, storeSelectedYear, setLoading]);
+
+  // New useEffect to load selected employee details (similar to cashAdvances.tsx)
+  useEffect(() => {
+    const loadSelectedEmployee = async () => {
+      if (!selectedEmployeeId) {
+        setEmployee(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        if (isWebEnvironment()) {
+          if (!companyNameFromSettings) {
+            toast.warn("Company name not set. Cannot load selected employee for web mode.");
+            setEmployee(null);
+            return;
+          }
+          // Find from the already loaded 'employees' list
+          const foundEmp = employees.find(e => e.id === selectedEmployeeId);
+          setEmployee(foundEmp || null);
+          if (!foundEmp) {
+            console.warn(`[ShortsPage WEB] loadSelectedEmployee: Employee ${selectedEmployeeId} not found in preloaded list.`);
+          } else {
+            console.log(`[ShortsPage WEB] loadSelectedEmployee: Successfully found employee ${selectedEmployeeId} in preloaded list.`);
+          }
+        } else {
+          if (!dbPath) {
+            toast.warn("Database path not set. Cannot load selected employee for desktop mode.");
+            setEmployee(null);
+            return;
+          }
+          const desktopEmployeeModel = createEmployeeModel(dbPath);
+          const emp = await desktopEmployeeModel.loadEmployeeById(selectedEmployeeId);
+          setEmployee(emp);
+          if (!emp) {
+            toast.error(`[ShortsPage DESKTOP] loadSelectedEmployee: Employee with ID ${selectedEmployeeId} not found using model.`);
+          }
+        }
+      } catch (error) {
+        console.error("[ShortsPage] Error in loadSelectedEmployee:", error);
+        toast.error("Error loading selected employee details.");
+        setEmployee(null);
+      } finally {
+        setLoading(false); // Consider if setLoading is appropriate here or if it flickers too much
+      }
+    };
+    loadSelectedEmployee();
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, employees, setLoading]);
 
   // Add effect to load all employees
   useEffect(() => {
     const loadEmployees = async () => {
-      if (!dbPath) return;
+      setLoading(true);
       try {
-        const employeeModel = createEmployeeModel(dbPath);
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
-        setEmployees(loadedEmployees);
+        if (isWebEnvironment()) {
+          if (!companyNameFromSettings) {
+            toast.warn("Company name not set. Cannot load employees for web mode.");
+            setEmployees([]);
+            return;
+          }
+          console.log("[ShortsPage WEB] Loading active employees from Firestore for dropdown.");
+          const firestoreEmployees = await loadActiveEmployeesFirestore(companyNameFromSettings);
+          setEmployees(firestoreEmployees);
+        } else {
+          if (!dbPath) {
+            toast.warn("Database path not set. Cannot load employees for desktop mode.");
+            setEmployees([]);
+            return;
+          }
+          console.log("[ShortsPage DESKTOP] Loading active employees from local DB for dropdown.");
+          const employeeModel = createEmployeeModel(dbPath);
+          const loadedEmployees = await employeeModel.loadActiveEmployees();
+          setEmployees(loadedEmployees);
+        }
       } catch (error) {
-        toast.error("Error loading employees");
+        console.error("Error loading employees for dropdown:", error);
+        toast.error("Error loading employees for dropdown");
+        setEmployees([]); // Ensure employees is empty on error
+      } finally {
+        setLoading(false);
       }
     };
 
     loadEmployees();
-  }, [dbPath]);
+  }, [dbPath, companyNameFromSettings, setLoading]);
 
-  const storedMonthInt = parseInt(dateContext.month, 10) + 1;
-  const yearInt = parseInt(dateContext.year, 10);
+  const storedMonthInt = storeSelectedMonth + 1; // Use store value for display consistency
+  const yearInt = storeSelectedYear; // Use store value for display consistency
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Paid":
@@ -283,14 +391,25 @@ export default function ShortsPage() {
   }
 
   const filteredShorts = useMemo(() => {
-    return shorts.filter((short) => {
+    console.log(`[ShortsPage FILTER] Running filter. storeSelectedMonth: ${storeSelectedMonth}, storeSelectedYear: ${storeSelectedYear}`);
+    console.log(`[ShortsPage FILTER] Input 'shorts' array length: ${shorts.length}`);
+    if (shorts.length > 0) {
+      console.log("[ShortsPage FILTER] First short raw data:", JSON.stringify(shorts[0]));
+    }
+    const result = shorts.filter((short) => {
       const shortDate = new Date(short.date);
-      return (
-        shortDate.getMonth() === parseInt(dateContext.month, 10) &&
-        shortDate.getFullYear() === parseInt(dateContext.year, 10)
-      );
+      const matchesMonth = shortDate.getMonth() === storeSelectedMonth; // storeSelectedMonth is 0-indexed
+      const matchesYear = shortDate.getFullYear() === storeSelectedYear;
+      // Safer logging for date
+      const shortDateString = shortDate instanceof Date && !isNaN(shortDate.valueOf())
+        ? shortDate.toISOString()
+        : `Invalid Date (original value: ${short.date})`;
+      console.log(`[ShortsPage FILTER] Filtering short ID ${short.id}: shortDate: ${shortDateString}, parsedMonth: ${!isNaN(shortDate.valueOf()) ? shortDate.getMonth() : 'N/A'}, parsedYear: ${!isNaN(shortDate.valueOf()) ? shortDate.getFullYear() : 'N/A'}, matchesMonth: ${matchesMonth}, matchesYear: ${matchesYear}`);
+      return matchesMonth && matchesYear;
     });
-  }, [shorts, dateContext]);
+    console.log(`[ShortsPage FILTER] Output 'filteredShorts' array length: ${result.length}`);
+    return result;
+  }, [shorts, storeSelectedMonth, storeSelectedYear]);
 
   return (
     <RootLayout>
@@ -326,17 +445,15 @@ export default function ShortsPage() {
                           type="button"
                           onClick={() => setShowTip((prev) => !prev)}
                           className={`inline-flex items-center justify-center rounded-md p-2 text-sm font-medium shadow-sm transition-all duration-300 ease-in-out
-                            ${
-                              showTip
-                                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white ring-2 ring-blue-500 ring-offset-2"
-                                : "bg-gradient-to-r from-white to-gray-50 text-blue-600 hover:from-blue-50 hover:to-purple-50 border border-gray-200"
+                            ${showTip
+                              ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white ring-2 ring-blue-500 ring-offset-2"
+                              : "bg-gradient-to-r from-white to-gray-50 text-blue-600 hover:from-blue-50 hover:to-purple-50 border border-gray-200"
                             }
                             transform hover:scale-105 active:scale-95`}
                         >
                           <InformationCircleIcon
-                            className={`h-5 w-5 transition-colors duration-300 ${
-                              showTip ? "text-white" : "text-blue-600"
-                            }`}
+                            className={`h-5 w-5 transition-colors duration-300 ${showTip ? "text-white" : "text-blue-600"
+                              }`}
                           />
                         </button>
                         <button
@@ -385,8 +502,8 @@ export default function ShortsPage() {
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">
                               No shorts found for{" "}
                               {new Date(
-                                parseInt(dateContext.year, 10),
-                                parseInt(dateContext.month, 10),
+                                storeSelectedYear,
+                                storeSelectedMonth,
                                 1
                               ).toLocaleString("default", {
                                 month: "long",
@@ -524,11 +641,10 @@ export default function ShortsPage() {
                                         setLoading(false);
                                       }
                                     }}
-                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${
-                                      !hasDeleteAccess
-                                        ? "opacity-50 cursor-not-allowed"
-                                        : "cursor-pointer"
-                                    }`}
+                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${!hasDeleteAccess
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : "cursor-pointer"
+                                      }`}
                                     disabled={!hasDeleteAccess}
                                   >
                                     Delete

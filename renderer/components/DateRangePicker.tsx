@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useDateRangeStore } from "../stores/dateRangeStore";
 import DatePicker, { DateObject, Calendar } from "react-multi-date-picker";
-import "react-multi-date-picker/styles/layouts/mobile.css";
 
 // Icon for the input field
 const CalendarIcon = () => (

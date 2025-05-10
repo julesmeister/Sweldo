@@ -46,7 +46,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                     )}
                 </h2>
                 {employeeId && (
-                    <div style={{ width: "480px" }}>
+                    <div style={{ width: "350px" }}>
                         <DateRangePickerProxy
                             variant="timesheet"
                             onRefresh={onRefresh}

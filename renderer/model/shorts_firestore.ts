@@ -49,25 +49,93 @@ export async function loadShortsFirestore(
   year: number,
   companyName: string
 ): Promise<Short[]> {
+  console.log(
+    `[DEBUG] loadShortsFirestore - Starting for employeeId: ${employeeId}, month: ${month}, year: ${year}, company: ${companyName}`
+  );
   try {
     const docId = createShortsDocId(employeeId, year, month);
+    console.log(
+      `[DEBUG] loadShortsFirestore - Generated docId: ${docId} for collection: "shorts"`
+    );
+
     const data = await fetchDocument<ShortsFirestoreData>(
       "shorts",
       docId,
       companyName
     );
 
-    if (!data || !data.shorts) {
+    if (!data) {
+      console.log(
+        `[DEBUG] loadShortsFirestore - No data returned from fetchDocument for docId: ${docId}`
+      );
       return [];
     }
 
+    if (!data.shorts) {
+      console.log(
+        `[DEBUG] loadShortsFirestore - Data returned, but 'shorts' array is missing or undefined for docId: ${docId}`
+      );
+      return [];
+    }
+
+    console.log(
+      `[DEBUG] loadShortsFirestore - Successfully fetched ${data.shorts.length} shorts for docId: ${docId}`
+    );
+
     // Convert date strings back to Date objects
-    return data.shorts.map((short) => ({
-      ...short,
-      date: short.date instanceof Date ? short.date : new Date(short.date),
-    }));
+    const mappedShorts = data.shorts.map((short) => {
+      let parsedDate: Date | null = null;
+      if (short.date) {
+        // Check if short.date is not null or undefined
+        if (typeof short.date === "string") {
+          parsedDate = new Date(short.date);
+        } else if (
+          typeof short.date === "object" &&
+          typeof (short.date as any).toDate === "function"
+        ) {
+          // Handle Firestore Timestamp object
+          parsedDate = (short.date as any).toDate();
+        } else if (short.date instanceof Date) {
+          parsedDate = short.date;
+        } else {
+          console.warn(
+            `[loadShortsFirestore] Encountered an unknown date type for short ID ${short.id}:`,
+            short.date
+          );
+          // Try to parse, but expect it might be invalid
+          parsedDate = new Date(short.date as any);
+        }
+      }
+
+      // If, after all attempts, parsedDate is null or an invalid Date object, log it.
+      if (!parsedDate || isNaN(parsedDate.valueOf())) {
+        console.warn(
+          `[loadShortsFirestore] Date field is null, undefined, or invalid for short ID ${short.id}. Original value:`,
+          short.date,
+          ". This short will be filtered out."
+        );
+        return null; // Mark for filtering
+      }
+
+      return {
+        ...short,
+        date: parsedDate, // Now, parsedDate is guaranteed to be a valid Date if not null
+      };
+    });
+
+    // Filter out any shorts that were marked as null due to invalid dates
+    const validShorts = mappedShorts.filter(
+      (short) => short !== null
+    ) as Short[];
+    console.log(
+      `[loadShortsFirestore] Processed ${data.shorts.length} shorts, ${validShorts.length} had valid dates.`
+    );
+    return validShorts;
   } catch (error) {
-    console.error(`Error loading shorts from Firestore:`, error);
+    console.error(
+      `[DEBUG] Error loading shorts from Firestore for employeeId: ${employeeId}, month: ${month}, year: ${year}, company: ${companyName}:`,
+      error
+    );
     return []; // Return empty array on error
   }
 }

@@ -218,10 +218,26 @@ export class ShortModel {
         `[ShortModel] loadShorts called with employeeId (${employeeId}) different from instance (${this.employeeId}). Using instance ID.`
       );
     }
+    console.log(
+      `[ShortModel DEBUG] loadShorts called for employeeId: ${this.employeeId}, month: ${this.month}, year: ${this.year}`
+    );
     try {
+      const webEnv = isWebEnvironment();
+      console.log(`[ShortModel DEBUG] isWebEnvironment() returned: ${webEnv}`);
+
       // Web mode - use Firestore
-      if (isWebEnvironment()) {
+      if (webEnv) {
+        console.log("[ShortModel DEBUG] Attempting to load from Firestore.");
         const companyName = await getCompanyName();
+        console.log(
+          `[ShortModel DEBUG] getCompanyName() returned: ${companyName}`
+        );
+        if (!companyName) {
+          console.error(
+            "[ShortModel DEBUG] Company name is missing. Cannot load shorts from Firestore."
+          );
+          return []; // Or throw an error
+        }
         return loadShortsFirestore(
           this.employeeId,
           this.month,
