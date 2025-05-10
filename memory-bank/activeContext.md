@@ -14,6 +14,7 @@ The Sweldo application was originally designed for desktop use with Electron, bu
 - ✅ Fixed payroll display in web mode
 - ✅ Implemented date parsing for Firestore timestamps
 - ✅ Added filter functionality for payroll records
+- ✅ **`shorts.tsx` Web Mode Data Loading Fixed**: Successfully refactored `shorts.tsx` to correctly load and display data from Firestore in web mode. This involved implementing direct Firestore service calls, separating employee detail loading, ensuring reactivity to the global `DateSelector`, and adding robust parsing for date fields (including handling `null` or invalid dates from Firestore). The approach aligns with patterns used in `cashAdvances.tsx`.
 
 ### Current Challenges
 - Some components still assume local file system access
@@ -237,7 +238,7 @@ These improvements make the shorts sync functionality more robust and user-frien
 4. Develop the `useDateAwareDataFetching` custom hook.
 5. Integrate the hook into `cashAdvances.tsx`.
 6. Test `cashAdvances.tsx` to ensure it correctly loads data based on the `DateSelector`.
-7. Proceed to refactor `loans.tsx`, `leaves.tsx`, and `shorts.tsx` using the new hook.
+7. Proceed to refactor `loans.tsx`, and `leaves.tsx` using the new hook, applying lessons from `shorts.tsx` and `cashAdvances.tsx`.
 8. Address any linter errors that arise during these refactors.
 
 9. Handle conditional imports/code for Electron-specific functionality

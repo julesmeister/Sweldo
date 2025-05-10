@@ -540,4 +540,151 @@ const memoizedValue = useMemo(() => computeValue(globalState), [globalState.id])
 useEffect(() => {
   fetchData();
 }, [memoizedValue]);
-``` 
+```
+
+## Environment-Aware Data Access and Firestore Integration Pattern
+
+This pattern describes how components should fetch and manage data when the application needs to support both a desktop environment (with local file system/DB access) and a web environment (using Firestore).
+
+### Core Principles
+1.  **Environment Detection**: Utilize a common utility function (e.g., `isWebEnvironment()`) within components or data hooks to determine the current operating mode.
+2.  **Conditional Logic**: Branch data fetching and CUD (Create, Update, Delete) operations based on the detected environment.
+3.  **Parameterization**:
+    *   In **web mode**, operations typically require `companyName` to scope Firestore queries.
+    *   In **desktop mode**, operations usually require `dbPath` to locate local data.
+4.  **Direct Service Calls (Web Mode)**: For web mode, UI components (or custom hooks they use) should directly invoke specialized functions from the relevant `*_firestore.ts` modules (e.g., `loadShortsFirestore`, `createEmployeeFirestore`). This provides clarity and avoids unnecessary abstraction layers designed for local file operations.
+5.  **Model Usage (Desktop Mode)**: For desktop mode, continue using established model classes (e.g., `createShortModel(...)`, `EmployeeModel`) that encapsulate local file system interactions (JSON/CSV parsing, directory management).
+6.  **State Management in UI Components**: Page components are responsible for managing their own state for fetched data (e.g., using `useState`, `useReducer`, or custom hooks like `useDateAwareData`).
+7.  **Reactivity**: UI components should subscribe to relevant global state stores (e.g., `useDateSelectorStore` for date changes, `useEmployeeStore` for selected employee) and include these store values in `useEffect` dependency arrays to trigger data re-fetching.
+8.  **Separation of Concerns for Data Loading**: For complex pages, separate the loading of primary data (e.g., a list of shorts) from auxiliary data (e.g., details of the selected employee, lists for dropdowns) into distinct `useEffect` hooks. This improves dependency management and reduces unnecessary re-renders.
+
+### Pattern for Data Loading in a Page Component (e.g., `shorts.tsx`)
+
+```typescript
+// In your page component (e.g., shorts.tsx)
+
+// Stores and Services
+import { useSettingsStore } from "@/renderer/stores/settingsStore";
+import { useEmployeeStore } from "@/renderer/stores/employeeStore";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { loadShortsFirestore } from "@/renderer/model/shorts_firestore"; // Web
+import { createShortModel } from "@/renderer/model/shorts"; // Desktop
+// ... other imports for employee loading etc.
+
+export default function ShortsPage() {
+  const [shorts, setShorts] = useState<Short[]>([]);
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]); // For dropdown
+
+  const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
+  const { selectedEmployeeId } = useEmployeeStore();
+  const { selectedMonth: storeSelectedMonth, selectedYear: storeSelectedYear } = useDateSelectorStore();
+  const { setLoading } = useLoadingStore(); // Example
+
+  // Effect to load all employees (for dropdown)
+  useEffect(() => {
+    const loadAllEmployees = async () => {
+      setLoading(true);
+      try {
+        if (isWebEnvironment()) {
+          if (!companyNameFromSettings) return;
+          const fetchedEmployees = await loadActiveEmployeesFirestore(companyNameFromSettings);
+          setEmployees(fetchedEmployees);
+        } else {
+          if (!dbPath) return;
+          const model = createEmployeeModel(dbPath);
+          const fetchedEmployees = await model.loadActiveEmployees();
+          setEmployees(fetchedEmployees);
+        }
+      } catch (e) { /* ... */ }
+      finally { setLoading(false); }
+    };
+    loadAllEmployees();
+  }, [dbPath, companyNameFromSettings, setLoading]);
+
+  // Effect to load the selected employee's details
+  useEffect(() => {
+    const loadSelectedEmployee = async () => {
+      if (!selectedEmployeeId) { setEmployee(null); return; }
+      setLoading(true);
+      try {
+        if (isWebEnvironment()) {
+          const found = employees.find(e => e.id === selectedEmployeeId);
+          setEmployee(found || null);
+        } else {
+          if (!dbPath) { setEmployee(null); return; }
+          const model = createEmployeeModel(dbPath);
+          const emp = await model.loadEmployeeById(selectedEmployeeId);
+          setEmployee(emp);
+        }
+      } catch (e) { /* ... */ setEmployee(null); }
+      finally { setLoading(false); }
+    };
+    loadSelectedEmployee();
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, employees, setLoading]);
+
+  // Effect to load primary data (e.g., shorts)
+  useEffect(() => {
+    const loadPrimaryData = async () => {
+      if (!selectedEmployeeId) { setShorts([]); return; }
+      setLoading(true);
+      try {
+        const monthForQuery = storeSelectedMonth + 1; // Adjust 0-indexed month
+        if (isWebEnvironment()) {
+          if (!companyNameFromSettings) { setShorts([]); return; }
+          const items = await loadShortsFirestore(selectedEmployeeId, monthForQuery, storeSelectedYear, companyNameFromSettings);
+          setShorts(items);
+        } else {
+          if (!dbPath) { setShorts([]); return; }
+          const model = createShortModel(dbPath, selectedEmployeeId, monthForQuery, storeSelectedYear);
+          const items = await model.loadShorts(selectedEmployeeId); // Ensure model uses correct month/year
+          setShorts(items);
+        }
+      } catch (e) { /* ... */ setShorts([]); }
+      finally { setLoading(false); }
+    };
+    loadPrimaryData();
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, storeSelectedMonth, storeSelectedYear, setLoading]);
+
+  // ... rest of the component
+}
+```
+
+### Robust Date Handling from Firestore (in `*_firestore.ts` modules)
+
+When loading data from Firestore that includes date fields (often stored as Firestore Timestamps or date strings), the corresponding `load*_firestore.ts` function must perform robust parsing:
+
+1.  **Check for Null/Undefined**: If the date field from Firestore is `null` or `undefined`, log this and decide on a strategy (e.g., filter out the record, use a default – filtering is often safer).
+2.  **Handle Firestore Timestamps**: If the field is an object and has a `.toDate()` method, it's a Firestore Timestamp. Call `timestamp.toDate()` to get a JavaScript `Date` object.
+3.  **Handle Date Strings**: If the field is a string, attempt to parse it with `new Date(dateString)`.
+4.  **Handle Existing Date Objects**: If it's already an `instanceof Date`, use it directly.
+5.  **Validate Parsed Date**: After attempting to create a `Date` object, always check its validity using `isNaN(parsedDate.valueOf())`. An invalid date will cause runtime errors later.
+6.  **Filter Invalid Records**: If a record's date field cannot be resolved to a valid JavaScript `Date` object, it's best to filter this entire record out from the results returned by the `load*_firestore.ts` function. This ensures type safety and prevents errors in the UI layer. Log a warning detailing which record was filtered.
+
+**Example snippet from `loadShortsFirestore`:**
+```typescript
+// Inside *.map((item) => { ... })
+let parsedDate: Date | null = null;
+if (item.dateField) {
+  if (typeof item.dateField === 'object' && typeof (item.dateField as any).toDate === 'function') {
+    parsedDate = (item.dateField as any).toDate();
+  } else if (typeof item.dateField === 'string') {
+    parsedDate = new Date(item.dateField);
+  } else if (item.dateField instanceof Date) {
+    parsedDate = item.dateField;
+  }
+  // ... other checks or attempts
+}
+
+if (!parsedDate || isNaN(parsedDate.valueOf())) {
+  console.warn(`Invalid or missing date for item ID ${item.id}. Filtering out.`);
+  return null; // Mark for filtering
+}
+return { ...item, dateField: parsedDate };
+
+// After .map()
+// const validItems = mappedItems.filter(item => item !== null) as ResultType[];
+// return validItems;
+```
+This ensures that only data with valid, usable dates proceeds to the application logic and UI. 

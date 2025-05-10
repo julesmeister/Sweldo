@@ -58,29 +58,84 @@ export async function loadLeavesFirestore(
   month: number,
   companyName: string
 ): Promise<Leave[]> {
+  console.log(
+    `[LeaveFirestore DEBUG] loadLeavesFirestore called with: employeeId=${employeeId}, year=${year}, month=${month}, companyName=${companyName}`
+  );
   try {
     const docId = createLeaveDocId(employeeId, year, month);
+    console.log(
+      `[LeaveFirestore DEBUG] Attempting to fetch document with docId: ${docId}, companyName: ${companyName}`
+    );
+
     const data = await fetchDocument<LeaveFirestoreData>(
       "leaves",
       docId,
       companyName
     );
+    console.log(
+      "[LeaveFirestore DEBUG] Raw data received from fetchDocument:",
+      JSON.stringify(data)
+    );
 
-    if (!data || !data.leaves) {
+    if (!data) {
+      console.log(
+        "[LeaveFirestore DEBUG] No data object returned from fetchDocument. Returning empty array."
+      );
       return [];
     }
 
-    // Convert to Leave array
-    const leaves: Leave[] = Object.entries(data.leaves).map(([id, leave]) => ({
-      id,
-      employeeId: leave.employeeId,
-      startDate: new Date(leave.startDate),
-      endDate: new Date(leave.endDate),
-      type: leave.type,
-      status: leave.status,
-      reason: leave.reason,
-    }));
+    if (!data.leaves) {
+      console.log(
+        "[LeaveFirestore DEBUG] Data object received, but 'data.leaves' is falsy. Returning empty array. Data meta:",
+        JSON.stringify(data.meta)
+      );
+      return [];
+    }
 
+    const leaveEntries = Object.entries(data.leaves);
+    console.log(
+      `[LeaveFirestore DEBUG] Found ${leaveEntries.length} entries in data.leaves.`
+    );
+
+    // Convert to Leave array
+    const leaves: Leave[] = leaveEntries
+      .map(([id, leave]) => {
+        console.log(
+          `[LeaveFirestore DEBUG] Processing leave entry - id: ${id}, raw leave data:`,
+          JSON.stringify(leave)
+        );
+        // Basic validation for critical date fields before new Date()
+        if (!leave.startDate || !leave.endDate) {
+          console.warn(
+            `[LeaveFirestore DEBUG] Invalid or missing startDate/endDate for leave id ${id}. Skipping this leave. StartDate: ${leave.startDate}, EndDate: ${leave.endDate}`
+          );
+          return null; // Mark for filtering
+        }
+        const startDate = new Date(leave.startDate);
+        const endDate = new Date(leave.endDate);
+
+        if (isNaN(startDate.valueOf()) || isNaN(endDate.valueOf())) {
+          console.warn(
+            `[LeaveFirestore DEBUG] Parsed invalid Date for leave id ${id}. Original startDate: ${leave.startDate}, Original endDate: ${leave.endDate}. Skipping this leave.`
+          );
+          return null; // Mark for filtering
+        }
+
+        return {
+          id,
+          employeeId: leave.employeeId,
+          startDate,
+          endDate,
+          type: leave.type,
+          status: leave.status,
+          reason: leave.reason,
+        };
+      })
+      .filter((leave) => leave !== null) as Leave[]; // Filter out nulls from invalid entries
+
+    console.log(
+      `[LeaveFirestore DEBUG] Finished processing. Returning ${leaves.length} leave objects.`
+    );
     return leaves;
   } catch (error) {
     console.error(

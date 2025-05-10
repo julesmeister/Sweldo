@@ -161,22 +161,36 @@ export const fetchDocument = async <T>(
   docId: string,
   companyName?: string
 ): Promise<T | null> => {
+  let fullPath = ""; // Variable to store the full path for logging
   try {
     const db = getFirestoreInstance();
     const company = companyName || (await getCompanyName());
-    const docRef = doc(db, `companies/${company}/${subcollection}/${docId}`);
+    fullPath = `companies/${company}/${subcollection}/${docId}`;
+    console.log(
+      `[firestoreService DEBUG] fetchDocument: Attempting to fetch doc at path: ${fullPath}`
+    );
+    const docRef = doc(db, fullPath);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
+      console.log(
+        `[firestoreService DEBUG] fetchDocument: Document exists at path: ${fullPath}. Returning data.`
+      );
       return docSnap.data() as T;
     }
+    console.log(
+      `[firestoreService DEBUG] fetchDocument: Document DOES NOT exist at path: ${fullPath}. Returning null.`
+    );
     return null;
   } catch (error) {
     console.error(
-      `Error fetching document from ${subcollection}/${docId}:`,
+      `[firestoreService DEBUG] Error fetching document from ${fullPath}:`,
       error
     );
-    throw error;
+    // It's important to re-throw or handle the error appropriately.
+    // For now, to match existing behavior if it was to return null on error (though it throws now):
+    // return null;
+    throw error; // Original behavior is to throw, which is usually better.
   }
 };
 

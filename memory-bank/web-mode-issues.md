@@ -251,3 +251,47 @@ This pattern can be reused for other modules with similar issues (loans, shorts)
    ```
 
 By following this pattern consistently across modules, we ensure that all data types will work correctly in both desktop and web modes. 
+
+## Shorts Page (`shorts.tsx`) Firestore Data Loading & Display Issues (Web Mode)
+
+### Problem Summary
+The `shorts.tsx` page initially failed to load or display any "shorts" data when running in web mode. The core issues were:
+1.  **Incorrect Data Fetching Strategy**: The page was trying to use the generic `ShortModel` and `dbPath`, which is suitable for desktop mode, instead of directly interacting with Firestore services using `companyName`.
+2.  **Lack of Reactivity to Date Changes**: The page did not update when the global date was changed via `DateSelector.tsx`.
+3.  **Employee Data Loading**: Issues with loading and displaying the selected employee's details in conjunction with their shorts data.
+4.  **Date Parsing Errors**: Once data fetching was partially corrected, `RangeError: Invalid time value` errors occurred due to incorrect handling of date values (specifically `null` dates) coming from Firestore.
+
+### Solution Path and Implementation Details
+
+1.  **Adopting Direct Firestore Interaction Pattern**:
+    *   Refactored `shorts.tsx` to follow the pattern established in `cashAdvances.tsx`.
+    *   In web mode (`isWebEnvironment() === true`):
+        *   Directly calls `loadShortsFirestore(employeeId, month, year, companyName)` from `renderer/model/shorts_firestore.ts`.
+        *   Directly calls `loadActiveEmployeesFirestore(companyName)` from `renderer/model/employee_firestore.ts` to populate the employee dropdown.
+    *   The `companyName` is sourced from `useSettingsStore`.
+
+2.  **Separate Employee Detail Loading**:
+    *   A dedicated `useEffect` hook was implemented in `shorts.tsx` to load the details of the `selectedEmployeeId`.
+    *   In web mode, this effect finds the employee from the `employees` state (populated by `loadActiveEmployeesFirestore`).
+    *   In desktop mode, it uses `createEmployeeModel(dbPath).loadEmployeeById(selectedEmployeeId)`.
+    *   This separation resolved timing issues where shorts data might load before the selected employee's details were available.
+
+3.  **Reactivity to Global Date Selector**:
+    *   `shorts.tsx` was updated to use `useDateSelectorStore` to get `storeSelectedMonth` and `storeSelectedYear`.
+    *   The main data-loading `useEffect` (for fetching shorts) now includes `storeSelectedMonth` and `storeSelectedYear` in its dependency array.
+    *   This ensures that shorts data is re-fetched whenever the user changes the date in the global `DateSelector.tsx` component.
+
+4.  **Robust Date Handling and Parsing**:
+    *   **Initial Error**: `RangeError: Invalid time value` occurred in the `filteredShorts` logic within `shorts.tsx` when trying to call `.toISOString()` on an invalid `Date` object. This was traced back to `short.date` being `null` in the data fetched from Firestore.
+    *   **Enhanced `loadShortsFirestore`**: The function in `renderer/model/shorts_firestore.ts` was significantly improved:
+        *   It now explicitly checks if `short.date` from Firestore is a string, a Firestore Timestamp object (by checking for a `.toDate()` method), or already a JavaScript `Date` instance.
+        *   It converts these to a standard JavaScript `Date` object.
+        *   If `short.date` is `null`, `undefined`, or if any parsing attempt results in an invalid Date object (checked via `isNaN(parsedDate.valueOf())`), a warning is logged.
+        *   Crucially, any short item that ends up with a `null` or invalid `parsedDate` is filtered out from the results returned by `loadShortsFirestore`. This ensures that the `shorts.tsx` component only receives shorts with valid `Date` objects, satisfying type requirements and preventing runtime errors.
+    *   The `filteredShorts` memoization in `shorts.tsx` was also made safer with checks before calling `toISOString()` during logging, though the primary fix was in `loadShortsFirestore`.
+
+### Key Takeaways & Reusable Patterns
+*   For web mode, page components should directly utilize the specific `*_firestore.ts` service functions for data operations, passing `companyName`.
+*   Complex data loading (e.g., primary data + related entity details) should be broken into separate, well-scoped `useEffect` hooks with precise dependency arrays to manage timing and state updates correctly.
+*   Global state stores (like `useDateSelectorStore`) are effective for cross-component communication (e.g., date changes), and components consuming this state must include the relevant store values in their `useEffect` dependency arrays to ensure reactivity.
+*   Date values from Firestore (especially Timestamps or string representations) require careful and robust parsing in the data model layer (`*_firestore.ts` files). Always check for `null`, potential type variations (Timestamp object, string), and validate the resulting JavaScript `Date` object. Filtering out records with invalid dates at this stage is a good practice to ensure data integrity for the UI. 

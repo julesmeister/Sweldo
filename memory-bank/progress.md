@@ -72,6 +72,7 @@
 - ✅ Enhanced `DateRangePicker` usability:
   - Fixed popover interaction: Clicking inside the calendar no longer closes it, due to refined `handleClickOutside` logic considering the portal-rendered calendar via a new `ref`.
   - Added Clear Button: An "x" icon now appears in the input field when a date is selected, allowing for easy resetting of the date range. Input padding adjusts dynamically.
+- ✅ `shorts.tsx` page now correctly loads, displays, and filters data from Firestore in web mode, including proper handling of Firestore Timestamps/date values and reactivity to global date changes.
 
 ## What's Left to Build / Improve
 
@@ -137,9 +138,9 @@
 *   TypeScript errors in `renderer/pages/timesheet.tsx` when adapting for web mode - component interfaces expect non-nullable model instances that aren't available in web mode, or props are missing (`AttendanceHistoryDialog`).
 *   `AttendanceHistoryDialog` history fetching is not implemented for web mode yet (TODO exists).
 *   Hook interfaces for `useTimesheetEdit`, `useTimesheetCheckbox`, and others need to be updated to support nullable model instances.
-*   Some pages (`cashAdvances.tsx`, `loans.tsx`, `leaves.tsx`, `shorts.tsx`) do not yet react to `DateSelector` changes; this is the next refactoring target.
+*   Some pages (`cashAdvances.tsx`, `loans.tsx`, `leaves.tsx` (*`shorts.tsx` is now complete for this specific date reactivity*)) do not yet react to `DateSelector` changes; this is the next refactoring target for `loans.tsx` and `leaves.tsx` using the planned custom hook.
 *   Web mode data persistence for user-specific data (like selected company) across sessions needs to be robustly handled (currently relies on `authStore` initialization).
-*   The overall data flow and state management for date-sensitive information across different pages needs to be streamlined (the planned custom hook should address this).
+*   The overall data flow and state management for date-sensitive information across different pages needs to be streamlined (the planned custom hook should address this for remaining pages).
 
 ### CSS Synchronization
 - The CSS synchronization script now properly handles copying styles from globals.css to styleInjector.js

@@ -14,6 +14,10 @@ import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import { loadLeavesFirestore } from "@/renderer/model/leave_firestore";
 
 interface Leave {
   id: string;
@@ -32,37 +36,18 @@ export default function LeavesPage() {
     undefined
   );
   const { setLoading, setActiveLink } = useLoadingStore();
-  const { dbPath } = useSettingsStore();
+  const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
+  const { selectedMonth: storeSelectedMonth, selectedYear: storeSelectedYear } = useDateSelectorStore();
   const pathname = usePathname();
-  const employeeModel = useMemo(() => createEmployeeModel(dbPath), [dbPath]);
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
-  const [storedYear, setStoredYear] = useState<string | null>(null);
+  const employeeModel = useMemo(() => {
+    if (isWebEnvironment() || !dbPath) return null;
+    return createEmployeeModel(dbPath);
+  }, [dbPath]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const month = localStorage.getItem("selectedMonth");
-      const year = localStorage.getItem("selectedYear");
-
-      setStoredMonth(month);
-      setStoredYear(year);
-    }
-  }, []);
-
-  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
   const [employee, setEmployee] = useState<Employee | null>(null);
-  let storedYearInt = storedYear
-    ? parseInt(storedYear, 10)
-    : new Date().getFullYear();
-  if (!storedYear) {
-    const currentYear = new Date().getFullYear().toString();
-    if (typeof window !== "undefined") {
-      localStorage.setItem("selectedYear", currentYear);
-    }
-    storedYearInt = parseInt(currentYear, 10);
-  }
   const router = useRouter();
+
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
     setLoading(true);
@@ -71,34 +56,85 @@ export default function LeavesPage() {
   };
 
   useEffect(() => {
-    const loadEmployeeAndLeaves = async () => {
-      if (!dbPath || !selectedEmployeeId || !employeeModel) {
+    const loadSelectedEmployeeDetails = async () => {
+      if (!selectedEmployeeId) {
+        setEmployee(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        if (isWebEnvironment()) {
+          const foundEmployee = employees.find(emp => emp.id === selectedEmployeeId);
+          setEmployee(foundEmployee || null);
+          if (!foundEmployee) {
+            console.warn(`[LeavesPage WEB] Employee with ID ${selectedEmployeeId} not found in the loaded list.`);
+          }
+        } else {
+          if (employeeModel) {
+            const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
+            setEmployee(emp);
+          } else {
+            setEmployee(null);
+            console.warn("[LeavesPage Desktop] employeeModel is null, cannot load employee details.");
+          }
+        }
+      } catch (error) {
+        console.error("Error loading selected employee details:", error);
+        toast.error("Failed to load employee details.");
+        setEmployee(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSelectedEmployeeDetails();
+  }, [selectedEmployeeId, employees, employeeModel, setLoading]);
+
+  useEffect(() => {
+    const loadLeavesData = async () => {
+      if (!selectedEmployeeId) {
+        setLeaves([]);
         return;
       }
 
       setLoading(true);
       try {
-        // Load employee
-        const emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
-        if (emp !== null) {
-          setEmployee(emp);
+        const monthForQuery = storeSelectedMonth + 1;
 
-          // Load leaves for the employee using stored year and month
-          const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
-          const employeeLeaves = await leaveModel.loadLeaves(
-            selectedEmployeeId,
-            storedYearInt,
-            storedMonthInt
-          );
-          setLeaves(employeeLeaves);
+        if (isWebEnvironment()) {
+          if (companyNameFromSettings) {
+            console.log(`[LeavesPage WEB] Loading leaves for ${selectedEmployeeId}, ${storeSelectedYear}/${monthForQuery}, company: ${companyNameFromSettings}`);
+            const employeeLeaves = await loadLeavesFirestore(
+              selectedEmployeeId,
+              storeSelectedYear,
+              monthForQuery,
+              companyNameFromSettings
+            );
+            setLeaves(employeeLeaves);
+          } else {
+            setLeaves([]);
+            console.warn("[LeavesPage WEB] companyNameFromSettings is not set. Cannot load leaves.");
+          }
+        } else {
+          if (dbPath) {
+            console.log(`[LeavesPage Desktop] Loading leaves for ${selectedEmployeeId}, ${monthForQuery}/${storeSelectedYear}`);
+            const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
+            const employeeLeaves = await leaveModel.loadLeaves(
+              selectedEmployeeId,
+              storeSelectedYear,
+              monthForQuery
+            );
+            setLeaves(employeeLeaves);
+          } else {
+            setLeaves([]);
+            console.warn("[LeavesPage Desktop] dbPath is not set. Cannot load leaves.");
+          }
         }
       } catch (error: any) {
-        // Check if the error is a 'file not found' error (ENOENT)
+        setLeaves([]);
         if (error.message?.includes("ENOENT")) {
-          setLeaves([]); // Set leaves to empty array if file doesn't exist
+          console.log("[LeavesPage] File not found, setting leaves to empty.");
         } else {
-          // Log other types of errors
-          console.error("Error loading data:", error);
+          console.error("Error loading leave data:", error);
           toast.error("Failed to load leave requests. Please try again.");
         }
       } finally {
@@ -106,14 +142,14 @@ export default function LeavesPage() {
       }
     };
 
-    loadEmployeeAndLeaves();
+    loadLeavesData();
   }, [
     selectedEmployeeId,
     dbPath,
-    employeeModel,
+    companyNameFromSettings,
+    storeSelectedMonth,
+    storeSelectedYear,
     setLoading,
-    storedYearInt,
-    storedMonthInt,
   ]);
 
   useEffect(() => {
@@ -251,8 +287,8 @@ export default function LeavesPage() {
       if (employee) {
         const updatedLeaves = await leaveModel.loadLeaves(
           employee.id,
-          storedYearInt,
-          storedMonthInt
+          storeSelectedYear,
+          storeSelectedMonth + 1
         );
         setLeaves(updatedLeaves);
         toast.success(`Leave request saved successfully`);
@@ -287,8 +323,8 @@ export default function LeavesPage() {
       if (employee) {
         const loadedLeaves = await leaveModel.loadLeaves(
           employee.id,
-          storedYearInt,
-          storedMonthInt
+          storeSelectedYear,
+          storeSelectedMonth + 1
         );
         setLeaves(loadedLeaves);
         toast.success("Leave request deleted successfully");
@@ -308,18 +344,37 @@ export default function LeavesPage() {
   // Add effect to load all employees
   useEffect(() => {
     const loadEmployees = async () => {
-      if (!dbPath) return;
+      setLoading(true);
       try {
-        const employeeModel = createEmployeeModel(dbPath);
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
-        setEmployees(loadedEmployees);
+        if (isWebEnvironment()) {
+          if (companyNameFromSettings) {
+            const loadedEmployees = await loadActiveEmployeesFirestore(companyNameFromSettings);
+            setEmployees(loadedEmployees);
+          } else {
+            setEmployees([]);
+            console.warn("[LeavesPage] Web mode: companyNameFromSettings is not set. Cannot load employees.");
+          }
+        } else {
+          if (dbPath) {
+            const model = createEmployeeModel(dbPath);
+            const loadedEmployees = await model.loadActiveEmployees();
+            setEmployees(loadedEmployees);
+          } else {
+            setEmployees([]);
+            console.warn("[LeavesPage] Desktop mode: dbPath is not set. Cannot load employees.");
+          }
+        }
       } catch (error) {
         toast.error("Error loading employees");
+        console.error("Error loading employees:", error);
+        setEmployees([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadEmployees();
-  }, [dbPath]);
+  }, [dbPath, companyNameFromSettings, setLoading]);
 
   return (
     <RootLayout>
@@ -409,7 +464,15 @@ export default function LeavesPage() {
                               />
                             </svg>
                             <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                              No leave requests found
+                              No leave requests found for{" "}
+                              {new Date(
+                                useDateSelectorStore.getState().selectedYear,
+                                useDateSelectorStore.getState().selectedMonth,
+                                1
+                              ).toLocaleString("default", {
+                                month: "long",
+                                year: "numeric",
+                              })}
                             </h3>
                             <p className="mt-1 text-sm text-gray-500">
                               Get started by creating a new leave request.
