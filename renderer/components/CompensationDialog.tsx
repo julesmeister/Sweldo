@@ -250,7 +250,7 @@ const FormField: React.FC<FormFieldProps> = ({
               className="clear-button"
               title="Clear value (enables Manual Override)"
             >
-              ×
+              {/* Using ::before and ::after CSS for the X */}
             </button>
           )}
           {renderHoursDropdown()}

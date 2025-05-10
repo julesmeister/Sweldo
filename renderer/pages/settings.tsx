@@ -162,6 +162,8 @@ export default function SettingsPage() {
   const [showPreparedBySaved, setShowPreparedBySaved] = React.useState(false);
   const [showApprovedBySaved, setShowApprovedBySaved] = React.useState(false);
   const [showCompanyNameSaved, setShowCompanyNameSaved] = useState(false);
+  // Add local state for company name
+  const [localCompanyName, setLocalCompanyName] = useState(companyName || "");
   const [showColumnColorSaved, setShowColumnColorSaved] = useState<{
     [key: string]: boolean;
   }>({});
@@ -648,9 +650,9 @@ export default function SettingsPage() {
                             <p className="font-semibold text-gray-800 flex items-center">
                               <span
                                 className={`inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full ${attendanceSettings?.countEarlyTimeInAsOvertime
-                                    ? "bg-indigo-100 text-indigo-700"
-                                    : "bg-gray-100 text-gray-500"
-                                }`}
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "bg-gray-100 text-gray-500"
+                                  }`}
                               >
                                 {attendanceSettings?.countEarlyTimeInAsOvertime ? (
                                   <svg
@@ -681,9 +683,9 @@ export default function SettingsPage() {
                               Calculation with Toggle{" "}
                               <span
                                 className={`ml-1.5 px-2 py-0.5 text-sm rounded-md ${attendanceSettings?.countEarlyTimeInAsOvertime
-                                    ? "bg-indigo-100 text-indigo-700 font-medium"
-                                    : "bg-gray-100 text-gray-500"
-                                }`}
+                                  ? "bg-indigo-100 text-indigo-700 font-medium"
+                                  : "bg-gray-100 text-gray-500"
+                                  }`}
                               >
                                 {attendanceSettings?.countEarlyTimeInAsOvertime
                                   ? "ON"
@@ -789,10 +791,10 @@ export default function SettingsPage() {
                                 {attendanceSettings?.overtimeThreshold} min).
                                 {(attendanceSettings?.countEarlyTimeInAsOvertime &&
                                   60 ===
-                                    (attendanceSettings?.overtimeThreshold ??
-                                      0)) ||
-                                (!attendanceSettings?.countEarlyTimeInAsOvertime &&
-                                  30 ===
+                                  (attendanceSettings?.overtimeThreshold ??
+                                    0)) ||
+                                  (!attendanceSettings?.countEarlyTimeInAsOvertime &&
+                                    30 ===
                                     (attendanceSettings?.overtimeThreshold ??
                                       0)) ? (
                                   <span className="block mt-1 italic">
@@ -911,9 +913,9 @@ export default function SettingsPage() {
                             value={
                               attendanceSettings?.nightDifferentialMultiplier
                                 ? (
-                                    attendanceSettings.nightDifferentialMultiplier *
-                                    100
-                                  ).toString()
+                                  attendanceSettings.nightDifferentialMultiplier *
+                                  100
+                                ).toString()
                                 : ""
                             }
                             onChange={(e) => {
@@ -1126,31 +1128,31 @@ export default function SettingsPage() {
           // Desktop mode: Role Management needs dbPath
           if (!dbPath) {
             return (
-        <MagicCard>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-50 rounded-lg">
-                <IoFolderOutline className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Database Path Not Set
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Please configure the database path in the Database Management
-                  section before managing roles.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSelected("database")}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
-            >
-              <IoFolderOutline className="w-5 h-5" />
-              Configure Database Path
-            </button>
-          </div>
-        </MagicCard>
+              <MagicCard>
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-yellow-50 rounded-lg">
+                      <IoFolderOutline className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Database Path Not Set
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Please configure the database path in the Database Management
+                        section before managing roles.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelected("database")}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-100 hover:border-blue-200"
+                  >
+                    <IoFolderOutline className="w-5 h-5" />
+                    Configure Database Path
+                  </button>
+                </div>
+              </MagicCard>
             );
           }
           return <RoleManagement roleModel={new RoleModelImpl(dbPath)} />;
@@ -1186,11 +1188,11 @@ export default function SettingsPage() {
                     <li
                       key={`active-${employee.id}`}
                       className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${selectedEmployees.some(
-                          (selected) => selected.id === employee.id
-                        )
-                          ? "bg-blue-100"
-                          : "bg-white"
-                      } hover:border-blue-200 hover:shadow-sm`}
+                        (selected) => selected.id === employee.id
+                      )
+                        ? "bg-blue-100"
+                        : "bg-white"
+                        } hover:border-blue-200 hover:shadow-sm`}
                       onClick={() => {
                         setSelectedEmployees((current) => {
                           if (
@@ -1237,7 +1239,7 @@ export default function SettingsPage() {
               {/* Center Controls */}
               <div className="flex flex-col items-center justify-center space-y-4">
                 {selectedEmployees.length > 0 &&
-                selectedEmployees[0].status === "inactive" ? (
+                  selectedEmployees[0].status === "inactive" ? (
                   <button
                     onClick={async () => {
                       if (!employeeModel) return;
@@ -1344,11 +1346,11 @@ export default function SettingsPage() {
                     <li
                       key={`inactive-${employee.id}`}
                       className={`rounded-lg p-3 flex items-center justify-between border border-gray-100 transition-all ${selectedEmployees.some(
-                          (selected) => selected.id === employee.id
-                        )
-                          ? "bg-blue-100"
-                          : "bg-white"
-                      } hover:border-green-200 hover:shadow-sm`}
+                        (selected) => selected.id === employee.id
+                      )
+                        ? "bg-blue-100"
+                        : "bg-white"
+                        } hover:border-green-200 hover:shadow-sm`}
                       onClick={() => {
                         setSelectedEmployees((current) => {
                           if (
@@ -1467,7 +1469,7 @@ export default function SettingsPage() {
             ) : !logoPath ? (
               <div
                 className={`mb-4 p-4 border rounded-lg bg-gray-50 border-dashed transition-colors duration-200 ${isDragging ? "border-blue-500 bg-blue-50" : ""
-                }`}
+                  }`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -1622,13 +1624,19 @@ export default function SettingsPage() {
               <div className="relative">
                 <input
                   type="text"
-                  value={companyName}
+                  value={localCompanyName}
                   onChange={(e) => {
-                    setCompanyName(e.target.value);
+                    // Update local state immediately for responsive typing
+                    setLocalCompanyName(e.target.value);
+
+                    // Debounce the actual store update
                     if (window.saveTimeout) {
                       clearTimeout(window.saveTimeout);
                     }
+
                     window.saveTimeout = setTimeout(() => {
+                      // Only update store when user stops typing
+                      setCompanyName(e.target.value);
                       setShowCompanyNameSaved(true);
                       setTimeout(() => setShowCompanyNameSaved(false), 2000);
                     }, 500);
@@ -1642,8 +1650,8 @@ export default function SettingsPage() {
                     flex items-center bg-green-50 px-2 py-0.5 rounded-full
                     transition-all duration-200 ease-in-out
                     ${showCompanyNameSaved
-                        ? "opacity-100 translate-x-0"
-                        : "opacity-0 translate-x-2"
+                      ? "opacity-100 translate-x-0"
+                      : "opacity-0 translate-x-2"
                     }
                   `}
                 >
@@ -1691,10 +1699,21 @@ export default function SettingsPage() {
                         type="text"
                         value={preparedBy}
                         onChange={(e) => {
-                          setPreparedBy(e.target.value);
+                          // Create a local value without setting state yet
+                          const newValue = e.target.value;
+
+                          // Update local input field to prevent focus loss
+                          e.target.value = newValue;
+
+                          // Debounce the actual store update
                           if (window.preparedByTimeout) {
                             clearTimeout(window.preparedByTimeout);
                           }
+
+                          // Set store value immediately but don't trigger saved indicator yet
+                          setPreparedBy(newValue);
+
+                          // Show saved indicator after typing stops
                           window.preparedByTimeout = setTimeout(() => {
                             setShowPreparedBySaved(true);
                             setTimeout(
@@ -1714,7 +1733,7 @@ export default function SettingsPage() {
                         ${showPreparedBySaved
                             ? "opacity-100 translate-x-0"
                             : "opacity-0 translate-x-2"
-                        }
+                          }
                       `}
                       >
                         {showPreparedBySaved && (
@@ -1766,10 +1785,21 @@ export default function SettingsPage() {
                         type="text"
                         value={approvedBy}
                         onChange={(e) => {
-                          setApprovedBy(e.target.value);
+                          // Create a local value without setting state yet
+                          const newValue = e.target.value;
+
+                          // Update local input field to prevent focus loss
+                          e.target.value = newValue;
+
+                          // Debounce the actual store update
                           if (window.approvedByTimeout) {
                             clearTimeout(window.approvedByTimeout);
                           }
+
+                          // Set store value immediately but don't trigger saved indicator yet
+                          setApprovedBy(newValue);
+
+                          // Show saved indicator after typing stops
                           window.approvedByTimeout = setTimeout(() => {
                             setShowApprovedBySaved(true);
                             setTimeout(
@@ -1789,7 +1819,7 @@ export default function SettingsPage() {
                         ${showApprovedBySaved
                             ? "opacity-100 translate-x-0"
                             : "opacity-0 translate-x-2"
-                        }
+                          }
                       `}
                       >
                         {showApprovedBySaved && (
@@ -2027,7 +2057,7 @@ export default function SettingsPage() {
                     </h3>
                     <div
                       className={`p-3 border rounded-md bg-gray-50 min-h-screen mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2113,8 +2143,8 @@ export default function SettingsPage() {
                               }}
                               className={`px-3 py-1 border rounded transition-all duration-200 font-mono
                                 ${selectedOperator === operator
-                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                                 }`}
                             >
                               {operator}
@@ -2140,9 +2170,9 @@ export default function SettingsPage() {
                                 <span
                                   key={index}
                                   className={`${isVariable
-                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                      : "text-gray-600"
-                                  }`}
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                    }`}
                                 >
                                   {part}
                                 </span>
@@ -2180,7 +2210,7 @@ export default function SettingsPage() {
                     </h3>
                     <div
                       className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2266,8 +2296,8 @@ export default function SettingsPage() {
                               }}
                               className={`px-3 py-1 border rounded transition-all duration-200 font-mono
                                 ${selectedOperator === operator
-                                    ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                    : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                                 }`}
                             >
                               {operator}
@@ -2293,9 +2323,9 @@ export default function SettingsPage() {
                                 <span
                                   key={index}
                                   className={`${isVariable
-                                      ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                      : "text-gray-600"
-                                  }`}
+                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                    : "text-gray-600"
+                                    }`}
                                 >
                                   {part}
                                 </span>
@@ -2333,7 +2363,7 @@ export default function SettingsPage() {
                     </h3>
                     <div
                       className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2410,8 +2440,8 @@ export default function SettingsPage() {
                             }}
                             className={`px-3 py-1 border rounded transition-all duration-200 font-mono
                               ${selectedOperator === operator
-                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                               }`}
                           >
                             {operator}
@@ -2437,9 +2467,9 @@ export default function SettingsPage() {
                               <span
                                 key={index}
                                 className={`${isVariable
-                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                    : "text-gray-600"
-                                }`}
+                                  ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                  : "text-gray-600"
+                                  }`}
                               >
                                 {part}
                               </span>
@@ -2473,7 +2503,7 @@ export default function SettingsPage() {
                     </h3>
                     <div
                       className={`p-3 border rounded-md bg-gray-50 min-h-[60px] mb-2 ${!selectedOperator ? "cursor-not-allowed" : ""
-                      }`}
+                        }`}
                       onDragOver={(e) => {
                         if (!selectedOperator) {
                           e.preventDefault();
@@ -2548,8 +2578,8 @@ export default function SettingsPage() {
                             }}
                             className={`px-3 py-1 border rounded transition-all duration-200 font-mono
                               ${selectedOperator === operator
-                                  ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
-                                  : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
+                                ? "bg-blue-100 border-blue-300 text-blue-700 ring-2 ring-blue-200 ring-opacity-50"
+                                : "bg-white hover:bg-gray-50 text-gray-600 border-gray-200"
                               }`}
                           >
                             {operator}
@@ -2575,9 +2605,9 @@ export default function SettingsPage() {
                               <span
                                 key={index}
                                 className={`${isVariable
-                                    ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
-                                    : "text-gray-600"
-                                }`}
+                                  ? "bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                  : "text-gray-600"
+                                  }`}
                               >
                                 {part}
                               </span>
@@ -2980,10 +3010,10 @@ export default function SettingsPage() {
       setEmploymentTypes(timeSettings);
       setAttendanceSettings(settings);
       if (settings) { // Check if settings is not null/undefined
-      setHolidayMultipliers({
+        setHolidayMultipliers({
           regular: settings.regularHolidayMultiplier?.toString() || "",
           special: settings.specialHolidayMultiplier?.toString() || "",
-      });
+        });
       } else {
         // Handle case where settings might be null (e.g. Firestore returns null and default isn't applied upstream)
         setHolidayMultipliers({ regular: "", special: "" });
@@ -2993,16 +3023,16 @@ export default function SettingsPage() {
         const localEmployeeModel = createEmployeeModel(currentDbPath);
         setEmployeeModel(localEmployeeModel);
         // ... (rest of employee loading) ...
-      const allEmployees = await localEmployeeModel.loadEmployees();
-      const activeList = allEmployees.filter((emp) => emp.status === "active");
+        const allEmployees = await localEmployeeModel.loadEmployees();
+        const activeList = allEmployees.filter((emp) => emp.status === "active");
         const inactiveList = allEmployees.filter((emp) => emp.status === "inactive");
-      setSelectedEmployees([]);
-      setActiveEmployees(activeList);
-      setInactiveEmployees(inactiveList);
+        setSelectedEmployees([]);
+        setActiveEmployees(activeList);
+        setInactiveEmployees(inactiveList);
 
         const roleModel = new RoleModelImpl(currentDbPath);
-      const roles = await roleModel.getRoles();
-      setHasRoles(roles.length > 0);
+        const roles = await roleModel.getRoles();
+        setHasRoles(roles.length > 0);
       } else if (isWebEnvironment()) {
         setEmployeeModel(null);
         setActiveEmployees([]);
@@ -3047,16 +3077,17 @@ export default function SettingsPage() {
     }
   }, [isWebEnvironment]); // Dependencies: store's isInitialized and companyName will be added to useEffect
 
-  // Effect for initialization
+  // Effect for initialization - remove companyName from dependencies
   useEffect(() => {
-    // console.log(
-    //   "[SettingsPage] Initialization Effect: Triggered. dbPath:",
-    //   dbPath
-    // );
-    if (isInitialized) { // Only run if store is initialized
-    initializeData();
+    if (isInitialized) {
+      initializeData();
     }
-  }, [isInitialized, companyName, initializeData]); // <--- Added store's isInitialized and companyName
+  }, [isInitialized, initializeData]); // Removed companyName from dependencies
+
+  // Add effect to sync local state with store when companyName changes from outside
+  useEffect(() => {
+    setLocalCompanyName(companyName || "");
+  }, [companyName]);
 
   // Function to handle column color changes
   const handleColumnColorChange = (columnId: string, color: string) => {
@@ -3215,15 +3246,15 @@ export default function SettingsPage() {
                     key={section.key}
                     onClick={() => handleSelectionChange(section.key)}
                     className={`flex-shrink-0 flex items-center gap-2 px-4 py-4 text-sm font-medium transition-all whitespace-nowrap ${selected === section.key
-                        ? "text-blue-600"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
+                      ? "text-blue-600"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
                   >
                     <div
                       className={`transition-colors ${selected === section.key
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                      }`}
+                        ? "text-blue-600"
+                        : "text-gray-400"
+                        }`}
                     >
                       {section.icon}
                     </div>

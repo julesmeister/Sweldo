@@ -7,9 +7,13 @@ import {
   IoCheckmarkCircleOutline,
   IoAlertCircleOutline,
   IoTimeOutline,
+  IoPeopleOutline
 } from "react-icons/io5";
 import { toast } from "sonner";
 import { useFirestoreSync } from "../hooks/useFirestoreSync";
+import { Employee } from "../model/employee";
+import { createEmployeeModel } from "../model/employee";
+import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
 interface DatabaseManagementSettingsProps {
   dbPath: string | null;
@@ -27,6 +31,9 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
   companyName,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(false);
 
   // --- State for model selection ---
   const [selectedModels, setSelectedModels] = useState<Record<string, boolean>>(
@@ -44,8 +51,34 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     // Pass only required identifiers to the hook
     dbPath: dbPath || "",
     companyName: companyName || "",
-    // employeeId and year are optional in the hook, not needed here for this component's general sync
+    employeeId: selectedEmployeeId || undefined,
+    // year is optional in the hook, not needed here for this component's general sync
   });
+
+  // Load employees when component mounts
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (!dbPath && !companyName) return;
+
+      setIsLoadingEmployees(true);
+      try {
+        const employeeModel = createEmployeeModel(dbPath || "");
+        const loadedEmployees = await employeeModel.loadEmployees();
+        // Sort employees by name for easier selection
+        const sortedEmployees = loadedEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        setEmployees(sortedEmployees);
+      } catch (error) {
+        console.error("Error loading employees:", error);
+        toast.error("Failed to load employees for sync options");
+      } finally {
+        setIsLoadingEmployees(false);
+      }
+    };
+
+    loadEmployees();
+  }, [dbPath, companyName]);
 
   // --- Effect to initialize model selection based on availableModelNames ---
   useEffect(() => {
@@ -203,9 +236,8 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
 
   return (
     <div
-      className={`grid grid-cols-1 ${
-        window.electron && companyName ? "md:grid-cols-2" : ""
-      }
+      className={`grid grid-cols-1 ${window.electron && companyName ? "md:grid-cols-2" : ""
+        }
 gap-6`}
     >
       {/* Column 1: Database Location */}
@@ -337,6 +369,46 @@ gap-6`}
                 </div>
               </div>
 
+              {/* Employee Selection for Shorts Sync */}
+              <div className="mb-6 border rounded-md p-4 bg-blue-50/30">
+                <h3 className="text-md font-semibold mb-3 flex items-center gap-2">
+                  <IoPeopleOutline className="text-blue-600" />
+                  Employee Selection for Shorts Sync (Optional)
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  <strong>This is optional</strong>: By default, shorts are synced for all employees. Select a specific employee only if you want to sync shorts for just that person.
+                </p>
+                <div className="relative">
+                  <select
+                    value={selectedEmployeeId}
+                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">All Active Employees (Default)</option>
+                    {employees
+                      .filter(e => e.status === 'active')
+                      .map(employee => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name} ({employee.id})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  {isLoadingEmployees && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <IoTimeOutline className="animate-spin text-blue-500" />
+                    </div>
+                  )}
+                </div>
+                {selectedModels && selectedModels.shorts && (
+                  <div className="mt-3 text-xs text-blue-600 bg-blue-50 p-2 rounded-md">
+                    When syncing, shorts data will be {selectedEmployeeId ?
+                      `synced only for: ${employees.find(e => e.id === selectedEmployeeId)?.name || selectedEmployeeId}` :
+                      'synced for ALL active employees'}
+                  </div>
+                )}
+              </div>
+
               {/* Model Selection Checkboxes - Now uses availableModelNames to render */}
               {/* The rendering logic itself depends on selectedModels state, which is correct */}
               {Object.keys(selectedModels).length > 0 && (
@@ -386,6 +458,13 @@ gap-6`}
                       </label>
                     </div>
                   </div>
+
+                  <p className="text-xs text-gray-600 mb-3">
+                    Select which data models to sync. <strong>Note:</strong> When "shorts" is selected, data will be synced for {selectedEmployeeId ?
+                      `only ${employees.find(e => e.id === selectedEmployeeId)?.name || selectedEmployeeId}` :
+                      'ALL active employees'} based on your selection above.
+                  </p>
+
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {/* Sort based on the availableModelNames order or alphabetically */}
                     {availableModelNames.sort().map((modelName) => (
@@ -424,11 +503,10 @@ gap-6`}
                 <button
                   onClick={handleUploadToFirestore}
                   disabled={uploadStatus === "running"}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${
-                    uploadStatus === "running"
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  } text-white rounded-md transition-colors`}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${uploadStatus === "running"
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                    } text-white rounded-md transition-colors`}
                 >
                   <IoCloudUploadOutline className="w-5 h-5" />
                   {uploadStatus === "running"
@@ -438,11 +516,10 @@ gap-6`}
                 <button
                   onClick={handleDownloadFromFirestore}
                   disabled={downloadStatus === "running"}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${
-                    downloadStatus === "running"
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  } text-white rounded-md transition-colors`}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 ${downloadStatus === "running"
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
+                    } text-white rounded-md transition-colors`}
                 >
                   <IoCloudDownloadOutline className="w-5 h-5" />
                   {downloadStatus === "running"
@@ -458,55 +535,60 @@ gap-6`}
                 downloadStatus === "success" ||
                 uploadStatus === "error" ||
                 downloadStatus === "error") && (
-                <div className="mt-4">
-                  <div className="text-sm font-medium mb-2">
-                    {uploadStatus === "running"
-                      ? "Uploading to Cloud..."
-                      : downloadStatus === "running"
-                      ? "Downloading from Cloud..."
-                      : uploadStatus === "success" ||
-                        downloadStatus === "success"
-                      ? "Sync Complete"
-                      : "Sync Error"}
-                  </div>
-                  {Object.keys(modelStatuses).length > 0 ? (
-                    <ul className="space-y-3">
-                      {Object.entries(modelStatuses).map(
-                        ([modelName, status]) => (
-                          <li
-                            key={modelName}
-                            className="flex items-center gap-3"
-                          >
-                            {getStatusIcon(status.status)}
-                            <span className="capitalize font-medium">
-                              {modelName}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              ({status.status})
-                            </span>
-                            {status.progress.length > 0 && (
-                              <span className="ml-2 text-xs text-gray-400">
-                                {status.progress[status.progress.length - 1]}
+                  <div className="mt-4">
+                    <div className="text-sm font-medium mb-2">
+                      {uploadStatus === "running"
+                        ? "Uploading to Cloud..."
+                        : downloadStatus === "running"
+                          ? "Downloading from Cloud..."
+                          : uploadStatus === "success" ||
+                            downloadStatus === "success"
+                            ? "Sync Complete"
+                            : "Sync Error"}
+                    </div>
+                    {Object.keys(modelStatuses).length > 0 ? (
+                      <ul className="space-y-3">
+                        {Object.entries(modelStatuses).map(
+                          ([modelName, status]) => (
+                            <li
+                              key={modelName}
+                              className="flex items-center gap-3"
+                            >
+                              {getStatusIcon(status.status)}
+                              <span className={`capitalize font-medium ${modelName === 'shorts' ? 'text-blue-600' : ''}`}>
+                                {modelName}
+                                {modelName === 'shorts' && selectedEmployeeId && (
+                                  <span className="ml-1 font-normal text-xs">
+                                    ({employees.find(e => e.id === selectedEmployeeId)?.name || selectedEmployeeId})
+                                  </span>
+                                )}
                               </span>
-                            )}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  ) : (
-                    (uploadStatus === "success" ||
-                      downloadStatus === "success" ||
-                      uploadStatus === "error" ||
-                      downloadStatus === "error") && (
-                      <p className="text-sm text-gray-600 mt-2">
-                        {uploadStatus === "error" || downloadStatus === "error"
-                          ? "Sync failed to process model data. Check console logs in useFirestoreSync for errors."
-                          : "Sync initiated, but no specific model data was processed. This might happen if models could not be initialized (check logs) or no changes were detected."}
-                      </p>
-                    )
-                  )}
-                </div>
-              )}
+                              <span className="text-xs text-gray-500">
+                                ({status.status})
+                              </span>
+                              {status.progress.length > 0 && (
+                                <span className="ml-2 text-xs text-gray-400">
+                                  {status.progress[status.progress.length - 1]}
+                                </span>
+                              )}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      (uploadStatus === "success" ||
+                        downloadStatus === "success" ||
+                        uploadStatus === "error" ||
+                        downloadStatus === "error") && (
+                        <p className="text-sm text-gray-600 mt-2">
+                          {uploadStatus === "error" || downloadStatus === "error"
+                            ? "Sync failed to process model data. Check console logs in useFirestoreSync for errors."
+                            : "Sync initiated, but no specific model data was processed. This might happen if models could not be initialized (check logs) or no changes were detected."}
+                        </p>
+                      )
+                    )}
+                  </div>
+                )}
             </>
           )}
         </div>

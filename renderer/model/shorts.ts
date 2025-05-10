@@ -27,7 +27,7 @@ interface ShortsJsonStructure {
 // --- Implementation --- //
 
 export class ShortModel {
-  private jsonFilePath: string;
+  private dbPath: string;
   private employeeId: string;
   private month: number;
   private year: number;
@@ -40,13 +40,12 @@ export class ShortModel {
     month?: number,
     year?: number
   ) {
-    // Note: The dbPath passed to this constructor should be the *base* DB path,
-    // not the employee-specific shorts path like in the old model.
-    const baseShortsPath = path.join(dbPath, "SweldoDB", "shorts");
-    this.folderPath = path.join(baseShortsPath, employeeId);
+    this.dbPath = dbPath;
     this.employeeId = employeeId;
     this.month = month || new Date().getMonth() + 1;
     this.year = year || new Date().getFullYear();
+    const baseShortsPath = path.join(dbPath, "SweldoDB", "shorts");
+    this.folderPath = path.join(baseShortsPath, employeeId);
     this.jsonFilePath = path.join(
       this.folderPath,
       `${this.year}_${this.month}_shorts.json`
@@ -59,6 +58,11 @@ export class ShortModel {
       this.month,
       this.year
     );
+  }
+
+  // Add method to get dbPath
+  getDbPath(): string {
+    return this.dbPath;
   }
 
   // --- Private JSON Read/Write Helpers --- //

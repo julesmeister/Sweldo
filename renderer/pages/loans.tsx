@@ -17,45 +17,65 @@ import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
+import { useDateAwareDataFetching } from "@/renderer/hooks/useDateAwareDataFetching";
+import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
+import { useAuthStore } from "../stores/authStore";
 
 export default function LoansPage() {
-  const [loans, setLoans] = useState<Loan[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [clickPosition, setClickPosition] = useState<{
     top: number;
     left: number;
     showAbove: boolean;
     caretLeft: number;
   } | null>(null);
-  const [storedMonth, setStoredMonth] = useState<string | null>(null);
-  const [storedYear, setStoredYear] = useState<string | null>(null);
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [isWebMode, setIsWebMode] = useState(false);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
-  const employeeModel = useMemo(
-    () => (dbPath ? createEmployeeModel(dbPath) : null),
-    [dbPath]
-  );
-  const loanModel = useMemo(
-    () =>
-      dbPath && selectedEmployeeId
-        ? createLoanModel(dbPath, selectedEmployeeId)
-        : null,
-    [dbPath, selectedEmployeeId]
-  );
   const pathname = usePathname();
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
   const router = useRouter();
+  const { hasAccess } = useAuthStore();
 
-  const storedMonthInt = storedMonth ? parseInt(storedMonth, 10) + 1 : 0;
-  const year = parseInt(storedYear!, 10);
+  const hasDeleteAccess = hasAccess("MANAGE_PAYROLL");
+
+  // Check if running in web mode
+  useEffect(() => {
+    const checkWebMode = async () => {
+      const isWeb = isWebEnvironment();
+      setIsWebMode(isWeb);
+
+      if (isWeb) {
+        const company = await getCompanyName();
+        setCompanyName(company);
+      }
+    };
+
+    checkWebMode();
+  }, []);
+
+  const effectiveDbPath = isWebMode ? "web" : dbPath;
+
+  const employeeModel = useMemo(
+    () => (effectiveDbPath ? createEmployeeModel(effectiveDbPath) : null),
+    [effectiveDbPath]
+  );
+
+  const loanModel = useMemo(
+    () =>
+      effectiveDbPath && selectedEmployeeId
+        ? createLoanModel(effectiveDbPath, selectedEmployeeId)
+        : null,
+    [effectiveDbPath, selectedEmployeeId]
+  );
 
   useEffect(() => {
     const loadEmployee = async () => {
-      if (!dbPath) {
+      if (!effectiveDbPath) {
         return;
       }
       if (!selectedEmployeeId) {
@@ -78,62 +98,26 @@ export default function LoansPage() {
     };
 
     loadEmployee();
-  }, [dbPath, selectedEmployeeId, employeeModel, setLoading]);
+  }, [effectiveDbPath, selectedEmployeeId, employeeModel, setLoading]);
 
+  // Use the date-aware data fetching hook
+  const fetchLoans = async (year: number, month: number) => {
+    if (!loanModel) return [];
+    return loanModel.loadLoans(year, month);
+  };
+
+  const { data: loans, isLoading, error, refetch } = useDateAwareDataFetching<Loan[]>(
+    fetchLoans,
+    [],
+    [loanModel, selectedEmployeeId]
+  );
+
+  // Display error if any
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const month = localStorage.getItem("selectedMonth");
-      const year = localStorage.getItem("selectedYear");
-
-      setStoredMonth(month);
-      setStoredYear(year);
+    if (error) {
+      toast.error(`Error loading loans: ${error.message}`);
     }
-  }, []);
-
-  useEffect(() => {
-    if (!storedYear) {
-      const currentYear = new Date().getFullYear().toString();
-      localStorage.setItem("selectedYear", currentYear);
-      setStoredYear(currentYear);
-    }
-  }, [storedYear]);
-
-  useEffect(() => {
-    const loadLoans = async () => {
-      if (!loanModel || !storedYear || storedMonthInt === 0) return;
-
-      try {
-        setLoading(true);
-        const currentLoans = await loanModel.loadLoans(
-          parseInt(storedYear),
-          storedMonthInt
-        );
-        setLoans(currentLoans);
-      } catch (error) {
-        console.error("Error loading loans:", error);
-        toast.error("Failed to load loans");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadLoans();
-  }, [loanModel, storedMonthInt, storedYear, setLoading]);
-
-  useEffect(() => {
-    const loadEmployees = async () => {
-      if (!dbPath) return;
-      try {
-        const employeeModel = createEmployeeModel(dbPath);
-        const loadedEmployees = await employeeModel.loadActiveEmployees();
-        setEmployees(loadedEmployees);
-      } catch (error) {
-        toast.error("Error loading employees");
-      }
-    };
-
-    loadEmployees();
-  }, [dbPath]);
+  }, [error]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -195,25 +179,26 @@ export default function LoansPage() {
     }
   };
 
-  const handleSaveLoan = (data: Loan): void => {
+  const handleSaveLoan = async (data: Loan): Promise<void> => {
     if (loanModel) {
-      loanModel
-        .createLoan(data)
-        .then(() => {
-          toast.success("Loan saved successfully", {
-            position: "bottom-right",
-            duration: 3000,
-          });
-        })
-        .catch((error) => {
-          console.error("Error saving loan:", error);
-          toast.error(`Error saving loan: ${error.message}`, {
-            position: "bottom-right",
-            duration: 3000,
-          });
+      try {
+        await loanModel.createLoan(data);
+        toast.success("Loan saved successfully", {
+          position: "bottom-right",
+          duration: 3000,
         });
+        // Refetch loans after saving
+        refetch();
+      } catch (error) {
+        console.error("Error saving loan:", error);
+        toast.error(`Error saving loan: ${error instanceof Error ? error.message : String(error)}`, {
+          position: "bottom-right",
+          duration: 3000,
+        });
+      }
     } else {
       console.error("Loan model is not initialized");
+      toast.error("Loan model is not initialized");
     }
   };
 
@@ -236,7 +221,6 @@ export default function LoansPage() {
                     <h2 className="text-lg font-medium text-gray-900 flex items-center">
                       {selectedEmployeeId ? (
                         <EmployeeDropdown
-                          employees={employees}
                           selectedEmployeeId={selectedEmployeeId}
                           onSelectEmployee={setSelectedEmployeeId}
                           labelPrefix="Loans"
@@ -387,7 +371,10 @@ export default function LoansPage() {
                                       e.stopPropagation();
                                       // Handle delete
                                     }}
-                                    className="text-red-600 hover:text-red-900"
+                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${!hasDeleteAccess
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : "cursor-pointer"
+                                      }`}
                                   >
                                     Delete
                                   </button>
@@ -455,8 +442,10 @@ export default function LoansPage() {
                 setClickPosition(null);
               }}
               onSave={handleSaveLoan}
-              initialData={undefined}
+              initialData={selectedLoan}
               position={clickPosition!}
+              isWebMode={isWebMode}
+              companyName={companyName}
             />
           </div>
         )}

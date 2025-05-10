@@ -38,6 +38,8 @@ interface SettingsState extends PersistedSettings {
   setColumnColor: (columnId: string, color: string) => void;
   setCalculationSettings: (settings: CalculationSettings) => void; // Use the separate type
   initialize: (initialDbPath: string | null) => Promise<void>;
+  // Add recovery method
+  recoverSettings: () => Promise<boolean>;
 }
 
 // Default values remain the same
@@ -72,12 +74,134 @@ export const defaultSettings: PersistedSettings = {
 const settingsFilePath = (dbPath: string): string =>
   `${dbPath}/SweldoDB/settings/app_settings.json`;
 
+/**
+ * Safe localStorage getter with error handling and type safety
+ */
+const safeGetFromLocalStorage = (key: string): any => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const item = localStorage.getItem(key);
+      if (item) {
+        return JSON.parse(item);
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error(`[SettingsStore] Error reading ${key} from localStorage:`, e);
+    return null;
+  }
+};
+
+/**
+ * Safe localStorage setter with error handling
+ */
+const safeSetToLocalStorage = (key: string, value: any): boolean => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error(`[SettingsStore] Error saving ${key} to localStorage:`, e);
+    return false;
+  }
+};
+
+/**
+ * Backup critical settings to sessionStorage as an additional safeguard
+ */
+const backupSettingsToSession = (
+  settings: Partial<PersistedSettings>
+): void => {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      sessionStorage.setItem(
+        "settings-backup",
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          data: settings,
+        })
+      );
+    }
+  } catch (e) {
+    console.error(
+      `[SettingsStore] Error backing up settings to sessionStorage:`,
+      e
+    );
+  }
+};
+
+/**
+ * Retrieve backup settings from sessionStorage if available
+ */
+const getBackupSettingsFromSession = (): Partial<PersistedSettings> | null => {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      const backup = sessionStorage.getItem("settings-backup");
+      if (backup) {
+        const parsed = JSON.parse(backup);
+        return parsed.data;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error(
+      `[SettingsStore] Error retrieving backup settings from sessionStorage:`,
+      e
+    );
+    return null;
+  }
+};
+
+/**
+ * Merge settings with preference for non-empty values
+ * This ensures we don't overwrite existing values with empty ones
+ */
+const mergeSafelyPreservingValues = (
+  target: Partial<PersistedSettings>,
+  source: Partial<PersistedSettings>
+): Partial<PersistedSettings> => {
+  const result = { ...target };
+
+  // Only copy values from source that are not empty strings, null, or undefined
+  for (const key in source) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const sourceValue = source[key as keyof PersistedSettings];
+
+      // Skip empty strings, null, or undefined values
+      if (
+        sourceValue === "" ||
+        sourceValue === null ||
+        sourceValue === undefined
+      ) {
+        continue;
+      }
+
+      // For objects like calculationSettings, do deep merge
+      if (
+        typeof sourceValue === "object" &&
+        !Array.isArray(sourceValue) &&
+        sourceValue !== null
+      ) {
+        result[key as keyof PersistedSettings] = {
+          ...result[key as keyof PersistedSettings],
+          ...sourceValue,
+        } as any;
+      } else {
+        result[key as keyof PersistedSettings] = sourceValue as any;
+      }
+    }
+  }
+
+  return result;
+};
+
 export const useSettingsStore = create<SettingsState>()((set, get) => {
   // Internal helper to save settings to file
   const _saveSettings = async () => {
     const state = get();
     if (!state.dbPath && !isWebEnvironment()) {
-      // Adjusted condition: dbPath needed for local, not strictly for web if companyName exists
       console.warn(
         "[SettingsStore] _saveSettings: Cannot save settings. For local mode, dbPath is not set. For web mode, ensure companyName is set if settings are to be saved."
       );
@@ -90,28 +214,49 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
       return;
     }
 
-    // In web mode, save to Firestore
+    // Backup critical settings to sessionStorage
+    backupSettingsToSession({
+      companyName: state.companyName,
+      dbPath: state.dbPath,
+      preparedBy: state.preparedBy,
+      approvedBy: state.approvedBy,
+    });
+
+    // In web mode, save to Firestore and localStorage
     if (isWebEnvironment()) {
       try {
-        // Construct webSettings with all fields required by AppSettingsFirestore,
-        // pulling values from the current state.
+        // Save to localStorage first for reliability
+        const stateToSave = {
+          dbPath: state.dbPath,
+          logoPath: state.logoPath,
+          preparedBy: state.preparedBy,
+          approvedBy: state.approvedBy,
+          companyName: state.companyName,
+          columnColors: state.columnColors,
+          calculationSettings: state.calculationSettings,
+        };
+
+        safeSetToLocalStorage("settings-storage", { state: stateToSave });
+
+        // Then save to Firestore
         const webSettings: AppSettingsFirestore = {
-          companyName: state.companyName, // Mandatory
-          logoPath: state.logoPath || "", // Default to empty string if undefined
+          companyName: state.companyName,
+          logoPath: state.logoPath || "",
           preparedBy: state.preparedBy || "",
           approvedBy: state.approvedBy || "",
           columnColors: state.columnColors || {},
           calculationSettings: state.calculationSettings || {},
-          // Optional fields from AppSettingsFirestore, provide defaults or current state if available
-          theme: "light", // Default or from state if managed
-          language: "en", // Default or from state if managed
-          notificationsEnabled: true, // Default or from state if managed
-          timeFormat: "12-hour" as const, // Default or from state if managed
+          theme: "light",
+          language: "en",
+          notificationsEnabled: true,
+          timeFormat: "12-hour" as const,
         };
         await saveAppSettingsFirestore(webSettings, state.companyName);
-        // console.log("Settings saved to Firestore");
+        console.log(
+          "[SettingsStore] Settings saved to localStorage and Firestore"
+        );
       } catch (error) {
-        console.error("Failed to save settings to Firestore:", error);
+        console.error("[SettingsStore] Failed to save settings:", error);
       }
       return;
     }
@@ -136,11 +281,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         filePath,
         JSON.stringify(settingsToSave, null, 2) // Pretty print
       );
-      // console.log("Settings saved to:", filePath);
+
+      // Also save critical settings to localStorage as backup
+      safeSetToLocalStorage("settings-storage", { state: settingsToSave });
+
+      console.log(
+        "[SettingsStore] Settings saved to file and localStorage backup"
+      );
     } catch (error) {
-      console.error("Failed to save settings to file:", filePath, error);
-      // Optionally notify the user with toast
-      // toast.error("Failed to save application settings.");
+      console.error(
+        "[SettingsStore] Failed to save settings to file:",
+        filePath,
+        error
+      );
+      // Try to save to localStorage as fallback
+      safeSetToLocalStorage("settings-storage", { state: settingsToSave });
     }
   };
 
@@ -187,109 +342,158 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
 
     initialize: async (initialDbPath) => {
       if (get().isInitialized) {
-        // console.log("[SettingsStore Init] Already initialized. Skipping.");
+        console.log("[SettingsStore Init] Already initialized. Skipping.");
         return;
       }
-      // console.log("[SettingsStore Init] Initializing settings store...");
-      // console.log(
-      //   `[SettingsStore Init] Received initialDbPath from layout/localStorage: ${initialDbPath}`
-      // );
+      console.log("[SettingsStore Init] Initializing settings store...");
 
+      // Start with default values
       let loadedSettings = { ...defaultSettings };
       let successfullyLoadedFromFile = false;
 
-      // --- First check if we're in web mode ---
+      // Create a record of settings sources for debugging
+      const settingsSources = {
+        fromSessionStorage: false,
+        fromLocalStorage: false,
+        fromFirestore: false,
+        fromFile: false,
+        fromInitialDbPath: false,
+      };
+
+      // First try to recover from session storage (highest priority)
+      const sessionBackup = getBackupSettingsFromSession();
+      if (sessionBackup) {
+        console.log(
+          "[SettingsStore Init] Found backup in sessionStorage:",
+          Object.keys(sessionBackup).filter(
+            (k) => sessionBackup[k as keyof PersistedSettings]
+          )
+        );
+        loadedSettings = mergeSafelyPreservingValues(
+          loadedSettings,
+          sessionBackup
+        );
+        settingsSources.fromSessionStorage = true;
+      }
+
+      // --- Check if we're in web mode ---
       if (isWebEnvironment()) {
-        // console.log("[SettingsStore Init] Detected web environment");
+        console.log("[SettingsStore Init] Detected web environment");
 
-        // Try to load from localStorage first to get company name
-        try {
-          const lsState = localStorage.getItem("settings-storage");
-          if (lsState) {
-            const parsedLs = JSON.parse(lsState);
-            if (parsedLs && parsedLs.state && parsedLs.state.companyName) {
-              const companyName = parsedLs.state.companyName;
-              // console.log(
-              //   `[SettingsStore Init] Found company name in localStorage: ${companyName}`
-              // );
+        // Try to load from localStorage first to get company name and other settings
+        const lsData = safeGetFromLocalStorage("settings-storage");
+        if (lsData && lsData.state) {
+          const lsSettings = lsData.state;
+          console.log(
+            "[SettingsStore Init] Found settings in localStorage:",
+            Object.keys(lsSettings).filter((k) => lsSettings[k])
+          );
 
-              // Set company name
-              loadedSettings.companyName = companyName;
+          // Apply localStorage settings, but don't overwrite session backup with empty values
+          loadedSettings = mergeSafelyPreservingValues(
+            loadedSettings,
+            lsSettings
+          );
+          settingsSources.fromLocalStorage = true;
 
-              // Update the centralized company name in firestoreService
-              setFirestoreCompanyName(companyName);
+          // If we have a company name, set it centrally and try to load from Firestore
+          if (lsSettings.companyName) {
+            setFirestoreCompanyName(lsSettings.companyName);
 
-              // Try to load additional settings from Firestore
-              // console.log(`[SettingsStore Init] Attempting to load settings from Firestore for company: ${companyName}`);
-              const firestoreSettings = await loadFromFirestore(companyName);
-              // console.log("[SettingsStore Init] Loaded from Firestore:", firestoreSettings);
-              loadedSettings = { ...loadedSettings, ...firestoreSettings };
-              successfullyLoadedFromFile = true; // Consider this a successful load for web
+            try {
+              console.log(
+                `[SettingsStore Init] Loading settings from Firestore for company: ${lsSettings.companyName}`
+              );
+              const firestoreSettings = await loadFromFirestore(
+                lsSettings.companyName
+              );
+              if (
+                firestoreSettings &&
+                Object.keys(firestoreSettings).length > 0
+              ) {
+                console.log(
+                  "[SettingsStore Init] Found settings in Firestore:",
+                  Object.keys(firestoreSettings).filter(
+                    (k) => firestoreSettings[k as keyof PersistedSettings]
+                  )
+                );
+
+                // Apply Firestore settings, but don't overwrite with empty values
+                loadedSettings = mergeSafelyPreservingValues(
+                  loadedSettings,
+                  firestoreSettings
+                );
+                settingsSources.fromFirestore = true;
+                successfullyLoadedFromFile = true;
+              }
+            } catch (e) {
+              console.error(
+                "[SettingsStore Init] Error loading from Firestore:",
+                e
+              );
             }
           }
-        } catch (e) {
-          console.error(
-            "[SettingsStore Init] Error processing localStorage in web mode:",
-            e
-          );
         }
-        // If companyName still not set after localStorage/Firestore attempt, it must be set another way (e.g. user input)
+
+        // If we still don't have a company name, it will need to be set via UI
         if (!loadedSettings.companyName) {
           console.warn(
-            "[SettingsStore Init] Web mode: Company name not found in localStorage or Firestore. It must be set via UI or other means."
+            "[SettingsStore Init] Web mode: Company name not found in any storage."
           );
         }
 
-        // Set state and exit
-        // console.log("[SettingsStore Init] Web mode: Final state before setting:", loadedSettings);
+        console.log(
+          `[SettingsStore Init] Web mode initialization complete. Sources:`,
+          settingsSources
+        );
+        console.log(`[SettingsStore Init] Final settings:`, {
+          companyName: loadedSettings.companyName ? "✓" : "✗",
+          dbPath: loadedSettings.dbPath ? "✓" : "✗",
+          preparedBy: loadedSettings.preparedBy ? "✓" : "✗",
+          approvedBy: loadedSettings.approvedBy ? "✓" : "✗",
+        });
+
+        // Set state and exit for web mode
         set({ ...loadedSettings, isInitialized: true });
+
+        // Save settings to ensure they're properly stored
+        if (loadedSettings.companyName) {
+          await _saveSettings();
+        }
+
         return;
       }
 
       // --- Desktop mode: attempt to load from file using initialDbPath ---
       if (initialDbPath) {
+        settingsSources.fromInitialDbPath = true;
         const filePath = settingsFilePath(initialDbPath);
-        // console.log(
-        //   "[SettingsStore Init] Attempting to load settings from derived path:",
-        //   filePath
-        // );
+        console.log(
+          "[SettingsStore Init] Attempting to load settings from:",
+          filePath
+        );
+
         try {
           const fileExists = await window.electron.fileExists(filePath);
           if (fileExists) {
             const fileContent = await window.electron.readFile(filePath);
             const parsedSettings = JSON.parse(fileContent) as PersistedSettings;
-            // console.log(
-            //   "[SettingsStore Init] Parsed settings from file:",
-            //   parsedSettings
-            // );
+            console.log("[SettingsStore Init] Found settings in file");
 
-            if (
-              parsedSettings &&
-              typeof parsedSettings.dbPath === "string" &&
-              parsedSettings.dbPath
-            ) {
-              // console.log(
-              //   `[SettingsStore Init] Prioritizing dbPath from file: ${parsedSettings.dbPath}`
-              // );
-              loadedSettings = {
-                ...defaultSettings,
-                ...parsedSettings,
-                dbPath: parsedSettings.dbPath,
-              };
-              successfullyLoadedFromFile = true;
+            if (parsedSettings && typeof parsedSettings === "object") {
+              // If settings file has a valid dbPath, use it; otherwise use initialDbPath
+              const effectiveDbPath = parsedSettings.dbPath || initialDbPath;
 
-              if (parsedSettings.companyName) {
-                setFirestoreCompanyName(parsedSettings.companyName);
-              }
-            } else {
-              // console.warn(
-              //   `[SettingsStore Init] File loaded, but dbPath invalid/missing. Using initialDbPath (${initialDbPath}) as fallback path.`
-              // );
-              loadedSettings = {
-                ...defaultSettings,
-                ...parsedSettings,
-                dbPath: initialDbPath,
-              };
+              // Merge settings from file with defaults, prioritizing file values
+              loadedSettings = mergeSafelyPreservingValues(
+                loadedSettings,
+                parsedSettings
+              );
+
+              // Always ensure we have a dbPath
+              loadedSettings.dbPath = effectiveDbPath;
+
+              settingsSources.fromFile = true;
               successfullyLoadedFromFile = true;
 
               if (parsedSettings.companyName) {
@@ -297,105 +501,78 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
               }
             }
           } else {
-            // console.log(
-            //   "[SettingsStore Init] Settings file not found at derived path. Using initialDbPath as fallback."
-            // );
+            console.log(
+              "[SettingsStore Init] Settings file not found. Using initialDbPath."
+            );
             loadedSettings.dbPath = initialDbPath;
           }
         } catch (error) {
           console.error(
-            "[SettingsStore Init] Error loading/parsing settings file. Using initialDbPath as fallback:",
+            "[SettingsStore Init] Error reading settings file:",
             error
           );
           loadedSettings.dbPath = initialDbPath;
         }
       } else {
-        // console.warn(
-        //   "[SettingsStore Init] Initializing without an initialDbPath."
-        // );
+        console.warn(
+          "[SettingsStore Init] Initializing without an initialDbPath."
+        );
       }
 
+      // --- Try localStorage as fallback for any empty critical values ---
       if (
         !successfullyLoadedFromFile ||
+        !loadedSettings.dbPath ||
         loadedSettings.preparedBy === "" ||
         loadedSettings.approvedBy === "" ||
         loadedSettings.companyName === ""
       ) {
-        try {
-          const lsState = localStorage.getItem("settings-storage");
-          if (lsState) {
-            const parsedLs = JSON.parse(lsState);
-            if (parsedLs && parsedLs.state) {
-              // console.log(
-              //   "[SettingsStore Init] Checking localStorage for fallbacks..."
-              // );
-              if (
-                !loadedSettings.dbPath &&
-                typeof parsedLs.state.dbPath === "string" &&
-                parsedLs.state.dbPath
-              ) {
-                loadedSettings.dbPath = parsedLs.state.dbPath;
-                // console.log(
-                //   "[SettingsStore Init] Using localStorage fallback for dbPath."
-                // );
-              }
-              if (
-                loadedSettings.preparedBy === "" &&
-                typeof parsedLs.state.preparedBy === "string" &&
-                parsedLs.state.preparedBy
-              ) {
-                loadedSettings.preparedBy = parsedLs.state.preparedBy;
-                // console.log(
-                //   "[SettingsStore Init] Using localStorage fallback for preparedBy."
-                // );
-              }
-              if (
-                loadedSettings.approvedBy === "" &&
-                typeof parsedLs.state.approvedBy === "string" &&
-                parsedLs.state.approvedBy
-              ) {
-                loadedSettings.approvedBy = parsedLs.state.approvedBy;
-                // console.log(
-                //   "[SettingsStore Init] Using localStorage fallback for approvedBy."
-                // );
-              }
-              if (
-                loadedSettings.companyName === "" &&
-                typeof parsedLs.state.companyName === "string" &&
-                parsedLs.state.companyName
-              ) {
-                loadedSettings.companyName = parsedLs.state.companyName;
-                // console.log(
-                //   "[SettingsStore Init] Using localStorage fallback for companyName."
-                // );
-                setFirestoreCompanyName(parsedLs.state.companyName);
-              }
-            }
-          }
-        } catch (e) {
-          console.error(
-            "[SettingsStore Init] Error processing localStorage fallback:",
-            e
+        const lsData = safeGetFromLocalStorage("settings-storage");
+        if (lsData && lsData.state) {
+          console.log(
+            "[SettingsStore Init] Checking localStorage for fallbacks"
           );
+
+          // Only use values from localStorage that aren't empty and aren't already set
+          loadedSettings = mergeSafelyPreservingValues(
+            loadedSettings,
+            lsData.state
+          );
+
+          if (lsData.state.companyName && !loadedSettings.companyName) {
+            setFirestoreCompanyName(lsData.state.companyName);
+            settingsSources.fromLocalStorage = true;
+          }
         }
       }
 
-      // console.log(
-      //   "[SettingsStore Init] Final state before setting:",
-      //   loadedSettings
-      // );
+      console.log(
+        `[SettingsStore Init] Desktop mode initialization complete. Sources:`,
+        settingsSources
+      );
+      console.log(`[SettingsStore Init] Final settings:`, {
+        companyName: loadedSettings.companyName ? "✓" : "✗",
+        dbPath: loadedSettings.dbPath ? "✓" : "✗",
+        preparedBy: loadedSettings.preparedBy ? "✓" : "✗",
+        approvedBy: loadedSettings.approvedBy ? "✓" : "✗",
+      });
+
+      // Set the final state
       set({ ...loadedSettings, isInitialized: true });
 
-      if (get().dbPath || (isWebEnvironment() && get().companyName)) {
-        // Check for companyName in webMode
-        // console.log(
-        //   "[SettingsStore Init] Attempting initial save. dbPath:", get().dbPath, "companyName:", get().companyName
-        // );
+      // Save settings to all storage mechanisms
+      if (
+        loadedSettings.dbPath ||
+        (isWebEnvironment() && loadedSettings.companyName)
+      ) {
+        console.log(
+          "[SettingsStore Init] Performing initial save to persist settings"
+        );
         await _saveSettings();
       } else {
-        // console.warn(
-        //   "[SettingsStore Init] Skipping initial save because dbPath (local) or companyName (web) is empty."
-        // );
+        console.warn(
+          "[SettingsStore Init] Skipping initial save because required fields missing"
+        );
       }
     },
 
@@ -429,46 +606,69 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     },
 
     setCompanyName: (name) => {
-      set({ companyName: name });
-
-      // If in web mode, immediately update localStorage and Firestore
-      if (isWebEnvironment()) {
-        try {
-          // Update centralized company name for Firestore service
-          setFirestoreCompanyName(name);
-
-          // Explicitly save to localStorage to ensure it's available on refresh
-          const currentState = get();
-          const stateToSave = {
-            dbPath: currentState.dbPath,
-            logoPath: currentState.logoPath,
-            preparedBy: currentState.preparedBy,
-            approvedBy: currentState.approvedBy,
-            companyName: name,
-            columnColors: currentState.columnColors,
-            calculationSettings: currentState.calculationSettings,
-          };
-
-          localStorage.setItem(
-            "settings-storage",
-            JSON.stringify({
-              state: stateToSave,
-            })
-          );
-
-          console.log(
-            `[SettingsStore] Company name '${name}' saved to localStorage`
-          );
-        } catch (e) {
-          console.error(
-            "[SettingsStore] Error saving company name to localStorage:",
-            e
-          );
-        }
+      if (!name || name.trim() === "") {
+        console.warn(
+          "[SettingsStore] Attempted to set an empty company name. Ignoring."
+        );
+        return;
       }
 
-      // Call the general save method to handle both web/desktop saving
-      _saveSettings();
+      console.log(`[SettingsStore] Setting company name to: ${name}`);
+
+      // Get current state to check if this is an actual change
+      const currentState = get();
+      const isNewValue = currentState.companyName !== name;
+
+      // Update the store state
+      set({ companyName: name });
+
+      // Update centralized company name for Firestore service
+      setFirestoreCompanyName(name);
+
+      // Create a backup to sessionStorage (survives page refreshes)
+      backupSettingsToSession({
+        ...currentState,
+        companyName: name,
+      });
+
+      // Save to localStorage for persistence (works in both web and desktop mode)
+      try {
+        // Get the rest of the state to preserve all settings
+        const stateToSave: PersistedSettings = {
+          dbPath: currentState.dbPath,
+          logoPath: currentState.logoPath,
+          preparedBy: currentState.preparedBy,
+          approvedBy: currentState.approvedBy,
+          companyName: name,
+          columnColors: currentState.columnColors,
+          calculationSettings: currentState.calculationSettings,
+        };
+
+        // Save to localStorage directly to ensure it's immediately available
+        safeSetToLocalStorage("settings-storage", { state: stateToSave });
+
+        console.log(
+          `[SettingsStore] Company name '${name}' saved to localStorage`
+        );
+
+        // In desktop mode, also create a backup in a special key
+        if (!isWebEnvironment()) {
+          safeSetToLocalStorage("settings-backup", {
+            timestamp: new Date().toISOString(),
+            state: stateToSave,
+          });
+        }
+      } catch (e) {
+        console.error(
+          "[SettingsStore] Error saving company name to localStorage:",
+          e
+        );
+      }
+
+      // Only trigger a full save if the value actually changed
+      if (isNewValue) {
+        _saveSettings();
+      }
     },
 
     setColumnColor: (columnId, color) => {
@@ -484,6 +684,168 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     setCalculationSettings: (settings) => {
       set({ calculationSettings: settings });
       _saveSettings();
+    },
+
+    // Add recovery method
+    recoverSettings: async () => {
+      console.log(
+        "[SettingsStore] Attempting to recover settings from backups..."
+      );
+
+      let recoveredSettings: Partial<PersistedSettings> = {};
+      let recoverySuccessful = false;
+
+      // Source 1: Try sessionStorage (highest priority, most recent)
+      try {
+        const sessionBackup = getBackupSettingsFromSession();
+        if (sessionBackup && Object.keys(sessionBackup).length > 0) {
+          console.log(
+            "[SettingsStore] Found session backup:",
+            Object.keys(sessionBackup).filter(
+              (k) => sessionBackup[k as keyof PersistedSettings]
+            )
+          );
+          recoveredSettings = { ...recoveredSettings, ...sessionBackup };
+          recoverySuccessful = true;
+        }
+      } catch (e) {
+        console.error("[SettingsStore] Error accessing session backup:", e);
+      }
+
+      // Source 2: Try special backup in localStorage
+      try {
+        const lsBackup = safeGetFromLocalStorage("settings-backup");
+        if (
+          lsBackup &&
+          lsBackup.state &&
+          Object.keys(lsBackup.state).length > 0
+        ) {
+          console.log(
+            "[SettingsStore] Found localStorage backup from:",
+            lsBackup.timestamp
+          );
+          // Don't overwrite values we already recovered from sessionStorage
+          recoveredSettings = mergeSafelyPreservingValues(
+            recoveredSettings,
+            lsBackup.state
+          );
+          recoverySuccessful = true;
+        }
+      } catch (e) {
+        console.error(
+          "[SettingsStore] Error accessing localStorage backup:",
+          e
+        );
+      }
+
+      // Source 3: Try regular localStorage
+      try {
+        const lsSettings = safeGetFromLocalStorage("settings-storage");
+        if (
+          lsSettings &&
+          lsSettings.state &&
+          Object.keys(lsSettings.state).length > 0
+        ) {
+          console.log("[SettingsStore] Found settings in localStorage");
+          // Don't overwrite values we already recovered from other sources
+          recoveredSettings = mergeSafelyPreservingValues(
+            recoveredSettings,
+            lsSettings.state
+          );
+          recoverySuccessful = true;
+        }
+      } catch (e) {
+        console.error(
+          "[SettingsStore] Error accessing localStorage settings:",
+          e
+        );
+      }
+
+      // Source 4 (Web mode only): Try Firestore if we recovered a company name
+      if (isWebEnvironment() && recoveredSettings.companyName) {
+        try {
+          console.log(
+            `[SettingsStore] Attempting to recover from Firestore with company: ${recoveredSettings.companyName}`
+          );
+          const firestoreSettings = await loadFromFirestore(
+            recoveredSettings.companyName
+          );
+          if (firestoreSettings && Object.keys(firestoreSettings).length > 0) {
+            console.log("[SettingsStore] Found settings in Firestore");
+            // Don't overwrite values we already recovered from other sources
+            recoveredSettings = mergeSafelyPreservingValues(
+              recoveredSettings,
+              firestoreSettings
+            );
+            recoverySuccessful = true;
+          }
+        } catch (e) {
+          console.error("[SettingsStore] Error recovering from Firestore:", e);
+        }
+      }
+
+      // Source 5 (Desktop mode only): Try to find settings file
+      if (!isWebEnvironment() && recoveredSettings.dbPath) {
+        try {
+          const filePath = settingsFilePath(recoveredSettings.dbPath);
+          console.log(
+            `[SettingsStore] Checking for settings file at: ${filePath}`
+          );
+
+          const fileExists = await window.electron.fileExists(filePath);
+          if (fileExists) {
+            const fileContent = await window.electron.readFile(filePath);
+            const fileSettings = JSON.parse(fileContent) as PersistedSettings;
+            console.log("[SettingsStore] Found settings in file");
+
+            // Don't overwrite values we already recovered
+            recoveredSettings = mergeSafelyPreservingValues(
+              recoveredSettings,
+              fileSettings
+            );
+            recoverySuccessful = true;
+          }
+        } catch (e) {
+          console.error(
+            "[SettingsStore] Error recovering from settings file:",
+            e
+          );
+        }
+      }
+
+      if (recoverySuccessful) {
+        console.log(
+          "[SettingsStore] Recovery successful. Recovered values:",
+          Object.keys(recoveredSettings).filter(
+            (k) => recoveredSettings[k as keyof PersistedSettings]
+          )
+        );
+
+        // Apply recovered settings to current state, preserving any existing non-empty values
+        const currentState = get();
+        const mergedState = mergeSafelyPreservingValues(
+          currentState,
+          recoveredSettings
+        );
+
+        // Update state
+        set(mergedState);
+
+        // Set the company name for Firestore if it was recovered
+        if (recoveredSettings.companyName) {
+          setFirestoreCompanyName(recoveredSettings.companyName);
+        }
+
+        // Save to ensure recovery is persisted
+        await _saveSettings();
+
+        return true;
+      } else {
+        console.log(
+          "[SettingsStore] Recovery unsuccessful. No backup sources found."
+        );
+        return false;
+      }
     },
   };
 });

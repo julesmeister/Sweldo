@@ -113,11 +113,10 @@ export function useFirestoreSync({
   // Note: This does NOT run the createFirestoreInstances function here.
   const availableModelNames = useMemo(() => {
     return ALL_POTENTIAL_MODEL_NAMES.filter((name) => {
-      if (name === "shorts" && !employeeId) return false;
       if (name === "statistics" && !year) return false;
       return true;
     });
-  }, [employeeId, year]);
+  }, [year]);
 
   const createFirestoreInstances = useCallback((): SyncOperation[] => {
     const operations: SyncOperation[] = [];
@@ -199,12 +198,15 @@ export function useFirestoreSync({
       });
       console.log("[useFirestoreSync] Added SETTINGS model to operations.");
 
+      // Always include shorts, either for specific employee or for all employees
+      const shortsEmployeeId = employeeId || placeholderEmployeeId;
+      const shortsModel = createShortModel(dbPath, shortsEmployeeId);
+      operations.push({
+        name: "shorts",
+        instance: createShortsFirestoreInstance(shortsModel, shortsEmployeeId),
+      });
+
       if (employeeId) {
-        const shortsModel = createShortModel(dbPath, employeeId);
-        operations.push({
-          name: "shorts",
-          instance: createShortsFirestoreInstance(shortsModel, employeeId),
-        });
         console.log(
           "[useFirestoreSync] Added SHORTS model to operations (for employeeId:",
           employeeId,
@@ -212,7 +214,7 @@ export function useFirestoreSync({
         );
       } else {
         console.log(
-          "[useFirestoreSync] Skipping SHORTS model: employeeId not provided."
+          "[useFirestoreSync] Added SHORTS model with placeholder employeeId for bulk sync"
         );
       }
 
@@ -345,7 +347,7 @@ export function useFirestoreSync({
       setStatus("running");
       setProgress([]);
 
-      let allOperations = createFirestoreInstances();
+      let allOperations = await createFirestoreInstances();
       let activeOperations = allOperations;
 
       if (modelsToFilter && modelsToFilter.length > 0) {

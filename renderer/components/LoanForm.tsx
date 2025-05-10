@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { IoClose } from "react-icons/io5";
 import { Loan } from "@/renderer/model/loan";
+import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 
 interface LoanFormProps {
   onClose: () => void;
   onSave: (data: Loan) => void;
-  initialData?: Loan;
+  initialData?: Loan | null;
   position?: {
     top: number;
     left: number;
     showAbove?: boolean;
     caretLeft?: number;
   };
+  isWebMode?: boolean;
+  companyName?: string | null;
 }
 
 const LoanForm: React.FC<LoanFormProps> = ({
@@ -19,6 +22,8 @@ const LoanForm: React.FC<LoanFormProps> = ({
   onSave,
   initialData,
   position,
+  isWebMode = false,
+  companyName = null,
 }) => {
   const [amount, setAmount] = useState(initialData?.amount?.toString() || "");
   const [type, setType] = useState<
@@ -30,6 +35,7 @@ const LoanForm: React.FC<LoanFormProps> = ({
   const [term, setTerm] = useState(initialData?.term?.toString() || "12");
   const [reason, setReason] = useState(initialData?.reason || "");
   const [monthlyPayment, setMonthlyPayment] = useState<number>(0);
+  const { selectedEmployeeId } = useEmployeeStore();
 
   useEffect(() => {
     // Calculate monthly payment when amount, interest rate, or term changes
@@ -56,9 +62,14 @@ const LoanForm: React.FC<LoanFormProps> = ({
       today.getDate()
     );
 
+    if (!selectedEmployeeId) {
+      console.error("No employee selected");
+      return;
+    }
+
     const formData: Loan = {
       id: initialData?.id || crypto.randomUUID(),
-      employeeId: initialData?.employeeId || "", // This should be set by the parent component
+      employeeId: selectedEmployeeId,
       date: today,
       amount: parseFloat(amount),
       type,
@@ -107,6 +118,7 @@ const LoanForm: React.FC<LoanFormProps> = ({
       <div className="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg">
         <h2 className="text-lg font-semibold text-gray-100">
           {initialData ? "Edit Loan Application" : "Apply for Loan"}
+          {isWebMode && <span className="ml-2 text-xs text-blue-400">(Web Mode)</span>}
         </h2>
         <button
           onClick={onClose}
@@ -250,11 +262,11 @@ const LoanForm: React.FC<LoanFormProps> = ({
             Cancel
           </button>
           <button
-            type="submit"
+            type="button"
             onClick={handleSubmit}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
           >
-            {initialData ? "Update" : "Submit"} Application
+            {initialData ? "Update" : "Submit"} Loan
           </button>
         </div>
       </div>

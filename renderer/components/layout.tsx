@@ -231,28 +231,52 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     }
 
     // Skip if already initialized
-    if (
-      useAuthStore.getState().isAuthInitialized
-    ) {
+    if (useAuthStore.getState().isAuthInitialized) {
       // (removed debug log)
       return;
     }
 
-    // (removed debug log)
-    initializeAuth()
-      .then(() => {
-        // (removed debug log)
-        // After auth initialization, check if the user is actually authenticated
-        // and update the hasInitializedThisSession accordingly
-        if (useAuthStore.getState().isAuthenticated) {
-          setHasInitializedThisSession(true);
-          localStorage.setItem("sweldo_session_initialized", "true");
+    // Try to recover settings if company name is missing in web mode
+    const attemptSettingsRecovery = async () => {
+      if (isWebEnvironment() && !companyName) {
+        console.log("[Layout] Web mode detected with missing company name. Attempting settings recovery...");
+        try {
+          const success = await useSettingsStore.getState().recoverSettings();
+          if (success) {
+            console.log("[Layout] Successfully recovered settings");
+            // No need to set anything as useSettingsStore will update itself
+          } else {
+            console.log("[Layout] No settings backup found to recover");
+          }
+        } catch (error) {
+          console.error("[Layout] Settings recovery failed:", error);
         }
-      })
-      .catch((error) => {
-        console.error("[Layout] Error calling initializeAuth:", error);
-      });
-  }, [isInitialized, dbPath, initializeAuth]);
+      }
+    };
+
+    // Attempt recovery before auth initialization
+    attemptSettingsRecovery().then(() => {
+      // (removed debug log)
+      initializeAuth()
+        .then(() => {
+          // (removed debug log)
+          // After auth initialization, check if the user is actually authenticated
+          // and update the hasInitializedThisSession accordingly
+          if (useAuthStore.getState().isAuthenticated) {
+            setHasInitializedThisSession(true);
+            localStorage.setItem("sweldo_session_initialized", "true");
+          }
+        })
+        .catch((error) => {
+          console.error("[Layout] Error initializing auth:", error);
+        });
+    });
+  }, [
+    isInitialized,
+    dbPath,
+    companyName,
+    initializeAuth,
+  ]);
 
   const [lastActivity, setLastActivity] = useState(Date.now());
 

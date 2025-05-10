@@ -174,4 +174,80 @@ The revised implementation:
 4. Uses flexible date range overlapping for filtering
 5. Provides detailed logging throughout the process
 
-These changes have successfully resolved the issue of payrolls not displaying in web mode, while maintaining compatibility with the desktop implementation. 
+These changes have successfully resolved the issue of payrolls not displaying in web mode, while maintaining compatibility with the desktop implementation.
+
+## Cash Advances Web Mode Issues (Solved)
+
+### Issues
+
+1. **CSV to JSON Migration Missing**
+   - Cash advances weren't appearing in web mode because they hadn't been migrated from CSV to JSON format
+   - Unlike some other data types, cash advances are stored in employee-specific folders (`SweldoDB/cashAdvances/{employeeId}`)
+   - There was no migration function in `cashAdvance.ts` similar to other modules
+
+2. **Firestore Sync and Retrieval Path Mismatch**
+   - Even after migration, there was a mismatch between how data was synced to Firestore and how it was retrieved
+   - The document ID format used for storing was different from the one used for retrieving
+   - The `fetchDocument` and `queryCollection` calls in `loadCashAdvancesFirestore` were using incorrect parameters
+
+### Solutions
+
+1. **Added CSV to JSON Migration**
+   - Added `migrateCsvToJson` function to `cashAdvance.ts` following the pattern in `employee.ts`
+   - Added a migration button to `DataMigrationSettings.tsx`
+   - Properly handled the employee-specific folder structure
+
+2. **Fixed Firestore Integration**
+   - Created a consistent document ID format using `createCashAdvanceDocId(employeeId, year, month)`
+   - Updated `syncToFirestore` to correctly navigate employee-specific folders
+   - Fixed `loadCashAdvancesFirestore` to use the same document ID format for retrieval
+   - Added proper type handling for Firestore query results
+
+3. **Improved Debugging**
+   - Added detailed debugging logs to track the flow of data
+   - Made log messages more descriptive to pinpoint issues
+
+### Pattern for Other Modules
+
+This pattern can be reused for other modules with similar issues (loans, shorts):
+
+1. **CSV to JSON Migration**:
+   ```typescript
+   export async function migrateCsvToJson(
+     dbPath: string,
+     onProgress?: (message: string) => void
+   ): Promise<void> {
+     // Check for the module's specific folder structure
+     // Find all relevant CSV files
+     // Convert each CSV file to JSON format
+     // Save as corresponding JSON files
+   }
+   ```
+
+2. **Document ID Format**:
+   ```typescript
+   const createDocumentId = (
+     employeeId: string, 
+     year: number, 
+     month: number
+   ): string => {
+     return `${employeeId}_${year}_${month}`;
+   };
+   ```
+
+3. **Consistent Firestore Path Structure**:
+   - Use the same path structure and document ID format for both storing and retrieving
+   - Fix parameters in `fetchDocument` and `queryCollection` calls
+   - Handle potential type issues with Firestore data
+
+4. **Data Migration Settings**:
+   ```typescript
+   const handleModuleCsvToJsonMigration = useCallback(async () => {
+     // Check for dbPath
+     // Set status to running
+     // Call migrateCsvToJson
+     // Handle success/error
+   }, [dbPath, migrationStatus]);
+   ```
+
+By following this pattern consistently across modules, we ensure that all data types will work correctly in both desktop and web modes. 

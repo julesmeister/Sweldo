@@ -133,43 +133,60 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
 - Determined the exact dimensions needed for the DateRangePicker dialog (669px width) to perfectly fit the calendar without extra whitespace
 - Made the entire DateRangePicker clickable rather than just the individual date inputs
 - Fixed issues with z-index by using portal rendering directly to the document body
+- Fixed re-rendering issue with company name input field in settings.tsx by implementing a pattern that:
+  - Uses a local state variable for immediate typing feedback
+  - Debounces updates to the global store
+  - Only triggers store updates when typing has stopped for 500ms
+  - Prevents the entire settings page from re-initializing on every keystroke
+- Implemented shorts sync functionality for Firestore in both per-employee and bulk modes:
+  - Added proper integration with useFirestoreSync.ts hook
+  - Created bulk sync capability that processes all active employees' shorts
+  - Added detailed progress reporting in the UI
+  - Implemented robust error handling with per-employee isolation
 
-## Recent Work (June 3, 2025)
+## Recent Work (June 2024)
 
-### DateRangePicker and PayrollList Web Mode Improvements
+### Shorts Sync Enhancement and Bug Fixes
 
-1. **DateRangePicker Component**
-   - Removed the date display text above the Apply button by adding a CSS override
-   - Added styling to improve the appearance of the dialog including better border styling
-   - The component now has a cleaner, more streamlined appearance
+1. **Fixed Linter Error in ShortModel**
+   - Added `getDbPath()` method to the `ShortModel` class in `shorts.ts`
+   - This fixed the linter error in `shorts_firestore.ts` where the model was trying to access a non-existent method
+   - The implementation follows the pattern used in other model classes like `loan_firestore.ts`
 
-2. **PayrollList Web Mode Fixes**
-   - Fixed issues with PayrollList not displaying payrolls in web mode
-   - Improved the Firestore document querying logic to correctly find and load payroll documents
-   - Added better data validation and defensive coding to handle Firestore document structures
-   - Enhanced date handling to correctly convert string dates to Date objects
-   - Implemented more detailed logging for easier troubleshooting
-   - Created detailed documentation in `memory-bank/payroll-component.md` and `memory-bank/web-mode-issues.md`
+2. **Enhanced Shorts Sync UI in Database Management**
+   - Made it clear that employee selection for shorts sync is optional
+   - Added explanatory text to indicate that shorts will sync for all employees by default
+   - Added visual feedback in the model selection UI showing which employee's shorts data will be synced
+   - Improved the shorts sync progress display to show the employee being processed
 
-3. **Firestore Integration**
-   - Identified and documented critical Firestore document structure for payroll data
-   - Added client-side filtering for payroll documents when Firestore doesn't support wildcard queries
-   - Implemented more robust error handling for Firestore operations
-   - Established best practices for future Firestore-related changes
+3. **Improved useFirestoreSync Hook for Shorts**
+   - Modified the hook to always include shorts in the available models list regardless of employee selection
+   - Simplified the code that creates the shorts model instance
+   - Used a consistent approach with a placeholder ID (`__SYNC_ALL__`) when no specific employee is selected
+   - Enhanced logging during shorts sync operations to provide clearer feedback on what's happening
 
-### Next Steps
+These improvements make the shorts sync functionality more robust and user-friendly, with clearer indications of what data is being synced and better error handling during the sync process.
 
-1. **Caching for Web Mode**
-   - Consider implementing client-side caching to reduce Firestore reads
-   - Add IndexedDB support for frequently accessed data like employees and payrolls
+### CompensationDialog UI Improvements
 
-2. **Testing Both Environments**
-   - Ensure all future changes are tested in both desktop (Nextron) and web modes
-   - Create a testing checklist for dual-environment validation
+1. **Fixed Clear Button Alignment Issues**
+   - Replaced text character (×) with CSS pseudo-elements for perfect centering
+   - Used ::before and ::after elements with absolute positioning and transforms
+   - Created a cross shape with consistent width and height regardless of font
+   - Ensured the clear button is perfectly centered in its circular container
 
-3. **Debug Mode**
-   - Add a proper debug mode switch for easier troubleshooting in production
-   - Consider adding a debug panel showing current environment, data sources, and query status
+2. **Improved Hover State Visibility**
+   - Enhanced contrast by using white color for the × on hover
+   - Used a darker background color for better visibility
+   - Fixed the issue where the × would disappear on hover due to poor contrast
+
+3. **Fixed Dropdown Select Visibility Issues**
+   - Added explicit styling for select options with proper contrast
+   - Set dark background with white text for better readability
+   - Added padding and highlight styles for hover/focus states
+   - Ensured consistent appearance across all dropdown elements
+
+These UI improvements enhance accessibility and user experience in the CompensationDialog component, making it more usable and visually consistent.
 
 ## Next Steps
 1. Test the react-date-range solution in web mode to ensure it works correctly
@@ -235,3 +252,66 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
   - Applying precise dimensions (669px width) to perfectly fit the calendar content
   - Implementing a modern UI with a proper month layout and selection controls
   - Creating a non-modal experience that works consistently across various parent containers
+
+## Current Focus (May 2024)
+
+### Cash Advances Web Mode Implementation
+
+We've successfully implemented the CSV to JSON migration and Firestore sync for cash advances. This was necessary because:
+
+1. The cash advances weren't showing up in web mode since they hadn't been migrated from CSV to JSON format
+2. The migrated data wasn't being synced to Firestore correctly
+3. The path structure in Firestore wasn't matching the path structure used for retrieval
+
+Key insights from the implementation:
+
+- **Employee-specific folder structure**: Cash advances are stored in an employee-specific folder structure (`SweldoDB/cashAdvances/{employeeId}`), unlike some other data types
+- **Migration pattern**: We created a `migrateCsvToJson` function in `cashAdvance.ts` that follows the pattern used in other modules like `employee.ts`
+- **Firestore sync**: Updated `syncToFirestore` in `cashAdvance_firestore.ts` to properly navigate the employee-specific structure
+- **Document ID format**: Established a consistent document ID format using `createCashAdvanceDocId(employeeId, year, month)` for both storing and retrieving documents
+
+This pattern should be used for other modules that have similar structures (like loans, shorts). The main steps are:
+
+1. Add a `migrateCsvToJson` function to the model file (e.g., `loan.ts`)
+2. Add a migration button to `DataMigrationSettings.tsx`
+3. Update the Firestore sync functions to correctly navigate any module-specific folder structures
+4. Ensure consistent document ID formats between storing and retrieving documents
+
+### Shorts Sync Implementation
+
+We've successfully implemented Firestore sync for the shorts module following the pattern established with cash advances. This was necessary because:
+
+1. The shorts module lacked integration with Firestore sync functionality
+2. Shorts have an employee-specific structure that requires special handling
+3. A more flexible approach was needed to allow syncing shorts for either specific employees or all employees
+
+Key insights from the implementation:
+
+- **Employee-specific structure**: Shorts are stored per employee (`SweldoDB/shorts/{employeeId}`), requiring special handling for sync operations
+- **Bulk sync pattern**: We implemented a new pattern for bulk syncing that:
+  - Loads all employees first
+  - Filters to active employees only
+  - Creates sync instances for each employee's shorts
+  - Processes them sequentially with isolated error handling
+  - Provides detailed progress reporting to the UI
+- **UI enhancements**: Added an employee selector dropdown to the database management UI that enables:
+  - Syncing shorts for all active employees (default)
+  - Syncing shorts for a specific employee (when selected)
+  - Clear visual feedback on sync progress and status
+
+This implementation serves as a template for other employee-specific data modules like loans that have similar folder structures and requirements.
+
+### Next Steps
+
+1. Apply the same pattern to implement Firestore sync for other modules:
+   - Loans (next priority)
+   
+2. Test all sync functionality thoroughly:
+   - Test uploading and downloading with both single-employee and bulk modes
+   - Verify that all data is correctly synced between devices
+
+3. Document the bulk sync pattern for future reference
+
+2. Test web mode functionality for each implemented module
+
+3. Update documentation as we extend this pattern to other modules

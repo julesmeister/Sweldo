@@ -147,8 +147,6 @@ export default function DateSelector() {
                           : "text-gray-700 hover:bg-gray-50"
                       }`}
                       onClick={() => {
-                        console.log("Clicked month:", month);
-                        console.log("Index:", index);
                         setSelectedMonth(index);
                       }}
                     >

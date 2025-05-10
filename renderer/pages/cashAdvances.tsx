@@ -57,45 +57,59 @@ export default function CashAdvancesPage() {
     }) => {
       if (!selectedEmployeeId) {
         setEmployee(null);
+        console.log("[DEBUG] fetchCashAdvancesAndEmployee - No selectedEmployeeId, returning null");
         return null;
       }
 
       const { year, month, dbPath: hookDbPath, companyName: hookCompanyName } = params;
+      console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Starting fetch for employee: ${selectedEmployeeId}, year: ${year}, month: ${month}`);
+      console.log(`[DEBUG] fetchCashAdvancesAndEmployee - isWebEnvironment: ${isWebEnvironment()}, dbPath: ${hookDbPath}, companyName: ${hookCompanyName}`);
+
       let advances: CashAdvance[] = [];
       let emp: Employee | null = null;
 
       try {
         if (isWebEnvironment()) {
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - In web mode`);
           if (!hookCompanyName) {
+            console.error("[DEBUG] fetchCashAdvancesAndEmployee - Company name not available for web mode");
             toast.error("Company name not available for web mode.");
             throw new Error("Company name not available for web mode.");
           }
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Calling loadCashAdvancesFirestore with companyName: ${hookCompanyName}`);
           advances = await loadCashAdvancesFirestore(
             selectedEmployeeId,
             month + 1,
             year,
             hookCompanyName
           );
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Loaded ${advances.length} cash advances`);
         } else {
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - In desktop mode`);
           if (!hookDbPath) {
+            console.error("[DEBUG] fetchCashAdvancesAndEmployee - Database path not available for desktop mode");
             toast.error("Database path not available for desktop mode.");
             throw new Error("Database path not available for desktop mode.");
           }
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Creating CashAdvanceModel with dbPath: ${hookDbPath}`);
           const cashAdvanceModel = createCashAdvanceModel(
             hookDbPath,
             selectedEmployeeId,
             month + 1,
             year
           );
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Calling cashAdvanceModel.loadCashAdvances`);
           advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId);
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Loaded ${advances.length} cash advances`);
 
           const employeeModel = createEmployeeModel(hookDbPath);
           emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
           setEmployee(emp);
         }
+        console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Successfully completed with ${advances.length} advances`);
         return advances;
       } catch (error) {
-        console.error("Error loading cash advances data:", error);
+        console.error("[DEBUG] fetchCashAdvancesAndEmployee - Error loading cash advances data:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to load cash advances"
         );

@@ -86,18 +86,10 @@ export async function loadActiveEmployeesFirestore(
       .where("companyName")
       .equals(companyName)
       .toArray();
-    console.log(
-      `[loadActiveEmployeesFirestore] Attempting cache lookup for company: ${companyName}, found ${cachedRecords.length} record(s)`
-    );
+
     if (cachedRecords.length > 0) {
-      console.log(
-        `[loadActiveEmployeesFirestore] Cache hit for ${companyName}, returning ${cachedRecords.length} record(s)`
-      );
       return cachedRecords.map((rec) => rec.data);
     }
-    console.log(
-      `[loadActiveEmployeesFirestore] Cache miss for ${companyName}, querying Firestore`
-    );
 
     // Cache miss; query active employees from Firestore
     const activeEmployees = await queryCollection<FirestoreEmployee>(
@@ -125,9 +117,6 @@ export async function loadActiveEmployeesFirestore(
       data: emp,
     }));
     await db.employees.bulkPut(records);
-    console.log(
-      `[loadActiveEmployeesFirestore] Stored ${records.length} record(s) in cache for ${companyName}`
-    );
 
     return employeesList;
   } catch (error) {

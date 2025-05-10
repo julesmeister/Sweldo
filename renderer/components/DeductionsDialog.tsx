@@ -4,6 +4,9 @@ import { CashAdvance } from "@/renderer/model/cashAdvance";
 import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
 import { Short } from "@/renderer/model/shorts";
 import { createShortModel } from "@/renderer/model/shorts";
+import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
+import { loadCashAdvancesFirestore } from "@/renderer/model/cashAdvance_firestore";
+import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
 
 interface Deductions {
   sss: number;
@@ -60,21 +63,14 @@ const MemoizedCashAdvanceItem = React.memo(
     onSelect: (id: string, checked: boolean) => void;
     onAmountChange: (id: string, amount: number) => void;
   }) => {
-    console.log("MemoizedCashAdvanceItem rendered:", {
-      id: advance.id,
-      isSelected,
-      deductionAmount,
-      isCalculating,
-    });
 
     return (
       <div className="w-full">
         <div
-          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${
-            isSelected
-              ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
-              : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
-          }`}
+          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
+            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+            }`}
         >
           <div className="flex justify-between items-start">
             <div className="flex items-center space-x-2">
@@ -86,7 +82,7 @@ const MemoizedCashAdvanceItem = React.memo(
                   onChange={(e) => onSelect(advance.id, e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" ></div>
               </label>
               <label
                 htmlFor={`advance-${advance.id}`}
@@ -121,9 +117,8 @@ const MemoizedCashAdvanceItem = React.memo(
                     onAmountChange(advance.id, parseFloat(e.target.value) || 0)
                   }
                   className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
-                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${
-                  isCalculating ? "opacity-50" : ""
-                }`}
+                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                    }`}
                   placeholder="Enter deduction amount"
                   disabled={isCalculating}
                 />
@@ -147,20 +142,6 @@ const MemoizedCashAdvanceItem = React.memo(
       prevProps.advance.id !== nextProps.advance.id ||
       prevProps.advance.remainingUnpaid !== nextProps.advance.remainingUnpaid;
 
-    console.log("MemoizedCashAdvanceItem memo comparison:", {
-      id: prevProps.advance.id,
-      shouldUpdate,
-      changes: {
-        isSelected: prevProps.isSelected !== nextProps.isSelected,
-        deductionAmount:
-          prevProps.deductionAmount !== nextProps.deductionAmount,
-        isCalculating: prevProps.isCalculating !== nextProps.isCalculating,
-        id: prevProps.advance.id !== nextProps.advance.id,
-        remainingUnpaid:
-          prevProps.advance.remainingUnpaid !==
-          nextProps.advance.remainingUnpaid,
-      },
-    });
 
     return !shouldUpdate;
   }
@@ -192,11 +173,10 @@ const MemoizedShortItem = React.memo(
     return (
       <div className="w-full">
         <div
-          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${
-            isSelected
-              ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
-              : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
-          }`}
+          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
+            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+            }`}
         >
           <div className="flex justify-between items-start">
             <div className="flex items-center space-x-2">
@@ -208,7 +188,11 @@ const MemoizedShortItem = React.memo(
                   onChange={(e) => onSelect(short.id, e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                  style={{
+                    backgroundColor: isSelected ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
+                  }}
+                ></div>
               </label>
               <label
                 htmlFor={`short-${short.id}`}
@@ -243,9 +227,8 @@ const MemoizedShortItem = React.memo(
                     onAmountChange(short.id, parseFloat(e.target.value) || 0)
                   }
                   className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
-                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${
-                  isCalculating ? "opacity-50" : ""
-                }`}
+                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                    }`}
                   placeholder="Enter deduction amount"
                   disabled={isCalculating}
                 />
@@ -388,17 +371,36 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
         // Load cash advances from all relevant months
         const allAdvances: CashAdvance[] = [];
-        for (const monthKey of months) {
-          const [year, month] = monthKey.split("_").map(Number);
-          const cashAdvanceModel = createCashAdvanceModel(
-            dbPath,
-            employeeId,
-            month,
-            year
-          );
+        const isWeb = isWebEnvironment();
 
-          const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
-          allAdvances.push(...advances);
+        if (isWeb) {
+          const companyName = await getCompanyName();
+          console.log(`[DeductionsDialog] Web mode: Loading advances for ${companyName}`);
+
+          for (const monthKey of months) {
+            const [year, month] = monthKey.split("_").map(Number);
+            const advances = await loadCashAdvancesFirestore(
+              employeeId,
+              month,
+              year,
+              companyName
+            );
+            allAdvances.push(...advances);
+          }
+        } else {
+          // Desktop mode - use existing implementation
+          for (const monthKey of months) {
+            const [year, month] = monthKey.split("_").map(Number);
+            const cashAdvanceModel = createCashAdvanceModel(
+              dbPath,
+              employeeId,
+              month,
+              year
+            );
+
+            const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+            allAdvances.push(...advances);
+          }
         }
 
         // Filter advances by date range
@@ -476,11 +478,28 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
         // Load shorts from all relevant months
         const allShorts: Short[] = [];
-        for (const { month, year } of months) {
-          const shortModel = createShortModel(dbPath, employeeId, month, year);
+        const isWeb = isWebEnvironment();
 
-          const shorts = await shortModel.loadShorts(employeeId);
-          allShorts.push(...shorts);
+        if (isWeb) {
+          const companyName = await getCompanyName();
+          console.log(`[DeductionsDialog] Web mode: Loading shorts for ${companyName}`);
+
+          for (const { month, year } of months) {
+            const shorts = await loadShortsFirestore(
+              employeeId,
+              month,
+              year,
+              companyName
+            );
+            allShorts.push(...shorts);
+          }
+        } else {
+          // Desktop mode - use existing implementation
+          for (const { month, year } of months) {
+            const shortModel = createShortModel(dbPath, employeeId, month, year);
+            const shorts = await shortModel.loadShorts(employeeId);
+            allShorts.push(...shorts);
+          }
         }
 
         // Filter unpaid shorts
@@ -648,6 +667,8 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
         currentDate.setMonth(currentDate.getMonth() + 1);
       }
 
+      const isWeb = isWebEnvironment();
+
       // Update each selected short in its respective month
       for (const shortId of selectedShorts) {
         const short = unpaidShorts.find((s) => s.id === shortId);
@@ -667,13 +688,24 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           const month = shortDate.getMonth() + 1;
           const year = shortDate.getFullYear();
 
-          // Update the short in its correct month
-          const shortModel = createShortModel(dbPath, employeeId, month, year);
-          await shortModel.updateShort({
-            ...short,
-            remainingUnpaid: newRemainingUnpaid,
-            status: newRemainingUnpaid <= 0 ? "Paid" : "Unpaid",
-          });
+          if (isWeb) {
+            const companyName = await getCompanyName();
+            const { updateShortFirestore } = await import("@/renderer/model/shorts_firestore");
+
+            await updateShortFirestore({
+              ...short,
+              remainingUnpaid: newRemainingUnpaid,
+              status: newRemainingUnpaid <= 0 ? "Paid" : "Unpaid",
+            }, month, year, companyName);
+          } else {
+            // Update the short in its correct month
+            const shortModel = createShortModel(dbPath, employeeId, month, year);
+            await shortModel.updateShort({
+              ...short,
+              remainingUnpaid: newRemainingUnpaid,
+              status: newRemainingUnpaid <= 0 ? "Paid" : "Unpaid",
+            });
+          }
         }
       }
 
@@ -726,13 +758,13 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           "cashAdvanceDeductions" | "shortDeductions"
         >
       ) =>
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = parseFloat(e.target.value) || 0;
-        setFormData((prev) => ({
-          ...prev,
-          [field]: value,
-        }));
-      };
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+          const value = parseFloat(e.target.value) || 0;
+          setFormData((prev) => ({
+            ...prev,
+            [field]: value,
+          }));
+        };
 
     if (!isOpen) return null;
 
@@ -791,7 +823,11 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                         }
                         className="sr-only peer"
                       />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                        style={{
+                          backgroundColor: formData.enableSss ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
+                        }}
+                      ></div>
                     </label>
                   </div>
                   <div className="relative rounded-lg">
@@ -805,11 +841,10 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                       step="0.01"
                       value={formData.enableSss ? formData.sss : 0}
                       onChange={handleInputChange("sss")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                        !formData.enableSss
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
+                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enableSss
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                        }`}
                       placeholder="0.00"
                       disabled={!formData.enableSss}
                     />
@@ -838,7 +873,11 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                         }
                         className="sr-only peer"
                       />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                        style={{
+                          backgroundColor: formData.enablePhilHealth ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
+                        }}
+                      ></div>
                     </label>
                   </div>
                   <div className="relative rounded-lg">
@@ -854,11 +893,10 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                         formData.enablePhilHealth ? formData.philHealth : 0
                       }
                       onChange={handleInputChange("philHealth")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                        !formData.enablePhilHealth
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
+                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePhilHealth
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                        }`}
                       placeholder="0.00"
                       disabled={!formData.enablePhilHealth}
                     />
@@ -887,7 +925,11 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                         }
                         className="sr-only peer"
                       />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                        style={{
+                          backgroundColor: formData.enablePagIbig ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
+                        }}
+                      ></div>
                     </label>
                   </div>
                   <div className="relative rounded-lg">
@@ -901,11 +943,10 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                       step="0.01"
                       value={formData.enablePagIbig ? formData.pagIbig : 0}
                       onChange={handleInputChange("pagIbig")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                        !formData.enablePagIbig
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
+                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePagIbig
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                        }`}
                       placeholder="0.00"
                       disabled={!formData.enablePagIbig}
                     />

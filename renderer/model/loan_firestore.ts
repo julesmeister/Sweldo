@@ -25,6 +25,7 @@ interface LoanFirestoreData {
     year: number;
     month: number;
     lastModified: string;
+    docId?: string;
   };
   loans: {
     [id: string]: {
@@ -51,7 +52,43 @@ const createLoanDocId = (
   year: number,
   month: number
 ): string => {
-  return createTimeBasedDocId(employeeId, year, month);
+  return `loan_${employeeId}_${year}_${month}`;
+};
+
+/**
+ * Helper function to check if a document ID matches the loan pattern for a given employee
+ */
+const isEmployeeLoanDoc = (docId: string, employeeId: string): boolean => {
+  // Check if docId matches pattern: loan_{employeeId}_{year}_{month}
+  const pattern = new RegExp(`^loan_${employeeId}_\\d+_\\d+$`);
+  return pattern.test(docId);
+};
+
+/**
+ * Parse date strings from Firestore to Date objects
+ * This handles different date formats consistently
+ */
+const parseFirestoreDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+
+  try {
+    // Handle ISO strings
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+
+    // Handle timestamp format
+    if (typeof dateStr === "object" && dateStr.seconds) {
+      return new Date(dateStr.seconds * 1000);
+    }
+
+    // Default to current date if parsing fails
+    return new Date();
+  } catch (error) {
+    console.error(`[LoanFirestore] Error parsing date: ${dateStr}`, error);
+    return new Date();
+  }
 };
 
 /**
@@ -64,22 +101,33 @@ export async function loadLoansFirestore(
   companyName: string
 ): Promise<Loan[]> {
   try {
+    console.log(
+      `[LoanFirestore] Loading loans for employee ${employeeId}, ${year}-${month} in company ${companyName}`
+    );
+
+    // First try to load the specific month's document
     const docId = createLoanDocId(employeeId, year, month);
-    const data = await fetchDocument<LoanFirestoreData>(
+    console.log(
+      `[LoanFirestore] Attempting to fetch document with ID: ${docId}`
+    );
+
+    let data = await fetchDocument<LoanFirestoreData>(
       "loans",
       docId,
       companyName
     );
 
-    if (!data || !data.loans) {
-      return [];
-    }
+    // If the specific document is found, extract loans
+    if (data && data.loans) {
+      console.log(
+        `[LoanFirestore] Found specific document for ${year}-${month}`
+      );
 
     // Convert to Loan array
     const loans: Loan[] = Object.entries(data.loans).map(([id, loan]) => ({
       id,
       employeeId: loan.employeeId,
-      date: new Date(loan.date),
+        date: parseFirestoreDate(loan.date),
       amount: loan.amount,
       type: loan.type,
       status: loan.status,
@@ -87,11 +135,81 @@ export async function loadLoansFirestore(
       term: loan.term,
       monthlyPayment: loan.monthlyPayment,
       remainingBalance: loan.remainingBalance,
-      nextPaymentDate: new Date(loan.nextPaymentDate),
+        nextPaymentDate: parseFirestoreDate(loan.nextPaymentDate),
       reason: loan.reason,
     }));
 
+      console.log(
+        `[LoanFirestore] Returning ${loans.length} loans from specific document`
+      );
     return loans;
+    }
+
+    // If specific document is not found, query all documents and filter by employee
+    console.log(
+      `[LoanFirestore] Specific document not found. Querying all loan documents...`
+    );
+
+    // Query all documents in the loans collection
+    const documents = await queryCollection<LoanFirestoreData>(
+      "loans",
+      [],
+      companyName
+    );
+
+    console.log(
+      `[LoanFirestore] Found ${documents.length} total loan documents`
+    );
+
+    // Filter documents for the specific employee
+    const employeeLoans: Loan[] = [];
+
+    for (const doc of documents) {
+      // Skip documents that don't have loans data
+      if (!doc.loans) continue;
+
+      // Extract document ID to check if it belongs to this employee
+      const docIdParts = doc.meta?.docId?.split("_");
+      const isEmployeeDoc =
+        docIdParts && docIdParts.length > 1 && docIdParts[1] === employeeId;
+
+      // If document ID format is unknown, check using regex pattern
+      const isMatchingDoc = doc.meta?.docId
+        ? isEmployeeLoanDoc(doc.meta.docId, employeeId)
+        : isEmployeeDoc;
+
+      if (isMatchingDoc || doc.meta?.employeeId === employeeId) {
+        // Extract loans for this employee from the document
+        Object.entries(doc.loans).forEach(([id, loan]) => {
+          // Check if the loan is for the requested month/year
+          const loanDate = parseFirestoreDate(loan.date);
+          const loanMonth = loanDate.getMonth() + 1; // Convert to 1-based
+          const loanYear = loanDate.getFullYear();
+
+          if (loanYear === year && loanMonth === month) {
+            employeeLoans.push({
+              id,
+              employeeId: loan.employeeId,
+              date: loanDate,
+              amount: loan.amount,
+              type: loan.type,
+              status: loan.status,
+              interestRate: loan.interestRate,
+              term: loan.term,
+              monthlyPayment: loan.monthlyPayment,
+              remainingBalance: loan.remainingBalance,
+              nextPaymentDate: parseFirestoreDate(loan.nextPaymentDate),
+              reason: loan.reason,
+            });
+          }
+        });
+      }
+    }
+
+    console.log(
+      `[LoanFirestore] Found ${employeeLoans.length} loans for employee ${employeeId} in ${year}-${month} after filtering`
+    );
+    return employeeLoans;
   } catch (error) {
     console.error(
       `[LoanFirestore] Error loading loans from Firestore for emp ${employeeId}, ${year}-${month}:`,
@@ -113,6 +231,10 @@ export async function createLoanFirestore(
     const month = loan.date.getMonth() + 1;
     const docId = createLoanDocId(loan.employeeId, year, month);
 
+    console.log(
+      `[LoanFirestore] Creating/updating loan with ID ${loan.id} in document ${docId}`
+    );
+
     // First check if document exists
     const existingDoc = await fetchDocument<LoanFirestoreData>(
       "loans",
@@ -128,6 +250,7 @@ export async function createLoanFirestore(
           year,
           month,
           lastModified: new Date().toISOString(),
+          docId: docId, // Include the docId in meta for easier retrieval
         },
         loans: {
           [loan.id]: {
@@ -146,9 +269,12 @@ export async function createLoanFirestore(
         },
       };
 
+      console.log(`[LoanFirestore] Creating new loan document: ${docId}`);
       await saveDocument("loans", docId, newDoc, companyName);
     } else {
       // Update existing document to add the new loan
+      console.log(`[LoanFirestore] Updating existing loan document: ${docId}`);
+
       const loanData = {
         [`loans.${loan.id}`]: {
           employeeId: loan.employeeId,
@@ -166,8 +292,14 @@ export async function createLoanFirestore(
         "meta.lastModified": new Date().toISOString(),
       };
 
+      // Ensure docId is included in meta
+      if (!existingDoc.meta?.docId) {
+        loanData["meta.docId"] = docId;
+      }
+
       await updateDocument("loans", docId, loanData, companyName);
     }
+    console.log(`[LoanFirestore] Successfully saved loan with ID ${loan.id}`);
   } catch (error) {
     console.error(
       `[LoanFirestore] Error creating/updating loan in Firestore (ID: ${loan.id}):`,

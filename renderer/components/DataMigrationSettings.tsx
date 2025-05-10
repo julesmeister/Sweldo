@@ -13,6 +13,7 @@ import { migrateCsvToJson as migrateEmployeeCsvToJson } from "@/renderer/model/e
 import { migrateCsvToJson as migrateHolidayCsvToJson } from "@/renderer/model/holiday";
 import { migrateCsvToJson as migrateLeaveCsvToJson } from "@/renderer/model/leave";
 import { migrateCsvToJson as migrateLoanCsvToJson } from "@/renderer/model/loan";
+import { migrateCsvToJson as migrateCashAdvanceCsvToJson } from "@/renderer/model/cashAdvance";
 import { MissingTimeModel } from "@/renderer/model/missingTime";
 import { Payroll } from "@/renderer/model/payroll";
 import { RoleModelImpl } from "@/renderer/model/role";
@@ -258,6 +259,15 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
   const [shortsErrorDetails, setShortsErrorDetails] = useState<string | null>(
     null
   );
+
+  const [cashAdvanceMigrationStatus, setCashAdvanceMigrationStatus] =
+    useState<MigrationStatus>("idle");
+  const [cashAdvanceProgressMessages, setCashAdvanceProgressMessages] = useState<
+    string[]
+  >([]);
+  const [cashAdvanceErrorDetails, setCashAdvanceErrorDetails] = useState<
+    string | null
+  >(null);
 
   const handleMigration = useCallback(async () => {
     if (!dbPath) {
@@ -734,6 +744,42 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     }
   }, [dbPath, shortsMigrationStatus]);
 
+  const handleCashAdvanceCsvToJsonMigration = useCallback(async () => {
+    if (!dbPath) {
+      toast.error("Database path is not set. Please configure it first.");
+      return;
+    }
+    if (cashAdvanceMigrationStatus === "running") {
+      toast.info("Cash Advance CSV to JSON migration is already in progress.");
+      return;
+    }
+
+    setCashAdvanceMigrationStatus("running");
+    setCashAdvanceProgressMessages(["Starting Cash Advance CSV to JSON migration..."]);
+    setCashAdvanceErrorDetails(null);
+
+    try {
+      await migrateCashAdvanceCsvToJson(dbPath, (message) => {
+        setCashAdvanceProgressMessages((prev) => [...prev, message]);
+      });
+      setCashAdvanceMigrationStatus("success");
+      toast.success("Cash Advance CSV to JSON migration completed successfully!");
+      setCashAdvanceProgressMessages((prev) => [
+        ...prev,
+        "Cash Advance CSV to JSON migration completed successfully!",
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCashAdvanceMigrationStatus("error");
+      setCashAdvanceErrorDetails(message);
+      toast.error(`Cash Advance CSV to JSON migration failed: ${message}`);
+      setCashAdvanceProgressMessages((prev) => [
+        ...prev,
+        `Migration failed: ${message}`,
+      ]);
+    }
+  }, [dbPath, cashAdvanceMigrationStatus]);
+
   const clearAlternativesProgressMessages = useCallback(() => {
     setProgressMessages([]);
   }, []);
@@ -782,6 +828,10 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     setShortsProgressMessages([]);
   }, []);
 
+  const clearCashAdvanceProgressMessages = useCallback(() => {
+    setCashAdvanceProgressMessages([]);
+  }, []);
+
   // Function to check if any migration logs should be shown
   const shouldShowMigrationLogs = () =>
     jsonMigrationStatus !== "idle" ||
@@ -790,6 +840,7 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     employeeMigrationStatus !== "idle" ||
     leaveMigrationStatus !== "idle" ||
     loanMigrationStatus !== "idle" ||
+    cashAdvanceMigrationStatus !== "idle" ||
     missingTimeMigrationStatus !== "idle" ||
     payrollMigrationStatus !== "idle" ||
     roleMigrationStatus !== "idle" ||
@@ -801,6 +852,7 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     employeeProgressMessages.length > 0 ||
     leaveProgressMessages.length > 0 ||
     loanProgressMessages.length > 0 ||
+    cashAdvanceProgressMessages.length > 0 ||
     missingTimeProgressMessages.length > 0 ||
     payrollProgressMessages.length > 0 ||
     roleProgressMessages.length > 0 ||
@@ -833,11 +885,10 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
           onClick={handleMigration}
           disabled={status === "running"}
           className={`inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent rounded-lg text-sm font-medium text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow
-                ${
-                  status === "running"
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }
+                ${status === "running"
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+            }
               `}
         >
           {status === "running" ? (
@@ -875,40 +926,40 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
         {(status === "running" ||
           status === "success" ||
           status === "error") && (
-          <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="font-medium text-gray-700">Migration Log:</h4>
-              <button
-                onClick={clearAlternativesProgressMessages}
-                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
-                title="Clear log"
-              >
-                <IoTrashOutline className="w-4 h-4" />
-              </button>
+            <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-medium text-gray-700">Migration Log:</h4>
+                <button
+                  onClick={clearAlternativesProgressMessages}
+                  className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                  title="Clear log"
+                >
+                  <IoTrashOutline className="w-4 h-4" />
+                </button>
+              </div>
+              <ul className="space-y-1 text-xs text-gray-600">
+                {progressMessages.map((msg, index) => (
+                  <li key={index} className="font-mono">
+                    {msg}
+                  </li>
+                ))}
+              </ul>
+              {status === "success" && (
+                <div className="mt-3 flex items-center gap-2 text-green-600">
+                  <IoCheckmarkCircleOutline className="w-5 h-5" />
+                  <span className="font-medium">Migration Successful</span>
+                </div>
+              )}
+              {status === "error" && errorDetails && (
+                <div className="mt-3 flex items-center gap-2 text-red-600">
+                  <IoAlertCircleOutline className="w-5 h-5" />
+                  <span className="font-medium">
+                    Migration Failed: {errorDetails}
+                  </span>
+                </div>
+              )}
             </div>
-            <ul className="space-y-1 text-xs text-gray-600">
-              {progressMessages.map((msg, index) => (
-                <li key={index} className="font-mono">
-                  {msg}
-                </li>
-              ))}
-            </ul>
-            {status === "success" && (
-              <div className="mt-3 flex items-center gap-2 text-green-600">
-                <IoCheckmarkCircleOutline className="w-5 h-5" />
-                <span className="font-medium">Migration Successful</span>
-              </div>
-            )}
-            {status === "error" && errorDetails && (
-              <div className="mt-3 flex items-center gap-2 text-red-600">
-                <IoAlertCircleOutline className="w-5 h-5" />
-                <span className="font-medium">
-                  Migration Failed: {errorDetails}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+          )}
       </div>
 
       {/* Right Column - CSV to JSON Migrations */}
@@ -1060,6 +1111,18 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
               ringColorClass="focus:ring-pink-500"
               className=""
             />
+
+            {/* Cash Advance CSV to JSON Button */}
+            <MigrationButton
+              onClick={handleCashAdvanceCsvToJsonMigration}
+              isRunning={cashAdvanceMigrationStatus === "running"}
+              icon={<IoWalletOutline className="w-5 h-5" />}
+              label="Convert Cash Advance CSV to JSON"
+              runningLabel="Converting Cash Advances to JSON..."
+              colorClass="bg-rose-600 hover:bg-rose-700"
+              ringColorClass="focus:ring-rose-500"
+              className=""
+            />
           </div>
 
           {/* JSON Migration Logs */}
@@ -1068,134 +1131,146 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
               {/* Attendance JSON Migration Log */}
               {(jsonMigrationStatus !== "idle" ||
                 jsonProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Attendance JSON Migration Log:"
-                  messages={jsonProgressMessages}
-                  status={jsonMigrationStatus}
-                  errorDetails={jsonErrorDetails}
-                  onClear={clearJsonProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Attendance JSON Migration Log:"
+                    messages={jsonProgressMessages}
+                    status={jsonMigrationStatus}
+                    errorDetails={jsonErrorDetails}
+                    onClear={clearJsonProgressMessages}
+                  />
+                )}
 
               {/* Compensation JSON Migration Log */}
               {(compensationMigrationStatus !== "idle" ||
                 compensationProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Compensation JSON Migration Log:"
-                  messages={compensationProgressMessages}
-                  status={compensationMigrationStatus}
-                  errorDetails={compensationErrorDetails}
-                  onClear={clearCompensationProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Compensation JSON Migration Log:"
+                    messages={compensationProgressMessages}
+                    status={compensationMigrationStatus}
+                    errorDetails={compensationErrorDetails}
+                    onClear={clearCompensationProgressMessages}
+                  />
+                )}
 
               {/* Holiday JSON Migration Log */}
               {(holidayMigrationStatus !== "idle" ||
                 holidayProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Holiday JSON Migration Log:"
-                  messages={holidayProgressMessages}
-                  status={holidayMigrationStatus}
-                  errorDetails={holidayErrorDetails}
-                  onClear={clearHolidayProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Holiday JSON Migration Log:"
+                    messages={holidayProgressMessages}
+                    status={holidayMigrationStatus}
+                    errorDetails={holidayErrorDetails}
+                    onClear={clearHolidayProgressMessages}
+                  />
+                )}
 
               {/* Employee JSON Migration Log */}
               {(employeeMigrationStatus !== "idle" ||
                 employeeProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Employee JSON Migration Log:"
-                  messages={employeeProgressMessages}
-                  status={employeeMigrationStatus}
-                  errorDetails={employeeErrorDetails}
-                  onClear={clearEmployeeProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Employee JSON Migration Log:"
+                    messages={employeeProgressMessages}
+                    status={employeeMigrationStatus}
+                    errorDetails={employeeErrorDetails}
+                    onClear={clearEmployeeProgressMessages}
+                  />
+                )}
 
               {/* Leave JSON Migration Log */}
               {(leaveMigrationStatus !== "idle" ||
                 leaveProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Leave JSON Migration Log:"
-                  messages={leaveProgressMessages}
-                  status={leaveMigrationStatus}
-                  errorDetails={leaveErrorDetails}
-                  onClear={clearLeaveProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Leave JSON Migration Log:"
+                    messages={leaveProgressMessages}
+                    status={leaveMigrationStatus}
+                    errorDetails={leaveErrorDetails}
+                    onClear={clearLeaveProgressMessages}
+                  />
+                )}
 
               {/* Loan JSON Migration Log */}
               {(loanMigrationStatus !== "idle" ||
                 loanProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Loan JSON Migration Log:"
-                  messages={loanProgressMessages}
-                  status={loanMigrationStatus}
-                  errorDetails={loanErrorDetails}
-                  onClear={clearLoanProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Loan JSON Migration Log:"
+                    messages={loanProgressMessages}
+                    status={loanMigrationStatus}
+                    errorDetails={loanErrorDetails}
+                    onClear={clearLoanProgressMessages}
+                  />
+                )}
 
               {/* Missing Time JSON Migration Log */}
               {(missingTimeMigrationStatus !== "idle" ||
                 missingTimeProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Missing Time JSON Migration Log:"
-                  messages={missingTimeProgressMessages}
-                  status={missingTimeMigrationStatus}
-                  errorDetails={missingTimeErrorDetails}
-                  onClear={clearMissingTimeProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Missing Time JSON Migration Log:"
+                    messages={missingTimeProgressMessages}
+                    status={missingTimeMigrationStatus}
+                    errorDetails={missingTimeErrorDetails}
+                    onClear={clearMissingTimeProgressMessages}
+                  />
+                )}
 
               {/* Payroll Summary JSON Migration Log */}
               {(payrollMigrationStatus !== "idle" ||
                 payrollProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Payroll Summary JSON Migration Log:"
-                  messages={payrollProgressMessages}
-                  status={payrollMigrationStatus}
-                  errorDetails={payrollErrorDetails}
-                  onClear={clearPayrollProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Payroll Summary JSON Migration Log:"
+                    messages={payrollProgressMessages}
+                    status={payrollMigrationStatus}
+                    errorDetails={payrollErrorDetails}
+                    onClear={clearPayrollProgressMessages}
+                  />
+                )}
 
               {/* Role JSON Migration Log */}
               {(roleMigrationStatus !== "idle" ||
                 roleProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Role JSON Migration Log:"
-                  messages={roleProgressMessages}
-                  status={roleMigrationStatus}
-                  errorDetails={roleErrorDetails}
-                  onClear={clearRoleProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Role JSON Migration Log:"
+                    messages={roleProgressMessages}
+                    status={roleMigrationStatus}
+                    errorDetails={roleErrorDetails}
+                    onClear={clearRoleProgressMessages}
+                  />
+                )}
 
               {/* Settings JSON Migration Log */}
               {(settingsMigrationStatus !== "idle" ||
                 settingsProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Settings JSON Migration Log:"
-                  messages={settingsProgressMessages}
-                  status={settingsMigrationStatus}
-                  errorDetails={settingsErrorDetails}
-                  onClear={clearSettingsProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Settings JSON Migration Log:"
+                    messages={settingsProgressMessages}
+                    status={settingsMigrationStatus}
+                    errorDetails={settingsErrorDetails}
+                    onClear={clearSettingsProgressMessages}
+                  />
+                )}
 
               {/* Shorts JSON Migration Log */}
               {(shortsMigrationStatus !== "idle" ||
                 shortsProgressMessages.length > 0) && (
-                <MigrationLogSection
-                  title="Shorts JSON Migration Log:"
-                  messages={shortsProgressMessages}
-                  status={shortsMigrationStatus}
-                  errorDetails={shortsErrorDetails}
-                  onClear={clearShortsProgressMessages}
-                />
-              )}
+                  <MigrationLogSection
+                    title="Shorts JSON Migration Log:"
+                    messages={shortsProgressMessages}
+                    status={shortsMigrationStatus}
+                    errorDetails={shortsErrorDetails}
+                    onClear={clearShortsProgressMessages}
+                  />
+                )}
+
+              {/* Cash Advance JSON Migration Log */}
+              {(cashAdvanceMigrationStatus !== "idle" ||
+                cashAdvanceProgressMessages.length > 0) && (
+                  <MigrationLogSection
+                    title="Cash Advance JSON Migration Log:"
+                    messages={cashAdvanceProgressMessages}
+                    status={cashAdvanceMigrationStatus}
+                    errorDetails={cashAdvanceErrorDetails}
+                    onClear={clearCashAdvanceProgressMessages}
+                  />
+                )}
             </div>
           )}
         </div>

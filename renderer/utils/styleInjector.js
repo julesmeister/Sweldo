@@ -200,31 +200,79 @@ export function injectStyles() {
     }
     
     /* CompensationDialog styling fixes for web mode */
-    /* Clear button (×) styling */
-    .clear-button {
-      position: absolute !important;
-      right: 10px !important;
-      top: 50% !important;
-      transform: translateY(-50%) !important;
-      color: rgba(156, 163, 175, 0.7) !important;
-      cursor: pointer !important;
-      font-size: 16px !important;
-      z-index: 10 !important;
-      background: transparent !important;
-      border: none !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: 20px !important;
-      height: 20px !important;
-      border-radius: 50% !important;
-      transition: all 0.2s !important;
-    }
-    
-    .clear-button:hover {
-      color: rgba(107, 114, 128, 1) !important;
-      background-color: rgba(229, 231, 235, 0.4) !important;
-    }
+    /* Clear button (×) styling - completely redesigned with SVG icon */
+  .clear-button {
+    position: absolute !important;
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: rgba(156, 163, 175, 0.7) !important;
+    cursor: pointer !important;
+    font-size: 16px !important; /* Smaller font size */
+    z-index: 10 !important;
+    background: transparent !important;
+    border: none !important;
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+    transition: all 0.2s !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  .clear-button::before,
+  .clear-button::after {
+    content: "" !important;
+    position: absolute !important;
+    width: 12px !important; /* Line width */
+    height: 2px !important; /* Line thickness */
+    background-color: currentColor !important;
+    top: 50% !important;
+    left: 50% !important;
+  }
+  
+  .clear-button::before {
+    transform: translate(-50%, -50%) rotate(45deg) !important;
+  }
+  
+  .clear-button::after {
+    transform: translate(-50%, -50%) rotate(-45deg) !important;
+  }
+  
+  .clear-button:hover {
+    color: rgba(255, 255, 255, 0.9) !important;
+    background-color: rgba(107, 114, 128, 0.5) !important;
+  }
+  
+  /* Fix dropdown select styling */
+  .compensation-dialog select option {
+    background-color: #1f2937 !important; /* Dark background */
+    color: white !important; /* Light text */
+    padding: 8px !important;
+  }
+  
+  .compensation-dialog select:focus option:checked,
+  .compensation-dialog select option:hover,
+  .compensation-dialog select option:focus {
+    background-color: #3b82f6 !important; /* Blue highlight */
+    color: white !important;
+  }
+  
+  /* Ensure dropdown options are visible */
+  select option {
+    text-shadow: none !important;
+    background-color: #1f2937 !important;
+    color: white !important;
+  }
+  
+  /* Ensure the dropdown background contrasts with the text */
+  select {
+    background-color: rgba(31, 41, 55, 0.5) !important;
+    color: white !important;
+  }
     
     /* Input field styling in dark dialog mode */
     .compensation-dialog input,

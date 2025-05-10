@@ -59,18 +59,11 @@ export async function loadHolidaysFirestore(
       .where("[companyName+year+month]")
       .equals(cacheKey)
       .toArray();
-    console.log(
-      `[loadHolidaysFirestore] Attempting cache lookup for ${companyName} ${year}-${month}, found ${cachedRecords.length} record(s)`
-    );
+
     if (cachedRecords.length > 0) {
-      console.log(
-        `[loadHolidaysFirestore] Cache hit for ${companyName} ${year}-${month}, returning ${cachedRecords.length} record(s)`
-      );
       return cachedRecords.map((rec) => rec.data);
     }
-    console.log(
-      `[loadHolidaysFirestore] Cache miss for ${companyName} ${year}-${month}, querying Firestore]`
-    );
+
     const docId = createHolidayDocId(year, month);
     const data = await fetchDocument<HolidayFirestoreData>(
       "holidays",
@@ -105,9 +98,6 @@ export async function loadHolidaysFirestore(
       data: h,
     }));
     await db.holidays.bulkPut(records);
-    console.log(
-      `[loadHolidaysFirestore] Stored ${records.length} record(s) in cache for ${companyName} ${year}-${month}`
-    );
 
     return holidays;
   } catch (error) {
@@ -238,9 +228,6 @@ export async function saveHolidaysFirestore(
   month: number,
   companyName: string
 ): Promise<void> {
-  console.log(
-    `[holiday_firestore.ts] saveHolidaysFirestore: START for ${year}-${month}, ${holidays.length} holidays. Company: ${companyName}`
-  );
   try {
     const docId = createHolidayDocId(year, month);
 
@@ -266,20 +253,10 @@ export async function saveHolidaysFirestore(
       },
       holidays: holidaysMap,
     };
-    console.log(
-      `[holiday_firestore.ts] saveHolidaysFirestore: Attempting to save document ${docId} with ${
-        Object.keys(holidaysMap).length
-      } holidays.`
-    );
+
     await saveDocument("holidays", docId, docData, companyName, false); // false = don't merge
-    console.log(
-      `[holiday_firestore.ts] saveHolidaysFirestore: END for ${year}-${month}. Document ${docId} saved.`
-    );
   } catch (error) {
-    console.error(
-      `[holiday_firestore.ts] saveHolidaysFirestore: ERROR for ${year}-${month}. Error:`,
-      error
-    );
+    console.error(`Error saving holidays to Firestore:`, error);
     throw error;
   }
 }
@@ -345,23 +322,13 @@ export function createHolidayFirestoreInstance(model: HolidayModel) {
     async syncToFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
-      console.log("[holiday_firestore.ts] syncToFirestore: START");
       onProgress?.("Starting holiday sync to Firestore...");
       try {
         // Load all holidays from the model
-        console.log(
-          "[holiday_firestore.ts] syncToFirestore: Attempting to load all local holidays via model.loadAllHolidaysForSync()..."
-        );
         const holidays = await model.loadAllHolidaysForSync();
-        console.log(
-          `[holiday_firestore.ts] syncToFirestore: Loaded ${holidays.length} local holidays for sync.`
-        );
         onProgress?.(`Loaded ${holidays.length} local holidays for sync.`);
 
         if (holidays.length === 0) {
-          console.log(
-            "[holiday_firestore.ts] syncToFirestore: No local holidays to sync."
-          );
           onProgress?.("No local holidays to sync.");
           return;
         }
@@ -371,12 +338,7 @@ export function createHolidayFirestoreInstance(model: HolidayModel) {
           (acc: Record<string, Holiday[]>, holiday: Holiday) => {
             const year = holiday.startDate.getFullYear();
             const month = holiday.startDate.getMonth() + 1; // getMonth() is 0-indexed
-            // Log if year or month is NaN
-            if (isNaN(year) || isNaN(month)) {
-              console.warn(
-                `[holiday_firestore.ts] syncToFirestore: NaN year/month detected for holiday id ${holiday.id}, name '${holiday.name}'. startDate: ${holiday.startDate}, Parsed Year: ${year}, Parsed Month: ${month}`
-              );
-            }
+
             const key = `${year}_${month}`;
             if (!acc[key]) {
               acc[key] = [];
@@ -386,11 +348,6 @@ export function createHolidayFirestoreInstance(model: HolidayModel) {
           },
           {}
         );
-        console.log(
-          `[holiday_firestore.ts] syncToFirestore: Grouped holidays into ${
-            Object.keys(holidaysByMonth).length
-          } month(s). Groups: ${Object.keys(holidaysByMonth).join(", ")}`
-        ); // Added group keys to log
 
         // Process each month's holidays
         const months = Object.keys(holidaysByMonth);
@@ -400,11 +357,6 @@ export function createHolidayFirestoreInstance(model: HolidayModel) {
           const month = parseInt(monthStr, 10);
           const monthHolidays = holidaysByMonth[months[i]];
 
-          console.log(
-            `[holiday_firestore.ts] syncToFirestore: Processing ${
-              monthHolidays.length
-            } holidays for ${year}-${month} (${i + 1}/${months.length})`
-          );
           onProgress?.(
             `Processing holidays for ${year}-${month} (${i + 1}/${
               months.length
@@ -416,20 +368,11 @@ export function createHolidayFirestoreInstance(model: HolidayModel) {
             month,
             await getCompanyName()
           );
-          console.log(
-            `[holiday_firestore.ts] syncToFirestore: Successfully processed ${year}-${month}.`
-          );
         }
 
-        console.log(
-          "[holiday_firestore.ts] syncToFirestore: END - Holiday sync to Firestore completed successfully."
-        );
         onProgress?.("Holiday sync to Firestore completed successfully.");
       } catch (error) {
-        console.error(
-          "[holiday_firestore.ts] syncToFirestore: ERROR - Error syncing holidays to Firestore:",
-          error
-        );
+        console.error("Error syncing holidays to Firestore:", error);
         onProgress?.(
           `Error syncing holidays: ${
             error instanceof Error ? error.message : String(error)
