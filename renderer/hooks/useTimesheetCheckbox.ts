@@ -2,6 +2,7 @@ import { Attendance } from "@/renderer/model/attendance";
 import { Compensation } from "@/renderer/model/compensation";
 import { Employee } from "@/renderer/model/employee";
 import { toast } from "sonner";
+import { EmploymentType } from "@/renderer/model/settings";
 
 interface UseTimesheetCheckboxParams {
   attendanceModel: any;
@@ -78,7 +79,7 @@ export const useTimesheetCheckbox = ({
 
       // Find the employee's settings
       const employeeType = timeSettings.find(
-        (type) =>
+        (type: EmploymentType) =>
           type.type.toLowerCase() === employee?.employmentType?.toLowerCase()
       );
 
