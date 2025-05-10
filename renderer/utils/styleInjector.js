@@ -601,6 +601,17 @@ export function injectStyles() {
     .compensation-dialog select {
       padding-right: 2.5rem !important;
       background-position: right 1rem center !important;
+      background-size: 16px 16px !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+      background-repeat: no-repeat !important;
+      -webkit-appearance: none !important;
+      -moz-appearance: none !important;
+      appearance: none !important;
+    }
+
+    /* Remove default arrow in IE10+ */
+    .compensation-dialog select::-ms-expand {
+      display: none !important;
     }
   
 

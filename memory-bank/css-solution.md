@@ -549,3 +549,72 @@ We implemented several fixes to address these issues:
    - Add explicit checks like `typeof component === 'function'` before attempting to render
 
 This approach fixed the component rendering issues while maintaining the ability to dynamically load CSS and components at runtime. The solution works consistently in both web and Nextron environments. 
+
+## CSS Pseudo-elements for UI Components
+
+### Problem: Text Character Alignment Issues
+
+When using text characters like × (times) for UI elements such as close or clear buttons, several issues can arise:
+
+1. **Inconsistent Positioning**: Text characters often have inconsistent positioning across different browsers and fonts
+2. **Line Height Challenges**: Setting line-height correctly for single characters is difficult
+3. **Poor Contrast on Hover**: When changing background colors on hover, text may become difficult to see
+4. **Font-Dependent Rendering**: The appearance may change based on font availability
+
+This was evident in CompensationDialog's clear button, where the × character was not perfectly centered and had poor visibility when hovered.
+
+### Solution: CSS Pseudo-elements
+
+Instead of using text characters, we can create UI elements using CSS pseudo-elements (::before and ::after):
+
+```css
+.clear-button {
+  position: absolute !important;
+  /* Other positioning and sizing styles */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.clear-button::before,
+.clear-button::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 12px !important; /* Line width */
+  height: 2px !important; /* Line thickness */
+  background-color: currentColor !important;
+  top: 50% !important;
+  left: 50% !important;
+}
+
+.clear-button::before {
+  transform: translate(-50%, -50%) rotate(45deg) !important;
+}
+
+.clear-button::after {
+  transform: translate(-50%, -50%) rotate(-45deg) !important;
+}
+```
+
+### Implementation Steps
+
+1. **Remove Text Content**: Remove the text character from the HTML/JSX
+2. **Create Lines with Pseudo-elements**: Use ::before and ::after to create two perpendicular lines
+3. **Position Lines Precisely**: Use absolute positioning with transforms
+4. **Use currentColor**: Ensures the icon inherits the button's text color
+5. **Adjust Hover States**: Modify colors for better contrast on hover
+
+### Advantages
+
+1. **Perfect Centering**: Elements are precisely positioned using transforms
+2. **Consistent Rendering**: Appearance is consistent across browsers and fonts
+3. **Better Contrast Control**: Color inheritance works reliably 
+4. **Size Control**: Icon size can be adjusted through CSS properties
+5. **No Character Encoding Issues**: Avoids problems with character encoding
+6. **Accessibility**: Improves accessibility by maintaining visibility
+
+### Application
+
+This approach was successfully implemented in the CompensationDialog component's clear buttons, replacing the problematic × character with perfectly centered, accessible cross icons. 
