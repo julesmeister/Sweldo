@@ -68,6 +68,10 @@
 - Revamped `DateRangePicker` by switching to `react-multi-date-picker` library:
   - Addressed multiple styling issues with the new picker, including custom input, popover behavior, and contrast.
   - Fixed popover appearance and functionality (e.g., using `Calendar` component directly).
+- ✅ Resolved `DateRangePicker` z-index/clipping issues on pages like `payroll.tsx` by implementing `ReactDOM.createPortal` for the calendar popover, ensuring it renders at the document root and above other elements.
+- ✅ Enhanced `DateRangePicker` usability:
+  - Fixed popover interaction: Clicking inside the calendar no longer closes it, due to refined `handleClickOutside` logic considering the portal-rendered calendar via a new `ref`.
+  - Added Clear Button: An "x" icon now appears in the input field when a date is selected, allowing for easy resetting of the date range. Input padding adjusts dynamically.
 
 ## What's Left to Build / Improve
 
@@ -95,6 +99,7 @@
       - Custom CSS for `react-multi-date-picker` was removed, user preferred library defaults.
       - Input field in `DateRangePicker.tsx` now shows dates as "MMMM D, YYYY".
       - Timesheet data filtering in `timesheet.tsx` now adjusts `startDate` to be one day earlier to include the selected day's data.
+    *   **DateRangePicker Z-Index Fix:** Resolved z-index and clipping issues (e.g., on `payroll.tsx`) by using `ReactDOM.createPortal` in `DateRangePicker.tsx` to render the calendar popover at the document root, ensuring it displays above other content. The popover is positioned dynamically using `position: fixed`.
 2.  **Data Synchronization Strategy (Web & Desktop):**
     *   Define and implement a clear strategy for how data entered in web mode synchronizes with the local database if a user switches between modes (or vice-versa, though less common).
     *   Consider if two-way sync is needed or if one mode is primary.

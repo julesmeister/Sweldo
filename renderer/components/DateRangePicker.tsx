@@ -20,11 +20,28 @@ const CalendarIcon = () => (
   </svg>
 );
 
+// Icon for the clear button
+const ClearIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    className="w-5 h-5 text-gray-400 hover:text-gray-600"
+  >
+    <path
+      fillRule="evenodd"
+      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
+
 export const DateRangePicker: React.FC = () => {
   const { dateRange, setDateRange } = useDateRangeStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null); // Ref for the calendar popover
 
   // State for calendar position
   const [calendarPosition, setCalendarPosition] = useState<{ top: number; left: number } | null>(null);
@@ -85,22 +102,15 @@ export const DateRangePicker: React.FC = () => {
   // Click outside handler - needs to check if the click is outside the calendar too if it's in a portal
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // The calendar itself will be handled by its own click-outside logic if needed, or by this
-      // For now, clicking outside the main wrapper (input area) closes it.
-      // If the calendar is in a portal, its own container won't be part of wrapperRef.current
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        // Additional check for clicks on the portal-rendered calendar would be needed if it doesn't handle its own closing
-        // For simplicity, we assume clicking outside the input area should close it.
-        // A more robust solution might involve a ref on the calendar popover itself.
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(event.target as Node) &&
+        calendarRef.current && !calendarRef.current.contains(event.target as Node)
+      ) {
         setIsCalendarOpen(false);
       }
     };
-    if (isCalendarOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    if (isCalendarOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isCalendarOpen]);
 
   // Effect to calculate calendar position when it opens
@@ -129,23 +139,45 @@ export const DateRangePicker: React.FC = () => {
     return ""; // Placeholder is handled by the input itself
   };
 
+  const handleClearDates = (event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent input click from toggling calendar
+    setDateRange(null, null);
+    setIsCalendarOpen(false); // Optionally close calendar on clear
+  };
+
+  const hasSelection = dateRange?.startDate;
+
   return (
     <div style={{ fontFamily: "sans-serif", width: "100%" }} className="sweldo-datepicker-wrapper relative" ref={wrapperRef}>
-      <div className="relative w-full" onClick={() => setIsCalendarOpen(prev => !prev)}>
+      <div className="relative w-full">
         <input
           ref={inputRef}
           readOnly // Make input readOnly to rely on picker for date changes
           value={getDisplayValue()}
           placeholder="Select Date Range"
-          className="w-full pl-3 pr-10 py-2 text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+          onClick={() => setIsCalendarOpen(prev => !prev)} // Toggle on input click
+          className={`w-full pl-3 ${hasSelection ? 'pr-16' : 'pr-10'} py-2 text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer`}
         />
-        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-          <CalendarIcon />
+        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+          {hasSelection && (
+            <button
+              type="button"
+              onClick={handleClearDates}
+              className="p-1 mr-1 focus:outline-none"
+              aria-label="Clear date range"
+            >
+              <ClearIcon />
+            </button>
+          )}
+          <div onClick={() => setIsCalendarOpen(prev => !prev)} className="cursor-pointer">
+            <CalendarIcon />
+          </div>
         </div>
       </div>
 
       {isCalendarOpen && calendarPosition && document.body && createPortal(
         <div
+          ref={calendarRef} // Assign ref to the calendar popover
           style={{
             position: "fixed", // Use fixed for portal positioning relative to viewport
             top: `${calendarPosition.top}px`,
@@ -153,7 +185,7 @@ export const DateRangePicker: React.FC = () => {
             zIndex: 1050, // Ensure high z-index
           }}
           className="rmdp-container shadow-lg rounded-md border border-gray-200 bg-white"
-          // Add a ref here if you need to check clicks on the calendar itself for click-outside
+        // Add a ref here if you need to check clicks on the calendar itself for click-outside
         >
           <Calendar
             value={calendarValue}

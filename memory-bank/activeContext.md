@@ -206,6 +206,12 @@ These improvements make the shorts sync functionality more robust and user-frien
     *   The date format displayed in the `DateRangePicker` input field (`renderer/components/DateRangePicker.tsx`) was changed to a more complete "MMMM D, YYYY" format.
 3.  **Adjusted Timesheet Start Date Logic:**
     *   The filtering logic in `renderer/pages/timesheet.tsx` for `filteredTimesheetEntries` was modified to use a `startDate` that is one day prior to the user's selection. This ensures data for the actual selected start date is correctly included.
+4.  **DateRangePicker Z-Index/Clipping Fix:**
+    *   Resolved z-index and clipping issues with the `DateRangePicker` popover (e.g., on `payroll.tsx`) by implementing `ReactDOM.createPortal`.
+    *   The calendar popover in `renderer/components/DateRangePicker.tsx` now renders at the document root, positioned correctly under the input field using `position: fixed` and dynamic coordinate calculations.
+5.  **DateRangePicker Usability Enhancements:**
+    *   **Popover Interaction:** Fixed an issue where clicking inside the calendar popover would inadvertently close it. The `handleClickOutside` logic was updated to correctly consider clicks within the portal-rendered calendar.
+    *   **Clear Button:** Added a clear button (styled "x" icon) to the input field of the `DateRangePicker`. This button appears when a date range is selected, allowing for easy clearing of the dates. Event propagation is stopped on clear button click to prevent calendar toggle.
 
 These improvements make the shorts sync functionality more robust and user-friendly, with clearer indications of what data is being synced and better error handling during the sync process.
 
