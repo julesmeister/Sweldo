@@ -146,6 +146,20 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
 
 ## Recent Work (June 2024)
 
+### UI Improvements and Bug Fixes
+
+1. **CompensationDialog UI Enhancements**
+   - Fixed clear button (×) alignment issues using CSS pseudo-elements instead of text characters
+   - Improved hover contrast for clear buttons so they remain visible when hovered
+   - Fixed dropdown select visibility and spacing issues
+   - Adjusted caret icon positioning to be properly spaced from the right edge
+
+2. **DateRangePicker Navigation Fix**
+   - Fixed missing month navigation buttons in the DateRangePicker component
+   - Implemented custom month navigation with proper state management
+   - Used a key prop to force component re-rendering when changing months
+   - Improved styling for better usability and visual consistency
+
 ### Shorts Sync Enhancement and Bug Fixes
 
 1. **Fixed Linter Error in ShortModel**
@@ -184,9 +198,16 @@ These improvements make the shorts sync functionality more robust and user-frien
    - Added explicit styling for select options with proper contrast
    - Set dark background with white text for better readability
    - Added padding and highlight styles for hover/focus states
-   - Ensured consistent appearance across all dropdown elements
 
-These UI improvements enhance accessibility and user experience in the CompensationDialog component, making it more usable and visually consistent.
+### DateRangePicker and Timesheet Display Adjustments
+1.  **Reverted Custom Calendar CSS:**
+    *   All custom CSS for `react-multi-date-picker` in `renderer/styles/globals.css` was removed by the user, opting for the library's default styling.
+2.  **Improved Date Input Display:**
+    *   The date format displayed in the `DateRangePicker` input field (`renderer/components/DateRangePicker.tsx`) was changed to a more complete "MMMM D, YYYY" format.
+3.  **Adjusted Timesheet Start Date Logic:**
+    *   The filtering logic in `renderer/pages/timesheet.tsx` for `filteredTimesheetEntries` was modified to use a `startDate` that is one day prior to the user's selection. This ensures data for the actual selected start date is correctly included.
+
+These improvements make the shorts sync functionality more robust and user-friendly, with clearer indications of what data is being synced and better error handling during the sync process.
 
 ## Next Steps
 1. Test the react-date-range solution in web mode to ensure it works correctly

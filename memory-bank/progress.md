@@ -57,7 +57,17 @@
   - Fixed clear button (×) alignment issues by replacing text character with CSS pseudo-elements
   - Improved hover contrast for clear buttons so they remain visible when hovered
   - Fixed dropdown select visibility issues with proper background contrast
-  - Enhanced overall UI consistency across form fields
+  - Enhanced overall UI consistency across components
+- ✅ Fixed select dropdown caret spacing and appearance in CompensationDialog
+- ✅ Fixed DateRangePicker navigation buttons to properly change months with custom UI controls
+- ✅ Fixed DateRangePicker console errors and implemented a more reliable navigation approach:
+  - Replaced problematic ref-based approach with a complete UI reset (close/reopen) strategy
+  - Used date-fns for more reliable date manipulation
+  - Removed dependencies on the react-date-range internal API which was causing errors
+  - Added proper date initialization on each calendar render
+- Revamped `DateRangePicker` by switching to `react-multi-date-picker` library:
+  - Addressed multiple styling issues with the new picker, including custom input, popover behavior, and contrast.
+  - Fixed popover appearance and functionality (e.g., using `Calendar` component directly).
 
 ## What's Left to Build / Improve
 
@@ -68,6 +78,23 @@
     *   Ensure all pages that currently rely on local DB (`dbPath`) are fully functional in web mode using Firestore (`companyName`).
     *   This includes: `PayrollPage`, `TimesheetPage`, potentially others.
     *   **Create a custom React hook (e.g., `useDateAwareDataFetching`)** to encapsulate the common logic of subscribing to `useDateSelectorStore` and triggering data re-fetching when the selected date changes. Refactor `cashAdvances.tsx`, `loans.tsx`, `leaves.tsx`, and `shorts.tsx` to use this hook and remove redundant date management logic.
+    *   **Implemented a modern, two-month calendar view in the DateRangePicker**:
+      - Made the entire DateRangePicker clickable rather than just the individual date inputs
+      - Fixed issues with z-index by using portal rendering directly to the document body
+    *   **Fixed re-rendering issue with company name input field in settings.tsx by implementing a pattern that**:
+      - Uses a local state variable for immediate typing feedback
+      - Debounces updates to the global store
+      - Only triggers store updates when typing has stopped for 500ms
+      - Prevents the entire settings page from re-initializing on every keystroke
+    *   **Implemented shorts sync functionality for Firestore in both per-employee and bulk modes**:
+      - Added proper integration with useFirestoreSync.ts hook
+      - Created bulk sync capability that processes all active employees' shorts
+      - Added detailed progress reporting in the UI
+      - Implemented robust error handling with per-employee isolation
+    *   **DateRangePicker and Timesheet data display refinements**:
+      - Custom CSS for `react-multi-date-picker` was removed, user preferred library defaults.
+      - Input field in `DateRangePicker.tsx` now shows dates as "MMMM D, YYYY".
+      - Timesheet data filtering in `timesheet.tsx` now adjusts `startDate` to be one day earlier to include the selected day's data.
 2.  **Data Synchronization Strategy (Web & Desktop):**
     *   Define and implement a clear strategy for how data entered in web mode synchronizes with the local database if a user switches between modes (or vice-versa, though less common).
     *   Consider if two-way sync is needed or if one mode is primary.

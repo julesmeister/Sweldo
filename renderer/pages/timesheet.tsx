@@ -566,12 +566,20 @@ const TimesheetPage: React.FC = () => {
       return timesheetEntries;
     }
 
-    const startDate = new Date(dateRange.startDate).getTime();
-    const endDate = new Date(dateRange.endDate).getTime();
+    // Adjust startDate by subtracting one day
+    const adjustedStartDate = new Date(dateRange.startDate);
+    adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
+    const startDateMs = adjustedStartDate.getTime();
+
+    const endDateMs = new Date(dateRange.endDate).getTime();
 
     return timesheetEntries.filter((entry) => {
+      // Ensure entry.day is valid before creating a date
+      if (typeof entry.day !== 'number' || entry.day < 1 || entry.day > 31) {
+        return false; // Or handle as an error
+      }
       const entryDate = new Date(year, storedMonthInt - 1, entry.day).getTime();
-      return entryDate >= startDate && entryDate <= endDate;
+      return entryDate >= startDateMs && entryDate <= endDateMs;
     });
   }, [timesheetEntries, dateRange?.startDate, dateRange?.endDate, year, storedMonthInt]);
 
