@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { getCompanyName, isWebEnvironment } from "../lib/firestoreService";
 
@@ -47,6 +47,13 @@ import { createStatisticsFirestoreInstance } from "../model/statistics_firestore
 
 import { createCashAdvanceModel, CashAdvanceModel } from "../model/cashAdvance";
 import { createCashAdvanceFirestoreInstance } from "../model/cashAdvance_firestore";
+
+// Import SyncLogger functions
+import {
+  initializeSyncLogger,
+  addLog,
+  SyncLogEntry,
+} from "../model/SyncLogger";
 
 type SyncStatus = "idle" | "running" | "success" | "error";
 
@@ -107,6 +114,13 @@ export function useFirestoreSync({
   >(() => {
     return {};
   });
+
+  // Initialize SyncLogger when dbPath is available (for desktop mode)
+  useEffect(() => {
+    if (dbPath && !isWebEnvironment()) {
+      initializeSyncLogger(dbPath);
+    }
+  }, [dbPath]);
 
   // --- Determine currently *active* models based on provided props ---
   // This filters the potential list based on dependencies like employeeId/year
@@ -257,7 +271,12 @@ export function useFirestoreSync({
   }, [dbPath, employeeId, year]);
 
   const updateModelStatus = useCallback(
-    (modelName: string, status: SyncStatus, message?: string) => {
+    (
+      modelName: string,
+      status: SyncStatus,
+      operation: SyncLogEntry["operation"],
+      message?: string
+    ) => {
       setModelStatuses((prev) => {
         if (typeof prev !== "object" || prev === null) {
           console.error(
@@ -280,6 +299,16 @@ export function useFirestoreSync({
           },
         };
       });
+      // Add log entry
+      if (!isWebEnvironment() && message) {
+        // Only log in desktop environment
+        addLog({
+          modelName,
+          status: status as SyncLogEntry["status"], // Cast SyncStatus to SyncLogEntry['status']
+          operation,
+          message,
+        });
+      }
     },
     []
   );
@@ -291,6 +320,10 @@ export function useFirestoreSync({
       setProgress: React.Dispatch<React.SetStateAction<string[]>>,
       modelsToFilter?: string[]
     ) => {
+      const operationType: SyncLogEntry["operation"] = isUpload
+        ? "upload"
+        : "download"; // Define operationType
+
       if (!dbPath || !companyName) {
         const errorMsg = `Cannot sync: ${!dbPath ? "Database path" : ""}${
           !dbPath && !companyName ? " and " : ""
@@ -300,6 +333,7 @@ export function useFirestoreSync({
           "[useFirestoreSync] Prerequisites missing for sync:",
           errorMsg
         );
+        setStatus("error");
         return;
       }
 
@@ -379,21 +413,36 @@ export function useFirestoreSync({
       setModelStatuses(initialModelStatuses);
 
       try {
+        // Log start of overall sync operation
+        if (!isWebEnvironment()) {
+          addLog({
+            modelName: "System",
+            operation: operationType,
+            status: "running",
+            message: `Overall sync (${operationType}) started for ${
+              modelsToFilter && modelsToFilter.length > 0
+                ? modelsToFilter.join(", ")
+                : "all models"
+            }.`,
+          });
+        }
+
         for (const { name, instance } of activeOperations) {
-          const operationType = isUpload ? "upload" : "download";
           updateModelStatus(
             name,
             "running",
+            operationType, // Pass operationType
             `Starting ${name} ${operationType}...`
           );
           await (isUpload
             ? instance.syncToFirestore
             : instance.syncFromFirestore)((msg: string) => {
-            updateModelStatus(name, "running", msg);
+            updateModelStatus(name, "running", operationType, msg); // Pass operationType
           });
           updateModelStatus(
             name,
             "success",
+            operationType, // Pass operationType
             `${name} ${operationType} completed`
           );
         }
@@ -403,6 +452,19 @@ export function useFirestoreSync({
             isUpload ? "Upload" : "Download"
           } completed successfully for selected models!`
         );
+        // Log success of overall sync operation
+        if (!isWebEnvironment()) {
+          addLog({
+            modelName: "System",
+            operation: operationType,
+            status: "success",
+            message: `Overall sync (${operationType}) completed successfully for ${
+              modelsToFilter && modelsToFilter.length > 0
+                ? modelsToFilter.join(", ")
+                : "all models"
+            }.`,
+          });
+        }
       } catch (error: any) {
         setStatus("error");
         toast.error(
@@ -410,6 +472,20 @@ export function useFirestoreSync({
             error.message
           }`
         );
+        // Log error of overall sync operation
+        if (!isWebEnvironment()) {
+          addLog({
+            modelName: "System",
+            operation: operationType,
+            status: "error",
+            message: `Overall sync (${operationType}) failed for ${
+              modelsToFilter && modelsToFilter.length > 0
+                ? modelsToFilter.join(", ")
+                : "all models"
+            }. Error: ${error.message}`,
+            details: { stack: error.stack },
+          });
+        }
       }
     },
     [dbPath, companyName, createFirestoreInstances, updateModelStatus]

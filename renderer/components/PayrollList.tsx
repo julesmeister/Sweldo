@@ -17,6 +17,7 @@ import { PayrollDeleteDialog } from "@/renderer/components/PayrollDeleteDialog";
 import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
 import { debugFirestorePayrolls } from "@/renderer/lib/employeeUtils";
 import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
+import NoDataPlaceholder from "./NoDataPlaceholder";
 
 interface PayrollListProps {
   payrolls: PayrollSummaryModel[];
@@ -1002,68 +1003,82 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
               </div>
             </div>
             <div className="overflow-x-auto relative">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Date Range
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Net Pay
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Payment Date
-                    </th>
-                    <th
-                      scope="col"
-                      className="relative py-3.5 pl-3 pr-4 sm:pr-6"
-                    >
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {payrolls.length > 0 ? (
-                    payrollRows
-                  ) : (
+              {initialLoadComplete.current && payrolls.length === 0 ? (
+                <NoDataPlaceholder
+                  employeeName={employee.name}
+                  dataType="payroll records"
+                  actionText="generate new payroll records"
+                  onActionClick={() => {
+                    console.log("[PayrollList] Placeholder action click: Intend to generate payroll.");
+                  }}
+                  onSelectEmployeeClick={() => {
+                    console.log("[PayrollList] Placeholder select employee click: Not applicable here.");
+                  }}
+                />
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan={4}>
-                        <div className="text-center py-12 px-4">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
-                          <h3 className="mt-4 text-lg font-medium text-gray-900">
-                            No payrolls generated yet
-                          </h3>
-                          <p className="mt-1 text-sm text-gray-500">
-                            Select a date range and click 'Generate Payroll' to
-                            create a new payroll record.
-                          </p>
-                        </div>
-                      </td>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Date Range
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Net Pay
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Payment Date
+                      </th>
+                      <th
+                        scope="col"
+                        className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                      >
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {payrolls.length > 0 ? (
+                      payrollRows
+                    ) : (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="text-center py-12 px-4">
+                            <svg
+                              className="mx-auto h-12 w-12 text-gray-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.5}
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                              />
+                            </svg>
+                            <h3 className="mt-4 text-lg font-medium text-gray-900">
+                              No payrolls generated yet
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              Select a date range and click 'Generate Payroll' to
+                              create a new payroll record.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
           {payrollToDelete && (

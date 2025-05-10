@@ -27,6 +27,7 @@ import { usePayrollStatistics } from "../hooks/usePayrollStatistics";
 import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 import YearPickerDropdown from "../components/YearPickerDropdown";
 import Waves from '../components/magicui/Waves';
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 // Stat card component
 const StatCard = ({
@@ -751,7 +752,7 @@ export default function StatisticsPage() {
                 <div className="flex items-center gap-2">
                   <MdOutlineDataset className="h-5 w-5 text-blue-600" />
                   <h2 className="text-lg font-semibold text-gray-900">
-                    Payroll Statistics
+                    <DecryptedText text="Payroll Statistics" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
                   </h2>
                 </div>
                 <div className="flex items-center space-x-2">

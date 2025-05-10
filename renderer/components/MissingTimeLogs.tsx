@@ -19,6 +19,7 @@ import { useAuthStore } from "../stores/authStore";
 import { clearMissingTimeLogCache } from "@/renderer/lib/db";
 import { IoReloadOutline } from "react-icons/io5";
 import { isWebEnvironment } from "../lib/firestoreService";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 export default function MissingTimeLogs() {
   const [missingLogs, setMissingLogs] = useState<MissingTimeLog[]>([]);
@@ -293,7 +294,9 @@ export default function MissingTimeLogs() {
       >
         <div className="overflow-hidden bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-2 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Missing Time Logs</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              <DecryptedText text={isWebEnvironment() && companyName ? `${companyName} Missing Time Logs` : "Missing Time Logs"} animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+            </h2>
             {yearNum !== undefined && monthNum !== undefined && isWebEnvironment() && (
               <button
                 type="button"

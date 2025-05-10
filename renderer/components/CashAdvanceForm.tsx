@@ -1,8 +1,8 @@
 import React, { useState, ChangeEvent } from "react";
 import { toast } from "sonner";
-import BaseFormDialog from "./dialogs/BaseFormDialog";
-import FormField from "./forms/FormField";
-import OptionSelector from "./forms/OptionSelector";
+import BaseFormDialog from "@/renderer/components/dialogs/BaseFormDialog";
+import FormField from "@/renderer/components/forms/FormField";
+import OptionSelector from "@/renderer/components/forms/OptionSelector";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 
 interface CashAdvanceFormProps {

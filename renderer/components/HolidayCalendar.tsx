@@ -9,6 +9,7 @@ import { loadHolidaysFirestore } from '@/renderer/model/holiday_firestore';
 import { clearHolidayCache } from '@/renderer/lib/db';
 import { IoReloadOutline } from 'react-icons/io5';
 import { toast } from 'sonner';
+import DecryptedText from '../styles/DecryptedText/DecryptedText';
 
 export default function HolidayCalendar() {
   // Persistent refs to prevent data loss on rerenders
@@ -154,7 +155,9 @@ export default function HolidayCalendar() {
     <MagicCard className='p-0.5 rounded-lg' gradientSize={200} gradientColor="#9E7AFF" gradientOpacity={0.8} gradientFrom="#9E7AFF" gradientTo="#FE8BBB">
       <div className="overflow-hidden bg-white rounded-lg shadow p-6">
         <div className="flex items-center space-x-2 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Holidays</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            <DecryptedText text={isWebEnvironment() && companyName ? `${companyName} Holidays` : "Holiday Calendar"} animateOn="view" revealDirection='start' sequential={true}/>
+          </h2>
           {isWebEnvironment() && companyName && (
             <button
               type="button"

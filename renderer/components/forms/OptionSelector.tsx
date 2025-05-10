@@ -33,22 +33,32 @@ const OptionSelector: React.FC<OptionSelectorProps> = ({
 
     return (
         <div className={`w-full ${className}`}>
-            {label && <label className="block text-sm font-medium text-gray-300 mb-2">{label}</label>}
-            <div className={`grid ${gridClassName} gap-2`}>
+            {label && <label className="block text-sm font-medium text-gray-300 mb-2.5">{label}</label>}
+            <div className={`grid ${gridClassName} gap-3`}>
                 {options.map((option) => (
                     <button
                         key={option.value}
                         type="button"
                         onClick={() => onChange(option.value)}
                         className={`
-              flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium
-              transition-all duration-200 border
-              ${selectedValue === option.value
-                                ? 'bg-blue-600 text-white border-blue-700 shadow-md'
-                                : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'}
-            `}
+                            flex items-center w-full px-4 py-3 rounded-lg 
+                            border transition-all duration-200 ease-in-out 
+                            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900
+                            ${selectedValue === option.value
+                                ? 'bg-gray-700 border-blue-500 ring-2 ring-blue-500'
+                                : 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                            }
+                        `}
                     >
-                        {option.label}
+                        <div className="flex-shrink-0 w-5 h-5 mr-3 rounded-full border-2 flex items-center justify-center transition-all duration-200 ease-in-out 
+                            ${selectedValue === option.value ? 'border-blue-500 bg-blue-500' : 'border-gray-500 group-hover:border-gray-400'}">
+                            {selectedValue === option.value && (
+                                <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                        </div>
+                        <span className={`text-sm font-medium ${selectedValue === option.value ? 'text-blue-300' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                            {option.label}
+                        </span>
                     </button>
                 ))}
             </div>

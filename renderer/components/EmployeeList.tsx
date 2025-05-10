@@ -12,6 +12,7 @@ import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import { clearEmployeeCache } from "@/renderer/lib/db";
 import { toast } from "sonner";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 interface LastPaymentPeriod {
   start: string;
@@ -172,7 +173,7 @@ const EmployeeList: React.FC<{ height?: string }> = ({ height }) => {
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <h2 className="text-xl font-semibold text-gray-800">
-              {isWebEnvironment() && companyName ? `${companyName} Employees` : "Employee List"}
+              <DecryptedText text={isWebEnvironment() && companyName ? `${companyName} Employees` : "Employee List"} animateOn="view" revealDirection='start' speed={50} sequential={true}/>
             </h2>
             {isWebEnvironment() && (
               <button

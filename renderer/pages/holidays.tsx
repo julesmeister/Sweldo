@@ -21,6 +21,7 @@ import {
 import { clearHolidayCache } from "@/renderer/lib/db";
 import { IoReloadOutline } from "react-icons/io5";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 const months = [
   "January",
@@ -389,9 +390,7 @@ export default function HolidaysPage() {
                   <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center space-x-2">
                       <h2 className="text-lg font-medium text-gray-900">
-                        {isWebEnvironment() && companyName
-                          ? `${companyName} Holidays`
-                          : "Current Holidays"} ({months[selectedMonth]} {selectedYear})
+                        <DecryptedText text={`${isWebEnvironment() && companyName ? companyName + " Holidays" : "Current Holidays"} (${months[selectedMonth]} ${selectedYear})`} animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       </h2>
                       {isWebEnvironment() && companyName && yearNum !== undefined && monthNum !== undefined && (
                         <button

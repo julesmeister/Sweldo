@@ -3,8 +3,8 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 // import { IoClose } from "react-icons/io5"; 
 import { Loan } from "@/renderer/model/loan";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
-import BaseFormDialog from "./dialogs/BaseFormDialog"; // Import BaseFormDialog
-import FormField from "./forms/FormField"; // Import FormField
+import BaseFormDialog from "@/renderer/components/dialogs/BaseFormDialog"; // Import BaseFormDialog
+import FormField from "@/renderer/components/forms/FormField"; // Import FormField
 
 interface LoanFormProps {
   onClose: () => void;

@@ -25,6 +25,7 @@ import {
 } from "@/renderer/model/shorts_firestore";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 export default function ShortsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -496,7 +497,7 @@ export default function ShortsPage() {
                             labelPrefix="Shorts"
                           />
                         ) : (
-                          "Shorts"
+                          <DecryptedText text="Shorts" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
                         )}
                       </h2>
                       <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import DateSelector from "@/renderer/components/DateSelector";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
+import SyncStatusDropdown from "@/renderer/components/SyncStatusDropdown";
 
 // Define navigation links with categories
 const navLinks = [
@@ -35,6 +36,7 @@ export default function Navbar() {
     width: 0,
     display: "none",
   });
+  const [isDesktop, setIsDesktop] = useState(false);
 
   // State to track client-side mount
   const [hasMounted, setHasMounted] = useState(false);
@@ -42,6 +44,8 @@ export default function Navbar() {
   // Effect to set hasMounted to true after component mounts
   useEffect(() => {
     setHasMounted(true);
+    // Check if running in Electron (desktop)
+    setIsDesktop(typeof window !== 'undefined' && !!(window as any).electron);
   }, []);
 
   // Click outside handler for the More dropdown
@@ -203,9 +207,8 @@ export default function Navbar() {
                       key={path}
                       href={path}
                       ref={(el) => setNavRef(path, el)}
-                      className={`text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10 ${
-                        isActive ? "font-semibold" : ""
-                      }`}
+                      className={`text-blue-100 hover:text-white rounded-full px-4 py-1 transition-all duration-200 inline-flex items-center relative z-10 ${isActive ? "font-semibold" : ""
+                        }`}
                       onClick={(e) => {
                         e.preventDefault();
                         handleLinkClick(path);
@@ -225,9 +228,8 @@ export default function Navbar() {
                     >
                       More
                       <svg
-                        className={`ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out ${
-                          isMoreMenuOpen ? "rotate-180" : ""
-                        }`}
+                        className={`ml-1.5 h-3.5 w-3.5 transition-transform duration-300 ease-out ${isMoreMenuOpen ? "rotate-180" : ""
+                          }`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -262,11 +264,10 @@ export default function Navbar() {
                                     href={path}
                                     className={`
                                     relative flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-200
-                                    ${
-                                      isActive
+                                    ${isActive
                                         ? "text-blue-600 bg-blue-50"
                                         : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
-                                    }
+                                      }
                                   `}
                                     onClick={(e) => {
                                       e.preventDefault();
@@ -296,8 +297,12 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Date Selector for Desktop View */}
-              <div className="ml-auto pl-4">
+              {/* Right side items container: Sync Dropdown and Date Selector */}
+              <div className="flex items-center ml-auto pl-4">
+                {/* Sync Status Dropdown (Desktop Only) */}
+                {isDesktop && <SyncStatusDropdown />}
+
+                {/* Date Selector for Desktop View */}
                 <DateSelector />
               </div>
             </div>
@@ -310,9 +315,8 @@ export default function Navbar() {
               >
                 <span className="sr-only">Open main menu</span>
                 <svg
-                  className={`h-6 w-6 transition-transform duration-200 ${
-                    isMobileMenuOpen ? "rotate-90" : ""
-                  }`}
+                  className={`h-6 w-6 transition-transform duration-200 ${isMobileMenuOpen ? "rotate-90" : ""
+                    }`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -345,11 +349,10 @@ export default function Navbar() {
                 <Link
                   key={path}
                   href={path}
-                  className={`block px-4 py-2 text-base font-medium rounded-md ${
-                    pathname === path
-                      ? "bg-blue-700 text-white"
-                      : "text-blue-100 hover:bg-blue-700 hover:text-white"
-                  }`}
+                  className={`block px-4 py-2 text-base font-medium rounded-md ${pathname === path
+                    ? "bg-blue-700 text-white"
+                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
+                    }`}
                   onClick={() => handleLinkClick(path)}
                 >
                   {label}

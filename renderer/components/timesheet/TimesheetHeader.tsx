@@ -3,6 +3,7 @@ import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 import { DateRangePickerProxy } from "@/renderer/components/DateRangePickerProxy";
 import { Employee } from "@/renderer/model/employee";
 import { IoSettingsOutline } from "react-icons/io5";
+import DecryptedText from "@/renderer/styles/DecryptedText/DecryptedText";
 
 interface TimesheetHeaderProps {
     employeeId: string | null;
@@ -42,7 +43,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                             labelPrefix="Timesheet"
                         />
                     ) : (
-                        "Timesheet"
+                        <DecryptedText text="Timesheet" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
                     )}
                 </h2>
                 {employeeId && (

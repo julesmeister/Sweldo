@@ -19,6 +19,7 @@ import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestor
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import { loadLeavesFirestore } from "@/renderer/model/leave_firestore";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 interface Leave {
   id: string;
@@ -402,7 +403,7 @@ export default function LeavesPage() {
                           labelPrefix="Leave Requests"
                         />
                       ) : (
-                        "Leave Requests"
+                        <DecryptedText text="Leave Requests" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
                       )}
                     </h2>
                     <button
@@ -417,7 +418,7 @@ export default function LeavesPage() {
                     <NoDataPlaceholder
                       dataType="leave requests"
                       actionText="Request Leave"
-                      onActionClick={handleButtonClick}
+                      onActionClick={() => handleButtonClick}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   ) : (
@@ -427,7 +428,7 @@ export default function LeavesPage() {
                           employeeName={employee?.name}
                           dataType="leave requests"
                           actionText="Request Leave"
-                          onActionClick={handleButtonClick}
+                          onActionClick={() => handleButtonClick}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (

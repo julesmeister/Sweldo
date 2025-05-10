@@ -28,6 +28,7 @@ import {
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 export default function CashAdvancesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -425,7 +426,7 @@ export default function CashAdvancesPage() {
                           labelPrefix="Cash Advances"
                         />
                       ) : (
-                        "Cash Advances"
+                        <DecryptedText text="Cash Advances" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
                       )}
                     </h2>
                     <div className="relative flex items-center space-x-4">

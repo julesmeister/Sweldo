@@ -22,6 +22,7 @@ import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreServic
 import { useAuthStore } from "../stores/authStore";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
+import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
 export default function LoansPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -228,7 +229,7 @@ export default function LoansPage() {
                           labelPrefix="Loans"
                         />
                       ) : (
-                        "Loans"
+                        <DecryptedText text="Loans" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
                     </h2>
                     <div className="relative flex items-center space-x-4">
@@ -248,7 +249,7 @@ export default function LoansPage() {
                           employeeName={employee?.name}
                           dataType="loans"
                           actionText="Apply for Loan"
-                          onActionClick={handleButtonClick}
+                          onActionClick={() => handleButtonClick}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (
@@ -374,7 +375,7 @@ export default function LoansPage() {
                     <NoDataPlaceholder
                       dataType="loans"
                       actionText="Apply for Loan"
-                      onActionClick={handleButtonClick}
+                      onActionClick={() => handleButtonClick}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   )}
