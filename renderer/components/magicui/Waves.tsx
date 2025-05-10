@@ -1,14 +1,30 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, CSSProperties } from "react";
 
 class Grad {
-    constructor(x, y, z) {
+    x: number;
+    y: number;
+    z: number;
+
+    constructor(x: number, y: number, z: number) {
         this.x = x; this.y = y; this.z = z;
     }
-    dot2(x, y) { return this.x * x + this.y * y; }
+    dot2(x: number, y: number): number { return this.x * x + this.y * y; }
+}
+
+interface Point {
+    x: number;
+    y: number;
+    wave: { x: number; y: number };
+    cursor: { x: number; y: number; vx: number; vy: number };
 }
 
 class Noise {
-    constructor(seed = 0) {
+    grad3: Grad[];
+    p: number[];
+    perm: number[];
+    gradP: Grad[];
+
+    constructor(seed: number = 0) {
         this.grad3 = [
             new Grad(1, 1, 0), new Grad(-1, 1, 0), new Grad(1, -1, 0), new Grad(-1, -1, 0),
             new Grad(1, 0, 1), new Grad(-1, 0, 1), new Grad(1, 0, -1), new Grad(-1, 0, -1),
@@ -31,7 +47,7 @@ class Noise {
         this.gradP = new Array(512);
         this.seed(seed);
     }
-    seed(seed) {
+    seed(seed: number): void {
         if (seed > 0 && seed < 1) seed *= 65536;
         seed = Math.floor(seed);
         if (seed < 256) seed |= seed << 8;
@@ -41,9 +57,9 @@ class Noise {
             this.gradP[i] = this.gradP[i + 256] = this.grad3[v % 12];
         }
     }
-    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-    lerp(a, b, t) { return (1 - t) * a + t * b; }
-    perlin2(x, y) {
+    fade(t: number): number { return t * t * t * (t * (t * 6 - 15) + 10); }
+    lerp(a: number, b: number, t: number): number { return (1 - t) * a + t * b; }
+    perlin2(x: number, y: number): number {
         let X = Math.floor(x), Y = Math.floor(y);
         x -= X; y -= Y; X &= 255; Y &= 255;
         const n00 = this.gradP[X + this.perm[Y]].dot2(x, y);
@@ -59,7 +75,23 @@ class Noise {
     }
 }
 
-const Waves = ({
+interface WavesProps {
+    lineColor?: string;
+    backgroundColor?: string;
+    waveSpeedX?: number;
+    waveSpeedY?: number;
+    waveAmpX?: number;
+    waveAmpY?: number;
+    xGap?: number;
+    yGap?: number;
+    friction?: number;
+    tension?: number;
+    maxCursorMove?: number;
+    style?: CSSProperties;
+    className?: string;
+}
+
+const Waves: React.FC<WavesProps> = ({
     lineColor = "black",
     backgroundColor = "transparent",
     waveSpeedX = 0.0125,
@@ -74,12 +106,12 @@ const Waves = ({
     style = {},
     className = ""
 }) => {
-    const containerRef = useRef(null);
-    const canvasRef = useRef(null);
-    const ctxRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const boundingRef = useRef({ width: 0, height: 0, left: 0, top: 0 });
     const noiseRef = useRef(new Noise(Math.random()));
-    const linesRef = useRef([]);
+    const linesRef = useRef<Point[][]>([]);
     const mouseRef = useRef({
         x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false
     });
@@ -88,7 +120,7 @@ const Waves = ({
         lineColor, waveSpeedX, waveSpeedY, waveAmpX, waveAmpY,
         friction, tension, maxCursorMove, xGap, yGap
     });
-    const frameIdRef = useRef(null);
+    const frameIdRef = useRef<number | null>(null);
 
     useEffect(() => {
         configRef.current = { lineColor, waveSpeedX, waveSpeedY, waveAmpX, waveAmpY, friction, tension, maxCursorMove, xGap, yGap };
@@ -97,15 +129,19 @@ const Waves = ({
     useEffect(() => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
-        ctxRef.current = canvas.getContext("2d");
+        if (!canvas || !container) return;
 
-        function setSize() {
+        ctxRef.current = canvas.getContext("2d");
+        if (!ctxRef.current) return;
+
+        function setSize(): void {
+            if (!container || !canvas) return;
             boundingRef.current = container.getBoundingClientRect();
             canvas.width = boundingRef.current.width;
             canvas.height = boundingRef.current.height;
         }
 
-        function setLines() {
+        function setLines(): void {
             const { width, height } = boundingRef.current;
             linesRef.current = [];
             const oWidth = width + 200, oHeight = height + 30;
@@ -115,7 +151,7 @@ const Waves = ({
             const xStart = (width - xGap * totalLines) / 2;
             const yStart = (height - yGap * totalPoints) / 2;
             for (let i = 0; i <= totalLines; i++) {
-                const pts = [];
+                const pts: Point[] = [];
                 for (let j = 0; j <= totalPoints; j++) {
                     pts.push({
                         x: xStart + xGap * i,
@@ -128,11 +164,11 @@ const Waves = ({
             }
         }
 
-        function movePoints(time) {
+        function movePoints(time: number): void {
             const lines = linesRef.current, mouse = mouseRef.current, noise = noiseRef.current;
             const { waveSpeedX, waveSpeedY, waveAmpX, waveAmpY, friction, tension, maxCursorMove } = configRef.current;
-            lines.forEach((pts) => {
-                pts.forEach((p) => {
+            lines.forEach((pts: Point[]) => {
+                pts.forEach((p: Point) => {
                     const move = noise.perlin2(
                         (p.x + time * waveSpeedX) * 0.002,
                         (p.y + time * waveSpeedY) * 0.0015
@@ -161,22 +197,23 @@ const Waves = ({
             });
         }
 
-        function moved(point, withCursor = true) {
+        function moved(point: Point, withCursor: boolean = true): { x: number; y: number } {
             const x = point.x + point.wave.x + (withCursor ? point.cursor.x : 0);
             const y = point.y + point.wave.y + (withCursor ? point.cursor.y : 0);
             return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
         }
 
-        function drawLines() {
+        function drawLines(): void {
             const { width, height } = boundingRef.current;
             const ctx = ctxRef.current;
+            if (!ctx) return;
             ctx.clearRect(0, 0, width, height);
             ctx.beginPath();
             ctx.strokeStyle = configRef.current.lineColor;
-            linesRef.current.forEach((points) => {
+            linesRef.current.forEach((points: Point[]) => {
                 let p1 = moved(points[0], false);
                 ctx.moveTo(p1.x, p1.y);
-                points.forEach((p, idx) => {
+                points.forEach((p: Point, idx: number) => {
                     const isLast = idx === points.length - 1;
                     p1 = moved(p, !isLast);
                     const p2 = moved(points[idx + 1] || points[points.length - 1], !isLast);
@@ -187,8 +224,9 @@ const Waves = ({
             ctx.stroke();
         }
 
-        function tick(t) {
+        function tick(t: number): void {
             const mouse = mouseRef.current;
+            if (!container) return;
             mouse.sx += (mouse.x - mouse.sx) * 0.1;
             mouse.sy += (mouse.y - mouse.sy) * 0.1;
             const dx = mouse.x - mouse.lx, dy = mouse.y - mouse.ly;
@@ -206,16 +244,18 @@ const Waves = ({
             frameIdRef.current = requestAnimationFrame(tick);
         }
 
-        function onResize() {
+        function onResize(): void {
             setSize();
             setLines();
         }
-        function onMouseMove(e) { updateMouse(e.clientX, e.clientY); }
-        function onTouchMove(e) {
+        function onMouseMove(e: MouseEvent): void { updateMouse(e.clientX, e.clientY); }
+        function onTouchMove(e: TouchEvent): void {
             const touch = e.touches[0];
-            updateMouse(touch.clientX, touch.clientY);
+            if (touch) {
+                updateMouse(touch.clientX, touch.clientY);
+            }
         }
-        function updateMouse(x, y) {
+        function updateMouse(x: number, y: number): void {
             const mouse = mouseRef.current, b = boundingRef.current;
             mouse.x = x - b.left;
             mouse.y = y - b.top;
@@ -237,7 +277,9 @@ const Waves = ({
             window.removeEventListener("resize", onResize);
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("touchmove", onTouchMove);
-            cancelAnimationFrame(frameIdRef.current);
+            if (frameIdRef.current !== null) {
+                cancelAnimationFrame(frameIdRef.current);
+            }
         };
     }, []);
 
@@ -248,7 +290,7 @@ const Waves = ({
                 backgroundColor,
                 ...style
             }}
-            className={`absolute top-0 left-0 w-full h-full overflow-hidden ${className}`}
+            className={`waves-container ${className}`.trim()}
         >
             <div
                 className="absolute top-0 left-0 bg-[#160000] rounded-full w-[0.5rem] h-[0.5rem]"
@@ -259,10 +301,10 @@ const Waves = ({
             />
             <canvas
                 ref={canvasRef}
-                className="block w-full h-full"
+                className="waves-canvas block w-full h-full"
             />
         </div>
     );
-}
+};
 
 export default Waves;
