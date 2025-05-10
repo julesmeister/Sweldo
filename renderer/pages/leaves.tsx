@@ -7,7 +7,7 @@ import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { IoSettingsOutline } from "react-icons/io5";
-import LeaveForm from "@/renderer/components/LeaveForm";
+import LeaveForm from "@/renderer/components/forms/LeaveForm";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import { createLeaveModel } from "@/renderer/model/leave";
 import RootLayout from "@/renderer/components/layout";
@@ -403,7 +403,7 @@ export default function LeavesPage() {
                           labelPrefix="Leave Requests"
                         />
                       ) : (
-                        <DecryptedText text="Leave Requests" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                        <DecryptedText text="Leave Requests" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
                     </h2>
                     <button

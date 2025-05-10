@@ -10,7 +10,7 @@ import {
   createCashAdvanceModel,
 } from "@/renderer/model/cashAdvance";
 import { Employee, createEmployeeModel } from "@/renderer/model/employee";
-import CashAdvanceForm from "@/renderer/components/CashAdvanceForm";
+import CashAdvanceForm from "@/renderer/components/forms/CashAdvanceForm";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import RootLayout from "@/renderer/components/layout";

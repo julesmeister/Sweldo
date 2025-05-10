@@ -1,9 +1,9 @@
 import React, { useState, ChangeEvent } from "react";
 import { IoClose } from "react-icons/io5";
 import { Leave } from "@/renderer/model/leave";
-import BaseFormDialog from "./dialogs/BaseFormDialog";
-import FormField from "./forms/FormField";
-import OptionSelector from "./forms/OptionSelector";
+import BaseFormDialog from "../dialogs/BaseFormDialog";
+import FormField from "./FormField";
+import OptionSelector from "./OptionSelector";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 
 interface LeaveFormProps {

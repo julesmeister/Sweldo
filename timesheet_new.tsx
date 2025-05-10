@@ -28,7 +28,7 @@ import {
   IoWarningOutline,
 } from "react-icons/io5";
 import { EditableCell } from "@/renderer/components/EditableCell";
-import { CompensationDialog } from "@/renderer/components/CompensationDialog";
+import { CompensationDialog } from "@/renderer/components/forms/CompensationDialog";
 import {
   Employee,
   EmployeeModel,
@@ -368,99 +368,99 @@ const TimesheetPage: React.FC = () => {
           }
 
           console.log("Using companyName in loadData:", companyName);
-          
+
           [attendanceData, compensationData] = await Promise.all([
             loadAttendanceFirestore(selectedEmployeeId, year, storedMonthInt, companyName),
             loadCompensationFirestore(selectedEmployeeId, year, storedMonthInt, companyName)
           ]);
- 
-         if (isWebEnvironment()) {
-           // Web mode - use Firestore - using companyName from component props
-           if (!companyName) {
-             console.error("[loadData] ERROR: Company name is not set for web mode:", companyName);
-             toast.error("Company name not set for web mode");
-             throw new Error("Company name not set for web mode");
-           }
 
-          console.log("[loadData] PARAMS - Using company name:", companyName);
-          console.log("[loadData] PARAMS - Employee ID:", selectedEmployeeId);
-          console.log("[loadData] PARAMS - Year:", year);
-          console.log("[loadData] PARAMS - Month:", storedMonthInt);
-          
-          try {
-            console.log("[loadData] Fetching attendance and compensation data from Firestore...");
-            
-            // Trace the precise Firestore functions being called
-            console.log("[loadData] Calling loadAttendanceFirestore with:", { 
-              employeeId: selectedEmployeeId, 
-              year, 
-              month: storedMonthInt, 
-              companyName 
-            });
-            
-            const results = await Promise.all([
-              loadAttendanceFirestore(selectedEmployeeId, year, storedMonthInt, companyName),
-              loadCompensationFirestore(selectedEmployeeId, year, storedMonthInt, companyName)
+          if (isWebEnvironment()) {
+            // Web mode - use Firestore - using companyName from component props
+            if (!companyName) {
+              console.error("[loadData] ERROR: Company name is not set for web mode:", companyName);
+              toast.error("Company name not set for web mode");
+              throw new Error("Company name not set for web mode");
+            }
+
+            console.log("[loadData] PARAMS - Using company name:", companyName);
+            console.log("[loadData] PARAMS - Employee ID:", selectedEmployeeId);
+            console.log("[loadData] PARAMS - Year:", year);
+            console.log("[loadData] PARAMS - Month:", storedMonthInt);
+
+            try {
+              console.log("[loadData] Fetching attendance and compensation data from Firestore...");
+
+              // Trace the precise Firestore functions being called
+              console.log("[loadData] Calling loadAttendanceFirestore with:", {
+                employeeId: selectedEmployeeId,
+                year,
+                month: storedMonthInt,
+                companyName
+              });
+
+              const results = await Promise.all([
+                loadAttendanceFirestore(selectedEmployeeId, year, storedMonthInt, companyName),
+                loadCompensationFirestore(selectedEmployeeId, year, storedMonthInt, companyName)
+              ]);
+
+              [attendanceData, compensationData] = results;
+
+              console.log("[loadData] RESULTS - Attendance data count:", attendanceData.length);
+              console.log("[loadData] RESULTS - Attendance data:", JSON.stringify(attendanceData.slice(0, 2)));
+              console.log("[loadData] RESULTS - Compensation data count:", compensationData.length);
+              console.log("[loadData] RESULTS - Compensation data:", JSON.stringify(compensationData.slice(0, 2)));
+
+              if (attendanceData.length === 0) {
+                console.warn("[loadData] WARNING: No attendance data found for this employee/period");
+              }
+
+              if (compensationData.length === 0) {
+                console.warn("[loadData] WARNING: No compensation data found for this employee/period");
+              }
+            } catch (error) {
+              console.error("[loadData] ERROR during Firestore data fetch:", error);
+              throw error;
+            }
+          } else {
+            // Desktop mode - use local DB
+            if (!dbPath) {
+              toast.error("Database path is not configured");
+              throw new Error("Database path is not configured");
+            }
+
+            [attendanceData, compensationData] = await Promise.all([
+              attendanceModel.loadAttendancesById(
+                storedMonthInt,
+                year,
+                selectedEmployeeId
+              ),
+              compensationModel.loadRecords(storedMonthInt, year, selectedEmployeeId),
             ]);
-            
-            [attendanceData, compensationData] = results;
-            
-            console.log("[loadData] RESULTS - Attendance data count:", attendanceData.length);
-            console.log("[loadData] RESULTS - Attendance data:", JSON.stringify(attendanceData.slice(0, 2)));
-            console.log("[loadData] RESULTS - Compensation data count:", compensationData.length);
-            console.log("[loadData] RESULTS - Compensation data:", JSON.stringify(compensationData.slice(0, 2)));
-            
-            if (attendanceData.length === 0) {
-              console.warn("[loadData] WARNING: No attendance data found for this employee/period");
-            }
-            
-            if (compensationData.length === 0) {
-              console.warn("[loadData] WARNING: No compensation data found for this employee/period");
-            }
-          } catch (error) {
-            console.error("[loadData] ERROR during Firestore data fetch:", error);
-            throw error;
-          }
-        } else {
-          // Desktop mode - use local DB
-          if (!dbPath) {
-            toast.error("Database path is not configured");
-            throw new Error("Database path is not configured");
           }
 
-          [attendanceData, compensationData] = await Promise.all([
-            attendanceModel.loadAttendancesById(
-              storedMonthInt,
-              year,
-              selectedEmployeeId
-            ),
-            compensationModel.loadRecords(storedMonthInt, year, selectedEmployeeId),
-          ]);
+          setTimesheetEntries(attendanceData);
+          setCompensationEntries(compensationData);
+          setValidEntriesCount(
+            compensationData.filter((comp) => comp.absence).length
+          );
+
+          if (attendanceData.length > 0 || compensationData.length > 0) {
+            await computeCompensations(attendanceData, compensationData);
+          } else if (!hasAttemptedInitialRefresh) {
+            setHasAttemptedInitialRefresh(true);
+            await refreshTimesheetData(true);
+          }
+        } catch (error) {
+          console.error("Detailed error loading timesheet data:", error);
+          toast.error("Error loading timesheet data");
+        } finally {
+          setLoading(false);
+          setIsLoading(false);
         }
+      };
 
-        setTimesheetEntries(attendanceData);
-        setCompensationEntries(compensationData);
-        setValidEntriesCount(
-          compensationData.filter((comp) => comp.absence).length
-        );
-
-        if (attendanceData.length > 0 || compensationData.length > 0) {
-          await computeCompensations(attendanceData, compensationData);
-        } else if (!hasAttemptedInitialRefresh) {
-          setHasAttemptedInitialRefresh(true);
-          await refreshTimesheetData(true);
-        }
-      } catch (error) {
-        console.error("Detailed error loading timesheet data:", error);
-        toast.error("Error loading timesheet data");
-      } finally {
-        setLoading(false);
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [employee, selectedEmployeeId, storedMonthInt, year]);
+      loadData();
+    }, [employee, selectedEmployeeId, storedMonthInt, year]);
 
   // Find the employee's time tracking setting
   const employeeTimeSettings = useMemo(() => {

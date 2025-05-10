@@ -60,7 +60,7 @@ export const getScheduleInfo = async (
 
 // Hook version for calculating schedule info for multiple dates
 export const useSchedules = (
-  attendanceSettingsModel: any,
+  attendanceSettingsModel: AttendanceSettingsModel | null,
   employmentType: EmploymentType | null,
   dates: Date[]
 ) => {
@@ -70,74 +70,64 @@ export const useSchedules = (
 
   useEffect(() => {
     const calculateSchedules = async () => {
-      if (!attendanceSettingsModel || !dates.length) {
+      if (!attendanceSettingsModel || !dates.length || !employmentType) {
+        const defaultMap = new Map<
+          number,
+          { isRestDay: boolean; hasSchedule: boolean }
+        >();
+        if (dates.length > 0) {
+          for (const date of dates) {
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+            const isRestDay = dayOfWeek === 0 || dayOfWeek === 6;
+            const hasSchedule = !isRestDay;
+            defaultMap.set(day, { isRestDay, hasSchedule });
+          }
+        }
+        setScheduleMap(defaultMap);
         return;
       }
 
       try {
-        // Create a map to store schedule information for each day
         const newScheduleMap = new Map<
           number,
           { isRestDay: boolean; hasSchedule: boolean }
         >();
 
-        // If we have an employment type, use its schedule
-        if (employmentType) {
-          // Process each date
-          for (const date of dates) {
-            const day = date.getDate();
-            const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
+        for (const date of dates) {
+          const day = date.getDate();
+          const dailySchedule =
+            await attendanceSettingsModel.getScheduleForDate(
+              employmentType,
+              date
+            );
 
-            // Check if this day is a rest day based on employment type settings
-            // Add null checks to prevent TypeError
-            const isRestDay =
-              employmentType.restDays && Array.isArray(employmentType.restDays)
-                ? employmentType.restDays.includes(dayOfWeek)
-                : dayOfWeek === 0 || dayOfWeek === 6; // Default to weekends if restDays is missing
+          const hasSchedule =
+            !!dailySchedule &&
+            !!dailySchedule.timeIn &&
+            !!dailySchedule.timeOut &&
+            !dailySchedule.isOff;
 
-            // Determine if there's a schedule for this day
-            const hasSchedule =
-              employmentType.workDays && Array.isArray(employmentType.workDays)
-                ? employmentType.workDays.includes(dayOfWeek)
-                : dayOfWeek > 0 && dayOfWeek < 6; // Default to weekdays if workDays is missing
+          const isRestDay =
+            !hasSchedule || (!!dailySchedule && dailySchedule.isOff === true);
 
-            // Store schedule info in the map
-            newScheduleMap.set(day, { isRestDay, hasSchedule });
-          }
-        } else {
-          // If no employment type is available, assume all days have a schedule but none are rest days
-          for (const date of dates) {
-            const day = date.getDate();
-            const dayOfWeek = date.getDay();
-
-            // Default: Weekends (Saturday and Sunday) are rest days
-            const isRestDay = dayOfWeek === 0 || dayOfWeek === 6;
-
-            // Default: Weekdays have schedules
-            const hasSchedule = dayOfWeek > 0 && dayOfWeek < 6;
-
-            newScheduleMap.set(day, { isRestDay, hasSchedule });
-          }
-        }
-
-        // Load any custom schedules from the settings model
-        try {
-          // This would be where you'd load custom schedules if implemented
-          // For example:
-          // const customSchedules = await attendanceSettingsModel.loadCustomSchedules();
-          // for (const schedule of customSchedules) {
-          //   // Update the scheduleMap with custom schedule information
-          // }
-        } catch (error) {
-          console.error(
-            "useSchedules - Error loading custom schedules:",
-            error
-          );
+          newScheduleMap.set(day, { isRestDay, hasSchedule });
         }
 
         setScheduleMap(newScheduleMap);
       } catch (error) {
         console.error("useSchedules - Error calculating schedules:", error);
+        const errorMap = new Map<
+          number,
+          { isRestDay: boolean; hasSchedule: boolean }
+        >();
+        if (dates.length > 0) {
+          for (const date of dates) {
+            const day = date.getDate();
+            errorMap.set(day, { isRestDay: true, hasSchedule: false });
+          }
+        }
+        setScheduleMap(errorMap);
       }
     };
 

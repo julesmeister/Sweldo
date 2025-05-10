@@ -159,9 +159,18 @@ export async function clearEmployeeCache(): Promise<void> {
  * Debug function to inspect the Firestore payroll collection structure
  * @param companyName The company name to use for Firestore
  */
+
+// Define an interface for the structure of objects in the docs array
+interface DebugPayrollDocInfo {
+  id: string;
+  hasPayrolls: boolean;
+  payrollsCount: number;
+  meta: any; // Or a more specific type if meta structure is known and consistent
+}
+
 export async function debugFirestorePayrolls(
   companyName: string
-): Promise<any> {
+): Promise<DebugPayrollDocInfo[]> {
   try {
     console.log(
       `[Debug] Inspecting Firestore payroll structure for ${companyName}`
@@ -182,7 +191,7 @@ export async function debugFirestorePayrolls(
     );
 
     // Collect document information
-    const docs = [];
+    const docs: DebugPayrollDocInfo[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       docs.push({

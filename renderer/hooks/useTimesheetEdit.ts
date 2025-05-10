@@ -2,6 +2,7 @@ import { Attendance } from "@/renderer/model/attendance";
 import { Compensation } from "@/renderer/model/compensation";
 import { Employee } from "@/renderer/model/employee";
 import { toast } from "sonner";
+import { EmploymentType } from "@/renderer/model/settings";
 
 interface UseTimesheetEditParams {
   attendanceModel: any;
@@ -54,16 +55,12 @@ export const useTimesheetEdit = ({
       updatedEntry[columnKey] = value;
 
       // If one field is present but the other is not, set both to present (for non-time-tracking)
-      if (!employee?.employmentType) {
-        toast.error("Employee employment type not found");
-        throw new Error("Employee employment type not found");
-      }
+      if (!employee) return;
 
-      // Load employment type settings to know if this employee requires time tracking
       const timeSettings = await attendanceSettingsModel.loadTimeSettings();
       const employeeType = timeSettings.find(
-        (type) =>
-          type.type.toLowerCase() === employee.employmentType.toLowerCase()
+        (type: EmploymentType) =>
+          type.type.toLowerCase() === employee?.employmentType?.toLowerCase()
       );
 
       if (!employeeType) {
@@ -109,6 +106,9 @@ export const useTimesheetEdit = ({
             hoursWorked: 0,
             grossPay: 0,
             netPay: 0,
+            absence: !(rowData.timeIn || rowData.timeOut),
+            nightDifferentialHours: 0,
+            nightDifferentialPay: 0,
           };
 
       // Update the absence status - if timeIn or timeOut is filled, the employee is present

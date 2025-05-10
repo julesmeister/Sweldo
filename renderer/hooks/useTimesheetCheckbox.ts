@@ -105,6 +105,9 @@ export const useTimesheetCheckbox = ({
             hoursWorked: 0,
             grossPay: 0,
             netPay: 0,
+            absence: !isPresent,
+            nightDifferentialHours: 0,
+            nightDifferentialPay: 0,
           };
 
       // Update the absence status based on the checkbox

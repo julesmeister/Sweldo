@@ -28,7 +28,7 @@ import {
   IoWarningOutline,
 } from "react-icons/io5";
 import { EditableCell } from "@/renderer/components/EditableCell";
-import { CompensationDialog } from "@/renderer/components/CompensationDialog";
+import { CompensationDialog } from "@/renderer/components/forms/CompensationDialog";
 import {
   Employee,
   EmployeeModel,

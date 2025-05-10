@@ -7,7 +7,7 @@ import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
 import { Short, createShortModel } from "@/renderer/model/shorts";
 import { Employee, createEmployeeModel } from "@/renderer/model/employee";
-import ShortsForm from "@/renderer/components/ShortsForm";
+import ShortsForm from "@/renderer/components/forms/ShortsForm";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import RootLayout from "@/renderer/components/layout";
@@ -497,7 +497,7 @@ export default function ShortsPage() {
                             labelPrefix="Shorts"
                           />
                         ) : (
-                          <DecryptedText text="Shorts" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                          <DecryptedText text="Shorts" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                         )}
                       </h2>
                       <div className="flex items-center gap-2">

@@ -4,7 +4,7 @@ import EmployeeList from "@/renderer/components/EmployeeList";
 import { ExcelUpload } from "@/renderer/components/ExcelUpload";
 import HolidayCalendar from "@/renderer/components/HolidayCalendar";
 import MissingTimeLogs from "@/renderer/components/MissingTimeLogs";
-import EditEmployee from "@/renderer/components/EditEmployee";
+import EditEmployee from "@/renderer/components/forms/EditEmployee";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { motion } from "framer-motion";
 import RootLayout from "@/renderer/components/layout";

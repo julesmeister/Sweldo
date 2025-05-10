@@ -6,7 +6,7 @@ import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { toast } from "sonner";
 import { Holiday, createHolidayModel } from "@/renderer/model/holiday";
 import { createAttendanceSettingsModel } from "@/renderer/model/settings";
-import HolidayForm from "@/renderer/components/HolidayForm";
+import HolidayForm from "@/renderer/components/forms/HolidayForm";
 import { fetchHolidays } from "@/renderer/services/fetchHolidays";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";

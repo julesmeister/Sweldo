@@ -11,15 +11,15 @@ import { createEmployeeModel } from "@/renderer/model/employee";
 import { createAttendanceModel, Attendance } from "@/renderer/model/attendance";
 import { createCompensationModel } from "@/renderer/model/compensation";
 import { createAttendanceSettingsModel } from "@/renderer/model/settings";
-import { MagicCard } from "./magicui/magic-card";
-import { TimeEditDialog } from "./TimeEditDialog";
+import { MagicCard } from "@/renderer/components/magicui/magic-card";
+import { TimeEditDialog } from "@/renderer/components/forms/TimeEditDialog";
 import { useMissingTimeEdit } from "@/renderer/hooks/useMissingTimeEdit";
 import { Employee } from "@/renderer/model/employee";
-import { useAuthStore } from "../stores/authStore";
+import { useAuthStore } from "@/renderer/stores/authStore";
 import { clearMissingTimeLogCache } from "@/renderer/lib/db";
 import { IoReloadOutline } from "react-icons/io5";
-import { isWebEnvironment } from "../lib/firestoreService";
-import DecryptedText from "../styles/DecryptedText/DecryptedText";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import DecryptedText from "@/renderer/styles/DecryptedText/DecryptedText";
 
 export default function MissingTimeLogs() {
   const [missingLogs, setMissingLogs] = useState<MissingTimeLog[]>([]);

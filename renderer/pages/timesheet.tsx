@@ -11,7 +11,7 @@ import TimesheetHeader from "@/renderer/components/timesheet/TimesheetHeader";
 import TimesheetRow from "@/renderer/components/timesheet/TimesheetRow";
 import EmptyTimesheet from "@/renderer/components/timesheet/EmptyTimesheet";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
-import { CompensationDialog } from "@/renderer/components/CompensationDialog";
+import { CompensationDialog } from "@/renderer/components/forms/CompensationDialog";
 import { RecomputeDialog } from "@/renderer/components/RecomputeDialog";
 import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
 

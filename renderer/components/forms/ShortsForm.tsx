@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent } from "react";
 import { toast } from "sonner";
-import BaseFormDialog from "./dialogs/BaseFormDialog"; // Adjust path as necessary
-import FormField from "./forms/FormField"; // Import the new FormField
+import BaseFormDialog from "../dialogs/BaseFormDialog"; // Adjust path as necessary
+import FormField from "./FormField"; // Import the new FormField
 import { useDateSelectorStore } from "@/renderer/components/DateSelector"; // Import the store
 
 interface ShortsFormProps {

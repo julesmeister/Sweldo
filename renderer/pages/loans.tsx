@@ -6,7 +6,7 @@ import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
 import { IoSettingsOutline } from "react-icons/io5";
-import LoanForm from "@/renderer/components/LoanForm";
+import LoanForm from "@/renderer/components/forms/LoanForm";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import { createLoanModel } from "@/renderer/model/loan";
 import { usePathname } from "next/navigation";
