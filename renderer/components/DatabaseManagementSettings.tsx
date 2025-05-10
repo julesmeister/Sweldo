@@ -52,7 +52,7 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     dbPath: dbPath || "",
     companyName: companyName || "",
     employeeId: selectedEmployeeId || undefined,
-    // year is optional in the hook, not needed here for this component's general sync
+    year: new Date().getFullYear(), // Add current year for StatisticsModel
   });
 
   // Load employees when component mounts

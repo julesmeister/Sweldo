@@ -73,6 +73,7 @@
   - Fixed popover interaction: Clicking inside the calendar no longer closes it, due to refined `handleClickOutside` logic considering the portal-rendered calendar via a new `ref`.
   - Added Clear Button: An "x" icon now appears in the input field when a date is selected, allowing for easy resetting of the date range. Input padding adjusts dynamically.
 - ✅ `shorts.tsx` page now correctly loads, displays, and filters data from Firestore in web mode, including proper handling of Firestore Timestamps/date values and reactivity to global date changes.
+- ✅ Fixed oblong radiating circle animation in `NoDataPlaceholder.tsx` by ensuring parent containers have fixed dimensions and animated circles use `aspect-square`.
 
 ## What's Left to Build / Improve
 

@@ -3121,10 +3121,15 @@ export default function SettingsPage() {
   // console.log("[SettingsPage] Checking isLoading:", isLoading);
   if (isLoading) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 mx-auto"></div>
-          <div className="text-gray-600">Loading settings...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="flex space-x-2">
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-0"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-200"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-400"></div>
+          </div>
+          <div className="text-gray-700 font-medium">Loading settings... Please wait.</div>
+          <div className="text-xs text-gray-500">Fetching configurations and preparing your workspace.</div>
         </div>
       </div>
     );

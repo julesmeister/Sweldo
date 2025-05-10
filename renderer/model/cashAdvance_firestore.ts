@@ -255,7 +255,7 @@ export async function saveCashAdvanceFirestore(
 
     // First check if document exists
     const existingDoc = await fetchDocument<CashAdvanceFirestoreData>(
-      "cash_advances",
+      "cash-advances",
       docId,
       companyName
     );
@@ -288,7 +288,7 @@ export async function saveCashAdvanceFirestore(
         },
       };
 
-      await saveDocument("cash_advances", docId, newDoc, companyName);
+      await saveDocument("cash-advances", docId, newDoc, companyName);
     } else {
       // Update existing document
       console.log(
@@ -310,7 +310,7 @@ export async function saveCashAdvanceFirestore(
         "meta.lastModified": new Date().toISOString(),
       };
 
-      await updateDocument("cash_advances", docId, updateData, companyName);
+      await updateDocument("cash-advances", docId, updateData, companyName);
     }
     console.log(
       `[DEBUG] saveCashAdvanceFirestore - Successfully saved cash advance`
@@ -339,7 +339,7 @@ export async function deleteCashAdvanceFirestore(
 
     // Check if document exists
     const existingDoc = await fetchDocument<CashAdvanceFirestoreData>(
-      "cash_advances",
+      "cash-advances",
       docId,
       companyName
     );
@@ -357,7 +357,7 @@ export async function deleteCashAdvanceFirestore(
       "meta.lastModified": new Date().toISOString(),
     };
 
-    await updateDocument("cash_advances", docId, updateData, companyName);
+    await updateDocument("cash-advances", docId, updateData, companyName);
     console.log(
       `[DEBUG] deleteCashAdvanceFirestore - Successfully deleted cash advance with ID: ${id}`
     );
@@ -384,7 +384,7 @@ export async function getAllCashAdvancesForEmployeeFirestore(
     ];
 
     const documents = await queryCollection<CashAdvanceFirestoreData>(
-      "cash_advances",
+      "cash-advances",
       conditions,
       companyName
     );
@@ -708,7 +708,7 @@ export function createCashAdvanceFirestoreInstance(model: CashAdvanceModel) {
 
         // Query all cash advance documents (not just for a specific employee)
         const docs = await queryCollection<CashAdvanceFirestoreData>(
-          "cash_advances",
+          "cash-advances",
           [], // No conditions = all documents
           companyName
         );

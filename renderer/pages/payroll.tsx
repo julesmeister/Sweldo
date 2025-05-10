@@ -463,7 +463,6 @@ export default function PayrollPage() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
-                
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <svg
@@ -488,7 +487,7 @@ export default function PayrollPage() {
                   </span>
                 </div>
               </div>
-              <DateRangePicker variant="timesheet" />
+              <DateRangePicker />
             </div>
 
             <div className="flex gap-4">
@@ -523,7 +522,6 @@ export default function PayrollPage() {
                         <span className="text-[13px] font-medium text-gray-600 mr-1.5">
                           Only
                         </span>
-                        
                       </div>
                     </div>
                   </div>
@@ -535,7 +533,7 @@ export default function PayrollPage() {
                       style={{
                         backgroundColor: "#007bff",
                         color: "#fff",
-                        height: "48px",
+                        height: isWebEnvironment() ? "48px" : "36px",
                         border: "none",
                         borderRadius: "4px",
                         padding: "8px 16px",
@@ -633,7 +631,6 @@ export default function PayrollPage() {
                 <>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-1.5">
-                  
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <svg
@@ -687,11 +684,11 @@ export default function PayrollPage() {
                         onMouseEnter={() => setShowPayslipsTooltip(true)}
                         onMouseLeave={() => setShowPayslipsTooltip(false)}
                         style={{
-                        height: "38px",
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "8px 16px",
-                      }}
+                          height: "38px",
+                          border: "none",
+                          borderRadius: "4px",
+                          padding: "8px 16px",
+                        }}
                       >
                         <span className="flex items-center gap-2">
                           Generate Payslips PDF
@@ -749,12 +746,12 @@ export default function PayrollPage() {
                         className=" px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2 relative"
                         onMouseEnter={() => setShowSummaryTooltip(true)}
                         onMouseLeave={() => setShowSummaryTooltip(false)}
-                         style={{
-                        height: "38px",
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "8px 16px",
-                      }}
+                        style={{
+                          height: "38px",
+                          border: "none",
+                          borderRadius: "4px",
+                          padding: "8px 16px",
+                        }}
                       >
                         <span className="flex items-center gap-2">
                           Generate Summary PDF

@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { IoClose } from "react-icons/io5";
+import React, { useState, useEffect, ChangeEvent } from "react";
+// IoClose is imported but BaseFormDialog will handle its own close icon.
+// import { IoClose } from "react-icons/io5"; 
 import { Loan } from "@/renderer/model/loan";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
+import BaseFormDialog from "./dialogs/BaseFormDialog"; // Import BaseFormDialog
+import FormField from "./forms/FormField"; // Import FormField
 
 interface LoanFormProps {
   onClose: () => void;
@@ -13,8 +16,8 @@ interface LoanFormProps {
     showAbove?: boolean;
     caretLeft?: number;
   };
-  isWebMode?: boolean;
-  companyName?: string | null;
+  isWebMode?: boolean; // This prop seems informational, BaseFormDialog doesn't use it directly
+  companyName?: string | null; // This prop seems informational
 }
 
 const LoanForm: React.FC<LoanFormProps> = ({
@@ -23,25 +26,23 @@ const LoanForm: React.FC<LoanFormProps> = ({
   initialData,
   position,
   isWebMode = false,
-  companyName = null,
+  // companyName prop is not used in LoanForm logic directly
 }) => {
-  const [amount, setAmount] = useState(initialData?.amount?.toString() || "");
-  const [type, setType] = useState<
-    "Personal" | "Housing" | "Emergency" | "Other"
-  >(initialData?.type || "Personal");
-  const [interestRate, setInterestRate] = useState(
-    initialData?.interestRate?.toString() || "12"
-  );
-  const [term, setTerm] = useState(initialData?.term?.toString() || "12");
-  const [reason, setReason] = useState(initialData?.reason || "");
+  const [formDataState, setFormDataState] = useState({
+    amount: initialData?.amount?.toString() || "",
+    type: initialData?.type || "Personal",
+    interestRate: initialData?.interestRate?.toString() || "12",
+    term: initialData?.term?.toString() || "12",
+    reason: initialData?.reason || "",
+  });
   const [monthlyPayment, setMonthlyPayment] = useState<number>(0);
   const { selectedEmployeeId } = useEmployeeStore();
 
   useEffect(() => {
     // Calculate monthly payment when amount, interest rate, or term changes
-    const principal = parseFloat(amount) || 0;
-    const rate = (parseFloat(interestRate) || 0) / 100 / 12; // Monthly interest rate
-    const numberOfPayments = parseInt(term) || 1;
+    const principal = parseFloat(formDataState.amount) || 0;
+    const rate = (parseFloat(formDataState.interestRate) || 0) / 100 / 12; // Monthly interest rate
+    const numberOfPayments = parseInt(formDataState.term) || 1;
 
     if (principal > 0 && rate > 0 && numberOfPayments > 0) {
       const payment =
@@ -51,7 +52,12 @@ const LoanForm: React.FC<LoanFormProps> = ({
     } else {
       setMonthlyPayment(0);
     }
-  }, [amount, interestRate, term]);
+  }, [formDataState.amount, formDataState.interestRate, formDataState.term]);
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormDataState(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -67,210 +73,112 @@ const LoanForm: React.FC<LoanFormProps> = ({
       return;
     }
 
-    const formData: Loan = {
+    const processedFormData: Loan = {
       id: initialData?.id || crypto.randomUUID(),
       employeeId: selectedEmployeeId,
       date: today,
-      amount: parseFloat(amount),
-      type,
+      amount: parseFloat(formDataState.amount),
+      type: formDataState.type as "Personal" | "Housing" | "Emergency" | "Other",
       status: initialData?.status || "Pending",
-      interestRate: parseFloat(interestRate),
-      term: parseInt(term),
+      interestRate: parseFloat(formDataState.interestRate),
+      term: parseInt(formDataState.term),
       monthlyPayment,
-      remainingBalance: parseFloat(amount),
+      remainingBalance: parseFloat(formDataState.amount),
       nextPaymentDate: nextMonth,
-      reason,
+      reason: formDataState.reason,
     };
-    onSave(formData);
-    onClose();
+    onSave(processedFormData);
+    // BaseFormDialog handles calling onClose via its own cancel button if configured,
+    // or parent calls onClose when onSave completes. Here, it implies success.
+    // onClose(); // Typically called after onSave promise resolves in parent
   };
 
+  const dialogTitle = initialData ? "Edit Loan Application" : "Apply for Loan";
+  const submitButtonText = (initialData ? "Update" : "Submit") + " Loan";
+
+  const loanTypeOptions = [
+    { value: "Personal", label: "Personal Loan" },
+    { value: "Housing", label: "Housing Loan" },
+    { value: "Emergency", label: "Emergency Loan" },
+    { value: "Other", label: "Other" },
+  ];
+
   return (
-    <div
-      className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700"
-      style={{
-        top: position?.top,
-        left: position?.left,
-        transform: position?.showAbove ? "translateY(-100%)" : "none",
-        maxHeight: "calc(100vh - 200px)",
-        width: "500px",
-      }}
+    <BaseFormDialog
+      title={dialogTitle}
+      isOpen={true} // Assuming LoanForm is only rendered when it should be open
+      onClose={onClose}
+      onSubmit={handleSubmit} // The form inside children will also call this
+      position={position}
+      submitText={submitButtonText}
+      // cancelText="Cancel" // BaseFormDialog has default "Cancel"
+      dialogWidth="500px" // As per old style
+      dialogMaxHeight="calc(100vh - 200px)" // As per old style
     >
-      {/* Caret */}
-      <div
-        className="absolute"
-        style={{
-          left: position?.caretLeft,
-          [position?.showAbove ? "bottom" : "top"]: position?.showAbove
-            ? "-8px"
-            : "-8px",
-          width: 0,
-          height: 0,
-          borderLeft: "8px solid transparent",
-          borderRight: "8px solid transparent",
-          ...(position?.showAbove
-            ? { borderTop: "8px solid rgb(17, 24, 39)" }
-            : { borderBottom: "8px solid rgb(17, 24, 39)" }),
-        }}
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg">
-        <h2 className="text-lg font-semibold text-gray-100">
-          {initialData ? "Edit Loan Application" : "Apply for Loan"}
-          {isWebMode && <span className="ml-2 text-xs text-blue-400">(Web Mode)</span>}
-        </h2>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-300 transition-colors duration-200"
-        >
-          <IoClose size={24} />
-        </button>
-      </div>
-
-      {/* Form Content */}
-      <div className="px-6 py-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Loan Amount */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Loan Amount
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                  ₱
-                </span>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="block w-full pl-8 bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-100 h-10 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                  min="0"
-                  step="0.01"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Loan Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Loan Type
-              </label>
-              <select
-                value={type}
-                onChange={(e) =>
-                  setType(
-                    e.target.value as
-                      | "Personal"
-                      | "Housing"
-                      | "Emergency"
-                      | "Other"
-                  )
-                }
-                className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-              >
-                <option value="Personal" className="bg-gray-800">
-                  Personal Loan
-                </option>
-                <option value="Housing" className="bg-gray-800">
-                  Housing Loan
-                </option>
-                <option value="Emergency" className="bg-gray-800">
-                  Emergency Loan
-                </option>
-                <option value="Other" className="bg-gray-800">
-                  Other
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Interest Rate */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Interest Rate (% per year)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={interestRate}
-                  onChange={(e) => setInterestRate(e.target.value)}
-                  className="block w-full pr-8 bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                  min="0"
-                  step="0.1"
-                  required
-                />
-                <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">
-                  %
-                </span>
-              </div>
-            </div>
-
-            {/* Term */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Term (months)
-              </label>
-              <input
-                type="number"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                min="1"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Monthly Payment Display */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-md p-4">
-            <div className="text-sm text-gray-300">
-              Estimated Monthly Payment
-            </div>
-            <div className="text-xl font-semibold text-gray-100 mt-1">
-              ₱{monthlyPayment.toLocaleString()}
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Reason for Loan
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 p-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-              rows={3}
-              required
-            />
-          </div>
-        </form>
-      </div>
-
-      {/* Footer */}
-      <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
-        <div className="flex flex-row space-x-3 w-full">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-          >
-            {initialData ? "Update" : "Submit"} Loan
-          </button>
+      {/* Form Content will be the child of BaseFormDialog */}
+      <form onSubmit={handleSubmit} className="space-y-4 pb-2">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            label="Loan Amount"
+            name="amount"
+            type="number"
+            value={formDataState.amount}
+            onChange={handleInputChange}
+            prefix="₱"
+            inputClassName="pl-8"
+            inputProps={{ min: "0", step: "0.01" }}
+          />
+          <FormField
+            label="Loan Type"
+            name="type"
+            type="select"
+            value={formDataState.type}
+            onChange={handleInputChange}
+            options={loanTypeOptions}
+          />
         </div>
-      </div>
-    </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            label="Interest Rate (% per year)"
+            name="interestRate"
+            type="number"
+            value={formDataState.interestRate}
+            onChange={handleInputChange}
+            suffix="%"
+            inputClassName="pr-8"
+            inputProps={{ min: "0", step: "0.1" }}
+          />
+          <FormField
+            label="Term (months)"
+            name="term"
+            type="number"
+            value={formDataState.term}
+            onChange={handleInputChange}
+            inputProps={{ min: "1" }}
+          />
+        </div>
+
+        {/* Monthly Payment Display */}
+        <div className="bg-gray-800/50 border border-gray-700 rounded-md p-4">
+          <div className="text-sm text-gray-300">
+            Estimated Monthly Payment
+          </div>
+          <div className="text-xl font-semibold text-gray-100 mt-1">
+            ₱{monthlyPayment.toLocaleString()}
+          </div>
+        </div>
+
+        <FormField
+          label="Reason for Loan"
+          name="reason"
+          type="textarea"
+          value={formDataState.reason}
+          onChange={handleInputChange}
+          rows={3}
+        />
+      </form>
+    </BaseFormDialog>
   );
 };
 

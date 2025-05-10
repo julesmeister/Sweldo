@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import TimesheetHeader from "@/renderer/components/timesheet/TimesheetHeader";
 import TimesheetRow from "@/renderer/components/timesheet/TimesheetRow";
 import EmptyTimesheet from "@/renderer/components/timesheet/EmptyTimesheet";
+import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 import { CompensationDialog } from "@/renderer/components/CompensationDialog";
 import { RecomputeDialog } from "@/renderer/components/RecomputeDialog";
 import { AttendanceHistoryDialog } from "@/renderer/components/AttendanceHistoryDialog";
@@ -715,9 +716,11 @@ const TimesheetPage: React.FC = () => {
             />
 
             {!selectedEmployeeId ? (
-              <EmptyTimesheet
-                onSelectEmployee={() => handleLinkClick("/")}
-                hasSelectedEmployee={false}
+              <NoDataPlaceholder
+                dataType="timesheet data"
+                actionText="Select Employee"
+                onActionClick={() => handleLinkClick("/")}
+                onSelectEmployeeClick={() => handleLinkClick("/")}
               />
             ) : (
               <div className="flex-1 overflow-x-auto scrollbar-y-none">
@@ -784,9 +787,15 @@ const TimesheetPage: React.FC = () => {
                 )}
 
                 {filteredTimesheetEntries.length === 0 ? (
-                  <EmptyTimesheet
-                    onSelectEmployee={() => { }}
-                    hasSelectedEmployee={true}
+                  <NoDataPlaceholder
+                    employeeName={employee?.name || "Selected Employee"}
+                    dataType="timesheet entries"
+                    actionText="Add Entry"
+                    onActionClick={() => {
+                      console.log("Add Entry / Primary Action Clicked for NoDataPlaceholder");
+                      toast.info("Action for 'No timesheet entries' placeholder clicked.");
+                    }}
+                    onSelectEmployeeClick={() => handleLinkClick("/")}
                   />
                 ) : (
                   <table className="min-w-full divide-y divide-gray-200 border-collapse border-gray-200 timesheet-table">

@@ -15,6 +15,13 @@ The Sweldo application was originally designed for desktop use with Electron, bu
 - ✅ Implemented date parsing for Firestore timestamps
 - ✅ Added filter functionality for payroll records
 - ✅ **`shorts.tsx` Web Mode Data Loading Fixed**: Successfully refactored `shorts.tsx` to correctly load and display data from Firestore in web mode. This involved implementing direct Firestore service calls, separating employee detail loading, ensuring reactivity to the global `DateSelector`, and adding robust parsing for date fields (including handling `null` or invalid dates from Firestore). The approach aligns with patterns used in `cashAdvances.tsx`.
+- ✅ **Fixed Oblong Radiating Circles in `NoDataPlaceholder.tsx`**:
+    - **Problem**: The radiating ping animation circles in the `NoDataPlaceholder` component were appearing oblong instead of perfectly round.
+    - **Solution**:
+        - Modified the parent container of the animation to have a fixed width and height (e.g., `w-28 h-28` or `w-24 h-24`) and used `mx-auto` for centering.
+        - Applied `aspect-square` to the animating circle `div`s to enforce a 1:1 aspect ratio.
+        - Ensured the inner content container (`relative z-10 ...`) used `w-full h-full` to correctly fill its new fixed-size parent.
+        - This was addressed in `renderer/components/NoDataPlaceholder.tsx`.
 
 ### Current Challenges
 - Some components still assume local file system access

@@ -203,6 +203,10 @@ module.exports = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         shine: "shine var(--duration) infinite linear",
+        "ping-slow-1": "ping-slow-1 3s cubic-bezier(0, 0, 0.2, 1) infinite",
+        "ping-slow-2":
+          "ping-slow-2 3s cubic-bezier(0, 0, 0.2, 1) 0.5s infinite", // 0.5s delay
+        "ping-slow-3": "ping-slow-3 3s cubic-bezier(0, 0, 0.2, 1) 1s infinite", // 1s delay
       },
       keyframes: {
         "accordion-down": {
@@ -223,6 +227,18 @@ module.exports = {
           to: {
             "background-position": "0% 0%",
           },
+        },
+        "ping-slow-1": {
+          "0%": { transform: "scale(0.5)", opacity: "0.75" },
+          "75%, 100%": { transform: "scale(1.5)", opacity: "0" },
+        },
+        "ping-slow-2": {
+          "0%": { transform: "scale(0.5)", opacity: "0.6" },
+          "75%, 100%": { transform: "scale(1.75)", opacity: "0" },
+        },
+        "ping-slow-3": {
+          "0%": { transform: "scale(0.5)", opacity: "0.45" },
+          "75%, 100%": { transform: "scale(2)", opacity: "0" },
         },
       },
     },

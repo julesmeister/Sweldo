@@ -342,9 +342,10 @@
   }
 
   /* Adjust select dropdown arrow spacing */
-  .compensation-dialog select {
+  .compensation-dialog select,
+  .base-form-dialog-content select {
     padding-right: 2.5rem !important;
-    background-position: right 1rem center !important;
+    background-position: right 0.75rem center !important;
   }
   
   /* Fix form layout and button positioning in CompensationDialog */

@@ -18,6 +18,7 @@ import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import { loadLeavesFirestore } from "@/renderer/model/leave_firestore";
+import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 
 interface Leave {
   id: string;
@@ -413,72 +414,22 @@ export default function LeavesPage() {
                     </button>
                   </div>
                   {selectedEmployeeId === null ? (
-                    <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <div className="mb-6">
-                        <svg
-                          className="mx-auto h-24 w-24 text-gray-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                          />
-                        </svg>
-                      </div>
-                      <h3 className="mt-2 text-xl font-semibold text-gray-900">
-                        No Employee Selected
-                      </h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Please select an employee from the dropdown menu to view
-                        their cash advances.
-                      </p>
-                      <div className="mt-6">
-                        <AddButton
-                          text="Select Employee"
-                          onClick={() => handleLinkClick("/")}
-                        />
-                      </div>
-                    </div>
+                    <NoDataPlaceholder
+                      dataType="leave requests"
+                      actionText="Request Leave"
+                      onActionClick={handleButtonClick}
+                      onSelectEmployeeClick={() => handleLinkClick("/")}
+                    />
                   ) : (
                     <div className="overflow-x-auto relative">
                       {leaves.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 px-4">
-                          <div className="text-center">
-                            <svg
-                              className="mx-auto h-12 w-12 text-gray-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                              />
-                            </svg>
-                            <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                              No leave requests found for{" "}
-                              {new Date(
-                                useDateSelectorStore.getState().selectedYear,
-                                useDateSelectorStore.getState().selectedMonth,
-                                1
-                              ).toLocaleString("default", {
-                                month: "long",
-                                year: "numeric",
-                              })}
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                              Get started by creating a new leave request.
-                            </p>
-                          </div>
-                        </div>
+                        <NoDataPlaceholder
+                          employeeName={employee?.name}
+                          dataType="leave requests"
+                          actionText="Request Leave"
+                          onActionClick={handleButtonClick}
+                          onSelectEmployeeClick={() => handleLinkClick("/")}
+                        />
                       ) : (
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">

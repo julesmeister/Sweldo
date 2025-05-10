@@ -18,8 +18,13 @@ import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
 import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
-import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
+import {
+  loadShortsFirestore,
+  createShortFirestore,
+  updateShortFirestore,
+} from "@/renderer/model/shorts_firestore";
 import { useDateSelectorStore } from "@/renderer/components/DateSelector";
+import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 
 export default function ShortsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -64,8 +69,8 @@ export default function ShortsPage() {
     return createShortModel(
       dbPath,
       selectedEmployeeId,
-      parseInt(storeSelectedMonth, 10) + 1,
-      parseInt(storeSelectedYear, 10)
+      storeSelectedMonth + 1,
+      storeSelectedYear
     );
   }, [dbPath, selectedEmployeeId, storeSelectedMonth, storeSelectedYear]);
   const { hasAccess } = useAuthStore();
@@ -92,7 +97,7 @@ export default function ShortsPage() {
         if (isWebEnvironment()) {
           console.log(`[ShortsPage WEB] Starting to load shorts for employee: ${selectedEmployeeId}`);
           if (!companyNameFromSettings) {
-            toast.error("Company name not configured for web mode. Cannot load shorts.");
+            toast("Company name not configured for web mode. Cannot load shorts.");
             if (mounted) setLoading(false);
             return;
           }
@@ -106,7 +111,7 @@ export default function ShortsPage() {
           // Desktop mode
           console.log(`[ShortsPage DESKTOP] Starting to load shorts for employee: ${selectedEmployeeId}`);
           if (!dbPath || !employeeModel || !shortModel) {
-            toast.error("System not fully initialized for desktop mode. Cannot load shorts.");
+            toast("System not fully initialized for desktop mode. Cannot load shorts.");
             if (mounted) setLoading(false);
             return;
           }
@@ -121,7 +126,7 @@ export default function ShortsPage() {
       } catch (error) {
         console.error("Error loading shorts data:", error);
         if (mounted) {
-          toast.error(
+          toast(
             error instanceof Error ? error.message : "Failed to load shorts data"
           );
         }
@@ -150,7 +155,7 @@ export default function ShortsPage() {
       try {
         if (isWebEnvironment()) {
           if (!companyNameFromSettings) {
-            toast.warn("Company name not set. Cannot load selected employee for web mode.");
+            toast("Company name not set. Cannot load selected employee for web mode.");
             setEmployee(null);
             return;
           }
@@ -164,7 +169,7 @@ export default function ShortsPage() {
           }
         } else {
           if (!dbPath) {
-            toast.warn("Database path not set. Cannot load selected employee for desktop mode.");
+            toast("Database path not set. Cannot load selected employee for desktop mode.");
             setEmployee(null);
             return;
           }
@@ -172,12 +177,12 @@ export default function ShortsPage() {
           const emp = await desktopEmployeeModel.loadEmployeeById(selectedEmployeeId);
           setEmployee(emp);
           if (!emp) {
-            toast.error(`[ShortsPage DESKTOP] loadSelectedEmployee: Employee with ID ${selectedEmployeeId} not found using model.`);
+            toast("Error loading selected employee details.");
           }
         }
       } catch (error) {
         console.error("[ShortsPage] Error in loadSelectedEmployee:", error);
-        toast.error("Error loading selected employee details.");
+        toast("Error loading selected employee details.");
         setEmployee(null);
       } finally {
         setLoading(false); // Consider if setLoading is appropriate here or if it flickers too much
@@ -193,7 +198,7 @@ export default function ShortsPage() {
       try {
         if (isWebEnvironment()) {
           if (!companyNameFromSettings) {
-            toast.warn("Company name not set. Cannot load employees for web mode.");
+            toast("Company name not set. Cannot load employees for web mode.");
             setEmployees([]);
             return;
           }
@@ -202,7 +207,7 @@ export default function ShortsPage() {
           setEmployees(firestoreEmployees);
         } else {
           if (!dbPath) {
-            toast.warn("Database path not set. Cannot load employees for desktop mode.");
+            toast("Database path not set. Cannot load employees for desktop mode.");
             setEmployees([]);
             return;
           }
@@ -213,7 +218,7 @@ export default function ShortsPage() {
         }
       } catch (error) {
         console.error("Error loading employees for dropdown:", error);
-        toast.error("Error loading employees for dropdown");
+        toast("Error loading employees for dropdown");
         setEmployees([]); // Ensure employees is empty on error
       } finally {
         setLoading(false);
@@ -240,31 +245,35 @@ export default function ShortsPage() {
     setSelectedShort(null);
   };
 
-  const handleButtonClick = (event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
+  const handleButtonClick = (event?: React.MouseEvent) => {
+    let top, left, showAbove, caretLeft;
     const dialogHeight = 450;
     const dialogWidth = 850;
     const spacing = 8;
 
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
+    if (event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const windowWidth = window.innerWidth;
 
-    // Calculate horizontal position
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
+      // Calculate vertical position
+      const spaceBelow = windowHeight - rect.bottom;
+      showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
+      top = showAbove
+        ? rect.top - dialogHeight - spacing
+        : rect.bottom + spacing;
 
-    // Keep dialog within window bounds
-    left =
-      Math.max(spacing, Math.min(left, windowWidth - dialogWidth - spacing)) -
-      60;
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = rect.left + rect.width / 2 - left;
+      // Calculate horizontal position
+      let tempLeft = rect.left + rect.width / 2 - dialogWidth / 2;
+      left = Math.max(spacing, Math.min(tempLeft, windowWidth - dialogWidth - spacing)) - 60; // Adjusted as per original logic
+      caretLeft = rect.left + rect.width / 2 - left;
+    } else {
+      // Default positioning logic (e.g., center screen)
+      top = window.innerHeight / 2 - dialogHeight / 2;
+      left = window.innerWidth / 2 - dialogWidth / 2;
+      showAbove = false;
+      caretLeft = dialogWidth / 2; // Caret in the middle of the dialog
+    }
 
     setClickPosition({
       top,
@@ -324,59 +333,109 @@ export default function ShortsPage() {
   };
 
   async function handleSaveShort(data: Short): Promise<void> {
-    if (!shortModel) {
-      toast.error(
-        "System not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set"
-      );
-      return;
-    }
-
     if (!selectedEmployeeId) {
-      toast.error("Please select an employee first");
-      return;
-    }
-
-    if (!dbPath) {
-      toast.error("Database path is not configured");
+      toast("Please select an employee first");
       return;
     }
 
     setLoading(true);
     try {
-      if (selectedShort) {
-        // Update existing short
-        await shortModel.updateShort({
-          ...data,
-          id: selectedShort.id,
-          employeeId: selectedEmployeeId!,
-          date: data.date, // Use the new date from the form
-        });
-        toast.success("Short updated successfully", {
-          position: "bottom-right",
-          duration: 3000,
-        });
-      } else {
-        // Create new short
-        await shortModel.createShort({
-          ...data,
-          employeeId: selectedEmployeeId!,
-          date: data.date,
-        });
-        toast.success("Short created successfully", {
-          position: "bottom-right",
-          duration: 3000,
-        });
-      }
+      if (isWebEnvironment()) {
+        // Web Mode
+        if (!companyNameFromSettings) {
+          toast("Company name not configured for web mode. Cannot save short.");
+          setLoading(false);
+          return;
+        }
 
-      // Reload the shorts to get the updated list
-      const shortItems = await shortModel.loadShorts(selectedEmployeeId!);
-      setShorts(shortItems);
+        const currentMonthForFirestore = storeSelectedMonth + 1; // Zustand month is 0-indexed
+        const currentYearForFirestore = storeSelectedYear;
+
+        if (selectedShort) {
+          // Update existing short in Firestore
+          await updateShortFirestore(
+            { ...data, employeeId: selectedEmployeeId! }, // Ensure current employeeId is used
+            currentMonthForFirestore,
+            currentYearForFirestore,
+            companyNameFromSettings
+          );
+          toast("Short updated successfully", {
+            position: "bottom-right",
+            duration: 3000,
+          });
+        } else {
+          // Create new short in Firestore
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, ...shortDataForCreate } = data; // Firestore backend generates ID if needed, or uses provided if structured that way by the model
+          await createShortFirestore(
+            shortDataForCreate, // Pass data without the form-generated ID
+            selectedEmployeeId!,
+            currentMonthForFirestore,
+            currentYearForFirestore,
+            companyNameFromSettings
+          );
+          toast("Short created successfully", {
+            position: "bottom-right",
+            duration: 3000,
+          });
+        }
+
+        // Reload the shorts from Firestore to get the updated list
+        const shortItems = await loadShortsFirestore(
+          selectedEmployeeId!,
+          currentMonthForFirestore,
+          currentYearForFirestore,
+          companyNameFromSettings
+        );
+        setShorts(shortItems);
+      } else {
+        // Desktop Mode (Existing Logic)
+        if (!dbPath) {
+          toast("Database path is not configured for desktop mode.");
+          setLoading(false);
+          return;
+        }
+        if (!shortModel) {
+          toast("Shorts system (desktop) not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set");
+          setLoading(false);
+          return;
+        }
+
+        if (selectedShort) {
+          // Update existing short
+          await shortModel.updateShort({
+            ...data,
+            id: selectedShort.id,
+            employeeId: selectedEmployeeId!,
+            date: data.date, // Use the new date from the form
+          });
+          toast("Short updated successfully", {
+            position: "bottom-right",
+            duration: 3000,
+          });
+        } else {
+          // Create new short
+          await shortModel.createShort({
+            ...data,
+            employeeId: selectedEmployeeId!,
+            date: data.date,
+          });
+          toast("Short created successfully", {
+            position: "bottom-right",
+            duration: 3000,
+          });
+        }
+
+        // Reload the shorts to get the updated list
+        const shortItems = await shortModel.loadShorts(selectedEmployeeId!);
+        setShorts(shortItems);
+      }
 
       // Close the dialog
       handleCloseDialog();
     } catch (error) {
       console.error("Error saving short:", error);
-      toast.error(
+      toast(
         error instanceof Error
           ? `Error saving short: ${error.message}`
           : "Error saving short",
@@ -483,39 +542,13 @@ export default function ShortsPage() {
                   {selectedEmployeeId ? (
                     <div className="overflow-x-auto relative">
                       {filteredShorts.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 px-4">
-                          <div className="text-center">
-                            <svg
-                              className="mx-auto h-12 w-12 text-gray-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                              />
-                            </svg>
-                            <h3 className="mt-2 text-sm font-semibold text-gray-900">
-                              No shorts found for{" "}
-                              {new Date(
-                                storeSelectedYear,
-                                storeSelectedMonth,
-                                1
-                              ).toLocaleString("default", {
-                                month: "long",
-                                year: "numeric",
-                              })}
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                              Get started by clicking the "Apply for Short"
-                              button above.
-                            </p>
-                          </div>
-                        </div>
+                        <NoDataPlaceholder
+                          employeeName={employee?.name}
+                          dataType="shorts"
+                          actionText="Apply for Short"
+                          onActionClick={handleButtonClick}
+                          onSelectEmployeeClick={() => handleLinkClick("/")}
+                        />
                       ) : (
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
@@ -595,14 +628,14 @@ export default function ShortsPage() {
                                       e.stopPropagation();
 
                                       if (!hasDeleteAccess) {
-                                        toast.error(
+                                        toast(
                                           "You don't have permission to delete short records"
                                         );
                                         return;
                                       }
 
                                       if (!shortModel) {
-                                        toast.error(
+                                        toast(
                                           "System not properly initialized"
                                         );
                                         return;
@@ -624,7 +657,7 @@ export default function ShortsPage() {
                                             selectedEmployeeId!
                                           );
                                         setShorts(shortItems);
-                                        toast.success(
+                                        toast(
                                           "Short deleted successfully"
                                         );
                                       } catch (error) {
@@ -632,7 +665,7 @@ export default function ShortsPage() {
                                           "Error deleting short:",
                                           error
                                         );
-                                        toast.error(
+                                        toast(
                                           error instanceof Error
                                             ? `Error deleting short: ${error.message}`
                                             : "Error deleting short"
@@ -657,37 +690,12 @@ export default function ShortsPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <div className="mb-6">
-                        <svg
-                          className="mx-auto h-24 w-24 text-gray-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                          />
-                        </svg>
-                      </div>
-                      <h3 className="mt-2 text-xl font-semibold text-gray-900">
-                        No Employee Selected
-                      </h3>
-                      <p className="mt-2 text-sm text-gray-500">
-                        Please select an employee from the dropdown menu to view
-                        their shorts.
-                      </p>
-                      <div className="mt-6">
-                        <AddButton
-                          text="Select Employee"
-                          onClick={() => handleLinkClick("/")}
-                        />
-                      </div>
-                    </div>
+                    <NoDataPlaceholder
+                      dataType="shorts"
+                      actionText="Apply for Short"
+                      onActionClick={handleButtonClick}
+                      onSelectEmployeeClick={() => handleLinkClick("/")}
+                    />
                   )}
                 </div>
               </div>

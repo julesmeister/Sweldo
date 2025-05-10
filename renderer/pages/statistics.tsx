@@ -25,6 +25,8 @@ import { Payroll, PayrollSummaryModel } from "../model/payroll";
 import { useDateSelectorStore } from "../components/DateSelector";
 import { usePayrollStatistics } from "../hooks/usePayrollStatistics";
 import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+import YearPickerDropdown from "../components/YearPickerDropdown";
+import Waves from '../components/magicui/Waves';
 
 // Stat card component
 const StatCard = ({
@@ -40,7 +42,8 @@ const StatCard = ({
   trend?: string;
   trendUp?: boolean;
 }) => (
-  <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
+  <div className="bg-white bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2710%27%20height%3D%2710%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%27M-1%201%20l2-2%20M0%2010%20l10-10%20M9%2011%20l2-2%27%20stroke%3D%27rgba(0%2C0%2C0%2C0.04)%27%20stroke-width%3D%270.5%27%2F%3E%3C%2Fsvg%3E')] rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
+    <Waves lineColor="#f1f1f1" />
     <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-full opacity-20 -mr-12 -mt-12"></div>
     <div className="flex items-center justify-between relative z-10">
       <div>
@@ -151,14 +154,15 @@ const Table = ({
 const Timeline = ({
   data,
 }: {
-  data: { employee: string; date: string; rate: number }[];
+  data: (DailyRateHistory & { groupKey: string; displayName: string })[];
 }) => {
-  // Group data by employee
+  // Group data by the consistent 'groupKey'
   const employeeGroups = data.reduce((groups, item) => {
-    if (!groups[item.employee]) {
-      groups[item.employee] = [];
+    const key = item.groupKey; // Use the new groupKey
+    if (!groups[key]) {
+      groups[key] = [];
     }
-    groups[item.employee].push(item);
+    groups[key].push(item);
     return groups;
   }, {} as Record<string, typeof data>);
 
@@ -191,16 +195,19 @@ const Timeline = ({
         Daily Rate History
       </h3>
 
-      {Object.entries(employeeGroups).map(([employee, history]) => {
+      {Object.entries(employeeGroups).map(([groupKey, historyItems]) => {
         // Sort history by date in descending order (most recent first)
-        const sortedHistory = [...history].sort(
+        const sortedHistory = [...historyItems].sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
 
+        // Display name should come from the first item in the sorted history
+        const employeeDisplayName = sortedHistory[0]?.displayName || groupKey;
+
         return (
-          <div key={employee} className="mb-8 last:mb-0">
+          <div key={groupKey} className="mb-8 last:mb-0">
             <h4 className="text-md font-medium text-gray-700 mb-4">
-              {employee}
+              {employeeDisplayName}
             </h4>
             <div className="overflow-x-auto">
               <div className="relative flex items-start min-w-max">
@@ -449,6 +456,7 @@ export default function StatisticsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statisticsData, setStatisticsData] = useState<Statistics | null>(null);
   const [refreshDialogOpen, setRefreshDialogOpen] = useState(false);
+  const [employeeList, setEmployeeList] = useState<Employee[]>([]);
 
   // Convert selectedMonth (number 0-11) to month name string
   const getMonthName = (monthIndex: number): string => {
@@ -547,6 +555,24 @@ export default function StatisticsPage() {
     let needsRefreshAfterRateInit = false;
 
     try {
+      // Fetch employees first
+      let fetchedEmployees: Employee[] = [];
+      if (isWebEnvironment()) {
+        if (companyName) {
+          fetchedEmployees = await loadEmployeesFirestore(companyName);
+        } else {
+          console.warn("[Stats Page] Web mode: Company name missing for employee load.");
+        }
+      } else {
+        if (dbPath) {
+          const employeeModel = createEmployeeModel(dbPath);
+          fetchedEmployees = await employeeModel.loadEmployees();
+        } else {
+          console.warn("[Stats Page] Desktop mode: dbPath missing for employee load.");
+        }
+      }
+      setEmployeeList(fetchedEmployees);
+
       if (isWebEnvironment()) {
         if (!companyName) throw new Error("Company not selected.");
         data = await getStatisticsFirestore(selectedYear, companyName);
@@ -619,14 +645,43 @@ export default function StatisticsPage() {
     */
   };
 
-  // Filter data based on selected year
-  const filteredDailyRateHistory = statisticsData?.dailyRateHistory || [];
+  // Create memoized maps for employee ID/Name lookups
+  const idToNameMap = React.useMemo(() => new Map(employeeList.map(e => [e.id, e.name])), [employeeList]);
+  const nameToIdMap = React.useMemo(() => new Map(employeeList.map(e => [e.name, e.id])), [employeeList]);
+
+  // Process dailyRateHistory to ensure consistent grouping and display names
+  const processedDailyRateHistory = React.useMemo(() => {
+    if (!statisticsData?.dailyRateHistory) return [];
+
+    return statisticsData.dailyRateHistory.map(item => {
+      let groupKey: string = ''; // This will be the consistent key, ideally employee ID
+      let displayName: string = ''; // This will be the employee's name for display
+
+      // Scenario 1: item.employee is a known ID
+      if (idToNameMap.has(item.employee)) {
+        groupKey = item.employee;
+        displayName = idToNameMap.get(item.employee)!;
+      }
+      // Scenario 2: item.employee is a known Name
+      else if (nameToIdMap.has(item.employee)) {
+        groupKey = nameToIdMap.get(item.employee)!;
+        displayName = item.employee;
+      }
+      // Scenario 3: Fallback (item.employee might be an unknown ID or a name not in current employeeList)
+      else {
+        groupKey = item.employee; // Use as is for grouping
+        displayName = item.employee; // Use as is for display
+      }
+      return { ...item, groupKey, displayName }; // Add groupKey and displayName to each history item
+    });
+  }, [statisticsData?.dailyRateHistory, idToNameMap, nameToIdMap]);
 
   // Debug output
   useEffect(() => {
     console.log("Current statistics data:", statisticsData);
-    console.log("Filtered daily rate history:", filteredDailyRateHistory);
-  }, [statisticsData, filteredDailyRateHistory]);
+    console.log("Processed daily rate history:", processedDailyRateHistory);
+    console.log("Employee List for ID/Name mapping:", employeeList);
+  }, [statisticsData, processedDailyRateHistory, employeeList]);
 
   // Function to open the refresh dialog
   const openRefreshDialog = (month: string) => {
@@ -636,10 +691,15 @@ export default function StatisticsPage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 mx-auto"></div>
-          <div className="text-gray-600">Loading statistics...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="flex space-x-2">
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-0"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-200"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-400"></div>
+          </div>
+          <div className="text-gray-700 font-medium">Loading statistics... Please wait.</div>
+          <div className="text-xs text-gray-500">Crunching numbers and generating insights.</div>
         </div>
       </div>
     );
@@ -697,26 +757,23 @@ export default function StatisticsPage() {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleRefresh}
-                    className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1"
+                    className="flex items-center justify-between cursor-pointer border border-gray-300 rounded-full pl-3 pr-1.5 py-1 bg-white hover:bg-gray-50 transition-colors shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-auto"
                     title="Refresh statistics data"
                     disabled={isLoading}
                   >
-                    <IoRefreshOutline
-                      className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
-                    />
-                    <span>Refresh</span>
+                    <span className="text-gray-700 font-medium mr-1.5">Refresh</span>
+                    <div className="flex items-center justify-center w-5 h-5 bg-blue-500 rounded-full">
+                      <IoRefreshOutline
+                        className={`w-3 h-3 text-white ${isLoading ? "animate-spin" : ""}`}
+                      />
+                    </div>
                   </button>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                    className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {years.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
+                  <YearPickerDropdown
+                    selectedYear={selectedYear}
+                    onSelectYear={setSelectedYear}
+                    years={years}
+                    className="w-20"
+                  />
                 </div>
               </div>
             </div>
@@ -856,7 +913,7 @@ export default function StatisticsPage() {
 
               {/* Daily Rate History Section */}
               <div className="mt-8">
-                <Timeline data={filteredDailyRateHistory} />
+                <Timeline data={processedDailyRateHistory} />
               </div>
             </div>
           </div>

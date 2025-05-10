@@ -117,6 +117,43 @@ export function injectStyles() {
       border-radius: inherit;
     }
 
+    /* Pulse animation for loading indicators */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .5; }
+    }
+    .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+    }
+    .delay-0 { animation-delay: 0s !important; } /* Added !important for override */
+    .delay-200 { animation-delay: 0.2s !important; } /* Added !important for override */
+    .delay-400 { animation-delay: 0.4s !important; } /* Added !important for override */
+
+    /* Ping slow animations for NoDataPlaceholder */
+    @keyframes ping-slow-1 {
+      0% { transform: scale(0.5); opacity: 0.75; }
+      75%, 100% { transform: scale(1.5); opacity: 0; }
+    }
+    .animate-ping-slow-1 {
+      animation: ping-slow-1 3s cubic-bezier(0, 0, 0.2, 1) infinite !important;
+    }
+
+    @keyframes ping-slow-2 {
+      0% { transform: scale(0.5); opacity: 0.6; }
+      75%, 100% { transform: scale(1.75); opacity: 0; }
+    }
+    .animate-ping-slow-2 {
+      animation: ping-slow-2 3s cubic-bezier(0, 0, 0.2, 1) 0.5s infinite !important;
+    }
+
+    @keyframes ping-slow-3 {
+      0% { transform: scale(0.5); opacity: 0.45; }
+      75%, 100% { transform: scale(2); opacity: 0; }
+    }
+    .animate-ping-slow-3 {
+      animation: ping-slow-3 3s cubic-bezier(0, 0, 0.2, 1) 1s infinite !important;
+    }
+
     /* Custom scrollbar styles from timesheet.tsx */
     .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
@@ -598,8 +635,9 @@ export function injectStyles() {
     }
 
     /* Adjust select dropdown arrow spacing */
-    .compensation-dialog select {
-      padding-right: 2.5rem !important;
+    .compensation-dialog select,
+    .base-form-dialog-content select {
+      padding-right: 1.5rem !important;
       background-position: right 1rem center !important;
       background-size: 16px 16px !important;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
@@ -617,6 +655,12 @@ export function injectStyles() {
 
     /* timesheet-table section - auto-generated */
     .timesheet-table th,
+    .timesheet-table .timesheet-day-cell {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: inherit !important;
+}
     /* end timesheet-table section */
 
     /* scrollbar section - auto-generated */

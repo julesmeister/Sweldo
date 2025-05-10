@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, ChangeEvent } from "react";
 import { IoClose } from "react-icons/io5";
 import { Leave } from "@/renderer/model/leave";
+import BaseFormDialog from "./dialogs/BaseFormDialog";
+import FormField from "./forms/FormField";
+import OptionSelector from "./forms/OptionSelector";
+import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 
 interface LeaveFormProps {
   onClose: () => void;
@@ -24,267 +28,180 @@ const LeaveForm: React.FC<LeaveFormProps> = ({
     return null; // Prevent rendering if position is not set
   }
 
-  const [type, setType] = useState<"Sick" | "Vacation" | "Emergency" | "Other">(
-    initialData?.type || "Vacation"
-  );
-  const [reason, setReason] = useState(initialData?.reason || "");
-  const [status, setStatus] = useState<"Pending" | "Approved" | "Rejected">(
-    initialData?.status || "Pending"
-  );
+  // Get selected month and year from the DateSelector store
+  const storeSelectedMonth = useDateSelectorStore((state) => state.selectedMonth);
+  const storeSelectedYear = useDateSelectorStore((state) => state.selectedYear);
 
-  const storedMonth = localStorage.getItem("selectedMonth");
-  let storedMonthInt = storedMonth
-    ? parseInt(storedMonth, 10)
-    : new Date().getMonth();
-  if (isNaN(storedMonthInt) || storedMonthInt < 1 || storedMonthInt > 12) {
-    storedMonthInt = new Date().getMonth();
-  }
+  const [formState, setFormState] = useState({
+    type: initialData?.type || "Vacation",
+    reason: initialData?.reason || "",
+    status: initialData?.status || "Pending",
+    startDate:
+      initialData?.startDate
+        ? (() => {
+          const d = new Date(initialData.startDate);
+          const year = d.getFullYear();
+          const month = d.getMonth() + 1;
+          const day = d.getDate();
+          return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        })()
+        : (() => {
+          const year = storeSelectedYear;
+          const month = storeSelectedMonth + 1;
+          const day = 1;
+          return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        })(),
+    endDate:
+      initialData?.endDate
+        ? (() => {
+          const d = new Date(initialData.endDate);
+          const year = d.getFullYear();
+          const month = d.getMonth() + 1;
+          const day = d.getDate();
+          return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        })()
+        : (() => {
+          const year = storeSelectedYear;
+          const month = storeSelectedMonth + 1;
+          // For endDate, get the last day of the storeSelectedMonth
+          const lastDay = new Date(storeSelectedYear, storeSelectedMonth + 1, 0).getDate();
+          return `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
+        })(),
+  });
 
-  let storedYear = localStorage.getItem("selectedYear");
-  if (!storedYear || isNaN(parseInt(storedYear))) {
-    const currentYear = new Date().getFullYear().toString();
-    localStorage.setItem("selectedYear", currentYear);
-    storedYear = currentYear;
-  }
+  const handleInputChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormState((prev) => ({
+      ...prev,
+      [name]:
+        name === "reason"
+          ? value.charAt(0).toUpperCase() + value.slice(1) // Capitalize reason
+          : value,
+    }));
+  };
 
-  const [startDateState, setStartDateState] = useState(
-    initialData?.startDate
-      ? new Date(initialData.startDate).toISOString().split("T")[0]
-      : new Date(`${storedYear}-${storedMonthInt + 1 || "1"}-01`)
-          .toISOString()
-          .split("T")[0]
-  );
-  const [endDateState, setEndDateState] = useState(
-    initialData?.endDate
-      ? new Date(initialData.endDate).toISOString().split("T")[0]
-      : new Date(
-          new Date(`${storedYear}-${storedMonthInt + 1 || "1"}-01`).setMonth(
-            storedMonthInt + 1,
-            0
-          )
-        )
-          .toISOString()
-          .split("T")[0]
-  );
+  const handleStatusChange = (value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      status: value as "Pending" | "Approved" | "Rejected",
+    }));
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    const formData: Leave = {
+    const formDataToSave: Leave = {
       id: initialData?.id || crypto.randomUUID(),
-      employeeId: initialData?.employeeId || "", // This should be set by the parent component
-      startDate: new Date(startDateState),
-      endDate: new Date(endDateState),
-      type,
-      status,
-      reason,
+      employeeId: initialData?.employeeId || "",
+      startDate: new Date(formState.startDate),
+      endDate: new Date(formState.endDate),
+      type: formState.type as "Sick" | "Vacation" | "Emergency" | "Other",
+      status: formState.status as "Pending" | "Approved" | "Rejected",
+      reason: formState.reason,
     };
-    console.log("[LeaveForm] Submitting leave:", formData);
-    onSave(formData);
-    onClose();
+    console.log("[LeaveForm] Submitting leave:", formDataToSave);
+    onSave(formDataToSave);
   };
 
+  const dialogTitle = initialData ? "Edit Leave Request" : "New Leave Request";
+  const submitButtonText = initialData ? "Update" : "Submit";
+
+  const leaveTypeOptions = [
+    { value: "Vacation", label: "Vacation Leave" },
+    { value: "Sick", label: "Sick Leave" },
+    { value: "Emergency", label: "Emergency Leave" },
+    { value: "Other", label: "Other" },
+  ];
+
+  const leaveStatusOptions = [
+    { value: "Pending", label: "Pending" },
+    { value: "Approved", label: "Approved" },
+    { value: "Rejected", label: "Rejected" },
+  ];
+
+  // Adjust position for LeaveForm specific layout
+  const adjustedPosition = position ? {
+    ...position,
+    left: position.left - 100, // Apply the original offset
+    // Caret position in BaseFormDialog is relative to its own body,
+    // so if the main dialog is shifted left by 100, the caretLeft 
+    // from the original event might still be okay, or might need adjustment 
+    // if it was meant to be centered on the original button BEFORE the shift.
+    // The original caret style was `left: position.caretLeft! + 100`. 
+    // This implies the caretLeft from the event was 100px to the left of where the caret should be.
+    // Let's assume position.caretLeft is already correct for the *button* center.
+    // BaseFormDialog will place the caret relative to its new `left` position.
+    // If the original position.caretLeft was, for example, half the button width,
+    // and BaseFormDialog centers its caret based on its own width or a passed caretLeft,
+    // we might need to ensure caretLeft passed to BaseFormDialog is also adjusted or set appropriately.
+    // For now, let's just adjust the main dialog `left` and see. 
+    // The caret in BaseFormDialog is positioned via `style={{ left: currentPosition.caretLeft }}`.
+    // The original was `left: position.caretLeft! + 100`. 
+    // If position.caretLeft was the center of the button (e.g. 50px from button's left edge)
+    // and the button itself is not moving, then to make the caret appear at the same screen spot
+    // relative to the button, but now relative to a dialog shifted left by 100px, 
+    // caretLeft for BaseFormDialog needs to be position.caretLeft + 100.
+    caretLeft: position.caretLeft !== undefined ? position.caretLeft + 100 : undefined
+  } : undefined;
+
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: position.top,
-        left: position.left - 100,
-        width: "550px",
-        transform: position.showAbove ? "translateY(-100%)" : "none",
-      }}
-      className="bg-gray-900 rounded-lg shadow-xl border border-gray-700"
+    <BaseFormDialog
+      title={dialogTitle}
+      isOpen={true}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      position={adjustedPosition} // Use the adjusted position
+      submitText={submitButtonText}
+      dialogWidth="550px"
     >
-      {/* Caret */}
-      <div
-        style={{
-          position: "absolute",
-          left: position.caretLeft! + 100,
-          [position.showAbove ? "bottom" : "top"]: position.showAbove
-            ? "-8px"
-            : "-8px",
-          width: 0,
-          height: 0,
-          borderLeft: "8px solid transparent",
-          borderRight: "8px solid transparent",
-          ...(position.showAbove
-            ? { borderTop: "8px solid rgb(17, 24, 39)" }
-            : { borderBottom: "8px solid rgb(17, 24, 39)" }),
-        }}
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg">
-        <h2 className="text-lg font-semibold text-gray-100">
-          {initialData ? "Edit Leave Request" : "New Leave Request"}
-        </h2>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-300 transition-colors duration-200"
-        >
-          <IoClose size={24} />
-        </button>
-      </div>
-
-      {/* Form Content */}
-      <div className="px-6 py-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Start Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDateState}
-                onChange={(e) => setStartDateState(e.target.value)}
-                className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
-                required
-              />
-            </div>
-
-            {/* End Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDateState}
-                min={startDateState}
-                onChange={(e) => setEndDateState(e.target.value)}
-                className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600 [color-scheme:dark]"
-                required
-              />
-            </div>
-
-            {/* Leave Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Leave Type
-              </label>
-              <select
-                value={type}
-                onChange={(e) =>
-                  setType(
-                    e.target.value as
-                      | "Sick"
-                      | "Vacation"
-                      | "Emergency"
-                      | "Other"
-                  )
-                }
-                className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 h-10 px-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-              >
-                <option value="Vacation" className="bg-gray-800">
-                  Vacation Leave
-                </option>
-                <option value="Sick" className="bg-gray-800">
-                  Sick Leave
-                </option>
-                <option value="Emergency" className="bg-gray-800">
-                  Emergency Leave
-                </option>
-                <option value="Other" className="bg-gray-800">
-                  Other
-                </option>
-              </select>
-            </div>
-          </div>
-
-          {/* Leave Status */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Leave Status
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {["Pending", "Approved", "Rejected"].map((option) => (
-                <div
-                  key={option}
-                  className={`
-                    relative flex items-center px-3 py-2.5 cursor-pointer
-                    rounded-lg border transition-all duration-200
-                    ${
-                      status === option
-                        ? "border-blue-500 bg-blue-900/50 text-blue-300"
-                        : "border-gray-700 hover:border-gray-600 hover:bg-gray-700 text-gray-300"
-                    }
-                  `}
-                >
-                  <input
-                    type="radio"
-                    name="status"
-                    value={option}
-                    checked={status === option}
-                    onChange={() =>
-                      setStatus(option as "Pending" | "Approved" | "Rejected")
-                    }
-                    className="absolute opacity-0 w-full h-full"
-                  />
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`
-                      w-4 h-4 rounded-full border-2 flex items-center justify-center
-                      transition-colors duration-200
-                      ${
-                        status === option
-                          ? "border-blue-500"
-                          : "border-gray-500"
-                      }
-                    `}
-                    >
-                      {status === option && (
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      )}
-                    </div>
-                    <span className="text-sm font-medium">{option}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Reason
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) =>
-                setReason(
-                  e.target.value.charAt(0).toUpperCase() +
-                    e.target.value.slice(1)
-                )
-              }
-              rows={1}
-              className="block w-full bg-gray-800 border border-gray-700 rounded-md text-gray-100 p-3 focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-              required
-            />
-          </div>
-        </form>
-      </div>
-
-      {/* Footer */}
-      <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
-        <div className="flex flex-row space-x-3 w-full">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-          >
-            {initialData ? "Update" : "Submit"}
-          </button>
+      <form onSubmit={handleSubmit} className="space-y-4 pb-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormField
+            label="Start Date"
+            name="startDate"
+            type="date"
+            value={formState.startDate}
+            onChange={handleInputChange}
+          />
+          <FormField
+            label="End Date"
+            name="endDate"
+            type="date"
+            value={formState.endDate}
+            onChange={handleInputChange}
+            inputProps={{ min: formState.startDate }} // Ensure end date is not before start date
+          />
+          <FormField
+            label="Leave Type"
+            name="type"
+            type="select"
+            value={formState.type}
+            onChange={handleInputChange}
+            options={leaveTypeOptions}
+          />
         </div>
-      </div>
-    </div>
+
+        <OptionSelector
+          label="Leave Status"
+          name="status" // Optional, as selection is handled by value/onChange
+          options={leaveStatusOptions}
+          selectedValue={formState.status}
+          onChange={handleStatusChange}
+          columns={3}
+        // className="bg-gray-800 rounded-lg p-4 border border-gray-700" // Add this if boxing is desired
+        />
+
+        <FormField
+          label="Reason"
+          name="reason"
+          type="textarea"
+          value={formState.reason}
+          onChange={handleInputChange}
+          rows={1} // Original form used 1 row, can be adjusted
+        />
+      </form>
+    </BaseFormDialog>
   );
 };
 
