@@ -166,21 +166,21 @@ export const fetchDocument = async <T>(
     const db = getFirestoreInstance();
     const company = companyName || (await getCompanyName());
     fullPath = `companies/${company}/${subcollection}/${docId}`;
-    console.log(
-      `[firestoreService DEBUG] fetchDocument: Attempting to fetch doc at path: ${fullPath}`
-    );
+    // console.log(
+    //   `[firestoreService DEBUG] fetchDocument: Attempting to fetch doc at path: ${fullPath}`
+    // );
     const docRef = doc(db, fullPath);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      console.log(
-        `[firestoreService DEBUG] fetchDocument: Document exists at path: ${fullPath}. Returning data.`
-      );
+      // console.log(
+      //   `[firestoreService DEBUG] fetchDocument: Document exists at path: ${fullPath}. Returning data.`
+      // );
       return docSnap.data() as T;
     }
-    console.log(
-      `[firestoreService DEBUG] fetchDocument: Document DOES NOT exist at path: ${fullPath}. Returning null.`
-    );
+    // console.log(
+    //   `[firestoreService DEBUG] fetchDocument: Document DOES NOT exist at path: ${fullPath}. Returning null.`
+    // );
     return null;
   } catch (error) {
     console.error(
@@ -418,27 +418,28 @@ export const migrateToFirestore = async <T extends DocumentData>(
  * Fetches an entire collection from Firestore
  * @param subcollection - The subcollection name
  * @param companyName - Optional company name
+ * @param includeDocId - Optional boolean to include document IDs in the results
  * @returns Array of all documents in the collection
  */
 export const fetchCollection = async <T>(
   subcollection: string,
-  companyName?: string
+  companyName?: string,
+  includeDocId?: boolean
 ): Promise<T[]> => {
   try {
     const db = getFirestoreInstance();
     const company = companyName || (await getCompanyName());
-    const collectionRef = collection(
-      db,
-      `companies/${company}/${subcollection}`
-    );
-    const querySnapshot = await getDocs(collectionRef);
-
-    const results: T[] = [];
-    querySnapshot.forEach((doc) => {
-      results.push(doc.data() as T);
+    const collRef = collection(db, `companies/${company}/${subcollection}`);
+    const querySnapshot = await getDocs(collRef);
+    const data: T[] = [];
+    querySnapshot.forEach((docSnap) => {
+      if (includeDocId) {
+        data.push({ id: docSnap.id, ...docSnap.data() } as T);
+      } else {
+        data.push(docSnap.data() as T);
+      }
     });
-
-    return results;
+    return data;
   } catch (error) {
     console.error(`Error fetching collection ${subcollection}:`, error);
     throw error;

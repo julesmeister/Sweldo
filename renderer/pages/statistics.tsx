@@ -44,7 +44,6 @@ const StatCard = ({
   trendUp?: boolean;
 }) => (
   <div className="bg-white bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2710%27%20height%3D%2710%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cpath%20d%3D%27M-1%201%20l2-2%20M0%2010%20l10-10%20M9%2011%20l2-2%27%20stroke%3D%27rgba(0%2C0%2C0%2C0.04)%27%20stroke-width%3D%270.5%27%2F%3E%3C%2Fsvg%3E')] rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
-    <Waves lineColor="#f1f1f1" />
     <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-full opacity-20 -mr-12 -mt-12"></div>
     <div className="flex items-center justify-between relative z-10">
       <div>

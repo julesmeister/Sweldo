@@ -3,6 +3,7 @@ node_modules
 
 # logs
 *.log
+/.firebase
 
 # next.js
 .next

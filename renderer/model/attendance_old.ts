@@ -248,8 +248,6 @@ export class AttendanceModel {
       day: number;
       timeIn?: string | null;
       timeOut?: string | null;
-      // alternativeTimeIns?: string[]; // Removed
-      // alternativeTimeOuts?: string[]; // Removed
     })[],
     month: number,
     year: number,
@@ -347,7 +345,9 @@ export class AttendanceModel {
         // --- Add/Update Alternatives ---
         try {
           const currentAlternatives = await this.loadAlternativeTimes(
-            employeeId
+            employeeId,
+            year,
+            month
           );
           const alternativesSet = new Set(currentAlternatives); // Use a Set for efficient checking
           let alternativesChanged = false;
@@ -373,7 +373,12 @@ export class AttendanceModel {
 
           if (alternativesChanged) {
             const updatedAlternatives = Array.from(alternativesSet).sort(); // Keep it sorted
-            await this.saveAlternativeTimes(employeeId, updatedAlternatives);
+            await this.saveAlternativeTimes(
+              employeeId,
+              year,
+              month,
+              updatedAlternatives
+            );
             console.log(`Updated alternatives for employee ${employeeId}`); // Optional logging
           }
         } catch (altError) {
@@ -394,283 +399,148 @@ export class AttendanceModel {
     }
   }
 
-  // --- Methods for Shared Alternatives ---
-
-  private getAlternativesFilePath(employeeId: string): string {
-    return `${this.folderPath}/${employeeId}/alternatives.json`;
+  // NEW/MODIFIED helper to get the path for month-specific alternatives
+  private getAlternativesFilePath(
+    employeeId: string,
+    year: number,
+    month: number
+  ): string {
+    // Construct path like: [dbPath]/employees/[employeeId]/attendances/alternatives_[employeeId]_[year]_[month].json
+    return `${this.folderPath}/employees/${employeeId}/attendances/alternatives_${employeeId}_${year}_${month}.json`;
   }
 
-  /**
-   * Loads the shared alternative time list for an employee.
-   * Returns an empty list if the file doesn't exist or is invalid.
-   */
-  public async loadAlternativeTimes(employeeId: string): Promise<string[]> {
-    const filePath = this.getAlternativesFilePath(employeeId);
+  // MODIFIED: Load alternative times for a specific employee, year, and month
+  public async loadAlternativeTimes(
+    employeeId: string,
+    year: number,
+    month: number
+  ): Promise<string[]> {
+    const filePath = this.getAlternativesFilePath(employeeId, year, month);
     try {
       const fileExists = await window.electron.fileExists(filePath);
       if (!fileExists) {
-        return []; // Return empty array if file doesn't exist
+        // console.log(`Alternatives file not found for ${employeeId} ${year}-${month}, returning empty array.`);
+        return [];
       }
       const fileContent = await window.electron.readFile(filePath);
-      const data = JSON.parse(fileContent);
-      // Basic validation for the new structure { "times": [...] }
-      if (
-        typeof data === "object" &&
-        data !== null &&
-        Array.isArray(data.times)
-      ) {
-        // Further validation could be added here to check if elements are strings/valid times
-        return data.times; // Return the times array directly
+      if (!fileContent || fileContent.trim().length === 0) {
+        return [];
       }
-      console.warn(
-        `Invalid format in alternatives file: ${filePath}. Expected { "times": [...] }. Returning empty list.`
-      );
-      return [];
+      const data: SharedAlternatives = JSON.parse(fileContent);
+      return data.times || [];
     } catch (error) {
-      console.error(
-        `Error loading alternative times for ${employeeId} from ${filePath}:`,
-        error
-      );
-      return []; // Return empty array on error
+      console.error(`Error loading alternative times from ${filePath}:`, error);
+      return [];
     }
   }
 
-  /**
-   * Saves the shared alternative time list for an employee.
-   * Overwrites the existing file.
-   */
+  // MODIFIED: Save alternative times for a specific employee, year, and month
   public async saveAlternativeTimes(
     employeeId: string,
+    year: number,
+    month: number,
     times: string[]
   ): Promise<void> {
-    const filePath = this.getAlternativesFilePath(employeeId);
-    const directoryPath = `${this.folderPath}/${employeeId}`;
+    const filePath = this.getAlternativesFilePath(employeeId, year, month);
+    const data: SharedAlternatives = { times };
     try {
-      await window.electron.ensureDir(directoryPath); // Ensure directory exists
-      // Basic validation before saving
-      if (!Array.isArray(times)) {
-        // Check if input is an array
-        throw new Error(
-          "Invalid alternatives format provided for saving. Expected an array of strings."
-        );
-      }
-      // Structure the data for JSON file
-      const dataToSave: SharedAlternatives = { times: times };
-      const fileContent = JSON.stringify(dataToSave, null, 2); // Pretty print JSON { "times": [...] }
-      await window.electron.writeFile(filePath, fileContent);
+      // Ensure directory exists before writing
+      const dirPath = filePath.substring(0, filePath.lastIndexOf("/"));
+      await window.electron.ensureDir(dirPath); // You might need to implement/use your actual ensureDir function
+
+      await window.electron.writeFile(filePath, JSON.stringify(data, null, 2));
     } catch (error) {
-      console.error(
-        `Error saving alternative times for ${employeeId} to ${filePath}:`,
-        error
-      );
-      throw error; // Re-throw to notify caller
+      console.error(`Error saving alternative times to ${filePath}:`, error);
+      throw error; // Re-throw to allow UI to handle
     }
   }
 } // End of AttendanceModel class
 
-// --- Migration Function --- (Add this function outside the class)
-
-/**
- * Migrates old attendance CSVs containing alternativeTimeIns/Outs columns.
- * Extracts unique times into a shared alternatives.json file for each employee.
- * Rewrites the CSVs to remove the old columns.
- * @param dbPath The base path to the SweldoDB directory.
- * @param onProgress Optional callback to report progress (e.g., processed employee ID).
- */
+// Migration function - THIS WILL LIKELY NEED ADJUSTMENT
+// If you run this, it will attempt to move old alternatives (from a single shared file per employee)
+// to the *current* month/year. You might need a more sophisticated migration.
 export async function migrateAttendanceAlternatives(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
-  const attendancesBasePath = `${dbPath}/SweldoDB/attendances`;
-  const model = createAttendanceModel(dbPath); // Use existing factory
+  onProgress?.("Starting migration of old alternative times...");
+  const model = createAttendanceModel(dbPath);
 
   try {
-    onProgress?.(`Starting migration in: ${attendancesBasePath}`);
-    const employeeDirs = await window.electron.readDir(attendancesBasePath);
+    // This needs a way to get all employee IDs.
+    // Assuming you have an employee service or can list employee directories.
+    // For demonstration, let's imagine a function getEmployeeIds() exists.
+    // const employeeIds = await getEmployeeIdsFromSomewhere(dbPath);
 
-    for (const dirEntry of employeeDirs) {
-      if (dirEntry.isDirectory) {
-        const employeeId = dirEntry.name;
-        const employeePath = `${attendancesBasePath}/${employeeId}`;
-        onProgress?.(`Processing employee: ${employeeId}`);
+    // Placeholder: Manually list employee IDs if you don't have a dynamic way
+    // const employeeIds = ["employee1", "employee2"]; // Replace with actual IDs or discovery method
 
-        const allAlternativeTimes = new Set<string>();
-        let migrationNeeded = false;
+    // As a simple example, let's assume we need to discover employee folders
+    const employeesDir = `${dbPath}/employees`;
+    const employeeFolders = await window.electron.readDir(employeesDir);
+    const employeeIds = employeeFolders
+      .filter((f) => f.isDirectory)
+      .map((f) => f.name);
 
-        try {
-          const filesInEmployeeDir = await window.electron.readDir(
-            employeePath
+    if (!employeeIds || employeeIds.length === 0) {
+      onProgress?.("No employee IDs found to migrate alternatives for.");
+      return;
+    }
+    onProgress?.(
+      `Found ${employeeIds.length} employees to check for old alternatives.`
+    );
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1; // JS months are 0-indexed
+
+    for (const empId of employeeIds) {
+      const oldAlternativesFilePath = `${dbPath}/employees/${empId}/attendances/alternatives.json`; // Old path
+
+      try {
+        const fileExists = await window.electron.fileExists(
+          oldAlternativesFilePath
+        );
+        if (fileExists) {
+          const fileContent = await window.electron.readFile(
+            oldAlternativesFilePath
           );
-          const csvFilesToMigrate: string[] = [];
-
-          // --- Pass 1: Read all CSVs, collect unique alternatives ---
-          for (const fileEntry of filesInEmployeeDir) {
-            if (
-              fileEntry.isFile &&
-              fileEntry.name.endsWith("_attendance.csv")
-            ) {
-              const csvFilePath = `${employeePath}/${fileEntry.name}`;
-              try {
-                const fileContent = await window.electron.readFile(csvFilePath);
-                if (fileContent && fileContent.trim().length > 0) {
-                  const results = Papa.parse(fileContent, {
-                    header: true,
-                    skipEmptyLines: true,
-                    transformHeader: (h) => h.trim(),
-                  });
-
-                  // Check if old columns exist
-                  if (
-                    results.meta.fields?.includes("alternativeTimeIns") ||
-                    results.meta.fields?.includes("alternativeTimeOuts")
-                  ) {
-                    migrationNeeded = true; // Mark that this employee needs migration
-                    csvFilesToMigrate.push(csvFilePath);
-                    onProgress?.(`  - Found old format in: ${fileEntry.name}`);
-
-                    results.data.forEach((row: any) => {
-                      // Extract from both potential columns
-                      const alternatives = [
-                        row.alternativeTimeIns,
-                        row.alternativeTimeOuts,
-                      ];
-                      alternatives.forEach((altString) => {
-                        if (
-                          altString &&
-                          typeof altString === "string" &&
-                          altString.trim().startsWith("[")
-                        ) {
-                          try {
-                            const times: string[] = JSON.parse(altString);
-                            if (Array.isArray(times)) {
-                              times.forEach((time) => {
-                                if (
-                                  typeof time === "string" &&
-                                  time.match(/^\d{1,2}:\d{2}$/)
-                                ) {
-                                  // Basic time format check
-                                  allAlternativeTimes.add(time);
-                                }
-                              });
-                            }
-                          } catch (parseError) {
-                            // Ignore parse errors for individual rows
-                            onProgress?.(
-                              `    - Warning: Could not parse alternatives in row for ${fileEntry.name}`
-                            );
-                          }
-                        }
-                      });
-                    });
-                  }
-                }
-              } catch (readError) {
-                // Safely access error message
-                const message =
-                  readError instanceof Error
-                    ? readError.message
-                    : String(readError);
-                onProgress?.(`  - Error reading ${csvFilePath}: ${message}`);
-              }
-            }
-          }
-
-          // --- Save collected alternatives if migration was needed for this employee ---
-          if (migrationNeeded) {
-            const uniqueTimesArray = Array.from(allAlternativeTimes).sort();
-            onProgress?.(
-              `  - Saving ${uniqueTimesArray.length} unique alternative times to alternatives.json`
-            );
-            try {
-              await model.saveAlternativeTimes(employeeId, uniqueTimesArray);
-            } catch (saveAltError) {
-              // Safely access error message
-              const message =
-                saveAltError instanceof Error
-                  ? saveAltError.message
-                  : String(saveAltError);
+          if (fileContent && fileContent.trim().length > 0) {
+            const oldData: SharedAlternatives = JSON.parse(fileContent);
+            if (oldData.times && oldData.times.length > 0) {
               onProgress?.(
-                `  - Error saving alternatives.json for ${employeeId}: ${message}. Skipping CSV rewrite for this employee.`
+                `Migrating ${oldData.times.length} alternatives for ${empId} to ${currentYear}-${currentMonth}...`
               );
-              continue; // Skip to next employee if saving alternatives failed
+              // Save to the new month-specific location (current month for simplicity)
+              await model.saveAlternativeTimes(
+                empId,
+                currentYear,
+                currentMonth,
+                oldData.times
+              );
+              onProgress?.(
+                `Successfully migrated alternatives for ${empId}. Old file can be reviewed and deleted: ${oldAlternativesFilePath}`
+              );
+              // Optionally, you might want to rename or delete the old file here
+              // await window.electron.deleteFile(oldAlternativesFilePath);
+            } else {
+              // onProgress?.(`No alternatives to migrate in old file for ${empId}.`);
             }
-
-            // --- Pass 2: Rewrite CSVs to remove old columns ---
-            onProgress?.(
-              `  - Rewriting ${csvFilesToMigrate.length} CSV files...`
-            );
-            const finalHeaders = [
-              "employeeId",
-              "day",
-              "month",
-              "year",
-              "timeIn",
-              "timeOut",
-            ];
-
-            for (const csvFilePath of csvFilesToMigrate) {
-              try {
-                const fileContent = await window.electron.readFile(csvFilePath);
-                const results = Papa.parse(fileContent, {
-                  header: true,
-                  skipEmptyLines: true,
-                  transformHeader: (h) => h.trim(),
-                });
-
-                // Filter data to keep only the final columns
-                const cleanedData = results.data.map((row: any) => ({
-                  employeeId: row.employeeId || employeeId,
-                  day: row.day,
-                  month: row.month,
-                  year: row.year,
-                  timeIn: row.timeIn || null,
-                  timeOut: row.timeOut || null,
-                }));
-
-                const newCsvContent = Papa.unparse(cleanedData, {
-                  columns: finalHeaders,
-                  header: true,
-                });
-
-                await window.electron.writeFile(csvFilePath, newCsvContent);
-                onProgress?.(`    - Rewrote: ${csvFilePath.split("/").pop()}`);
-              } catch (rewriteError) {
-                // Safely access error message
-                const message =
-                  rewriteError instanceof Error
-                    ? rewriteError.message
-                    : String(rewriteError);
-                onProgress?.(
-                  `    - Error rewriting ${csvFilePath
-                    .split("/")
-                    .pop()}: ${message}`
-                );
-              }
-            }
-          } else {
-            onProgress?.(
-              `  - No migration needed (no old format files found).`
-            );
           }
-        } catch (employeeReadError) {
-          // Safely access error message
-          const message =
-            employeeReadError instanceof Error
-              ? employeeReadError.message
-              : String(employeeReadError);
-          onProgress?.(
-            `  - Error reading employee directory ${employeePath}: ${message}`
-          );
+        } else {
+          // onProgress?.(`No old alternatives file found for ${empId}.`);
         }
+      } catch (migrateError) {
+        onProgress?.(
+          `Error migrating alternatives for ${empId}: ${migrateError}`
+        );
+        console.error(`Error during migration for ${empId}:`, migrateError);
       }
     }
-    onProgress?.("Migration process completed.");
-  } catch (error) {
-    // Safely access error message
-    const message = error instanceof Error ? error.message : String(error);
-    onProgress?.(`Migration failed: ${message}`);
-    console.error("Migration Error:", error);
-    throw error; // Re-throw error after logging
+    onProgress?.("Alternative times migration process completed.");
+  } catch (err) {
+    onProgress?.(`Overall migration error: ${err}`);
+    console.error("Error during overall alternatives migration:", err);
   }
 }
 

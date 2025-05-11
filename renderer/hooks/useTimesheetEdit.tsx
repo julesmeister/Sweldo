@@ -257,18 +257,21 @@ export const useTimesheetEdit = ({
         compensation.grossPay = isHoliday
           ? dailyRate * (holiday?.multiplier || 1)
           : isPresent
-          ? dailyRate
-          : 0;
+            ? dailyRate
+            : 0;
         compensation.netPay = compensation.grossPay;
 
         try {
+          console.log("[useTimesheetEdit] Attempting to save non-time-tracking compensation...", compensation);
           await compensationModel.saveOrUpdateCompensations(
             [compensation],
             month,
             year,
             selectedEmployeeId
           );
+          console.log("[useTimesheetEdit] Successfully saved non-time-tracking compensation.");
         } catch (saveError) {
+          console.error("[useTimesheetEdit] Error saving non-time-tracking compensation:", saveError);
           throw saveError;
         }
 
@@ -309,13 +312,16 @@ export const useTimesheetEdit = ({
 
       // Save compensation
       try {
+        console.log("[useTimesheetEdit] Attempting to save compensation...", compensation);
         await compensationModel.saveOrUpdateCompensations(
           [compensation],
           month,
           year,
           selectedEmployeeId
         );
+        console.log("[useTimesheetEdit] Successfully saved compensation.");
       } catch (saveError) {
+        console.error("[useTimesheetEdit] Error saving compensation:", saveError);
         throw saveError;
       }
 
@@ -332,6 +338,7 @@ export const useTimesheetEdit = ({
       // Show success toast
       toast.success("Timesheet updated successfully");
     } catch (error) {
+      console.error("[useTimesheetEdit] Error in handleTimesheetEdit (outer catch):", error);
       toast.error("Failed to update timesheet");
       throw error;
     }
@@ -377,9 +384,9 @@ export const useTimesheetEdit = ({
       const key = name as keyof Compensation;
       (newData[key] as string | number) =
         name.includes("Pay") ||
-        name.includes("Deduction") ||
-        name.includes("Hours") ||
-        name.includes("Minutes")
+          name.includes("Deduction") ||
+          name.includes("Hours") ||
+          name.includes("Minutes")
           ? numericValue
           : value;
       return newData;

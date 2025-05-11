@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { EmploymentType } from "@/renderer/model/settings";
-import { FaCheck, FaSun, FaMoon, FaTimes, FaEraser } from "react-icons/fa"; // Added moon icon for evening times and times icon
+import { FaCheck, FaSun, FaMoon, FaTimes, FaEraser, FaSpinner } from "react-icons/fa"; // Added FaSpinner for loading
 import { BsFillSunsetFill } from "react-icons/bs"; // Added sunset icon for afternoon
 import { toast } from "sonner";
-import { createAttendanceModel } from "@/renderer/model/attendance_old"; // Import model factory
+import { createAttendanceModel } from "@/renderer/model/attendance"; // Import model factory
+import { isWebEnvironment } from "@/renderer/lib/firestoreService"; // Import to detect web mode
 
 interface EditableCellProps {
   value: string | number | null;
@@ -71,6 +72,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   onStopEdit,
   onSwapTimes, // Destructure new prop
 }) => {
+  // Check if we're in web mode
+  const isWebMode = useMemo(() => isWebEnvironment(), []);
+
   // Remove internal isEditing state
   // const [isEditing, setIsEditing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -78,13 +82,15 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [loadedAlternatives, setLoadedAlternatives] = useState<string[]>([]);
   const [isLoadingAlternatives, setIsLoadingAlternatives] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // New state for save operations
   const inputRef = useRef<HTMLInputElement>(null);
   const tdRef = useRef<HTMLTableCellElement>(null);
   const [localValue, setLocalValue] = useState<string | number | null>(value);
   const [dropdownPosition, setDropdownPosition] = useState<"top" | "bottom">(
     "bottom"
   );
-  const cellKey = `${column.key}-${rowData?.day}`; // Calculate cellKey for callbacks
+  const cellKey = `${column.key}-${rowData?.day}`;
+  // console.log(`EditableCell [${cellKey}]: Initial render. isEditing prop: ${isEditing}, value: ${value}`);
 
   // Update editValue when external value changes (e.g., parent resets)
   useEffect(() => {
@@ -94,7 +100,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
   // Focus input and load alternatives when isEditing prop becomes true
   useEffect(() => {
+    // console.log(`EditableCell [${cellKey}]: isEditing effect. Current isEditing: ${isEditing}`);
     if (isEditing) {
+      // console.log(`EditableCell [${cellKey}]: Entering edit mode.`);
       if (inputRef.current) {
         inputRef.current.focus();
       }
@@ -105,18 +113,43 @@ export const EditableCell: React.FC<EditableCellProps> = ({
         const spaceBelow = windowHeight - tdRect.bottom;
         setDropdownPosition(spaceBelow < 200 ? "top" : "bottom");
       }
+      // Always show the dropdown with common times in web mode, even if there are no alternatives 
+      if (isWebMode && isEditing) {
+        // console.log("[EditableCell-Web] Showing default time options in web mode");
+        setShowAlternatives(true); // Show the dropdown container
+        // No need to explicitly load alternatives if web mode is just showing common times by default here
+      }
       // Load alternatives if it's a time column
       const isTimeColumn = column.key === "timeIn" || column.key === "timeOut";
-      if (isTimeColumn && dbPath && rowData?.employeeId) {
+      if (isTimeColumn &&
+        // Only require dbPath in non-web mode, but always require the other fields
+        (isWebMode || dbPath) &&
+        rowData?.employeeId &&
+        typeof rowData?.year === 'number' &&
+        typeof rowData?.month === 'number') {
         const loadAlts = async () => {
           setIsLoadingAlternatives(true);
           setShowAlternatives(true); // Show container (might show loading)
           try {
-            const model = createAttendanceModel(dbPath);
-            const times = await model.loadAlternativeTimes(rowData.employeeId);
-            setLoadedAlternatives(times);
+            if (isWebMode) {
+              // console.log(`[EditableCell-Web] Loading alternatives for ${rowData.employeeId} ${rowData.year}-${rowData.month}`);
+            }
+            const model = createAttendanceModel(isWebMode ? "" : dbPath || "");
+            // Use year and month from rowData
+            const alts = await model.loadAlternativeTimes(
+              rowData.employeeId,
+              rowData.year,
+              rowData.month
+            );
+            if (isWebMode) {
+              // console.log("[EditableCell-Web] Loaded", alts.length, "alternatives");
+            }
+            setLoadedAlternatives(alts);
           } catch (error) {
             // console.error("Error loading alternative times:", error);
+            if (isWebMode) {
+              console.error(`[EditableCell-Web] Error loading alternatives:`, error);
+            }
             toast.error("Could not load time suggestions.");
             setLoadedAlternatives([]);
           } finally {
@@ -125,9 +158,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({
         };
         loadAlts();
       } else {
+        if (isTimeColumn) {
+          console.warn("EditableCell: Not loading alternatives. Missing dbPath, employeeId, year, or month in rowData.",
+            { dbPath, employeeId: rowData?.employeeId, year: rowData?.year, month: rowData?.month, isWebMode });
+        }
         setShowAlternatives(false);
       }
     } else {
+      // console.log(`EditableCell [${cellKey}]: Exiting edit mode.`);
       // Reset alternatives when editing stops
       setShowAlternatives(false);
       setLoadedAlternatives([]);
@@ -136,7 +174,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
       setEditValue(value?.toString() || "");
       setLocalValue(value);
     }
-  }, [isEditing, dbPath, rowData?.employeeId, column.key, value]); // Dependencies for the effect
+  }, [isEditing, dbPath, rowData?.employeeId, rowData?.year, rowData?.month, column.key, value, cellKey, isWebMode]); // Dependencies for the effect
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -149,28 +187,48 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   };
 
   const handleClick = (event: React.MouseEvent) => {
-    if (onClick) {
-      onClick(event); // Propagate original click if needed
+    // console.log(`EditableCell [${cellKey}]: handleClick. Current isEditing: ${isEditing}. Target:`, event.target);
+
+    // Always stop event propagation to prevent row click handler from firing
+    event.stopPropagation();
+
+    // If already editing, handle clicks differently
+    if (isEditing) {
+      if (event.target === inputRef.current) {
+        // console.log(`EditableCell [${cellKey}]: Click target is the input ref while editing, just focusing.`);
+        inputRef.current?.focus();
+        return;
+      }
+      // Clicks elsewhere in the cell while editing should not trigger any action
+      // console.log(`EditableCell [${cellKey}]: Already in edit mode.`);
+      return;
     }
-    // If not already editing, call the parent handler to request edit start
-    if (!isEditing) {
+
+    // If not editing, notify parent component to start editing
+    // console.log(`EditableCell [${cellKey}]: Not editing, calling onStartEdit.`);
+    if (onStartEdit) {
       onStartEdit(cellKey);
-      event.stopPropagation();
+    }
+
+    // Call optional onClick callback
+    if (onClick) {
+      onClick(event);
     }
   };
 
   const handleInternalSave = async () => {
+    console.log(`EditableCell [${cellKey}]: handleInternalSave triggered. Value: ${editValue}`);
+    setIsSaving(true); // Set saving state to true
+    setShowAlternatives(false); // Hide alternatives while saving
     try {
       await onSave(editValue || "", rowData);
       setLocalValue(editValue);
       onStopEdit(); // Notify parent that editing stopped
     } catch (error) {
-      // console.error("Error saving:", error);
+      console.error(`EditableCell [${cellKey}]: Error in handleInternalSave:`, error);
       toast.error("Failed to save changes");
-      // Don't call onStopEdit on error? Or maybe do? Depends on desired UX.
-      // For now, keep editing on error.
-      // Revert editValue if needed (or rely on parent to reset via `value` prop)
-      // setEditValue(localValue?.toString() || "");
+    } finally {
+      setIsSaving(false); // Reset saving state
     }
   };
 
@@ -248,19 +306,48 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   const renderTimeOptions = () => {
     if (isLoadingAlternatives) {
       return (
-        <div className="absolute left-0 w-full p-4 text-center text-sm text-gray-500 bg-white border rounded shadow-lg z-50">
-          Loading suggestions...
+        <div
+          className="absolute left-0 w-full min-w-[200px] p-3 text-center text-sm bg-white border rounded-lg shadow-lg z-[9999] flex flex-col items-center justify-center gap-2"
+          style={{
+            position: 'absolute',
+            zIndex: 9999,
+            isolation: 'isolate',
+            height: '80px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            borderColor: '#e2e8f0',
+            background: 'linear-gradient(to bottom, #ffffff, #f9fafb)'
+          }}>
+          <FaSpinner className="text-blue-500 w-5 h-5 animate-spin" />
+          <span className="text-gray-600 font-medium">Loading suggestions...</span>
         </div>
       );
     }
+
+    // Generate default times when no alternatives are available
+    let timesToDisplay = loadedAlternatives;
     if (!Array.isArray(loadedAlternatives) || loadedAlternatives.length === 0) {
-      return (
-        <div className="absolute left-0 w-full p-4 text-center text-sm text-gray-500 bg-white border rounded shadow-lg z-50">
-          No time suggestions available.
-        </div>
-      );
+      // Generate common work times - more selective approach
+      timesToDisplay = [
+        // Morning times (start times)
+        "05:00", "05:30", "06:00", "06:30", "07:00", "07:30", "08:00", "08:30", "09:00", "09:30",
+        "10:00", "10:30", "11:00", "11:30",
+        // Afternoon times (lunch and afternoon)
+        "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+        "17:00", "17:30",
+        // Evening times (overtime and end times)
+        "18:00", "18:30", "19:00", "19:30", "20:00", "21:00", "22:00", "23:00"
+      ];
+
+      // If this is a timeOut column, add a few minutes after common start times
+      if (column.key === "timeOut") {
+        timesToDisplay = [
+          "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "16:30", "17:00", "17:30",
+          "18:00", "18:30", "19:00", "20:00", "21:00", "22:00", "23:00", "00:00"
+        ];
+      }
     }
-    const timesByCategory = loadedAlternatives.reduce(
+
+    const timesByCategory = timesToDisplay.reduce(
       (acc: any, time: string) => {
         const category = getTimeCategory(time);
         if (!acc[category]) acc[category] = [];
@@ -269,12 +356,32 @@ export const EditableCell: React.FC<EditableCellProps> = ({
       },
       {}
     );
+
     return (
       <div
-        className={`absolute ${
-          dropdownPosition === "bottom" ? "top-full" : "bottom-full"
-        } left-0 bg-white border rounded-lg shadow-lg z-50 p-2 mt-1`}
+        className={`absolute ${dropdownPosition === "bottom" ? "top-full" : "bottom-full"
+          } left-0 bg-white border rounded-lg shadow-lg z-[9999] p-2 mt-1`}
+        style={{
+          position: 'absolute',
+          zIndex: 9999,
+          // Ensure the position is correct and visible
+          width: 'auto',
+          minWidth: '550px',
+          // Force the dropdown to the top layer in web mode
+          isolation: 'isolate',
+          // Add extra styles specifically for web mode
+          ...(isWebMode ? {
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            border: '2px solid #e5e7eb',
+            borderRadius: '8px',
+          } : {})
+        }}
       >
+        {(!Array.isArray(loadedAlternatives) || loadedAlternatives.length === 0) && (
+          <div className="px-2 py-1 mb-1 text-xs text-gray-500 border-b border-gray-200">
+            Select from common times below. Your selections will be saved for future use.
+          </div>
+        )}
         <div className="flex gap-2">
           <div className="grid grid-cols-3 gap-2 min-w-[450px]">
             {Object.entries(timesByCategory).map(
@@ -286,7 +393,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                       {category}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-2 gap-1 max-h-[220px] overflow-y-auto scrollbar-thin">
                     {times.map((time: string, index: number) => (
                       <button
                         key={index}
@@ -297,11 +404,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                         className={`
                                px-2.5 py-1.5 text-xs rounded
                                transition-all duration-150
-                               ${
-                                 editValue === time
-                                   ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
-                                   : "hover:bg-gray-300 text-gray-900 hover:shadow-sm"
-                               }
+                               ${editValue === time
+                            ? "bg-blue-100 text-blue-700 font-medium shadow-sm"
+                            : "hover:bg-gray-300 text-gray-900 hover:shadow-sm"
+                          }
                              `}
                       >
                         {formatTime(time)}
@@ -313,9 +419,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({
             )}
           </div>
           <div
-            className={`grid ${
-              onSwapTimes ? "grid-rows-4" : "grid-rows-3"
-            } gap-2 pl-2 border-l border-gray-200 w-[100px]`}
+            className={`grid ${onSwapTimes ? "grid-rows-4" : "grid-rows-3"
+              } gap-2 pl-2 border-l border-gray-200 w-[100px]`}
           >
             <button
               onClick={(e) => {
@@ -386,31 +491,45 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   return (
     <td
       ref={tdRef}
-      className={`${
-        column.key === "day" ? "sticky left-0 z-10 bg-white" : ""
-      } px-6 py-4 whitespace-nowrap text-sm ${
-        column.key === "day" ? "font-medium text-gray-900" : "text-gray-500"
-      } relative group cursor-pointer transition-colors duration-200 ${
-        isHovered ? "bg-gray-50" : ""
-      }`}
+      className={`${column.key === "day" ? "sticky left-0 z-10 bg-white" : ""
+        } px-6 py-4 whitespace-nowrap text-sm ${column.key === "day" ? "font-medium text-gray-900" : "text-gray-500"
+        } relative group cursor-pointer transition-colors duration-200 ${isHovered ? "bg-gray-50" : ""
+        } editable-cell-container`}
+      style={{
+        position: 'relative', // Ensure positioning context is properly established
+        ...(isWebMode && isEditing ? { overflow: 'visible' } : {}), // Prevent clipping in web mode
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
     >
+      <>
+        {(() => {
+          // console.log(`EditableCell [${cellKey}]: RENDERING. isEditing: ${isEditing}`);
+          return null;
+        })()}
+      </>
       {isEditing ? (
-        <div className="flex flex-col relative">
+        <div className="flex flex-col relative" style={{ position: 'relative' }}>
           <div className="flex items-center">
-            <input
-              ref={inputRef}
-              type={timeValidationProps.type || "text"} // Use memoized type or default to text
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full p-1 border rounded bg-white"
-              {...timeValidationProps} // Spread memoized validation props
-            />
+            {isSaving ? (
+              <div className="w-full p-2 flex items-center justify-center gap-2 border rounded bg-blue-50 text-blue-600">
+                <FaSpinner className="w-4 h-4 animate-spin" />
+                <span className="text-sm font-medium">Saving...</span>
+              </div>
+            ) : (
+              <input
+                ref={inputRef}
+                type={timeValidationProps.type || "text"} // Use memoized type or default to text
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full p-1 border rounded bg-white"
+                {...timeValidationProps} // Spread memoized validation props
+              />
+            )}
           </div>
-          {showAlternatives && renderTimeOptions()}
+          {showAlternatives && !isSaving && renderTimeOptions()}
         </div>
       ) : (
         <>

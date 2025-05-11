@@ -3,6 +3,8 @@ import { Attendance } from "@/renderer/model/attendance";
 import { Compensation, DayType } from "@/renderer/model/compensation";
 import { EmploymentType } from "@/renderer/model/settings";
 import { EditableCell } from "@/renderer/components/EditableCell";
+import { useSettingsStore } from "@/renderer/stores/settingsStore";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 
 interface TimesheetRowProps {
     day: number;
@@ -50,6 +52,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     year,
     storedMonthInt,
 }) => {
+    // Access the dbPath from the settings store
+    const { dbPath } = useSettingsStore();
+    const isWeb = isWebEnvironment();
+
     const entryDate = new Date(year, storedMonthInt - 1, day);
     const scheduleInfo = scheduleMap.get(day);
     const hasTimeEntries = !!(foundEntry.timeIn || foundEntry.timeOut);
@@ -159,6 +165,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                     // IIFE to calculate cellKey
                                     const cellKey = `${column.key}-${day}`;
                                     const isCurrentlyEditing = editingCellKey === cellKey;
+                                    // console.log(`TimesheetRow: Rendering EditableCell ${cellKey}, isEditing=${isCurrentlyEditing}, value=${column.key === "timeIn" ? foundEntry.timeIn : foundEntry.timeOut}`);
                                     return (
                                         <EditableCell
                                             key={cellKey} // Use cellKey for React key as well
@@ -179,7 +186,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 handleStopEdit(); // Stop editing on successful save
                                             }}
                                             onSwapTimes={handleSwapTimes} // Pass swap handler
-                                            employmentTypes={employmentTypes} dbPath={""} />
+                                            employmentTypes={employmentTypes}
+                                            dbPath={isWeb ? "" : dbPath || ""} />
                                     );
                                 })()
                             ) : (

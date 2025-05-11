@@ -90,8 +90,9 @@ export class AttendanceModel {
   private folderPath: string;
   private useJsonFormat: boolean = true; // Default to JSON format
 
-  constructor(folderPath: string) {
-    this.folderPath = folderPath;
+  constructor(dbPath: string) {
+    // In web mode, folderPath can be empty as it's not used
+    this.folderPath = this.isWebMode() ? "" : `${dbPath}/SweldoDB/attendances`;
   }
 
   /**
@@ -569,7 +570,12 @@ export class AttendanceModel {
 
       // Also update alternatives in Firestore if needed
       try {
-        const currentAlternatives = await this.loadAlternativeTimes(employeeId);
+        // Pass year and month for web mode too
+        const currentAlternatives = await this.loadAlternativeTimes(
+          employeeId,
+          year,
+          month
+        );
         const alternativesSet = new Set(currentAlternatives);
         let alternativesChanged = false;
 
@@ -594,11 +600,17 @@ export class AttendanceModel {
 
         if (alternativesChanged) {
           const updatedAlternatives = Array.from(alternativesSet).sort();
-          await this.saveAlternativeTimes(employeeId, updatedAlternatives);
+          // Pass year and month for web mode too
+          await this.saveAlternativeTimes(
+            employeeId,
+            year,
+            month,
+            updatedAlternatives
+          );
         }
       } catch (altError) {
         console.warn(
-          `Warning: Failed to update alternative times for employee ${employeeId}:`,
+          `Warning: Failed to update alternative times for employee ${employeeId} ${year}-${month}:`,
           altError
         );
       }
@@ -687,8 +699,11 @@ export class AttendanceModel {
 
         // Add times to alternatives
         try {
+          // Pass year and month for desktop mode
           const currentAlternatives = await this.loadAlternativeTimes(
-            employeeId
+            employeeId,
+            year,
+            month
           );
           const alternativesSet = new Set(currentAlternatives);
           let alternativesChanged = false;
@@ -714,11 +729,17 @@ export class AttendanceModel {
 
           if (alternativesChanged) {
             const updatedAlternatives = Array.from(alternativesSet).sort();
-            await this.saveAlternativeTimes(employeeId, updatedAlternatives);
+            // Pass year and month for desktop mode
+            await this.saveAlternativeTimes(
+              employeeId,
+              year,
+              month,
+              updatedAlternatives
+            );
           }
         } catch (altError) {
           console.warn(
-            `Warning: Failed to update alternative times for employee ${employeeId}:`,
+            `Warning: Failed to update alternative times for employee ${employeeId} ${year}-${month}:`,
             altError
           );
         }
@@ -885,7 +906,10 @@ export class AttendanceModel {
 
   // --- Methods for handling alternatives ---
 
+  // MODIFIED: Path for month-specific alternatives
   private getAlternativesFilePath(employeeId: string): string {
+    // this.folderPath is [dbPath]/SweldoDB/attendances
+    // Store alternatives within the employee's folder, alongside attendance files
     return `${this.folderPath}/${employeeId}/alternatives.json`;
   }
 
@@ -893,21 +917,55 @@ export class AttendanceModel {
    * Loads the shared alternative time list for an employee.
    * Returns an empty list if the file doesn't exist or is invalid.
    */
-  public async loadAlternativeTimes(employeeId: string): Promise<string[]> {
+  public async loadAlternativeTimes(
+    employeeId: string,
+    year: number,
+    month: number
+  ): Promise<string[]> {
     // If in web mode, use Firestore
     if (this.isWebMode()) {
       const companyName = await getCompanyName();
-      return loadAlternativeTimesFirestore(employeeId, companyName);
+      // console.log(
+      //   `[Alternatives] Loading alternatives from Firestore for ${employeeId} ${year}-${month}`
+      // );
+      try {
+        // Pass year and month to Firestore function (Firestore still uses month-specific)
+        const times = await loadAlternativeTimesFirestore(
+          employeeId,
+          year,
+          month,
+          companyName
+        );
+        return times;
+      } catch (error) {
+        console.error(
+          `[Alternatives] Error loading alternatives from Firestore: `,
+          error
+        );
+        return []; // Return empty array on error
+      }
     }
 
     // Desktop mode - use local file storage
     const filePath = this.getAlternativesFilePath(employeeId);
     try {
+      console.log(
+        `[Alternatives] Checking for alternatives file at: ${filePath}`
+      );
       const fileExists = await window.electron.fileExists(filePath);
       if (!fileExists) {
+        console.log(
+          `[Alternatives] No alternatives file found for ${employeeId}`
+        );
         return []; // Return empty array if file doesn't exist
       }
       const fileContent = await window.electron.readFile(filePath);
+      if (!fileContent || fileContent.trim().length === 0) {
+        console.log(
+          `[Alternatives] Alternatives file exists but is empty for ${employeeId}`
+        );
+        return []; // Return empty array if file is empty
+      }
       const data = JSON.parse(fileContent);
       // Basic validation for the structure { "times": [...] }
       if (
@@ -915,6 +973,9 @@ export class AttendanceModel {
         data !== null &&
         Array.isArray(data.times)
       ) {
+        console.log(
+          `[Alternatives] Loaded ${data.times.length} alternatives for ${employeeId}`
+        );
         return data.times;
       }
       console.warn(
@@ -936,35 +997,57 @@ export class AttendanceModel {
    */
   public async saveAlternativeTimes(
     employeeId: string,
+    year: number,
+    month: number,
     times: string[]
   ): Promise<void> {
     // If in web mode, use Firestore
     if (this.isWebMode()) {
       const companyName = await getCompanyName();
-      return saveAlternativeTimesFirestore(employeeId, times, companyName);
+      console.log(
+        `[Alternatives] Saving ${times.length} alternatives to Firestore for ${employeeId} ${year}-${month}`
+      );
+      // Pass year and month to Firestore function (Firestore still uses month-specific)
+      return saveAlternativeTimesFirestore(
+        employeeId,
+        year,
+        month,
+        times,
+        companyName
+      );
     }
 
     // Desktop mode - use local file storage
     const filePath = this.getAlternativesFilePath(employeeId);
+    // The directory path should be for the employee's attendance folder
     const directoryPath = `${this.folderPath}/${employeeId}`;
     try {
-      await window.electron.ensureDir(directoryPath); // Ensure directory exists
-      // Basic validation before saving
+      console.log(`[Alternatives] Ensuring directory exists: ${directoryPath}`);
+      await window.electron.ensureDir(directoryPath);
+
       if (!Array.isArray(times)) {
+        console.error(
+          `[Alternatives] Invalid alternatives format provided for ${employeeId}. Expected array, got: ${typeof times}`
+        );
         throw new Error(
           "Invalid alternatives format provided for saving. Expected an array of strings."
         );
       }
-      // Structure the data for JSON file
+      console.log(
+        `[Alternatives] Saving ${times.length} alternatives for ${employeeId} to: ${filePath}`
+      );
       const dataToSave: SharedAlternatives = { times: times };
-      const fileContent = JSON.stringify(dataToSave, null, 2); // Pretty print JSON
+      const fileContent = JSON.stringify(dataToSave, null, 2);
       await window.electron.writeFile(filePath, fileContent);
+      console.log(
+        `[Alternatives] Successfully saved alternatives for ${employeeId}`
+      );
     } catch (error) {
       console.error(
         `Error saving alternative times for ${employeeId} to ${filePath}:`,
         error
       );
-      throw error; // Re-throw to notify caller
+      throw error;
     }
   }
 }
@@ -1413,20 +1496,95 @@ async function migrateBackupFile(
   }
 }
 
-// Re-export the legacy function (redirect to the old implementation)
+// MODIFIED: Direct implementation of alternative times migration
 export async function migrateAttendanceAlternatives(
   dbPath: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
-  // This will be imported from attendance_old.ts
-  const oldModule = await import("./attendance_old");
-  return oldModule.migrateAttendanceAlternatives(dbPath, onProgress);
+  onProgress?.("Starting migration of old alternative times (new model)...");
+  // Uses createAttendanceModel from *this* file (attendance.ts)
+  const model = createAttendanceModel(dbPath);
+  const baseAttendancesPath = `${dbPath}/SweldoDB/attendances`; // Base path for employee folders
+
+  try {
+    // Discover employee folders directly within the SweldoDB/attendances directory
+    // The model.folderPath is already SweldoDB/attendances, so we use it directly or its parent for employee discovery
+    const employeeFolders = await window.electron.readDir(baseAttendancesPath);
+    const employeeIds = employeeFolders
+      .filter((f) => f.isDirectory)
+      .map((f) => f.name);
+
+    if (!employeeIds || employeeIds.length === 0) {
+      onProgress?.("No employee IDs found to migrate alternatives for.");
+      return;
+    }
+    onProgress?.(
+      `Found ${employeeIds.length} employees to check for old alternatives.`
+    );
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1; // JS months are 0-indexed
+
+    for (const empId of employeeIds) {
+      // Path to the old, non-month-specific alternatives file
+      const oldAlternativesFilePath = `${baseAttendancesPath}/${empId}/alternatives.json`;
+
+      try {
+        const fileExists = await window.electron.fileExists(
+          oldAlternativesFilePath
+        );
+        if (fileExists) {
+          const fileContent = await window.electron.readFile(
+            oldAlternativesFilePath
+          );
+          if (fileContent && fileContent.trim().length > 0) {
+            const oldData: SharedAlternatives = JSON.parse(fileContent);
+            if (oldData.times && oldData.times.length > 0) {
+              onProgress?.(
+                `Migrating ${oldData.times.length} alternatives for ${empId} to ${currentYear}-${currentMonth}...`
+              );
+              // Save to the new month-specific location (current month for simplicity)
+              // This now calls saveAlternativeTimes from the model in attendance.ts
+              await model.saveAlternativeTimes(
+                empId,
+                currentYear,
+                currentMonth,
+                oldData.times
+              );
+              onProgress?.(
+                `Successfully migrated alternatives for ${empId}. Old file can be reviewed and deleted: ${oldAlternativesFilePath}`
+              );
+              // Optionally, you might want to rename or delete the old file here
+              // await window.electron.deleteFile(oldAlternativesFilePath);
+            } else {
+              // onProgress?.(`No alternatives to migrate in old file for ${empId}.`);
+            }
+          }
+        } else {
+          // onProgress?.(`No old alternatives file found for ${empId}.`);
+        }
+      } catch (migrateError) {
+        onProgress?.(
+          `Error migrating alternatives for ${empId}: ${migrateError}`
+        );
+        console.error(`Error during migration for ${empId}:`, migrateError);
+      }
+    }
+    onProgress?.("Alternative times migration process completed (new model).");
+  } catch (err) {
+    onProgress?.(`Overall migration error (new model): ${err}`);
+    console.error(
+      "Error during overall alternatives migration (new model):",
+      err
+    );
+  }
 }
 
 // Factory function to create AttendanceModel instance
 export const createAttendanceModel = (dbPath: string): AttendanceModel => {
-  const folderPath = `${dbPath}/SweldoDB/attendances`;
-  return new AttendanceModel(folderPath);
+  // No need to modify the path for web mode, as the constructor now handles it
+  return new AttendanceModel(dbPath);
 };
 
 // --- AttendanceSettings Model ---
@@ -1816,7 +1974,7 @@ export async function migrateBackupCsvToJson(
               ? employeeError.message
               : String(employeeError);
           console.error(
-            `[MIGRATION] Error reading employee directory: ${message}`
+            `[MIGRATION] Error reading employee directory ${employeePath}: ${message}`
           );
           onProgress?.(
             `  - Error reading employee directory ${employeePath}: ${message}`

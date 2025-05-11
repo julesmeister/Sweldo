@@ -124,17 +124,18 @@ const TimesheetPage: React.FC = () => {
 
   // Create model instances based on environment
   const attendanceModel = useMemo(() => {
-    // In web mode, we don't need a model instance as we'll use TimesheetService
-    if (isWeb) return null;
-    if (!dbPath) return null;
-    return createAttendanceModel(dbPath);
+    if (!dbPath && !isWeb) return null; // Only return null if no dbPath AND not web
+    return createAttendanceModel(isWeb ? "" : dbPath || ""); // Pass empty string for dbPath in web mode
   }, [dbPath, isWeb]);
 
   const compensationModel = useMemo(() => {
-    // In web mode, we don't need a model instance as we'll use TimesheetService
-    if (isWeb) return null;
-    if (!dbPath) return null;
-    return createCompensationModel(dbPath);
+    if (!dbPath && !isWeb) return null; // Only return null if no dbPath AND not web
+    // Ensure createCompensationModel can handle empty dbPath for web mode
+    // The CompensationModel constructor in compensation.ts takes a single `filePath` argument,
+    // which is used as `this.folderPath`. For web mode, this isn't directly used for Firestore ops.
+    // We might need to adjust createCompensationModel or CompensationModel constructor if it strictly expects a non-empty path
+    // for non-Firestore related initializations, but for now, let's assume passing "" is acceptable.
+    return createCompensationModel(isWeb ? "" : dbPath || "");
   }, [dbPath, isWeb]);
 
   const attendanceSettingsModel = useMemo(() => {
@@ -180,8 +181,8 @@ const TimesheetPage: React.FC = () => {
 
   // Initialize hooks
   const { handleTimesheetEdit } = useTimesheetEdit({
-    attendanceModel: isWeb ? null : attendanceModel,
-    compensationModel: isWeb ? null : compensationModel,
+    attendanceModel: attendanceModel, // Pass the model instance directly
+    compensationModel: compensationModel, // Pass the model instance directly
     attendanceSettingsModel,
     employee,
     selectedEmployeeId: selectedEmployeeId!,
@@ -193,8 +194,8 @@ const TimesheetPage: React.FC = () => {
   });
 
   const { handleCheckboxChange } = useTimesheetCheckbox({
-    attendanceModel: isWeb ? null : attendanceModel,
-    compensationModel: isWeb ? null : compensationModel,
+    attendanceModel: attendanceModel, // Pass the model instance directly
+    compensationModel: compensationModel, // Pass the model instance directly
     attendanceSettingsModel,
     employee,
     selectedEmployeeId: selectedEmployeeId!,
@@ -212,7 +213,7 @@ const TimesheetPage: React.FC = () => {
   } = useTimesheetHistoryOperations({
     hasAccess,
     handleTimesheetEdit,
-    compensationModel: isWeb ? null : compensationModel,
+    compensationModel: compensationModel, // Pass the model instance directly
     timesheetEntries,
     compensationEntries,
     storedMonthInt,
@@ -414,9 +415,28 @@ const TimesheetPage: React.FC = () => {
     compensation: Compensation | undefined | null,
     event: React.MouseEvent
   ) => {
-    // Stop any active cell editing before opening the dialog
-    handleStopEdit();
-    // Close history dialog if open
+    const targetElement = event.target as HTMLElement;
+    console.log(`TimesheetPage: handleRowClick. Target: ${targetElement.tagName}, Classes: ${targetElement.className}. editingCellKey: ${editingCellKey}`);
+
+    // First, check if the click is on an editable cell or its child elements 
+    if (
+      targetElement.closest('.editable-cell-container') ||
+      targetElement.closest('input, button') ||
+      targetElement.tagName === 'INPUT' ||
+      targetElement.tagName === 'BUTTON'
+    ) {
+      console.log("TimesheetPage: handleRowClick - click on editable cell container or form element, returning without action.");
+      return;
+    }
+
+    // If we're currently editing a cell and the click is somewhere else, stop editing
+    if (editingCellKey) {
+      console.log(`TimesheetPage: handleRowClick - editingCellKey is ${editingCellKey}, calling handleStopEdit.`);
+      handleStopEdit();
+    }
+
+    // Proceed to open the CompensationDialog
+    console.log("TimesheetPage: handleRowClick - proceeding to open CompensationDialog.");
     setIsHistoryDialogOpen(false);
     setSelectedHistoryDay(null);
 
@@ -427,7 +447,6 @@ const TimesheetPage: React.FC = () => {
     const dialogHeight = 400; // Approximate height of dialog
     const spacing = 8; // Space between dialog and row
 
-    // If there's not enough space below and more space above, show above
     const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
 
     setClickPosition({
@@ -641,6 +660,7 @@ const TimesheetPage: React.FC = () => {
 
   // Edit mode handlers
   const handleStartEdit = (cellKey: string) => {
+    console.log(`TimesheetPage: handleStartEdit called with cellKey: ${cellKey}. Current editingCellKey: ${editingCellKey}`);
     // Close the compensation dialog if it's open
     if (isDialogOpen) {
       setIsDialogOpen(false);
@@ -654,13 +674,16 @@ const TimesheetPage: React.FC = () => {
     }
 
     if (editingCellKey && editingCellKey !== cellKey) {
+      console.log(`TimesheetPage: Attempted to edit ${cellKey} while ${editingCellKey} is active. Warning toast shown.`);
       toast.warning("Please save or cancel the current edit before starting another.");
     } else {
+      console.log(`TimesheetPage: Setting editingCellKey to: ${cellKey}`);
       setEditingCellKey(cellKey);
     }
   };
 
   const handleStopEdit = () => {
+    console.log(`TimesheetPage: handleStopEdit called. Current editingCellKey: ${editingCellKey}. Setting to null.`);
     setEditingCellKey(null);
   };
 
@@ -679,6 +702,10 @@ const TimesheetPage: React.FC = () => {
     setSelectedHistoryDay(day);
     setIsHistoryDialogOpen(true);
   };
+
+  useEffect(() => {
+    console.log(`TimesheetPage: editingCellKey STATE CHANGED to: ${editingCellKey}`);
+  }, [editingCellKey]);
 
   // Check if user has basic access
   if (!hasAccess("VIEW_TIMESHEETS")) {

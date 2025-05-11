@@ -97,6 +97,20 @@ Sweldo follows a dual-process architecture typical of Electron applications:
    - Optional props to override internal data when needed
    - Example: EmployeeDropdown manages its own employee data loading
 
+10. **Edit Mode Component Pattern**:
+   - Used for editable cells in tables (e.g., `EditableCell` component)
+   - Externally controlled edit state via props (`isEditing`, `onStartEdit`, `onStopEdit`)
+   - Parent component maintains a single `editingCellKey` state to ensure only one cell is editable at a time
+   - Key implementation details:
+     - Cell components must properly manage event propagation (stop events from reaching the row)
+     - Consistent cell key format (e.g., `${column.key}-${day}`) for identification
+     - Pass required context data for alternatives (e.g., `dbPath` for time suggestions)
+     - Careful state handling to prevent UI conflicts (e.g., showing a dialog and editing a cell)
+   - Click handling hierarchy:
+     - Cell click → Start edit mode (if not already editing)
+     - Row click → Only if not on an editable element → Show related dialog or perform row action
+   - Example: EditableCell in TimesheetRow for handling time entry
+
 ## Component Relationships
 - **Page Components** → Use → **UI Components**
 - **Page Components** → Use → **Hooks** → Use → **Stores**

@@ -135,19 +135,55 @@ export async function saveAttendanceFirestore(
   month: number,
   companyName: string
 ): Promise<void> {
-  if (!attendances.length) return;
+  if (!attendances || attendances.length === 0) {
+    console.log("[Firestore] No attendance records provided to save.");
+    return;
+  }
 
   try {
     const docId = createTimeBasedDocId(employeeId, year, month);
+    console.log(`[Firestore] Saving/Updating attendance for docId: ${docId}`);
 
-    // First fetch existing document if it exists
-    const existingData = await fetchDocument<AttendanceJsonMonth>(
+    // Fetch the existing document for the entire month
+    const existingMonthDoc = await fetchDocument<AttendanceJsonMonth>(
       "attendances",
       docId,
       companyName
     );
 
-    // Prepare backup entries for changes if document exists
+    let currentMonthData: AttendanceJsonMonth;
+    if (existingMonthDoc) {
+      console.log(
+        `[Firestore] Existing document found for ${docId}. Merging changes.`
+      );
+      currentMonthData = { ...existingMonthDoc }; // Clone to avoid direct mutation
+      currentMonthData.meta = {
+        // Ensure meta is preserved/updated
+        ...existingMonthDoc.meta,
+        employeeId, // Ensure these are correct
+        year,
+        month,
+        lastModified: new Date().toISOString(),
+      };
+      // Ensure 'days' field exists
+      if (!currentMonthData.days) {
+        currentMonthData.days = {};
+      }
+    } else {
+      console.log(
+        `[Firestore] No existing document for ${docId}. Creating new one.`
+      );
+      currentMonthData = {
+        meta: {
+          employeeId,
+          year,
+          month,
+          lastModified: new Date().toISOString(),
+        },
+        days: {},
+      };
+    }
+
     const backupEntries: {
       day: number;
       field: string;
@@ -155,67 +191,83 @@ export async function saveAttendanceFirestore(
       newValue: string | null;
     }[] = [];
 
-    // Initialize the document data structure
-    let docData: AttendanceJsonMonth = {
-      meta: {
-        employeeId,
-        year,
-        month,
-        lastModified: new Date().toISOString(),
-      },
-      days: {},
-    };
+    // Iterate through ONLY the attendances that need to be saved/updated
+    for (const attendanceRecord of attendances) {
+      const dayStr = attendanceRecord.day.toString();
+      const existingDayData = currentMonthData.days[dayStr];
 
-    // If document exists, use its data as base
-    if (existingData) {
-      docData = {
-        ...existingData,
-        meta: {
-          ...existingData.meta,
-          lastModified: new Date().toISOString(),
-        },
+      // Prepare new day data from the incoming record
+      const newDayData: AttendanceJsonDay = {
+        timeIn: attendanceRecord.timeIn,
+        timeOut: attendanceRecord.timeOut,
+        schedule: attendanceRecord.schedule,
       };
-    }
 
-    // Process each attendance record
-    for (const attendance of attendances) {
-      const dayStr = attendance.day.toString();
-      const existingDay = docData.days[dayStr];
-
-      // Check for changes and create backup entries
-      if (existingDay) {
-        if (existingDay.timeIn !== attendance.timeIn) {
+      // Check for changes to create backup entries
+      if (existingDayData) {
+        if (existingDayData.timeIn !== newDayData.timeIn) {
           backupEntries.push({
-            day: attendance.day,
+            day: attendanceRecord.day,
             field: "timeIn",
-            oldValue: existingDay.timeIn,
-            newValue: attendance.timeIn,
+            oldValue: existingDayData.timeIn,
+            newValue: newDayData.timeIn,
           });
         }
-
-        if (existingDay.timeOut !== attendance.timeOut) {
+        if (existingDayData.timeOut !== newDayData.timeOut) {
           backupEntries.push({
-            day: attendance.day,
+            day: attendanceRecord.day,
             field: "timeOut",
-            oldValue: existingDay.timeOut,
-            newValue: attendance.timeOut,
+            oldValue: existingDayData.timeOut,
+            newValue: newDayData.timeOut,
+          });
+        }
+        // Add more checks if schedule changes need to be backed up
+      } else {
+        // This is a new day entry, so old values are null
+        if (newDayData.timeIn !== null) {
+          backupEntries.push({
+            day: attendanceRecord.day,
+            field: "timeIn",
+            oldValue: null,
+            newValue: newDayData.timeIn,
+          });
+        }
+        if (newDayData.timeOut !== null) {
+          backupEntries.push({
+            day: attendanceRecord.day,
+            field: "timeOut",
+            oldValue: null,
+            newValue: newDayData.timeOut,
           });
         }
       }
 
-      // Update the day data
-      docData.days[dayStr] = {
-        timeIn: attendance.timeIn,
-        timeOut: attendance.timeOut,
-        schedule: attendance.schedule,
-      };
+      // Update the specific day in the month's data
+      currentMonthData.days[dayStr] = newDayData;
+      console.log(
+        `[Firestore] Updated day ${dayStr} for ${docId} with TimeIn: ${newDayData.timeIn}, TimeOut: ${newDayData.timeOut}`
+      );
     }
 
-    // Save the document using the utility function
-    await saveDocument("attendances", docId, docData, companyName);
+    // Update the lastModified timestamp for the whole document
+    currentMonthData.meta.lastModified = new Date().toISOString();
 
-    // If there are changes, save backup
+    // Save the entire updated month document
+    // The saveDocument utility handles merge:true by default, but here we are providing the full desired state.
+    await saveDocument(
+      "attendances",
+      docId,
+      currentMonthData,
+      companyName,
+      true
+    ); // Explicitly merge:true
+    console.log(`[Firestore] Successfully saved document ${docId}`);
+
+    // If there were actual changes, save backup
     if (backupEntries.length > 0) {
+      console.log(
+        `[Firestore] ${backupEntries.length} changes detected. Saving backup for ${docId}.`
+      );
       await saveAttendanceBackupFirestore(
         backupEntries,
         employeeId,
@@ -223,12 +275,17 @@ export async function saveAttendanceFirestore(
         month,
         companyName
       );
+    } else {
+      console.log(
+        `[Firestore] No changes detected that require backup for ${docId}.`
+      );
     }
   } catch (error) {
     console.error(
-      `Error saving Firestore attendance for ${employeeId} ${year}-${month}:`,
+      `[Firestore] Error in saveAttendanceFirestore for ${employeeId} ${year}-${month}:`,
       error
     );
+    // It's important to re-throw the error so the calling function knows the save failed
     throw error;
   }
 }
@@ -293,24 +350,39 @@ export async function saveAttendanceBackupFirestore(
 }
 
 /**
- * Load alternative times from Firestore
+ * Load alternative times from Firestore for a specific month and year
  */
 export async function loadAlternativeTimesFirestore(
   employeeId: string,
+  year: number,
+  month: number,
   companyName: string
 ): Promise<string[]> {
   try {
-    // Use fetchDocument utility function
-    const data = await fetchDocument<SharedAlternatives>(
-      "alternatives",
-      employeeId,
+    const docId = createTimeBasedDocId(employeeId, year, month);
+    // console.log(`[Alternatives-Firestore] Fetching alternatives for document: ${docId}`);
+
+    const data = await fetchDocument<{ times: string[] }>(
+      "alternatives", // Collection remains 'alternatives'
+      docId, // Document ID is now employeeId_year_month
       companyName
     );
 
-    return data?.times || [];
+    if (!data) {
+      // console.log(`[Alternatives-Firestore] No alternatives document found for ${employeeId} ${year}-${month}`);
+      return [];
+    }
+
+    if (!data.times || !Array.isArray(data.times)) {
+      // console.log(`[Alternatives-Firestore] Alternatives document exists but has no valid times array for ${employeeId} ${year}-${month}`);
+      return [];
+    }
+
+    // console.log(`[Alternatives-Firestore] Retrieved ${data.times.length} alternatives for ${employeeId} ${year}-${month}`);
+    return data.times;
   } catch (error) {
     console.error(
-      `Error loading Firestore alternative times for ${employeeId}:`,
+      `Error loading Firestore alternative times for ${employeeId} ${year}-${month}:`,
       error
     );
     return []; // Return empty array on error
@@ -318,29 +390,42 @@ export async function loadAlternativeTimesFirestore(
 }
 
 /**
- * Save alternative times to Firestore
+ * Save alternative times to Firestore for a specific month and year
  */
 export async function saveAlternativeTimesFirestore(
   employeeId: string,
+  year: number,
+  month: number,
   times: string[],
   companyName: string
 ): Promise<void> {
   try {
     // Basic validation
     if (!Array.isArray(times)) {
+      console.error(
+        `[Alternatives-Firestore] Invalid alternatives format for ${employeeId} ${year}-${month}. Expected array, got: ${typeof times}`
+      );
       throw new Error(
         "Invalid alternatives format. Expected an array of strings."
       );
     }
 
-    // Structure data for Firestore
-    const dataToSave: SharedAlternatives = { times };
+    const docId = createTimeBasedDocId(employeeId, year, month);
+    console.log(
+      `[Alternatives-Firestore] Saving ${times.length} alternatives for ${employeeId} ${year}-${month} to document: ${docId}`
+    );
+
+    // Structure data for Firestore - simple object with a 'times' array
+    const dataToSave: { times: string[] } = { times };
 
     // Save document using utility function
-    await saveDocument("alternatives", employeeId, dataToSave, companyName);
+    await saveDocument("alternatives", docId, dataToSave, companyName);
+    console.log(
+      `[Alternatives-Firestore] Successfully saved alternatives for ${employeeId} ${year}-${month}`
+    );
   } catch (error) {
     console.error(
-      `Error saving Firestore alternative times for ${employeeId}:`,
+      `Error saving Firestore alternative times for ${employeeId} ${year}-${month}:`,
       error
     );
     throw error;
@@ -493,7 +578,6 @@ export async function queryAttendanceByDateRangeFirestore(
 
 export function createAttendanceFirestore(model: AttendanceModel) {
   const db = getFirestoreInstance();
-  // const collectionName = getFirestoreCollection("attendance"); // Keep commented or remove
 
   return {
     async syncToFirestore(
@@ -501,107 +585,133 @@ export function createAttendanceFirestore(model: AttendanceModel) {
     ): Promise<void> {
       let companyName: string;
       try {
-        // console.log("[syncToFirestore] Attempting to get company name..."); // Removed log
         companyName = await getCompanyName();
         if (!companyName) {
-          console.error(
-            "[syncToFirestore] Error: Company name could not be determined. Sync aborted."
-          );
           throw new Error(
             "Company name could not be determined. Sync aborted."
           );
         }
-        // console.log(`[syncToFirestore] Company name: ${companyName}`); // Removed log
         onProgress?.("Starting attendance sync to Firestore...");
 
-        // console.log("[syncToFirestore] Loading all local attendances..."); // Removed log
         const allLocalAttendances = await model.loadAttendances();
         if (!allLocalAttendances || allLocalAttendances.length === 0) {
-          // console.log("[syncToFirestore] No local attendance data to sync."); // Removed log
           onProgress?.("No local attendance data to sync.");
-          return;
-        }
-        // console.log(`[syncToFirestore] Loaded ${allLocalAttendances.length} local attendance records.`); // Removed log
-        onProgress?.(
-          `Loaded \${allLocalAttendances.length} local attendance records.`
-        );
-
-        // console.log("[syncToFirestore] Grouping attendances by employeeId, year, and month..."); // Removed log
-        const groupedAttendances = allLocalAttendances.reduce((acc, record) => {
-          const key = `\${record.employeeId}_\${record.year}_\${record.month}`;
-          if (!acc[key]) {
-            acc[key] = {
-              employeeId: record.employeeId,
-              year: record.year,
-              month: record.month,
-              records: [],
-            };
-          }
-          acc[key].records.push(record);
-          return acc;
-        }, {} as Record<string, { employeeId: string; year: number; month: number; records: Attendance[] }>);
-
-        const totalGroups = Object.keys(groupedAttendances).length;
-        // console.log(`[syncToFirestore] Grouped records into ${totalGroups} employee-month documents.`); // Removed log
-        onProgress?.(
-          `Grouped records into \${totalGroups} employee-month documents.`
-        );
-        let processedGroups = 0;
-
-        for (const groupKey in groupedAttendances) {
-          const group = groupedAttendances[groupKey];
-          const { employeeId, year, month, records } = group;
-          // console.log(`[syncToFirestore] Processing group: ${groupKey}, EmployeeID: ${employeeId}, Year: ${year}, Month: ${month}`); // Removed log
-
-          const docId = createTimeBasedDocId(employeeId, year, month);
-          // console.log(`[syncToFirestore] Generated docId: ${docId}`); // Removed log
-
-          const daysData: { [day: string]: AttendanceJsonDay } = {};
-          records.forEach((att) => {
-            daysData[att.day.toString()] = {
-              timeIn: att.timeIn,
-              timeOut: att.timeOut,
-              schedule: att.schedule === undefined ? null : att.schedule,
-            };
-          });
-
-          const docData: AttendanceJsonMonth = {
-            meta: {
-              employeeId,
-              year,
-              month,
-              lastModified: new Date().toISOString(),
-            },
-            days: daysData,
-          };
-          // console.log(`[syncToFirestore] Preparing to save document for ${docId}. Data: ${JSON.stringify(docData, null, 2)}`); // Removed log
-
-          // console.log(`[syncToFirestore] Calling saveDocument for ${docId} in collection 'attendances' for company '${companyName}'...`); // Removed log
-          await saveDocument("attendances", docId, docData, companyName);
-          // console.log(`[syncToFirestore] Successfully saved document ${docId}.`); // Removed log
-          processedGroups++;
+          // Even if no attendance, try to sync alternatives
+        } else {
           onProgress?.(
-            `Synced \${employeeId} \${year}-\${month} (\${processedGroups}/\${totalGroups})`
+            `Loaded ${allLocalAttendances.length} local attendance records.`
           );
-        }
 
-        // console.log("[syncToFirestore] Attendance sync to Firestore completed successfully."); // Removed log
-        onProgress?.("Attendance sync to Firestore completed successfully.");
-      } catch (error) {
-        console.error(
-          "[syncToFirestore] Error during attendance sync to Firestore:",
-          error
-        );
-        // Keep error logs
-        if (error instanceof Error) {
-          console.error(
-            `[syncToFirestore] Error details: ${error.message}, Stack: ${error.stack}`
+          const groupedAttendances = allLocalAttendances.reduce(
+            (acc, record) => {
+              const key = `${record.employeeId}_${record.year}_${record.month}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  employeeId: record.employeeId,
+                  year: record.year,
+                  month: record.month,
+                  records: [],
+                };
+              }
+              acc[key].records.push(record);
+              return acc;
+            },
+            {} as Record<
+              string,
+              {
+                employeeId: string;
+                year: number;
+                month: number;
+                records: Attendance[];
+              }
+            >
           );
+
+          const totalGroups = Object.keys(groupedAttendances).length;
+          onProgress?.(
+            `Grouped records into ${totalGroups} employee-month documents.`
+          );
+          let processedGroups = 0;
+
+          for (const groupKey in groupedAttendances) {
+            const group = groupedAttendances[groupKey];
+            const { employeeId, year, month, records } = group;
+
+            const docId = createTimeBasedDocId(employeeId, year, month);
+            const daysData: { [day: string]: AttendanceJsonDay } = {};
+            records.forEach((att) => {
+              daysData[att.day.toString()] = {
+                timeIn: att.timeIn,
+                timeOut: att.timeOut,
+                schedule: att.schedule === undefined ? null : att.schedule,
+              };
+            });
+
+            const docData: AttendanceJsonMonth = {
+              meta: {
+                employeeId,
+                year,
+                month,
+                lastModified: new Date().toISOString(),
+              },
+              days: daysData,
+            };
+            await saveDocument("attendances", docId, docData, companyName);
+            processedGroups++;
+            onProgress?.(
+              `Synced attendance for ${employeeId} ${year}-${month} (${processedGroups}/${totalGroups})`
+            );
+
+            // Sync alternatives for this specific employee, year, month
+            try {
+              // ASSUMPTION: model.loadAlternativeTimes will be updated to accept year and month
+              const localAlternativesForMonth =
+                await model.loadAlternativeTimes(employeeId, year, month);
+              if (
+                localAlternativesForMonth &&
+                localAlternativesForMonth.length > 0
+              ) {
+                onProgress?.(
+                  `Syncing ${localAlternativesForMonth.length} alternative times for ${employeeId} ${year}-${month}...`
+                );
+                await saveAlternativeTimesFirestore(
+                  // Use NEW signature
+                  employeeId,
+                  year,
+                  month,
+                  localAlternativesForMonth,
+                  companyName
+                );
+              } else {
+                // Optional: If local alternatives for this month are empty,
+                // consider deleting the corresponding Firestore document if it exists.
+                // For now, we only upload if local has data.
+                onProgress?.(
+                  `No local alternatives to sync for ${employeeId} ${year}-${month}.`
+                );
+              }
+            } catch (altError: any) {
+              onProgress?.(
+                `Error syncing alternatives for ${employeeId} ${year}-${month}: ${altError.message}`
+              );
+              console.warn(
+                `Could not sync alternatives for ${employeeId} ${year}-${month}:`,
+                altError
+              );
+            }
+          }
+        }
+        onProgress?.(
+          "Attendance records and their monthly alternatives sync to Firestore completed."
+        );
+        // The old loop for syncing alternatives for all employees has been removed
+        // as it's now handled within the groupedAttendances loop.
+      } catch (error) {
+        if (error instanceof Error) {
           throw new Error(
-            `Failed to sync attendance to Firestore: \${error.message}`
+            `Failed to sync attendance to Firestore: ${error.message}`
           );
         }
-        // console.error("[syncToFirestore] Unknown error occurred."); // Removed log
         throw new Error(
           "Failed to sync attendance to Firestore due to an unknown error"
         );
@@ -611,10 +721,7 @@ export function createAttendanceFirestore(model: AttendanceModel) {
     async syncFromFirestore(
       onProgress?: (message: string) => void
     ): Promise<void> {
-      // Keep existing implementation (which needs improvement like compensation's syncFromFirestore)
-      // But remove any temporary logs if they were added
       try {
-        // Assuming fetchCollection and getCompanyName are imported
         const companyName = await getCompanyName();
         if (!companyName) {
           throw new Error(
@@ -623,58 +730,142 @@ export function createAttendanceFirestore(model: AttendanceModel) {
         }
         onProgress?.("Starting attendance sync from Firestore...");
 
-        const firestoreDocs = await fetchCollection<AttendanceJsonMonth>(
-          "attendances",
-          companyName
-        );
+        const firestoreAttendanceDocs =
+          await fetchCollection<AttendanceJsonMonth>(
+            "attendances",
+            companyName
+          );
 
-        if (!firestoreDocs || firestoreDocs.length === 0) {
+        if (!firestoreAttendanceDocs || firestoreAttendanceDocs.length === 0) {
           onProgress?.(
             "No attendance data found in Firestore for this company."
           );
-          return;
-        }
-        onProgress?.(
-          `Retrieved ${firestoreDocs.length} attendance documents from Firestore.`
-        );
-
-        let allExtractedAttendances: Attendance[] = [];
-        firestoreDocs.forEach((docData: AttendanceJsonMonth) => {
-          const { employeeId, year, month } = docData.meta;
-          Object.entries(docData.days).forEach(
-            ([dayStr, dayData]: [string, AttendanceJsonDay]) => {
-              const day = parseInt(dayStr);
-              if (isNaN(day)) return;
-              allExtractedAttendances.push({
-                employeeId,
-                year,
-                month,
-                day,
-                timeIn: dayData.timeIn,
-                timeOut: dayData.timeOut,
-                schedule:
-                  dayData.schedule === undefined ? null : dayData.schedule, // Handle undefined here too
-              });
-            }
-          );
-        });
-
-        if (allExtractedAttendances.length > 0) {
-          // Save all extracted records at once (assuming model handles this)
-          await model.saveAttendances(allExtractedAttendances);
-          onProgress?.(
-            `Successfully saved/updated ${allExtractedAttendances.length} records locally.`
-          );
+          // Continue to attempt syncing alternatives
         } else {
           onProgress?.(
-            "No individual attendance entries extracted from Firestore documents."
+            `Retrieved ${firestoreAttendanceDocs.length} attendance documents from Firestore.`
           );
-        }
 
-        onProgress?.("Attendance sync from Firestore completed successfully.");
+          let allExtractedAttendances: Attendance[] = [];
+          firestoreAttendanceDocs.forEach((docData: AttendanceJsonMonth) => {
+            const { employeeId, year, month } = docData.meta;
+            Object.entries(docData.days).forEach(
+              ([dayStr, dayData]: [string, AttendanceJsonDay]) => {
+                const day = parseInt(dayStr);
+                if (isNaN(day)) return;
+                allExtractedAttendances.push({
+                  employeeId,
+                  year,
+                  month,
+                  day,
+                  timeIn: dayData.timeIn,
+                  timeOut: dayData.timeOut,
+                  schedule:
+                    dayData.schedule === undefined ? null : dayData.schedule,
+                });
+              }
+            );
+          });
+
+          if (allExtractedAttendances.length > 0) {
+            await model.saveAttendances(allExtractedAttendances);
+            onProgress?.(
+              `Successfully saved/updated ${allExtractedAttendances.length} attendance records locally.`
+            );
+          } else {
+            onProgress?.(
+              "No individual attendance entries extracted from Firestore documents."
+            );
+          }
+        }
+        onProgress?.("Attendance records sync from Firestore completed.");
+
+        // Sync alternative times from Firestore (now month/year specific)
+        onProgress?.(
+          "Fetching all monthly alternative time lists from Firestore..."
+        );
+        const firestoreAlternativesDocs = await fetchCollection<{
+          id: string;
+          times: string[];
+        }>( // doc.id will be "employeeId_year_month"
+          "alternatives",
+          companyName,
+          true // includeDocId parameter
+        );
+
+        if (
+          !firestoreAlternativesDocs ||
+          firestoreAlternativesDocs.length === 0
+        ) {
+          onProgress?.("No monthly alternative time lists found in Firestore.");
+        } else {
+          onProgress?.(
+            `Retrieved ${firestoreAlternativesDocs.length} monthly alternative time lists.`
+          );
+          for (const altDoc of firestoreAlternativesDocs) {
+            const docIdParts = altDoc.id.split("_");
+            // Expect at least 3 parts: employeeId (could have underscores), year, month
+            if (docIdParts.length >= 3) {
+              const monthStr = docIdParts[docIdParts.length - 1];
+              const yearStr = docIdParts[docIdParts.length - 2];
+              const employeeId = docIdParts
+                .slice(0, docIdParts.length - 2)
+                .join("_");
+
+              const year = parseInt(yearStr);
+              const month = parseInt(monthStr);
+              const times = altDoc.times;
+
+              if (
+                employeeId &&
+                !isNaN(year) &&
+                !isNaN(month) &&
+                Array.isArray(times)
+              ) {
+                try {
+                  // ASSUMPTION: model.saveAlternativeTimes will be updated to accept year and month
+                  await model.saveAlternativeTimes(
+                    employeeId,
+                    year,
+                    month,
+                    times
+                  );
+                  onProgress?.(
+                    `Saved ${times.length} alternative times for ${employeeId} ${year}-${month} locally.`
+                  );
+                } catch (saveAltError: any) {
+                  onProgress?.(
+                    `Error saving alternatives locally for ${employeeId} ${year}-${month}: ${saveAltError.message}`
+                  );
+                  console.warn(
+                    `Could not save alternatives locally for ${employeeId} ${year}-${month}:`,
+                    saveAltError
+                  );
+                }
+              } else {
+                onProgress?.(
+                  `Invalid data in alternative document: ID='${
+                    altDoc.id
+                  }', Times='${JSON.stringify(times)}'`
+                );
+                console.warn(
+                  `Skipping alternative document with invalid data: ${altDoc.id}`
+                );
+              }
+            } else {
+              onProgress?.(
+                `Invalid document ID format for alternative: ${altDoc.id}`
+              );
+              console.warn(
+                `Skipping alternative document with invalid ID format: ${altDoc.id}`
+              );
+            }
+          }
+        }
+        onProgress?.(
+          "Monthly alternative times sync from Firestore completed."
+        );
       } catch (error: any) {
-        console.error("Error syncing attendance from Firestore:", error);
-        // Keep error logs
         if (error instanceof Error) {
           console.error(
             `[syncFromFirestore - Attendance] Error details: ${error.message}, Stack: ${error.stack}`
