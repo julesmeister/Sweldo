@@ -14,6 +14,21 @@ export function injectStyles() {
     return;
   }
 
+  // Add Tailwind CSS file
+  const tailwindLink = document.createElement("link");
+  tailwindLink.rel = "stylesheet";
+  // Try both paths - the browser will only successfully load one of them
+  tailwindLink.href = "/styles/tailwind-web.css";
+  tailwindLink.id = "tailwind-css";
+  document.head.appendChild(tailwindLink);
+
+  // Also try the static/css path as a fallback
+  const tailwindLinkFallback = document.createElement("link");
+  tailwindLinkFallback.rel = "stylesheet";
+  tailwindLinkFallback.href = "/static/css/tailwind-web.css";
+  tailwindLinkFallback.id = "tailwind-css-fallback";
+  document.head.appendChild(tailwindLinkFallback);
+
   // Create style element for fonts
   const fontStyle = document.createElement("style");
   fontStyle.id = "font-styles";
@@ -714,14 +729,6 @@ export function injectStyles() {
     }
     /* end rounded-corners section */`;
   document.head.appendChild(baseStyle);
-
-  // Create a link element for Tailwind
-  const tailwindLink = document.createElement("link");
-  tailwindLink.id = "tailwind-styles";
-  tailwindLink.rel = "stylesheet";
-  tailwindLink.href =
-    "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
-  document.head.appendChild(tailwindLink);
 
   console.log("Styles injected successfully");
 }

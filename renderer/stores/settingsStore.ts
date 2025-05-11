@@ -184,8 +184,23 @@ const mergeSafelyPreservingValues = (
         !Array.isArray(sourceValue) &&
         sourceValue !== null
       ) {
+        // Ensure the target key in result is an object before spreading into it
+        if (
+          typeof result[key as keyof PersistedSettings] !== "object" ||
+          result[key as keyof PersistedSettings] === null
+        ) {
+          result[key as keyof PersistedSettings] = {} as any; // Initialize as empty object if not already an object
+        }
+
+        // Extract the current value to a separate variable
+        const currentValue = result[key as keyof PersistedSettings] as Record<
+          string,
+          any
+        >;
+
+        // Create a new object merging both
         result[key as keyof PersistedSettings] = {
-          ...result[key as keyof PersistedSettings],
+          ...currentValue,
           ...sourceValue,
         } as any;
       } else {
@@ -372,7 +387,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         loadedSettings = mergeSafelyPreservingValues(
           loadedSettings,
           sessionBackup
-        );
+        ) as PersistedSettings;
         settingsSources.fromSessionStorage = true;
       }
 
@@ -393,7 +408,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
           loadedSettings = mergeSafelyPreservingValues(
             loadedSettings,
             lsSettings
-          );
+          ) as PersistedSettings;
           settingsSources.fromLocalStorage = true;
 
           // If we have a company name, set it centrally and try to load from Firestore
@@ -422,7 +437,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
                 loadedSettings = mergeSafelyPreservingValues(
                   loadedSettings,
                   firestoreSettings
-                );
+                ) as PersistedSettings;
                 settingsSources.fromFirestore = true;
                 successfullyLoadedFromFile = true;
               }
@@ -488,7 +503,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
               loadedSettings = mergeSafelyPreservingValues(
                 loadedSettings,
                 parsedSettings
-              );
+              ) as PersistedSettings;
 
               // Always ensure we have a dbPath
               loadedSettings.dbPath = effectiveDbPath;
@@ -537,7 +552,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
           loadedSettings = mergeSafelyPreservingValues(
             loadedSettings,
             lsData.state
-          );
+          ) as PersistedSettings;
 
           if (lsData.state.companyName && !loadedSettings.companyName) {
             setFirestoreCompanyName(lsData.state.companyName);
@@ -728,7 +743,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
           recoveredSettings = mergeSafelyPreservingValues(
             recoveredSettings,
             lsBackup.state
-          );
+          ) as Partial<PersistedSettings>;
           recoverySuccessful = true;
         }
       } catch (e) {
@@ -751,7 +766,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
           recoveredSettings = mergeSafelyPreservingValues(
             recoveredSettings,
             lsSettings.state
-          );
+          ) as Partial<PersistedSettings>;
           recoverySuccessful = true;
         }
       } catch (e) {
@@ -776,7 +791,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
             recoveredSettings = mergeSafelyPreservingValues(
               recoveredSettings,
               firestoreSettings
-            );
+            ) as Partial<PersistedSettings>;
             recoverySuccessful = true;
           }
         } catch (e) {
@@ -802,7 +817,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
             recoveredSettings = mergeSafelyPreservingValues(
               recoveredSettings,
               fileSettings
-            );
+            ) as Partial<PersistedSettings>;
             recoverySuccessful = true;
           }
         } catch (e) {
@@ -826,7 +841,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         const mergedState = mergeSafelyPreservingValues(
           currentState,
           recoveredSettings
-        );
+        ) as PersistedSettings;
 
         // Update state
         set(mergedState);

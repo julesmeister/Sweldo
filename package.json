@@ -9,15 +9,16 @@
     "dev": "cd renderer && node switch-env.js nextron && cd .. && nextron",
     "setup:web": "if not exist renderer\\resources mkdir renderer\\resources && copy resources\\*.css renderer\\resources\\ && copy resources\\*.ttf renderer\\resources\\ && if not exist renderer\\public\\fonts mkdir renderer\\public\\fonts && copy resources\\*.ttf renderer\\public\\fonts\\ && if exist .env.local copy .env.local renderer\\.env.local",
     "sync:styles": "cd renderer && node scripts/sync-styles.js",
-    "dev:web": "npm run setup:web && npm run sync:styles && cd renderer && node switch-env.js web && next dev",
+    "dev:web": "npm run setup:web && npm run sync:styles && node renderer/scripts/ensure-css-paths.js && cd renderer && node switch-env.js web && next dev",
     "build": "nextron build",
     "build:win32": "nextron build --win --ia32",
-    "build:web": "npm run setup:web && npm run sync:styles && cd renderer && next build",
+    "build:web": "npm run setup:web && npm run generate:tailwind && npm run sync:styles && node renderer/scripts/ensure-css-paths.js && cd renderer && node switch-env.js web && next build --no-lint && powershell -Command \"if (!(Test-Path ../app/static/css)) { New-Item -ItemType Directory -Force -Path ../app/static/css }; Copy-Item -Force public/styles/tailwind-web.css ../app/static/css/tailwind-web.css\"",
     "deploy": "npm run build:web && firebase deploy --only hosting",
     "postinstall": "npx electron-builder install-app-deps",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "generate:tailwind": "node renderer/scripts/generate-tailwind.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

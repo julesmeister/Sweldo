@@ -216,8 +216,9 @@ export async function loadPayrollSummariesFirestore(
       // If specific month document is not found, try to query for all payroll docs for this employee
       try {
         // Import the necessary Firestore functions
-        const { collection, query, where, getDocs, startsWith, orderBy } =
-          await import("firebase/firestore");
+        const { collection, query, where, getDocs, orderBy } = await import(
+          "firebase/firestore"
+        );
         const { getFirestoreInstance } = await import(
           "../lib/firestoreService"
         );
@@ -230,7 +231,8 @@ export async function loadPayrollSummariesFirestore(
         const querySnapshot = await getDocs(payrollsRef);
 
         // Find documents that match our pattern using the helper function
-        const matchingDocs = [];
+        const matchingDocs: Array<{ id: string; data: PayrollFirestoreData }> =
+          [];
         querySnapshot.forEach((doc) => {
           // Log ALL document IDs to help diagnose the structure
           console.log(`[PayrollFirestore] Found document ID: ${doc.id}`);
@@ -239,7 +241,10 @@ export async function loadPayrollSummariesFirestore(
             console.log(
               `[PayrollFirestore] Document ${doc.id} matches employee ${employeeId}`
             );
-            matchingDocs.push({ id: doc.id, data: doc.data() });
+            matchingDocs.push({
+              id: doc.id,
+              data: doc.data() as PayrollFirestoreData,
+            });
           }
         });
 

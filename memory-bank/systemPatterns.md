@@ -66,8 +66,8 @@ Sweldo follows a dual-process architecture typical of Electron applications:
    
    - **Loading Mechanisms**:
      - Standard CSS imports in Nextron/desktop mode 
-     - Runtime style injection for web mode using `styleInjector.js`
-     - Early font loading via `_document.js` to prevent FOUC (Flash of Unstyled Content)
+     - Runtime style injection for web mode using `styleInjector.js`. For web mode, a comprehensive `tailwind-web.css` is generated during the build (via `npm run generate:tailwind` executing `renderer/scripts/generate-tailwind.js`) by processing `globals.css` with PostCSS and Tailwind (using `renderer/tailwind.config.js`). This generated `tailwind-web.css` (output to `renderer/public/styles/`) is the primary source of Tailwind styles and is linked by `styleInjector.js` at runtime. `styleInjector.js` may also inject other minimal critical/override styles, some of which are prepared by `sync-styles.js` (these are non-Tailwind-directive based).
+     - Early font loading via `_document.js` to prevent FOUC (Flash of Unstyled Content) for initially injected fonts.
      - Critical styles embedded directly in HTML head
    
    - **Style Organization**:
@@ -84,8 +84,10 @@ Sweldo follows a dual-process architecture typical of Electron applications:
 
 8. **Environment-Aware Styling Pattern**:
    - Detection of runtime environment (web vs desktop) via `isWebEnvironment()`
-   - Environment-specific style loading strategies
-   - Conditional font and style injection in web mode
+   - Environment-specific style loading strategies:
+     - Desktop: Direct processing of `globals.css` via Next.js/PostCSS.
+     - Web: Build-time generation of `tailwind-web.css` (via `generate:tailwind` script) which is then linked by `styleInjector.js`. `styleInjector.js` also handles injection of minimal supplementary styles.
+   - Conditional font and style injection in web mode primarily handled by `styleInjector.js` linking the main stylesheet and adding other critical pieces.
    - Different DOM manipulation approaches based on environment
 
 9. **Self-contained Component Pattern**:

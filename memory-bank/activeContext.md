@@ -10,19 +10,6 @@ The Sweldo application was originally designed for desktop use with Electron, bu
 3. Date handling and parsing differences
 4. UI rendering consistency across platforms
 
-### Recent Achievements
-- ✅ Fixed payroll display in web mode
-- ✅ Implemented date parsing for Firestore timestamps
-- ✅ Added filter functionality for payroll records
-- ✅ **`shorts.tsx` Web Mode Data Loading Fixed**: Successfully refactored `shorts.tsx` to correctly load and display data from Firestore in web mode. This involved implementing direct Firestore service calls, separating employee detail loading, ensuring reactivity to the global `DateSelector`, and adding robust parsing for date fields (including handling `null` or invalid dates from Firestore). The approach aligns with patterns used in `cashAdvances.tsx`.
-- ✅ **Fixed Oblong Radiating Circles in `NoDataPlaceholder.tsx`**:
-    - **Problem**: The radiating ping animation circles in the `NoDataPlaceholder` component were appearing oblong instead of perfectly round.
-    - **Solution**:
-        - Modified the parent container of the animation to have a fixed width and height (e.g., `w-28 h-28` or `w-24 h-24`) and used `mx-auto` for centering.
-        - Applied `aspect-square` to the animating circle `div`s to enforce a 1:1 aspect ratio.
-        - Ensured the inner content container (`relative z-10 ...`) used `w-full h-full` to correctly fill its new fixed-size parent.
-        - This was addressed in `renderer/components/NoDataPlaceholder.tsx`.
-
 ### Current Challenges
 - Some components still assume local file system access
 - Need to ensure consistent UI behavior between platforms
@@ -53,28 +40,21 @@ This allows components to work consistently in both environments without needing
 ## Current Work Focus
 The project is currently focused on enabling a web deployment of the Sweldo application via Firebase Hosting, in addition to the existing desktop application, and fixing critical authentication and session persistence issues in web mode.
 
-The immediate priorities are to resolve styling inconsistencies between desktop and web modes, and ensure all pages react properly to the global date selection component.
+The immediate priorities are to ensure all pages react properly to the global date selection component and to address any remaining UI inconsistencies now that core styling is fixed.
 
 **Completed:**
 *   Refactored `renderer/pages/settings.tsx` to correctly load and display settings from Firestore in web mode, and conditionally render sections based on the environment (web/desktop) and data availability (e.g., `dbPath`, `companyName`).
-*   Addressed PIN authentication in `RoleManagement.tsx` for web mode.
-*   Fixed employee list loading in `settings.tsx` for web mode.
-*   Hid "Database Management" and "Data Migration" sections in `settings.tsx` for web mode.
 *   Refactored `ScheduleSettings.tsx` to correctly fetch and save data in web mode (employees, month-specific schedules).
-*   Corrected button styling in `CalendarDayCell.tsx` for "Work"/"Day Off" toggle.
 *   Refactored `statistics.tsx` to use `selectedMonth` and `selectedYear` from `useDateSelectorStore` for its data fetching logic, removing its reliance on local `localStorage` for these values and ensuring it reacts to global date changes.
 *   Refactored `renderer/pages/holidays.tsx` to use `selectedMonth` and `selectedYear` from `useDateSelectorStore` for its data fetching logic, removing its reliance on local `localStorage` for these values and ensuring it reacts to global date changes.
 *   Fixed `renderer/pages/timesheet_test.tsx` to correctly handle web mode by checking for environment type and conditionally using Firestore for loading employees rather than requiring dbPath. Updated employee lookup to find from loaded data in web mode rather than making additional database calls.
-*   Created a robust system for synchronizing styles between globals.css and styleInjector.js to ensure consistent styling in both desktop and web modes.
-*   Fixed infinite loop issues in the timesheet.tsx page by optimizing React effect dependencies and removing excessive console logs.
+*   **Fixed Tailwind CSS in Web Mode:** Implemented a dedicated build step (`renderer/scripts/generate-tailwind.js` invoked by `npm run generate:tailwind` in `package.json`) to correctly process `renderer/styles/globals.css` using PostCSS, `tailwindcss` (with `renderer/tailwind.config.js`), and `autoprefixer`. This generates a complete `tailwind-web.css` (output to `renderer/public/styles/`) which is then linked by `styleInjector.js`, ensuring all Tailwind utilities and custom styles are available in the web deployment. This resolved issues of a 'bare' UI in web mode and ensures visual consistency with the desktop version.
+*   The `sync-styles.js` script now plays a supplementary role, injecting specific non-Tailwind-directive based CSS rules from `globals.css` via `styleInjector.js` as needed for minimal critical overrides or additions.
 *   Fixed table border styling issues in the timesheet to ensure consistent appearance in both environments.
 *   Enhanced CompensationDialog form layout to improve spacing and visual consistency.
 
 **Current Task:**
-1.  **Further refinement of the CSS sync mechanism:**
-    *   Test the automated CSS synchronization script with additional styles
-    *   Ensure all critical styles are properly synchronized between environments
-    *   Document the CSS synchronization approach in the memory bank
+1.  **Review and Refine `sync-styles.js` Usage:** Now that Tailwind CSS is fully generated for web mode, review the styles managed by `sync-styles.js` and `styleInjector.js` to ensure they are only for genuinely critical overrides or supplementary styles not covered by the main `tailwind-web.css`. Minimize inline injected styles where possible.
 2.  **Fix TypeScript errors in `renderer/pages/timesheet.tsx`:**
     *   Update hook and component interfaces (`useComputeAllCompensations`, `TimesheetRow`, `AttendanceHistoryDialog`) to correctly handle nullable models/props in web mode.
     *   Ensure `AttendanceHistoryDialog` can accept `companyName` and `isWebMode` props.
@@ -88,140 +68,6 @@ The immediate priorities are to resolve styling inconsistencies between desktop 
     *   `renderer/pages/loans.tsx`
     *   `renderer/pages/leaves.tsx`
     *   `renderer/pages/shorts.tsx`
-
-## Recent Changes
-- Fixed component rendering issue with DateRangePicker by ensuring proper function components are returned
-- Added comprehensive error handling and type checking for dynamically loaded components
-- Added UI improvements to the DateRangePicker dialog:
-  - Removed redundant date display text above the Apply button
-  - Changed X button color from black to white for better contrast
-  - Improved dialog border styling for better visual appearance
-- Fixed a runtime error in the SimpleDateRange mock component related to null parameter destructuring
-- Added default parameter values and defensive coding to prevent similar issues
-- Added proper imports for all dependencies (addMonths from date-fns)
-- Implemented a proxy component pattern to completely avoid CSS imports during build time
-- Created DateRangePickerProxy component that dynamically loads the real component at runtime
-- Removed all direct CSS imports from DateRangePicker.tsx, even conditional ones
-- Updated TimesheetHeader to use the proxy component instead of direct imports
-- Used dynamic runtime imports with Function('return require(...)') to avoid webpack processing
-- Fixed issue with react-date-range CSS loading in web mode by implementing a dynamic CSS loader and mock component
-- Created a simplified DateRange component for web mode to avoid problematic CSS imports
-- Implemented dynamic component loading strategy for DateRangePicker to work in both environments
-- Used conditional imports with environment detection to select the appropriate implementation
-- Created comprehensive documentation of the solution in memory-bank/css-solution.md
-- Fixed infinite loop issues in timesheet.tsx by optimizing React hook dependencies
-- Fixed styling inconsistencies between desktop and web modes
-- Implemented an automated CSS synchronization system between globals.css and styleInjector.js
-- Created a script (sync-styles.js) to intelligently extract styles from globals.css and update styleInjector.js
-- Added deduplication logic to prevent duplicate CSS selectors in styleInjector.js
-- Fixed table border styling in the timesheet to ensure consistent appearance
-- Enhanced CompensationDialog form layout with improved spacing and consistency
-- Updated package.json scripts to automatically run style synchronization as part of web build processes
-- Integrated the style synchronization into both development and production web builds
-- Added tailwind directive handling to prevent invalid CSS in web mode
-- Firebase Hosting has been initialized
-- Configuration for Firebase hosting has been set up
-- `firebase.json` has been configured to use `app` as the public directory
-- Proper ignores for Electron-specific directories have been added to `firebase.json`
-- Hosting rewrites for SPA support have been configured
-- `renderer/next.config.js` has been configured for static export (`output: 'export'`)
-- A web build script (`build:web`) has been added to package.json
-- PostCSS configuration has been fixed for both Nextron and web builds
-- Web build process has been successfully tested
-- Dexie-based IndexedDB cache implemented for EmployeeList (Firestore employee queries), with a reload button to clear cache and a reusable `fetchEmployees` function
-- Toast notifications added for cache reload actions in EmployeeList, HolidaysPage, and HolidayCalendar to indicate reload start and success
-- Toast notifications added for cache reload actions in EmployeeList, HolidaysPage, HolidayCalendar, and MissingTimeLogs to indicate reload start and success
-- Fixed authentication session persistence in web mode
-- Fixed company name persistence in web mode
-- Enhanced company selection in web mode
-- Added support for loading employees in desktop mode
-- Fixed web mode support for timesheet_test.tsx
-- Completely redesigned the DateRangePicker component using ReactDOM.createPortal to prevent clipping issues in payroll.tsx and other places
-- Implemented a modern, two-month calendar view in the DateRangePicker
-- Determined the exact dimensions needed for the DateRangePicker dialog (669px width) to perfectly fit the calendar without extra whitespace
-- Made the entire DateRangePicker clickable rather than just the individual date inputs
-- Fixed issues with z-index by using portal rendering directly to the document body
-- Fixed re-rendering issue with company name input field in settings.tsx by implementing a pattern that:
-  - Uses a local state variable for immediate typing feedback
-  - Debounces updates to the global store
-  - Only triggers store updates when typing has stopped for 500ms
-  - Prevents the entire settings page from re-initializing on every keystroke
-- Implemented shorts sync functionality for Firestore in both per-employee and bulk modes:
-  - Added proper integration with useFirestoreSync.ts hook
-  - Created bulk sync capability that processes all active employees' shorts
-  - Added detailed progress reporting in the UI
-  - Implemented robust error handling with per-employee isolation
-
-## Recent Work (June 2024)
-
-### UI Improvements and Bug Fixes
-
-1. **CompensationDialog UI Enhancements**
-   - Fixed clear button (×) alignment issues using CSS pseudo-elements instead of text characters
-   - Improved hover contrast for clear buttons so they remain visible when hovered
-   - Fixed dropdown select visibility and spacing issues
-   - Adjusted caret icon positioning to be properly spaced from the right edge
-
-2. **DateRangePicker Navigation Fix**
-   - Fixed missing month navigation buttons in the DateRangePicker component
-   - Implemented custom month navigation with proper state management
-   - Used a key prop to force component re-rendering when changing months
-   - Improved styling for better usability and visual consistency
-
-### Shorts Sync Enhancement and Bug Fixes
-
-1. **Fixed Linter Error in ShortModel**
-   - Added `getDbPath()` method to the `ShortModel` class in `shorts.ts`
-   - This fixed the linter error in `shorts_firestore.ts` where the model was trying to access a non-existent method
-   - The implementation follows the pattern used in other model classes like `loan_firestore.ts`
-
-2. **Enhanced Shorts Sync UI in Database Management**
-   - Made it clear that employee selection for shorts sync is optional
-   - Added explanatory text to indicate that shorts will sync for all employees by default
-   - Added visual feedback in the model selection UI showing which employee's shorts data will be synced
-   - Improved the shorts sync progress display to show the employee being processed
-
-3. **Improved useFirestoreSync Hook for Shorts**
-   - Modified the hook to always include shorts in the available models list regardless of employee selection
-   - Simplified the code that creates the shorts model instance
-   - Used a consistent approach with a placeholder ID (`__SYNC_ALL__`) when no specific employee is selected
-   - Enhanced logging during shorts sync operations to provide clearer feedback on what's happening
-
-These improvements make the shorts sync functionality more robust and user-friendly, with clearer indications of what data is being synced and better error handling during the sync process.
-
-### CompensationDialog UI Improvements
-
-1. **Fixed Clear Button Alignment Issues**
-   - Replaced text character (×) with CSS pseudo-elements for perfect centering
-   - Used ::before and ::after elements with absolute positioning and transforms
-   - Created a cross shape with consistent width and height regardless of font
-   - Ensured the clear button is perfectly centered in its circular container
-
-2. **Improved Hover State Visibility**
-   - Enhanced contrast by using white color for the × on hover
-   - Used a darker background color for better visibility
-   - Fixed the issue where the × would disappear on hover due to poor contrast
-
-3. **Fixed Dropdown Select Visibility Issues**
-   - Added explicit styling for select options with proper contrast
-   - Set dark background with white text for better readability
-   - Added padding and highlight styles for hover/focus states
-
-### DateRangePicker and Timesheet Display Adjustments
-1.  **Reverted Custom Calendar CSS:**
-    *   All custom CSS for `react-multi-date-picker` in `renderer/styles/globals.css` was removed by the user, opting for the library's default styling.
-2.  **Improved Date Input Display:**
-    *   The date format displayed in the `DateRangePicker` input field (`renderer/components/DateRangePicker.tsx`) was changed to a more complete "MMMM D, YYYY" format.
-3.  **Adjusted Timesheet Start Date Logic:**
-    *   The filtering logic in `renderer/pages/timesheet.tsx` for `filteredTimesheetEntries` was modified to use a `startDate` that is one day prior to the user's selection. This ensures data for the actual selected start date is correctly included.
-4.  **DateRangePicker Z-Index/Clipping Fix:**
-    *   Resolved z-index and clipping issues with the `DateRangePicker` popover (e.g., on `payroll.tsx`) by implementing `ReactDOM.createPortal`.
-    *   The calendar popover in `renderer/components/DateRangePicker.tsx` now renders at the document root, positioned correctly under the input field using `position: fixed` and dynamic coordinate calculations.
-5.  **DateRangePicker Usability Enhancements:**
-    *   **Popover Interaction:** Fixed an issue where clicking inside the calendar popover would inadvertently close it. The `handleClickOutside` logic was updated to correctly consider clicks within the portal-rendered calendar.
-    *   **Clear Button:** Added a clear button (styled "x" icon) to the input field of the `DateRangePicker`. This button appears when a date range is selected, allowing for easy clearing of the dates. Event propagation is stopped on clear button click to prevent calendar toggle.
-
-These improvements make the shorts sync functionality more robust and user-friendly, with clearer indications of what data is being synced and better error handling during the sync process.
 
 ## Next Steps
 1. Test the react-date-range solution in web mode to ensure it works correctly
@@ -261,8 +107,9 @@ These improvements make the shorts sync functionality more robust and user-frien
 11. Apply Dexie caching pattern to other models (attendance, payroll, timesheet, etc.)
 
 ## Active Decisions and Considerations
-- **CSS Synchronization Strategy**: Using an automated script to intelligently extract and synchronize styles between globals.css and styleInjector.js, with deduplication logic to prevent duplicates
-- **React Hook Optimization**: Carefully managing effect dependencies and memoization to prevent infinite render loops
+- **CSS Generation and Linking Strategy for Web Mode**: The primary method for web styling is a build-time generated `tailwind-web.css` file (created by `renderer/scripts/generate-tailwind.js` using PostCSS/Tailwind) which includes all necessary Tailwind base, components, utilities, and custom styles from `globals.css`. This file is then linked by `renderer/utils/styleInjector.js`.
+- **Supplementary CSS Injection**: `styleInjector.js`, with input from `sync-styles.js`, injects minimal critical styles, fonts, and specific non-Tailwind-directive based overrides from `globals.css`. This is secondary to the main linked `tailwind-web.css`.
+- **React Hook Optimization**: Carefully managing effect dependencies and memoization to prevent infinite render loops.
 - **Component Style Consistency**: Ensuring consistent styling between desktop and web modes through careful CSS management
 - **Data Storage Strategy**: Determining the best approach for replacing local file system storage with Firestore for web deployment
 - **Session Persistence**: Using localStorage for web authentication state while maintaining file-based storage for desktop
@@ -273,15 +120,13 @@ These improvements make the shorts sync functionality more robust and user-frien
 - **Environment Detection**: Implementing reliable detection logic to determine whether the application is running in Electron or web environment
 - **Visual Consistency**: Maintaining a consistent visual experience across both desktop and web environments
 - **Code Organization**: Maintaining a clean separation between platform-agnostic and platform-specific code
-- **Build Process**: Refining the separate build processes for web (`build:web`) and desktop (`build`) versions 
+- **Build Process**: Refining the separate build processes for web (`build:web`) and desktop (`build`) versions. The `build:web` script now includes a `generate:tailwind` step critical for correct web styling.
 - **Model Initialization**: Ensuring all model instances are created with appropriate environment checking 
 - **CSS Architecture**: 
-  - Using Tailwind CSS as the primary styling framework in both environments
-  - Synchronizing styles between globals.css and styleInjector.js
-  - Managing environment-specific style differences
-  - Balancing performance with style consistency
-  - Using CSS variables for theming support
-  - Implementing responsive design that works across environments
+  - Using Tailwind CSS as the primary styling framework in both environments.
+  - For web mode, Tailwind CSS is fully processed into `tailwind-web.css` via a build script (`generate:tailwind`). This file is linked by `styleInjector.js`.
+  - `styleInjector.js` and `sync-styles.js` provide a mechanism for linking `tailwind-web.css` and injecting minimal, non-Tailwind-directive based critical or override styles.
+  - Managing environment-specific style differences.
 - **DateRangePicker Implementation**:
   - Using ReactDOM.createPortal to bypass z-index and clipping issues
   - Applying precise dimensions (669px width) to perfectly fit the calendar content

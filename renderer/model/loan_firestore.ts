@@ -15,6 +15,7 @@ import {
   queryCollection,
   getCompanyName,
 } from "../lib/firestoreService";
+import { Timestamp } from "firebase/firestore";
 
 /**
  * Firestore structure for loans document
@@ -68,27 +69,38 @@ const isEmployeeLoanDoc = (docId: string, employeeId: string): boolean => {
  * Parse date strings from Firestore to Date objects
  * This handles different date formats consistently
  */
-const parseFirestoreDate = (dateStr: string): Date => {
-  if (!dateStr) return new Date();
-
-  try {
-    // Handle ISO strings
+export const parseDate = (
+  dateStr: string | { seconds: number; nanoseconds: number }
+): Date => {
+  if (typeof dateStr === "string") {
     const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) {
-      return date;
+    // Check if the parsed date string is a valid date
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date string provided: "${dateStr}"`);
     }
+    return date;
+  } else {
+    // At this point, TypeScript should know that dateStr is of type { seconds: number, nanoseconds: number }
+    // We assign it to a new variable for clarity, though it's not strictly necessary.
+    const timestampObject = dateStr;
 
-    // Handle timestamp format
-    if (typeof dateStr === "object" && dateStr.seconds) {
-      return new Date(dateStr.seconds * 1000);
+    // Perform runtime checks to ensure the object structure is as expected,
+    // even though types should guarantee this at compile time.
+    if (timestampObject && typeof timestampObject.seconds === "number") {
+      return new Date(timestampObject.seconds * 1000);
+    } else {
+      // This block would be hit if dateStr, despite not being a string,
+      // doesn't conform to the expected { seconds: number, ... } structure.
+      throw new Error(
+        `Invalid Firestore Timestamp-like object. Expected { seconds: number, ... }, but received: ${JSON.stringify(
+          timestampObject
+        )}`
+      );
     }
-
-    // Default to current date if parsing fails
-    return new Date();
-  } catch (error) {
-    console.error(`[LoanFirestore] Error parsing date: ${dateStr}`, error);
-    return new Date();
   }
+  // Original code had a throw statement here after the else-if.
+  // The structure above ensures that all paths either return a Date or throw an error,
+  // so a fallback throw here should be unreachable if the input strictly matches the type signature.
 };
 
 /**
@@ -123,26 +135,26 @@ export async function loadLoansFirestore(
         `[LoanFirestore] Found specific document for ${year}-${month}`
       );
 
-    // Convert to Loan array
-    const loans: Loan[] = Object.entries(data.loans).map(([id, loan]) => ({
-      id,
-      employeeId: loan.employeeId,
-        date: parseFirestoreDate(loan.date),
-      amount: loan.amount,
-      type: loan.type,
-      status: loan.status,
-      interestRate: loan.interestRate,
-      term: loan.term,
-      monthlyPayment: loan.monthlyPayment,
-      remainingBalance: loan.remainingBalance,
-        nextPaymentDate: parseFirestoreDate(loan.nextPaymentDate),
-      reason: loan.reason,
-    }));
+      // Convert to Loan array
+      const loans: Loan[] = Object.entries(data.loans).map(([id, loan]) => ({
+        id,
+        employeeId: loan.employeeId,
+        date: parseDate(loan.date),
+        amount: loan.amount,
+        type: loan.type,
+        status: loan.status,
+        interestRate: loan.interestRate,
+        term: loan.term,
+        monthlyPayment: loan.monthlyPayment,
+        remainingBalance: loan.remainingBalance,
+        nextPaymentDate: parseDate(loan.nextPaymentDate),
+        reason: loan.reason,
+      }));
 
       console.log(
         `[LoanFirestore] Returning ${loans.length} loans from specific document`
       );
-    return loans;
+      return loans;
     }
 
     // If specific document is not found, query all documents and filter by employee
@@ -182,7 +194,7 @@ export async function loadLoansFirestore(
         // Extract loans for this employee from the document
         Object.entries(doc.loans).forEach(([id, loan]) => {
           // Check if the loan is for the requested month/year
-          const loanDate = parseFirestoreDate(loan.date);
+          const loanDate = parseDate(loan.date);
           const loanMonth = loanDate.getMonth() + 1; // Convert to 1-based
           const loanYear = loanDate.getFullYear();
 
@@ -198,7 +210,7 @@ export async function loadLoansFirestore(
               term: loan.term,
               monthlyPayment: loan.monthlyPayment,
               remainingBalance: loan.remainingBalance,
-              nextPaymentDate: parseFirestoreDate(loan.nextPaymentDate),
+              nextPaymentDate: parseDate(loan.nextPaymentDate),
               reason: loan.reason,
             });
           }
@@ -395,7 +407,7 @@ export async function loadAllLoansForEmployeeFirestore(
         const loans = Object.entries(doc.loans).map(([id, loan]) => ({
           id,
           employeeId: loan.employeeId,
-          date: new Date(loan.date),
+          date: parseDate(loan.date),
           amount: loan.amount,
           type: loan.type,
           status: loan.status,
@@ -403,7 +415,7 @@ export async function loadAllLoansForEmployeeFirestore(
           term: loan.term,
           monthlyPayment: loan.monthlyPayment,
           remainingBalance: loan.remainingBalance,
-          nextPaymentDate: new Date(loan.nextPaymentDate),
+          nextPaymentDate: parseDate(loan.nextPaymentDate),
           reason: loan.reason,
         }));
 
@@ -543,7 +555,7 @@ export function createLoanFirestoreInstance(model: LoanModel) {
           const loans = Object.entries(doc.loans).map(([id, loanData]) => ({
             id,
             employeeId: loanData.employeeId,
-            date: new Date(loanData.date),
+            date: parseDate(loanData.date),
             amount: loanData.amount,
             type: loanData.type,
             status: loanData.status,
@@ -551,7 +563,7 @@ export function createLoanFirestoreInstance(model: LoanModel) {
             term: loanData.term,
             monthlyPayment: loanData.monthlyPayment,
             remainingBalance: loanData.remainingBalance,
-            nextPaymentDate: new Date(loanData.nextPaymentDate),
+            nextPaymentDate: parseDate(loanData.nextPaymentDate),
             reason: loanData.reason,
           }));
           onProgress?.(
@@ -588,3 +600,15 @@ export function createLoanFirestoreInstance(model: LoanModel) {
     },
   };
 }
+
+export const toFirestoreDate = (
+  date: Date | null | undefined
+): Timestamp | null => {
+  if (date instanceof Date) {
+    return Timestamp.fromDate(date);
+  } else if (date === null || date === undefined) {
+    return null;
+  } else {
+    throw new Error("Invalid date format");
+  }
+};

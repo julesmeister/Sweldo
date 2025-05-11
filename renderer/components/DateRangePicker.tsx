@@ -35,7 +35,12 @@ const ClearIcon = () => (
   </svg>
 );
 
-export const DateRangePicker: React.FC = () => {
+interface DateRangePickerProps {
+  variant?: string; // Optional variant prop
+  onRefresh?: (showToast?: boolean) => Promise<void>; // Existing onRefresh prop
+}
+
+export const DateRangePicker: React.FC<DateRangePickerProps> = ({ onRefresh }) => {
   const { dateRange, setDateRange } = useDateRangeStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);

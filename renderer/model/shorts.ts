@@ -32,6 +32,7 @@ export class ShortModel {
   private month: number;
   private year: number;
   private folderPath: string; // Base folder path for the employee
+  private jsonFilePath: string; // Path to the JSON file for the current month/year
   private oldModelInstance: OldShortModel; // Instance for fallback
 
   constructor(

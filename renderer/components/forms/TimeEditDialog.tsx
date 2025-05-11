@@ -9,7 +9,7 @@ import {
   createAttendanceSettingsModel,
 } from "@/renderer/model/settings";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
-import { Attendance } from "../model/attendance";
+import { Attendance } from "@/renderer/model/attendance";
 import { toast } from "sonner";
 
 interface TimeEditDialogProps {

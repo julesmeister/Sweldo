@@ -534,7 +534,7 @@ export default function PayrollPage() {
                       style={{
                         backgroundColor: "#007bff",
                         color: "#fff",
-                        height: isWebEnvironment() ? "48px" : "36px",
+                        height: "36px",
                         border: "none",
                         borderRadius: "4px",
                         padding: "8px 16px",

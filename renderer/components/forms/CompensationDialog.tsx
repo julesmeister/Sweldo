@@ -50,6 +50,7 @@ interface CompensationDialogProps {
   timeIn?: string;
   timeOut?: string;
   accessCodes?: string[];
+  hasAccess?: (code: string) => boolean;
 }
 
 interface FormFieldProps {
@@ -273,6 +274,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   timeIn,
   timeOut,
   accessCodes = [],
+  hasAccess,
 }) => {
   const [formData, setFormData] = useState<Compensation>({
     ...compensation,

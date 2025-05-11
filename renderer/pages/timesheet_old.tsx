@@ -223,15 +223,15 @@ const TimesheetPage: React.FC = () => {
     handleRevertCompensationToHistory,
   } = useTimesheetHistoryOperations({
     hasAccess,
-    handleTimesheetEdit, // Still needed for attendance revert
-    compensationModel, // Pass compensation model
-    timesheetEntries, // Pass current attendance state
-    compensationEntries, // Pass current compensation state
+    handleTimesheetEdit,
+    compensationModel,
+    timesheetEntries,
+    compensationEntries,
     storedMonthInt,
     year,
     selectedEmployeeId,
     employee,
-    onDataUpdate: onDataUpdateHandler, // Use the shared handler
+    onDataUpdate: onDataUpdateHandler,
   });
 
   // First effect: Load employee only
@@ -1268,6 +1268,7 @@ const TimesheetPage: React.FC = () => {
             timeOut={selectedEntry.entry.timeOut || undefined}
             position={clickPosition}
             accessCodes={accessCodes}
+            hasAccess={hasAccess}
           />
         )}
         <RecomputeDialog
@@ -1279,17 +1280,42 @@ const TimesheetPage: React.FC = () => {
         {selectedEmployeeId && selectedHistoryDay !== null && (
           <AttendanceHistoryDialog
             isOpen={isHistoryDialogOpen}
-            onClose={() => {
-              setIsHistoryDialogOpen(false);
-              setSelectedHistoryDay(null);
-            }}
+            onClose={() => setIsHistoryDialogOpen(false)}
             employeeId={selectedEmployeeId}
             year={year}
             month={storedMonthInt}
             day={selectedHistoryDay}
             dbPath={dbPath}
-            onRevertAttendance={handleRevertAttendanceToHistory}
-            onRevertCompensation={handleRevertCompensationToHistory}
+            isWebMode={isWebEnvironment()}
+            onRevertAttendance={async (day, timeIn, timeOut) => {
+              if (selectedHistoryDay !== null) {
+                const minimalHistoricalAttendance: Partial<Attendance> = {
+                  day: selectedHistoryDay,
+                  timeIn: timeIn,
+                  timeOut: timeOut,
+                  employeeId: selectedEmployeeId || "",
+                  month: storedMonthInt,
+                  year: year,
+                };
+                await handleRevertAttendanceToHistory(minimalHistoricalAttendance as Attendance);
+              }
+            }}
+            onRevertCompensation={async (day, backupCompensationData) => {
+              if (selectedHistoryDay !== null && selectedEmployeeId) {
+                const historicalCompensation: Compensation = {
+                  employeeId: selectedEmployeeId,
+                  year: year,
+                  month: storedMonthInt,
+                  day: selectedHistoryDay,
+                  ...(backupCompensationData as Partial<Compensation>),
+                  dayType: backupCompensationData.dayType || "Regular",
+                  dailyRate: backupCompensationData.dailyRate || 0,
+                  nightDifferentialHours: backupCompensationData.nightDifferentialHours || 0,
+                  nightDifferentialPay: backupCompensationData.nightDifferentialPay || 0,
+                };
+                await handleRevertCompensationToHistory(historicalCompensation);
+              }
+            }}
           />
         )}
       </main>

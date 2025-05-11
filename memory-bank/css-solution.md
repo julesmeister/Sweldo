@@ -1,4 +1,60 @@
-# Tailwind CSS Implementation in Sweldo
+# Tailwind CSS Implementation in Sweldo - Solved for Web Mode
+
+## Overview of the Corrected CSS Strategy for Web Mode
+
+The primary challenge was ensuring Tailwind CSS, with all its utilities and custom configurations, was fully applied in the web mode deployment, consistent with the desktop (Nextron) mode. The original issue stemmed from an incomplete `tailwind-web.css` file being used in web builds, leading to a "bare" UI.
+
+The **successful solution** revolves around a dedicated build step that generates a complete `tailwind-web.css` file. This file is then linked by the web application at runtime.
+
+### Core Components of the Solution:
+
+1.  **`renderer/scripts/generate-tailwind.js` (NEW & CRITICAL):**
+    *   A Node.js script added to the project.
+    *   Uses `postcss`, `tailwindcss`, and `autoprefixer` programmatically.
+    *   Reads `renderer/styles/globals.css` (which contains `@tailwind base/components/utilities` and custom styles).
+    *   Processes it using the project's `renderer/tailwind.config.js` for all Tailwind configurations (content paths, theme, plugins, safelist).
+    *   Outputs a single, comprehensive `tailwind-web.css` file to `renderer/public/styles/tailwind-web.css`.
+    *   This script is invoked via an npm script `generate:tailwind`.
+
+2.  **`package.json` Build Script (`build:web`):
+    *   Modified to include `npm run generate:tailwind` as a step *before* `next build`.
+    *   This ensures `renderer/public/styles/tailwind-web.css` is generated with the latest styles before Next.js packages public assets.
+    *   A subsequent step in `build:web` copies this generated `tailwind-web.css` to the final deployment directory (e.g., `app/static/css/`) for Firebase Hosting.
+
+3.  **`renderer/utils/styleInjector.js` (Role Clarified):
+    *   Its primary role in the corrected setup is to **link the generated `tailwind-web.css`** file into the document head at runtime for web mode.
+    *   It also continues to inject other minimal, critical styles: explicitly defined base styles, CSS variables for theming, font-face declarations, and specific component styles that are *not* part of the main Tailwind flow (e.g., some MagicUI critical styles, or styles prepared by `sync-styles.js`).
+
+4.  **`renderer/scripts/sync-styles.js` (Supplementary Role):
+    *   This script's role is now clearly supplementary.
+    *   It extracts specific, manually-defined CSS sections from `globals.css` (those *not* using Tailwind directives like `@apply` or `@layer`) to be injected by `styleInjector.js`.
+    *   These are for minor overrides or very specific style blocks that need to be injected directly, separate from the main Tailwind build.
+
+5.  **`renderer/tailwind.config.js` and `postcss.config.js`:**
+    *   These configurations are now correctly utilized by `generate-tailwind.js` to produce the complete `tailwind-web.css`.
+    *   Pathing for `content` in `tailwind.config.js` is crucial and should be relative to the `renderer` directory (e.g., `./pages/**/*.tsx`).
+
+## Why This Works and Previous Issues
+
+-   **Previous Problem:** The `build:web` process was *copying* a potentially stale or incomplete `tailwind-web.css` file, or the file was not being generated with all necessary Tailwind utilities. The `sync-styles.js` script, by design, skipped Tailwind directives, so it couldn't compensate for an incomplete main Tailwind file.
+-   **Current Solution:** By explicitly generating `tailwind-web.css` from source (`globals.css` + `tailwind.config.js`) using the full PostCSS/Tailwind toolchain during the build, we ensure all Tailwind base styles, components, utilities, and project-specific customizations are included. This generated file is then the single source of truth for Tailwind styling in web mode.
+
+## Key Files in the Corrected Architecture
+
+-   **Input for Web CSS Generation:**
+    -   `renderer/styles/globals.css`: Contains `@tailwind` directives and all custom CSS.
+    -   `renderer/tailwind.config.js`: Configures Tailwind (content paths, theme, plugins).
+    -   `postcss.config.js` (project root): Configures PostCSS, primarily for Tailwind and Autoprefixer.
+-   **Generation Script:**
+    -   `renderer/scripts/generate-tailwind.js`: Orchestrates the PostCSS/Tailwind processing.
+-   **Generated Asset (Primary Web Styles):**
+    -   `renderer/public/styles/tailwind-web.css`: The complete, processed CSS file. This is copied to the final deployment asset folder (e.g., `app/static/css/`).
+-   **Runtime Injection/Linking (Web Mode):**
+    -   `renderer/utils/styleInjector.js`: Links `tailwind-web.css` and injects other minimal/supplementary styles.
+-   **Supplementary Style Syncing:**
+    -   `renderer/scripts/sync-styles.js`: Extracts specific non-directive CSS blocks from `globals.css` for `styleInjector.js`.
+
+This corrected architecture ensures that the web deployment benefits from the full power and configuration of Tailwind CSS, consistent with the desktop environment, resolving previous UI inconsistencies.
 
 ## Current Architecture
 
