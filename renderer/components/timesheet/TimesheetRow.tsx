@@ -79,6 +79,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         entry: Attendance,
         compensation: Compensation | null
     ) => {
+        // Log compensation values for debugging
+        if (columnKey === "grossPay" || columnKey === "netPay" || columnKey === "deductions") {
+            console.log(`[TimesheetRow] Rendering ${columnKey} for day ${entry.day}:`,
+                compensation ? compensation[columnKey] : 'null');
+        }
+
         switch (columnKey) {
             case "day":
                 return (

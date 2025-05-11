@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { IoCalculator } from "react-icons/io5";
 import { AttendanceSettings } from "@/renderer/model/settings";
 import { Holiday } from "@/renderer/model/holiday";
@@ -18,23 +18,39 @@ const formatNumber = (num: number) => {
 export const ComputationBreakdownButton: React.FC<
   ComputationBreakdownButtonProps
 > = ({ breakdown, attendanceSettings, holiday }) => {
+  // Log when the component renders to help diagnose issues
+  useEffect(() => {
+    console.log("ComputationBreakdownButton rendered", {
+      hasBreakdown: !!breakdown,
+      hasAttendanceSettings: !!attendanceSettings,
+      hasHoliday: !!holiday,
+      basePay: breakdown?.basePay
+    });
+  }, [breakdown, attendanceSettings, holiday]);
+
   return (
     <button
       title="View payment computation breakdown"
       className="text-gray-400 hover:text-gray-300 focus:outline-none relative group"
+      onClick={(e) => {
+        // Prevent bubbling to avoid dialog closing
+        e.stopPropagation();
+        console.log("Calculation button clicked");
+      }}
     >
       <IoCalculator className="h-5 w-5" />
 
       {/* Computation Breakdown Popover */}
       <div
-        className="hidden group-hover:block fixed w-96 p-4 bg-gray-800 rounded-lg shadow-lg z-50 text-sm"
+        className="hidden group-hover:block absolute w-96 p-4 bg-gray-800 rounded-lg shadow-lg z-50 text-sm"
         style={{
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
+          top: "0",
+          right: "calc(100% + 8px)", /* Position to the left of the button */
           maxHeight: "90vh",
           overflowY: "auto",
         }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={() => console.log("Mouse entered computation breakdown")}
       >
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-medium text-gray-100">Payment Computation</h4>
@@ -194,7 +210,7 @@ export const ComputationBreakdownButton: React.FC<
                       {Math.max(
                         0,
                         breakdown.details.lateMinutes -
-                          breakdown.details.lateGracePeriod
+                        breakdown.details.lateGracePeriod
                       )}
                       mins @ ₱
                       {formatNumber(breakdown.details.lateDeductionPerMinute)}
@@ -218,7 +234,7 @@ export const ComputationBreakdownButton: React.FC<
                       {Math.max(
                         0,
                         breakdown.details.undertimeMinutes -
-                          breakdown.details.undertimeGracePeriod
+                        breakdown.details.undertimeGracePeriod
                       )}
                       mins | Rate: ₱
                       {formatNumber(

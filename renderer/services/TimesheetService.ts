@@ -4,7 +4,10 @@ import {
   Compensation,
   createCompensationModel,
 } from "@/renderer/model/compensation";
-import { loadCompensationFirestore } from "@/renderer/model/compensation_firestore";
+import {
+  loadCompensationFirestore,
+  saveOrUpdateCompensationsFirestore,
+} from "@/renderer/model/compensation_firestore";
 import { isWebEnvironment } from "@/renderer/lib/firestoreService";
 
 /**
@@ -104,6 +107,67 @@ export class TimesheetService {
         );
         return data;
       } catch (error) {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Save a compensation record
+   */
+  async saveCompensation(compensation: Compensation): Promise<void> {
+    console.log("[TimesheetService] Saving compensation:", compensation);
+
+    if (isWebEnvironment()) {
+      // Web mode - use Firestore
+      if (!this.companyName) {
+        throw new Error("Company name not set for web mode");
+      }
+
+      try {
+        console.log("[TimesheetService] Using Firestore to save compensation");
+        await saveOrUpdateCompensationsFirestore(
+          [compensation],
+          compensation.month,
+          compensation.year,
+          compensation.employeeId,
+          this.companyName
+        );
+        console.log(
+          "[TimesheetService] Compensation saved to Firestore successfully"
+        );
+      } catch (error) {
+        console.error(
+          "[TimesheetService] Error saving compensation to Firestore:",
+          error
+        );
+        throw error;
+      }
+    } else {
+      // Desktop mode - use local DB
+      if (!this.dbPath) {
+        throw new Error("Database path not configured");
+      }
+
+      try {
+        console.log(
+          "[TimesheetService] Using local model to save compensation"
+        );
+        const compensationModel = createCompensationModel(this.dbPath);
+        await compensationModel.saveOrUpdateCompensations(
+          [compensation],
+          compensation.month,
+          compensation.year,
+          compensation.employeeId
+        );
+        console.log(
+          "[TimesheetService] Compensation saved locally successfully"
+        );
+      } catch (error) {
+        console.error(
+          "[TimesheetService] Error saving compensation locally:",
+          error
+        );
         throw error;
       }
     }

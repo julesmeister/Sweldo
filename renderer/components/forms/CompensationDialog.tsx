@@ -32,6 +32,14 @@ import {
   formatTime,
   ScheduleInfo,
 } from "@/renderer/hooks/utils/useSchedule";
+import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import {
+  loadAttendanceSettingsFirestore,
+  loadTimeSettingsFirestore
+} from "@/renderer/model/settings_firestore";
+import {
+  loadHolidaysFirestore
+} from "@/renderer/model/holiday_firestore";
 
 interface CompensationDialogProps {
   isOpen: boolean;
@@ -284,14 +292,15 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     dayType: compensation.dayType || ("Regular" as DayType),
     manualOverride: compensation.manualOverride || false,
   });
-  const { dbPath } = useSettingsStore();
+  const { dbPath, companyName } = useSettingsStore();
+  const isWeb = isWebEnvironment();
   const attendanceSettingsModel = useMemo(
-    () => createAttendanceSettingsModel(dbPath),
-    [dbPath]
+    () => isWeb ? null : createAttendanceSettingsModel(dbPath),
+    [dbPath, isWeb]
   );
   const holidayModel = useMemo(
-    () => createHolidayModel(dbPath, year, month),
-    [dbPath, year, month]
+    () => isWeb ? null : createHolidayModel(dbPath, year, month),
+    [dbPath, year, month, isWeb]
   );
   const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>([]);
   const [employmentType, setEmploymentType] = useState<EmploymentType | null>(
@@ -330,20 +339,57 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
   useEffect(() => {
     const loadInitialData = async () => {
-      if (!dbPath || !attendanceSettingsModel || !holidayModel) return;
-
       try {
-        const timeSettings = await attendanceSettingsModel.loadTimeSettings();
+        let settings: AttendanceSettings;
+        let timeSettings: EmploymentType[] = [];
+        let loadedHolidays: Holiday[] = [];
+
+        if (isWeb && companyName) {
+          // Web mode - use Firestore
+          settings = await loadAttendanceSettingsFirestore(companyName);
+
+          // Load holidays from Firestore
+          loadedHolidays = await loadHolidaysFirestore(year, month, companyName);
+
+          // Load time settings from Firestore
+          timeSettings = await loadTimeSettingsFirestore(companyName);
+
+          // Add a fallback for web mode if we couldn't get employment types
+          if (!timeSettings || timeSettings.length === 0) {
+            console.warn("[CompensationDialog] No employment types loaded from Firestore, using default");
+            timeSettings = [{
+              type: employee?.employmentType || "regular",
+              hoursOfWork: 8,
+              requiresTimeTracking: true,
+              schedules: [
+                { dayOfWeek: 1, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 2, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 3, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 4, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 5, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 6, timeIn: "08:00", timeOut: "17:00" },
+                { dayOfWeek: 7, timeIn: "", timeOut: "" }
+              ]
+            }];
+          }
+        } else if (dbPath && attendanceSettingsModel && holidayModel) {
+          // Desktop mode - use local files
+          [settings, timeSettings, loadedHolidays] = await Promise.all([
+            attendanceSettingsModel.loadAttendanceSettings(),
+            attendanceSettingsModel.loadTimeSettings(),
+            holidayModel.loadHolidays(),
+          ]);
+        } else {
+          throw new Error("Unable to load settings - invalid configuration");
+        }
+
+        setAttendanceSettings(settings);
         const currentEmploymentType =
           timeSettings.find((type) => type.type === employee?.employmentType) ||
+          timeSettings[0] || // Fallback to first employment type if employee's type not found
           null;
         setEmploymentType(currentEmploymentType);
-
-        const [settings, loadedHolidays] = await Promise.all([
-          attendanceSettingsModel.loadAttendanceSettings(),
-          holidayModel.loadHolidays(),
-        ]);
-        setAttendanceSettings(settings);
+        setEmploymentTypes(timeSettings);
         setHolidays(loadedHolidays);
       } catch (error) {
         console.error("Error loading initial data for dialog:", error);
@@ -360,6 +406,10 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     holidayModel,
     employee?.employmentType,
     isOpen,
+    isWeb,
+    companyName,
+    year,
+    month,
   ]);
 
   useEffect(() => {
@@ -381,6 +431,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
   const computedValues = useMemo(() => {
     if (!employmentType || !attendanceSettings || !scheduleInfo) {
       const dailyRate = parseFloat((employee?.dailyRate || 0).toString());
+      console.log("[CompensationDialog] Missing required data for calculations:", {
+        hasEmploymentType: !!employmentType,
+        hasAttendanceSettings: !!attendanceSettings,
+        hasScheduleInfo: !!scheduleInfo,
+        isWeb: isWebEnvironment()
+      });
       return {
         lateMinutes: 0,
         undertimeMinutes: 0,
@@ -500,12 +556,16 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return createBaseReturn({ absence: true });
     }
 
+    // Ensure we have valid timeIn and timeOut strings for calculations
+    const effectiveTimeIn = typeof timeIn === 'string' ? timeIn : '00:00';
+    const effectiveTimeOut = typeof timeOut === 'string' ? timeOut : '00:00';
+
     const { actual, scheduled } = createTimeObjects(
       year,
       month,
       day,
-      timeIn,
-      timeOut,
+      effectiveTimeIn,
+      effectiveTimeOut,
       scheduleDetails
     );
 
@@ -576,6 +636,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
 
   useEffect(() => {
     if (computedValues && !formData.manualOverride) {
+      // Add debug logging to check computedValues
+      console.log("[CompensationDialog] Setting computed values:", computedValues);
       setFormData((prev) => {
         const nightHours = computedValues.nightDifferentialHours;
         const standardHours = employmentType?.hoursOfWork || 8;
@@ -624,6 +686,20 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
     }
   }, [compensation, month, year, day]);
 
+  // Add diagnostic useEffect to help debug why buttons might not show
+  useEffect(() => {
+    // Log when dialog opens and settings load
+    if (isOpen) {
+      console.log("CompensationDialog data:", {
+        hasAttendanceSettings: !!attendanceSettings,
+        hasScheduleInfo: !!scheduleInfo,
+        hasEmploymentType: !!employmentType,
+        hasEmployee: !!employee,
+        formDataManualOverride: formData.manualOverride
+      });
+    }
+  }, [isOpen, attendanceSettings, scheduleInfo, employmentType, employee, formData.manualOverride]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -632,7 +708,22 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
       return;
     }
 
+    // Add logging before submit
+    console.log("[CompensationDialog] Submitting form with data:", {
+      employeeId: formData.employeeId,
+      month: formData.month,
+      year: formData.year,
+      day: formData.day,
+      dayType: formData.dayType,
+      grossPay: formData.grossPay,
+      netPay: formData.netPay
+    });
+
     await onSave(formData);
+
+    // Add logging after submit
+    console.log("[CompensationDialog] Form submitted successfully");
+
     onClose();
   };
 
@@ -972,10 +1063,12 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
               </h3>
             </div>
             <div className="flex items-center gap-2">
+              {/* Reset button - only show when manual override is enabled */}
               {formData.manualOverride && (
                 <button
                   type="button"
                   onClick={() => {
+                    console.log("Reset button clicked");
                     setFormData({
                       ...formData,
                       overtimeMinutes: 0,
@@ -1013,6 +1106,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   Reset
                 </button>
               )}
+
+              {/* Computation Breakdown Button - Always show if settings are available */}
               {attendanceSettings && scheduleInfo && (
                 <ComputationBreakdownButton
                   breakdown={
@@ -1123,6 +1218,8 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   )}
                 />
               )}
+
+              {/* Close button */}
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-300 focus:outline-none"

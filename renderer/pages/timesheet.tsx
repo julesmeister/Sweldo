@@ -486,6 +486,8 @@ const TimesheetPage: React.FC = () => {
     }
 
     try {
+      console.log("[Timesheet] Saving compensation:", updatedCompensation);
+
       if (
         !updatedCompensation.employeeId ||
         !updatedCompensation.month ||
@@ -500,18 +502,43 @@ const TimesheetPage: React.FC = () => {
           throw new Error("Company name not available for web mode");
         }
 
+        console.log("[Timesheet] Web mode - saving compensation using TimesheetService");
         // Create a temporary service instance to save the compensation
         const timesheetService = new TimesheetService(dbPath, companyName);
+        await timesheetService.saveCompensation(updatedCompensation);
 
-        // Here you would need to implement a save method in TimesheetService
-        // For now, we'll just refresh the data to get the latest
-        await refreshData(true);
+        // Update local state immediately for a responsive UI
+        setCompensationEntries(prevEntries => {
+          // Create a new array to ensure React detects the change
+          const newEntries = [...prevEntries];
+
+          // Find and replace the existing entry, or add if not found
+          const index = newEntries.findIndex(comp =>
+            comp.employeeId === updatedCompensation.employeeId &&
+            comp.year === updatedCompensation.year &&
+            comp.month === updatedCompensation.month &&
+            comp.day === updatedCompensation.day
+          );
+
+          if (index !== -1) {
+            console.log("[Timesheet] Updating existing compensation entry at index:", index);
+            newEntries[index] = updatedCompensation;
+          } else {
+            console.log("[Timesheet] Adding new compensation entry");
+            newEntries.push(updatedCompensation);
+          }
+
+          return newEntries;
+        });
+
+        console.log("[Timesheet] Web mode - compensation saved and local state updated");
       } else {
         // Desktop mode
         if (!compensationModel) {
           throw new Error("Compensation model not available");
         }
 
+        console.log("[Timesheet] Desktop mode - saving compensation using model");
         await compensationModel.saveOrUpdateCompensations(
           [updatedCompensation],
           updatedCompensation.month,
@@ -525,6 +552,7 @@ const TimesheetPage: React.FC = () => {
           selectedEmployeeId!
         );
 
+        console.log("[Timesheet] Desktop mode - loaded updated compensation entries:", newCompensationEntries.length);
         setCompensationEntries(newCompensationEntries);
       }
 
@@ -654,7 +682,18 @@ const TimesheetPage: React.FC = () => {
         }
       });
     }
+    console.log(`[Timesheet] Built compensationLookup with ${lookup.size} entries for ${year}-${storedMonthInt}`);
     return lookup;
+  }, [compensationEntries]);
+
+  // Add a useEffect to debug compensation updates
+  useEffect(() => {
+    if (compensationEntries.length > 0) {
+      console.log(`[Timesheet] Compensation entries updated - now have ${compensationEntries.length} entries`);
+      // Log a sample of a few entries
+      const sample = compensationEntries.slice(0, Math.min(3, compensationEntries.length));
+      console.log('[Timesheet] Sample compensation entries:', sample);
+    }
   }, [compensationEntries]);
 
   // Find employee's employment type

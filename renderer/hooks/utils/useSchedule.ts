@@ -4,6 +4,11 @@ import {
   DailySchedule,
   AttendanceSettingsModel,
 } from "@/renderer/model/settings";
+import {
+  isWebEnvironment,
+  getCompanyName,
+} from "@/renderer/lib/firestoreService";
+import { loadMonthScheduleFirestore } from "@/renderer/model/settings_firestore";
 
 // Use DailySchedule type directly instead of defining our own Schedule interface
 export type { DailySchedule as Schedule };
@@ -24,7 +29,7 @@ export const formatTime = (time: string): string => {
 
 // Non-hook version for calculating schedule info for a single date
 export const getScheduleInfo = async (
-  model: AttendanceSettingsModel,
+  model: AttendanceSettingsModel | null,
   employmentType: EmploymentType | null,
   date: Date
 ): Promise<ScheduleInfo> => {
@@ -37,7 +42,51 @@ export const getScheduleInfo = async (
     };
   }
 
-  const schedule = await model.getScheduleForDate(employmentType, date);
+  let schedule: DailySchedule | null = null;
+
+  // Handle web mode without model
+  if (isWebEnvironment() && !model) {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // Month is 1-based here
+    const dateStr = date.toISOString().split("T")[0];
+
+    try {
+      const companyName = await getCompanyName();
+      // First check month-specific schedule
+      const monthSchedule = await loadMonthScheduleFirestore(
+        employmentType.type,
+        year,
+        month,
+        companyName
+      );
+
+      if (monthSchedule && monthSchedule[dateStr]) {
+        schedule = monthSchedule[dateStr];
+      } else if (employmentType.schedules) {
+        // Fall back to weekly schedule
+        const dayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday, etc.
+        const scheduleDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust to 0-6 index (Mon-Sun)
+        const weeklySchedule = employmentType.schedules[scheduleDay];
+
+        if (weeklySchedule) {
+          schedule = {
+            timeIn: weeklySchedule.timeIn,
+            timeOut: weeklySchedule.timeOut,
+            isOff: !weeklySchedule.timeIn || !weeklySchedule.timeOut,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(
+        "[useSchedule] Error fetching schedule in web mode:",
+        error
+      );
+    }
+  } else if (model) {
+    // Desktop mode or model provided in web mode
+    schedule = await model.getScheduleForDate(employmentType, date);
+  }
+
   // Consider a schedule valid only if it has both timeIn and timeOut values
   const hasSchedule =
     !!schedule && !!schedule.timeIn && !!schedule.timeOut && !schedule.isOff;
@@ -67,10 +116,11 @@ export const useSchedules = (
   const [scheduleMap, setScheduleMap] = useState<
     Map<number, { isRestDay: boolean; hasSchedule: boolean }>
   >(new Map());
+  const isWeb = isWebEnvironment();
 
   useEffect(() => {
     const calculateSchedules = async () => {
-      if (!attendanceSettingsModel || !dates.length || !employmentType) {
+      if (!dates.length || !employmentType) {
         const defaultMap = new Map<
           number,
           { isRestDay: boolean; hasSchedule: boolean }
@@ -96,22 +146,18 @@ export const useSchedules = (
 
         for (const date of dates) {
           const day = date.getDate();
-          const dailySchedule =
-            await attendanceSettingsModel.getScheduleForDate(
-              employmentType,
-              date
-            );
 
-          const hasSchedule =
-            !!dailySchedule &&
-            !!dailySchedule.timeIn &&
-            !!dailySchedule.timeOut &&
-            !dailySchedule.isOff;
+          // Use getScheduleInfo which now handles web mode correctly
+          const scheduleInfo = await getScheduleInfo(
+            attendanceSettingsModel,
+            employmentType,
+            date
+          );
 
-          const isRestDay =
-            !hasSchedule || (!!dailySchedule && dailySchedule.isOff === true);
-
-          newScheduleMap.set(day, { isRestDay, hasSchedule });
+          newScheduleMap.set(day, {
+            isRestDay: scheduleInfo.isRestDay,
+            hasSchedule: scheduleInfo.hasSchedule,
+          });
         }
 
         setScheduleMap(newScheduleMap);
@@ -132,7 +178,7 @@ export const useSchedules = (
     };
 
     calculateSchedules();
-  }, [attendanceSettingsModel, employmentType, dates]);
+  }, [attendanceSettingsModel, employmentType, dates, isWeb]);
 
   return scheduleMap;
 };
@@ -144,9 +190,10 @@ export const useSchedule = (
   date: Date | null
 ): ScheduleInfo | null => {
   const [scheduleInfo, setScheduleInfo] = useState<ScheduleInfo | null>(null);
+  const isWeb = isWebEnvironment();
 
   useEffect(() => {
-    if (!model || !employmentType || !date) {
+    if (!employmentType || !date) {
       setScheduleInfo({
         schedule: null,
         hasSchedule: false,
@@ -159,6 +206,7 @@ export const useSchedule = (
     let isMounted = true;
     const fetchSchedule = async () => {
       try {
+        // Model can be null in web mode, getScheduleInfo now handles this
         const info = await getScheduleInfo(model, employmentType, date);
         if (isMounted) {
           setScheduleInfo(info);
@@ -181,32 +229,32 @@ export const useSchedule = (
     return () => {
       isMounted = false;
     };
-  }, [model, employmentType?.type, date]);
+  }, [model, employmentType?.type, date, isWeb]);
 
   return scheduleInfo;
 };
 
 // Utility function that can be used without the hook (now async)
 export const checkHasSchedule = async (
-  model: AttendanceSettingsModel,
+  model: AttendanceSettingsModel | null,
   employmentType: EmploymentType | null,
   date: Date
 ): Promise<boolean> => {
-  if (!employmentType || !model) return false;
-  const schedule = await model.getScheduleForDate(employmentType, date);
-  return (
-    !!schedule && !!schedule.timeIn && !!schedule.timeOut && !schedule.isOff
-  );
+  if (!employmentType) return false;
+
+  // getScheduleInfo now handles null model in web mode
+  const scheduleInfo = await getScheduleInfo(model, employmentType, date);
+  return scheduleInfo.hasSchedule;
 };
 
 // Utility function to check if a date should be marked as absent (now async)
 export const shouldMarkAsAbsent = async (
-  model: AttendanceSettingsModel,
+  model: AttendanceSettingsModel | null,
   employmentType: EmploymentType | null,
   date: Date,
   hasTimeEntries: boolean
 ): Promise<boolean> => {
-  if (!employmentType || !model) return false;
+  if (!employmentType) return false;
 
   const scheduleInfo = await getScheduleInfo(model, employmentType, date);
 

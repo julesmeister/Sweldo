@@ -217,10 +217,10 @@ export default function StatisticsPage() {
             <StatisticsPageHeader
               isLoading={isLoading}
               onRefresh={handleRefresh}
-              selectedYear={selectedYear}
-              onSelectYear={setSelectedYear}
-              years={years}
-            />
+                    selectedYear={selectedYear}
+                    onSelectYear={setSelectedYear}
+                    years={years}
+                  />
             <div className="p-6">
               <MonthlyPayrollSection
                 monthlyPayrolls={statisticsData?.monthlyPayrolls}
@@ -239,9 +239,9 @@ export default function StatisticsPage() {
         </div>
       </MagicCard>
       {refreshDialogOpen && (
-        <RefreshMonthDialog
-          isOpen={refreshDialogOpen}
-          onClose={() => setRefreshDialogOpen(false)}
+      <RefreshMonthDialog
+        isOpen={refreshDialogOpen}
+        onClose={() => setRefreshDialogOpen(false)}
           onConfirm={handleRefreshMonth}
           monthName={monthToRefresh}
           selectedYear={selectedYear}
