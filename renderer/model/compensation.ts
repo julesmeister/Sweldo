@@ -659,9 +659,9 @@ export class CompensationModel {
         const companyName = await getCompanyName();
         await saveOrUpdateCompensationsFirestore(
           compensationsToSave,
-          employeeId,
-          year,
           month,
+          year,
+          employeeId,
           companyName
         );
         return;

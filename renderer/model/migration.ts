@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import { Attendance } from "./attendance_old";
+import { Attendance } from "./attendance";
 
 // Type definitions for the new JSON structure
 interface AttendanceJsonDay {

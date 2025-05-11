@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useCallback } from "react";
-import { migrateAttendanceAlternatives } from "@/renderer/model/attendance_old";
 import {
+  migrateAttendanceAlternatives,
   migrateCsvToJson as migrateAttendanceCsvToJson,
   migrateBackupCsvToJson as migrateAttendanceBackupCsvToJson,
 } from "@/renderer/model/attendance";

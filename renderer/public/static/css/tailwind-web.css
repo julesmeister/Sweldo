@@ -1373,6 +1373,9 @@ select {
 .max-h-\[200px\] {
   max-height: 200px;
 }
+.max-h-\[220px\] {
+  max-height: 220px;
+}
 .max-h-\[320px\] {
   max-height: 320px;
 }

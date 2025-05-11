@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { ExcelData } from "../model/attendance_old";
+import { ExcelData } from "../model/attendance";
 
 interface ExcelStore {
   excelData: ExcelData | null;

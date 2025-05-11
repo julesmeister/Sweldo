@@ -1506,13 +1506,22 @@ export async function migrateAttendanceAlternatives(
   const model = createAttendanceModel(dbPath);
   const baseAttendancesPath = `${dbPath}/SweldoDB/attendances`; // Base path for employee folders
 
+  // Define an interface for the directory entry
+  interface DirectoryEntry {
+    name: string;
+    isDirectory: boolean;
+    isFile: boolean; // Assuming isFile might also be part of it
+  }
+
   try {
     // Discover employee folders directly within the SweldoDB/attendances directory
     // The model.folderPath is already SweldoDB/attendances, so we use it directly or its parent for employee discovery
-    const employeeFolders = await window.electron.readDir(baseAttendancesPath);
+    const employeeFolders = (await window.electron.readDir(
+      baseAttendancesPath
+    )) as DirectoryEntry[];
     const employeeIds = employeeFolders
-      .filter((f) => f.isDirectory)
-      .map((f) => f.name);
+      .filter((f: DirectoryEntry) => f.isDirectory)
+      .map((f: DirectoryEntry) => f.name);
 
     if (!employeeIds || employeeIds.length === 0) {
       onProgress?.("No employee IDs found to migrate alternatives for.");
