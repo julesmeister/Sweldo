@@ -95,7 +95,7 @@ export default function StatisticsPage() {
 
     try {
       setIsUpdating(true);
-      toast.info(`Processing ${selectedPayrollIds.length} payrolls for ${monthToRefresh}...`);
+      toast.info(`Processing ${selectedPayrollIds.length} payrolls for ${monthToRefresh} ${selectedYear}...`);
 
       // Fetch the actual payroll objects for the selected IDs
       const payrollPromises = selectedPayrollIds.map(async (payrollId) => {
@@ -131,19 +131,19 @@ export default function StatisticsPage() {
       if (!isWebEnvironment() && dbPath) {
         const statsModel = createStatisticsModel(dbPath, selectedYear);
         await statsModel.updatePayrollStatistics(payrolls);
-        toast.success(`Local statistics updated with ${payrolls.length} payrolls.`);
+        toast.success(`Local statistics updated for ${monthToRefresh} ${selectedYear}`);
       }
 
       // Update Firestore statistics if in web mode
       if (isWebEnvironment() && companyName) {
         await updatePayrollStatisticsFirestore(payrolls, selectedYear, companyName);
-        toast.success(`Firestore statistics updated with ${payrolls.length} payrolls.`);
+        toast.success(`Firestore statistics updated for ${monthToRefresh} ${selectedYear}`);
       }
 
       // Since we've updated stats, refresh the display
       await refreshStatistics();
 
-      toast.success(`Successfully updated statistics for ${monthToRefresh} ${selectedYear}.`);
+      toast.success(`Successfully recalculated statistics for ${monthToRefresh} ${selectedYear}.`);
     } catch (error) {
       console.error("Error updating statistics:", error);
       toast.error(`Failed to update statistics: ${error instanceof Error ? error.message : "Unknown error"}`);

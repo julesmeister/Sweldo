@@ -139,9 +139,12 @@ export async function updatePayrollStatisticsFirestore(
       0
     );
 
+    // Only count months with actual data (amount > 0)
     const activeMonths = updatedStatistics.monthlyPayrolls.filter(
       (mp: MonthlyPayroll) => mp.amount > 0
     ).length;
+
+    // If no active months, set average to 0 to avoid division by zero
     updatedStatistics.yearlyAverage =
       activeMonths > 0 ? updatedStatistics.yearlyTotal / activeMonths : 0;
 

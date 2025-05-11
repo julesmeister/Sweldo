@@ -13,7 +13,12 @@ export const MonthlyPayrollSection: React.FC<MonthlyPayrollSectionProps> = ({
     onOpenRefreshDialog,
 }) => {
     const yearlyTotal = monthlyPayrolls?.reduce((sum, item) => sum + item.amount, 0) || 0;
-    const monthlyAverage = yearlyTotal / (monthlyPayrolls?.length || 1);
+
+    // Count only months with actual payroll data
+    const activeMonths = monthlyPayrolls?.filter(month => month.amount > 0).length || 0;
+
+    // Calculate monthly average based on active months only
+    const monthlyAverage = activeMonths > 0 ? yearlyTotal / activeMonths : 0;
 
     return (
         <div>
