@@ -536,7 +536,7 @@ const TimesheetPage: React.FC = () => {
   };
 
   // Recompute compensations handler
-  const handleRecompute = async () => {
+  const handleRecompute = async (useRange: boolean) => {
     if (!hasAccess("MANAGE_PAYROLL")) {
       toast.error("You don't have permission to recompute compensations");
       return;
@@ -555,12 +555,44 @@ const TimesheetPage: React.FC = () => {
         toast.success("Data refreshed successfully!");
       } else {
         // Desktop mode
+        let entriesToCompute = timesheetEntries;
+        let compsToCompute = compensationEntries;
+
+        // If using date range, filter the entries
+        if (useRange && dateRange?.startDate && dateRange?.endDate) {
+          // Adjust startDate by subtracting one day
+          const adjustedStartDate = new Date(dateRange.startDate);
+          adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
+          const startDateMs = adjustedStartDate.getTime();
+          const endDateMs = new Date(dateRange.endDate).getTime();
+
+          entriesToCompute = timesheetEntries.filter((entry) => {
+            // Ensure entry.day is valid before creating a date
+            if (typeof entry.day !== 'number' || entry.day < 1 || entry.day > 31) {
+              return false;
+            }
+            const entryDate = new Date(year, storedMonthInt - 1, entry.day).getTime();
+            return entryDate >= startDateMs && entryDate <= endDateMs;
+          });
+
+          compsToCompute = compensationEntries.filter((comp) => {
+            if (typeof comp.day !== 'number' || comp.day < 1 || comp.day > 31) {
+              return false;
+            }
+            const compDate = new Date(year, storedMonthInt - 1, comp.day).getTime();
+            return compDate >= startDateMs && compDate <= endDateMs;
+          });
+        }
+
         await computeCompensations(
-          timesheetEntries,
-          compensationEntries,
+          entriesToCompute,
+          compsToCompute,
           true
         ).finally(() => {
-          toast.success("Compensations recomputed successfully!");
+          const rangeText = useRange && dateRange?.startDate && dateRange?.endDate
+            ? `for ${dateRange.startDate.toLocaleDateString()} - ${dateRange.endDate.toLocaleDateString()}`
+            : "for the whole month";
+          toast.success(`Compensations recomputed successfully ${rangeText}!`);
         });
       }
     } catch (error) {
@@ -922,7 +954,7 @@ const TimesheetPage: React.FC = () => {
         <RecomputeDialog
           isOpen={showRecomputeDialog}
           onClose={() => setShowRecomputeDialog(false)}
-          onRecompute={handleRecompute}
+          onRecompute={(useRange) => handleRecompute(useRange)}
         />
 
         {selectedEmployeeId && selectedHistoryDay !== null && (

@@ -163,41 +163,60 @@ function updateMonthlyPayrollsData(
   // Group payrolls by month
   const monthlyData = new Map<string, MonthlyPayroll>();
 
-  // Initialize with existing data or create new entries
+  // Initialize with empty data for all months (reset values)
   for (let month = 1; month <= 12; month++) {
     const monthName = new Date(year, month - 1, 1).toLocaleString("default", {
       month: "long",
     });
 
-    // Find existing month data or create new
-    const existingData = existingMonthlyPayrolls.find(
-      (mp) => mp.month === monthName
-    );
+    // Create fresh entries for each month instead of using existing data
+    monthlyData.set(monthName, {
+      month: monthName,
+      amount: 0,
+      days: 0,
+      employees: 0,
+      absences: 0,
+    });
+  }
 
-    monthlyData.set(
-      monthName,
-      existingData || {
-        month: monthName,
-        amount: 0,
-        days: 0,
-        employees: 0,
-        absences: 0,
-      }
-    );
+  // Track unique employees per month to avoid double counting
+  const employeesProcessedByMonth = new Map<string, Set<string>>();
+  for (let month = 1; month <= 12; month++) {
+    const monthName = new Date(year, month - 1, 1).toLocaleString("default", {
+      month: "long",
+    });
+    employeesProcessedByMonth.set(monthName, new Set<string>());
   }
 
   // Process each payroll
   payrolls.forEach((payroll) => {
-    const startDate = new Date(payroll.startDate);
-    const monthName = startDate.toLocaleString("default", { month: "long" });
+    // Use end date instead of start date to determine which month this payroll belongs to
+    const endDate = new Date(payroll.endDate);
+    const monthName = endDate.toLocaleString("default", { month: "long" });
+    const payrollYear = endDate.getFullYear();
 
-    if (monthlyData.has(monthName)) {
+    // Only include payrolls that end in the selected year
+    if (payrollYear === year && monthlyData.has(monthName)) {
       const monthData = monthlyData.get(monthName)!;
+      const employeeId = payroll.employeeId || "";
+
+      // Update amount
       monthData.amount += payroll.netPay || 0;
-      if (monthData.days === 0) {
-        monthData.days = payroll.daysWorked || 0;
+
+      // Update days worked - use the maximum for the month
+      const payrollDays = payroll.daysWorked || 0;
+      if (payrollDays > monthData.days) {
+        monthData.days = payrollDays;
       }
-      monthData.employees += 1;
+
+      // Count unique employees
+      const employeesForMonth = employeesProcessedByMonth.get(monthName)!;
+      if (!employeesForMonth.has(employeeId)) {
+        employeesForMonth.add(employeeId);
+        monthData.employees += 1;
+      }
+
+      // Accumulate absences
       monthData.absences += payroll.absences || 0;
     }
   });

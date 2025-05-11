@@ -92,13 +92,11 @@ export class StatisticsModel {
     }
   }
 
-  public async updatePayrollStatistics(
-    payrollSummaries: any[],
-    year: number
-  ): Promise<void> {
+  public async updatePayrollStatistics(payrollSummaries: any[]): Promise<void> {
     try {
       await this.loadStatistics();
 
+      // Reset totals for recalculation instead of accumulating
       let totalPayroll = 0;
       let totalDeductions = 0;
       let totalNetPay = 0;
@@ -115,7 +113,21 @@ export class StatisticsModel {
       let totalPagIbig = 0;
       let totalOthers = 0;
 
-      for (const summary of payrollSummaries) {
+      // Filter payrolls for current year and categorize by end date
+      const currentYearPayrolls = payrollSummaries.filter((summary) => {
+        const endDate = new Date(summary.endDate);
+        return endDate.getFullYear() === this.year;
+      });
+
+      // Count unique employees
+      const uniqueEmployeeIds = new Set<string>();
+
+      for (const summary of currentYearPayrolls) {
+        const employeeId = summary.employeeId || "";
+        if (employeeId) {
+          uniqueEmployeeIds.add(employeeId);
+        }
+
         totalPayroll += summary.basicPay || 0;
         totalDeductions +=
           (summary.deductions?.sss || 0) +
@@ -140,8 +152,8 @@ export class StatisticsModel {
 
       this.statistics = {
         ...this.statistics,
-        year,
-        totalEmployees: payrollSummaries.length,
+        year: this.year,
+        totalEmployees: uniqueEmployeeIds.size,
         totalPayroll,
         totalDeductions,
         totalNetPay,

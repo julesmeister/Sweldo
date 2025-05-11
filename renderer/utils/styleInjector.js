@@ -670,12 +670,6 @@ export function injectStyles() {
 
     /* timesheet-table section - auto-generated */
     .timesheet-table th,
-    .timesheet-table .timesheet-day-cell {
-  position: sticky;
-  left: 0;
-  z-index: 10;
-  background-color: inherit !important;
-}
     /* end timesheet-table section */
 
     /* scrollbar section - auto-generated */

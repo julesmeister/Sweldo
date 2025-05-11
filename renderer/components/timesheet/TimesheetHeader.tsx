@@ -43,7 +43,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                             labelPrefix="Timesheet"
                         />
                     ) : (
-                        <DecryptedText text="Timesheet" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                        <DecryptedText text="Timesheet" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                     )}
                 </h2>
                 {employeeId && (
