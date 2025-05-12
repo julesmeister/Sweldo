@@ -997,7 +997,6 @@ export class Payroll {
           `[Payroll] Could not retrieve details for payroll ${payrollId} to reverse deductions.`
         );
       }
-
     } catch (error) {
       console.error(
         `[Payroll] Error deleting payroll summary ${payrollId}:`,
@@ -1066,6 +1065,11 @@ export class Payroll {
   }
 
   public getData(): ExcelData {
+    const isWeb = isWebEnvironment();
+    if (isWeb) {
+      console.log("[Payroll] Getting data in web mode");
+    }
+
     return {
       startDate: this.dateRange.start,
       endDate: this.dateRange.end,
@@ -1073,6 +1077,7 @@ export class Payroll {
       employees: this.employees,
       fileType: this.fileType,
       generatedTime: this.generatedTime,
+      isWebMode: isWeb,
     };
   }
 
@@ -1600,6 +1605,164 @@ export class Payroll {
       onProgress?.(`Payroll Summary migration failed: ${message}`);
       console.error("Payroll Summary Migration Error:", error);
       throw new Error(`Payroll Summary migration failed: ${message}`);
+    }
+  }
+
+  /**
+   * Get all available payroll periods for a specific year
+   * @param dbPath The database path (for desktop mode) or "web" for web mode
+   * @param year The year to get payroll periods for
+   * @returns An array of payroll period objects with start and end dates
+   */
+  public static async getAvailablePayrollPeriods(
+    dbPath: string,
+    year: number
+  ): Promise<{ id: string; label: string; startDate: Date; endDate: Date }[]> {
+    try {
+      // Web mode - use Firestore
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        const payrollDocs = await getPayrollDocumentsForYear(year, companyName);
+
+        // Format the dates for display
+        return payrollDocs.map((doc) => {
+          const startFormatted = doc.startDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          const endFormatted = doc.endDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+
+          return {
+            id: doc.id,
+            label: `${startFormatted} - ${endFormatted}`,
+            startDate: doc.startDate,
+            endDate: doc.endDate,
+          };
+        });
+      }
+      // Desktop mode - scan the filesystem
+      else {
+        // Get all subdirectories under payrolls (one per employee)
+        const payrollsDir = `${dbPath}/SweldoDB/payrolls`;
+        const employeeDirs = await window.electron.readDir(payrollsDir);
+
+        const allPeriods: {
+          id: string;
+          label: string;
+          startDate: Date;
+          endDate: Date;
+        }[] = [];
+
+        // For each employee directory
+        for (const dirEntry of employeeDirs) {
+          if (dirEntry.isDirectory) {
+            const employeeId = dirEntry.name;
+            const employeePath = `${payrollsDir}/${employeeId}`;
+
+            try {
+              // Get all payroll JSON files for this employee
+              const files = await window.electron.readDir(employeePath);
+
+              // Find payroll files for the specified year
+              const yearFiles = files.filter(
+                (file) =>
+                  file.isFile &&
+                  file.name.startsWith(`${year}_`) &&
+                  file.name.endsWith("_payroll.json")
+              );
+
+              // Process each matching payroll file
+              for (const file of yearFiles) {
+                try {
+                  const filePath = `${employeePath}/${file.name}`;
+                  const content = await window.electron.readFile(filePath);
+                  const data = JSON.parse(content) as PayrollJsonStructure;
+
+                  // Extract periods from each payroll entry
+                  if (data && data.payrolls) {
+                    for (const payroll of data.payrolls) {
+                      const startDate = new Date(payroll.startDate);
+                      const endDate = new Date(payroll.endDate);
+
+                      // Check if the year matches
+                      if (
+                        startDate.getFullYear() === year ||
+                        endDate.getFullYear() === year
+                      ) {
+                        const startFormatted = startDate.toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          }
+                        );
+                        const endFormatted = endDate.toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          }
+                        );
+
+                        allPeriods.push({
+                          id: payroll.id,
+                          label: `${startFormatted} - ${endFormatted}`,
+                          startDate,
+                          endDate,
+                        });
+                      }
+                    }
+                  }
+                } catch (fileError) {
+                  console.error(
+                    `Error processing payroll file ${file.name}:`,
+                    fileError
+                  );
+                  // Continue with next file
+                }
+              }
+            } catch (dirError) {
+              console.error(
+                `Error reading employee directory ${employeePath}:`,
+                dirError
+              );
+              // Continue with next employee
+            }
+          }
+        }
+
+        // Remove duplicates (same date ranges)
+        const uniquePeriods = allPeriods.reduce((acc, current) => {
+          const key = `${current.startDate.getTime()}-${current.endDate.getTime()}`;
+          if (
+            !acc.some(
+              (item) =>
+                `${item.startDate.getTime()}-${item.endDate.getTime()}` === key
+            )
+          ) {
+            acc.push(current);
+          }
+          return acc;
+        }, [] as typeof allPeriods);
+
+        // Sort by start date (most recent first)
+        return uniquePeriods.sort(
+          (a, b) => b.startDate.getTime() - a.startDate.getTime()
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[Payroll] Error getting available payroll periods for year ${year}:`,
+        error
+      );
+      return [];
     }
   }
 }

@@ -39,6 +39,7 @@ export interface ExcelData {
   employees: Employee[];
   fileType: string;
   generatedTime: Date;
+  isWebMode?: boolean;
 }
 
 export interface DateRange {

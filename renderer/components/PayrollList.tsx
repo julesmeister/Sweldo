@@ -948,7 +948,7 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
     }
 
     return (
-      <div className="px-4 sm:px-0">
+      <div className="sm:px-0">
         <MagicCard
           className="p-0.5 rounded-lg col-span-2 overflow-hidden"
           gradientSize={200}

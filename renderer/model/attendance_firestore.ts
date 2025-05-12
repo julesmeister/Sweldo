@@ -197,10 +197,14 @@ export async function saveAttendanceFirestore(
       const existingDayData = currentMonthData.days[dayStr];
 
       // Prepare new day data from the incoming record
+      // Convert undefined schedule to null for Firestore compatibility
       const newDayData: AttendanceJsonDay = {
         timeIn: attendanceRecord.timeIn,
         timeOut: attendanceRecord.timeOut,
-        schedule: attendanceRecord.schedule,
+        schedule:
+          attendanceRecord.schedule === undefined
+            ? null
+            : attendanceRecord.schedule,
       };
 
       // Check for changes to create backup entries

@@ -9,13 +9,18 @@ import { usePayrollStatistics } from "./usePayrollStatistics";
 import { evaluatePayrollFormulas } from "../utils/payrollCalculations";
 import { PDFGeneratorOptions } from "@/renderer/types/payroll"; // Use type from renderer
 import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
+// Add imports for PDF generation in web
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { generateWebPDF } from "./web/payrollPDFUtils";
 
 interface UsePayrollPDFGenerationProps {
   dbPath: string;
 }
 
 // Helper type for formatted payroll data for PDF
-type FormattedPayrollPDFData = Omit<
+export type FormattedPayrollPDFData = Omit<
   PayrollSummaryModel,
   "startDate" | "endDate" | "deductions"
 > & {
@@ -49,12 +54,42 @@ export function usePayrollPDFGeneration({
   // --- Internal Helper 1: Fetch and Filter Payroll Data ---
   const fetchAndFilterPayrolls = useCallback(
     async (startDate: Date, endDate: Date): Promise<PayrollSummaryModel[]> => {
-      if (!dbPath) return [];
+      if (!dbPath && !isWebEnvironment()) return [];
 
-      const employeeModel = createEmployeeModel(dbPath);
-      const allEmployees = await employeeModel.loadEmployees();
-      const activeEmployees = allEmployees.filter((e) => e.status === "active");
-      if (activeEmployees.length === 0) return [];
+      let activeEmployees: Employee[] = [];
+
+      // Use different approaches for web vs desktop mode
+      if (isWebEnvironment()) {
+        try {
+          // Get company name from settings
+          if (!companyName) {
+            return [];
+          }
+
+          // Use the same approach as EmployeeList for web mode
+          const firestoreEmployees = await loadActiveEmployeesFirestore(
+            companyName
+          );
+          activeEmployees = firestoreEmployees;
+        } catch (error) {
+          console.error("[PDF] Error loading employees from Firestore:", error);
+          return [];
+        }
+      } else {
+        // Desktop mode - use local database
+        try {
+          const employeeModel = createEmployeeModel(dbPath);
+          const allEmployees = await employeeModel.loadEmployees();
+          activeEmployees = allEmployees.filter((e) => e.status === "active");
+        } catch (error) {
+          console.error("[PDF] Error loading employees from local DB:", error);
+          return [];
+        }
+      }
+
+      if (activeEmployees.length === 0) {
+        return [];
+      }
 
       // Determine months in range
       const months: { month: number; year: number }[] = [];
@@ -119,8 +154,8 @@ export function usePayrollPDFGeneration({
 
       return filteredPayrolls;
     },
-    [dbPath]
-  ); // Dependency: dbPath
+    [dbPath, companyName]
+  ); // Dependencies: dbPath, companyName
 
   // --- Internal Helper 2: Format Payroll Data for PDF ---
   const formatPayrollsForPDF = useCallback(
@@ -246,98 +281,6 @@ export function usePayrollPDFGeneration({
     }
   }, [dateRange, fetchAndFilterPayrolls]); // Dependencies: dateRange, fetchAndFilterPayrolls helper
 
-  // --- Web-specific PDF generation helper ---
-  const generateWebPDF = useCallback(
-    async (
-      formattedPayrolls: FormattedPayrollPDFData[],
-      isLandscape: boolean
-    ) => {
-      // In web mode, we'll download CSV data instead of a PDF
-      try {
-        // Create CSV content
-        const headers = [
-          "Employee Name",
-          "Days Worked",
-          "Basic Pay",
-          "Overtime",
-          "Holiday",
-          "Undertime",
-          "Late",
-          "Gross Pay",
-          "SSS",
-          "PhilHealth",
-          "Pag-IBIG",
-          "Cash Advance",
-          "Total Deductions",
-          "Net Pay",
-          "Start Date",
-          "End Date",
-        ];
-
-        const csvRows = [headers.join(",")]; // Start with header row
-
-        for (const payroll of formattedPayrolls) {
-          const formattedStartDate = new Date(
-            payroll.startDate
-          ).toLocaleDateString();
-          const formattedEndDate = new Date(
-            payroll.endDate
-          ).toLocaleDateString();
-
-          const row = [
-            `"${payroll.employeeName}"`,
-            payroll.daysWorked,
-            payroll.basicPay,
-            payroll.overtime,
-            payroll.holidayBonus,
-            payroll.undertimeDeduction,
-            payroll.lateDeduction,
-            payroll.grossPay,
-            payroll.deductions.sss,
-            payroll.deductions.philHealth,
-            payroll.deductions.pagIbig,
-            payroll.deductions.cashAdvanceDeductions,
-            payroll.deductions.totalDeduction,
-            payroll.netPay,
-            formattedStartDate,
-            formattedEndDate,
-          ];
-
-          csvRows.push(row.join(","));
-        }
-
-        const csvContent = csvRows.join("\n");
-
-        // Create downloadable blob
-        const blob = new Blob([csvContent], {
-          type: "text/csv;charset=utf-8;",
-        });
-        const url = URL.createObjectURL(blob);
-
-        // Create download link and trigger it
-        const link = document.createElement("a");
-        const fileName = isLandscape
-          ? "payroll_summary.csv"
-          : "payroll_payslips.csv";
-        link.setAttribute("href", url);
-        link.setAttribute("download", fileName);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        return { success: true, filePath: fileName };
-      } catch (error) {
-        console.error("Failed to generate CSV:", error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-    []
-  );
-
   // --- Exposed Function 2: Generate Payslips PDF ---
   const generatePayslipsForAll = useCallback(async () => {
     if (!dateRange?.startDate || !dateRange?.endDate) {
@@ -366,15 +309,19 @@ export function usePayrollPDFGeneration({
 
       // Step 3: Generate based on environment
       if (isWebEnvironment()) {
-        // Web environment: Generate CSV
-        const result = await generateWebPDF(formattedPayrolls, false);
+        // Web environment: Generate PDF
+        const result = await generateWebPDF(
+          formattedPayrolls,
+          false,
+          companyName || "Default Company"
+        );
 
         if (result.success) {
-          toast.success("Payslips CSV generated and downloaded!", {
+          toast.success("Payslips PDF generated and downloaded!", {
             id: loadingToast,
           });
         } else {
-          toast.error(`Failed to generate payslips CSV: ${result.error}`, {
+          toast.error(`Failed to generate payslips PDF: ${result.error}`, {
             id: loadingToast,
           });
         }
@@ -463,15 +410,19 @@ export function usePayrollPDFGeneration({
 
       // Step 3: Generate based on environment
       if (isWebEnvironment()) {
-        // Web environment: Generate CSV
-        const result = await generateWebPDF(formattedPayrolls, true);
+        // Web environment: Generate PDF
+        const result = await generateWebPDF(
+          formattedPayrolls,
+          true,
+          companyName || "Default Company"
+        );
 
         if (result.success) {
-          toast.success("Summary CSV generated and downloaded!", {
+          toast.success("Summary PDF generated and downloaded!", {
             id: loadingToast,
           });
         } else {
-          toast.error(`Failed to generate summary CSV: ${result.error}`, {
+          toast.error(`Failed to generate summary PDF: ${result.error}`, {
             id: loadingToast,
           });
         }
