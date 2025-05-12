@@ -108,14 +108,14 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
             {
                 data: [totalGrossPay, totalDeductions, totalNetPay],
                 backgroundColor: [
-                    'rgba(59, 130, 246, 0.5)', // Blue for gross
-                    'rgba(239, 68, 68, 0.5)',  // Red for deductions
-                    'rgba(16, 185, 129, 0.5)'  // Green for net
+                    'rgba(59, 130, 246, 0.7)', // Blue for gross
+                    'rgba(239, 68, 68, 0.7)',  // Red for deductions
+                    'rgba(16, 185, 129, 0.7)'  // Green for net
                 ],
                 borderColor: [
-                    'rgb(59, 130, 246)',
-                    'rgb(239, 68, 68)',
-                    'rgb(16, 185, 129)'
+                    'rgb(37, 99, 235)',
+                    'rgb(220, 38, 38)',
+                    'rgb(5, 150, 105)'
                 ],
                 borderWidth: 1,
             },
@@ -142,7 +142,23 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                 ticks: {
                     callback: function (value: any) {
                         return '₱' + value.toLocaleString();
+                    },
+                    font: {
+                        size: 10
                     }
+                },
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                }
+            },
+            x: {
+                ticks: {
+                    font: {
+                        size: 10
+                    }
+                },
+                grid: {
+                    display: false
                 }
             }
         },
@@ -183,39 +199,63 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                             onMouseLeave={() => setShowSummary(false)}
                         >
                             <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm text-gray-600 transition-colors duration-150">
-                                <IoStatsChart className="h-4 w-4" />
-                                <span>₱{totalNetPay.toLocaleString()}</span>
+                                <IoStatsChart className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">₱{totalNetPay.toLocaleString()}</span>
                             </button>
 
                             {/* Dropdown Summary */}
                             {showSummary && (
-                                <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-50">
-                                    <div className="p-4">
-                                        <h3 className="text-sm font-medium text-gray-900 mb-3">Payment Summary</h3>
-
-                                        {/* Bar Chart */}
-                                        <div className="h-40 mb-4">
-                                            <Bar data={chartData} options={chartOptions} />
+                                <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-50 overflow-hidden">
+                                    <div className="relative">
+                                        {/* Header with gradient background */}
+                                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4">
+                                            <h3 className="text-sm font-medium text-white mb-1">Compensation Summary</h3>
+                                            <p className="text-xs text-blue-100 opacity-90">Filtered by current date range</p>
                                         </div>
 
-                                        {/* Detailed Summary */}
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Total Gross Pay:</span>
-                                                <span className="text-sm font-medium text-gray-900">₱{totalGrossPay.toLocaleString()}</span>
+                                        {/* Content area */}
+                                        <div className="p-4">
+                                            {/* Bar Chart */}
+                                            <div className="h-40 mb-5 bg-gray-50 p-2 rounded-md">
+                                                <Bar data={chartData} options={chartOptions} />
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Total Deductions:</span>
-                                                <span className="text-sm font-medium text-red-600">-₱{totalDeductions.toLocaleString()}</span>
+
+                                            {/* Detailed Summary */}
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center py-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-blue-500"></div>
+                                                        <span className="text-sm text-gray-600">Total Gross Pay:</span>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-900">₱{totalGrossPay.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-red-500"></div>
+                                                        <span className="text-sm text-gray-600">Total Deductions:</span>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-red-600">-₱{totalDeductions.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center border-t border-gray-200 pt-3 mt-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-green-500"></div>
+                                                        <span className="text-sm font-semibold text-gray-900">Total Net Pay:</span>
+                                                    </div>
+                                                    <span className="text-sm font-semibold text-gray-900">₱{totalNetPay.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-1 pb-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-gray-400"></div>
+                                                        <span className="text-sm text-gray-600">Total Absences:</span>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-900">{validEntriesCount}</span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
-                                                <span className="text-sm font-medium text-gray-900">Total Net Pay:</span>
-                                                <span className="text-sm font-medium text-gray-900">₱{totalNetPay.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center pt-1">
-                                                <span className="text-sm text-gray-600">Total Absences:</span>
-                                                <span className="text-sm font-medium text-gray-900">{validEntriesCount}</span>
-                                            </div>
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="px-4 py-2 bg-gray-50 text-xs text-gray-500 border-t border-gray-100">
+                                            Hover out to close
                                         </div>
                                     </div>
                                 </div>

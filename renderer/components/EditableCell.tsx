@@ -223,6 +223,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
     try {
       await onSave(editValue || "", rowData);
       setLocalValue(editValue);
+      setIsHovered(false); // Reset hover state after successful save
       onStopEdit(); // Notify parent that editing stopped
     } catch (error) {
       console.error(`EditableCell [${cellKey}]: Error in handleInternalSave:`, error);
@@ -234,6 +235,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
   const handleInternalCancel = () => {
     setEditValue(value?.toString() || ""); // Revert to original value prop
+    setIsHovered(false); // Reset hover state when cancelling edit
     onStopEdit(); // Notify parent that editing stopped
   };
 
@@ -294,6 +296,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
     try {
       await onSave("", rowData); // Use the main onSave prop
       setLocalValue(""); // Update local display value on success
+      setIsHovered(false); // Reset hover state after clearing value
       onStopEdit(); // Notify parent editing is done
     } catch (error) {
       // console.error("Error clearing:", error);
@@ -438,6 +441,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                   e.stopPropagation();
                   try {
                     await onSwapTimes(rowData);
+                    setIsHovered(false); // Reset hover state after swapping
                     onStopEdit(); // Close dropdown after swap
                     toast.success("Time In/Out swapped successfully.");
                   } catch (swapError) {
