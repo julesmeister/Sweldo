@@ -814,7 +814,7 @@ select {
     right: 0 !important;
     background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
     padding: 0.75rem 0 !important;
-    z-index: 50 !important;
+    z-index: 10 !important;
   }
 /* Position the toggle separately */
 .compensation-dialog .col-start-7 {
@@ -4256,7 +4256,7 @@ select {
     right: 0 !important;
     background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
     padding: 0.75rem 0 !important;
-    z-index: 50 !important;
+    z-index: 10 !important;
   }
   .compensation-dialog .sm\:flex.col-span-7 input {
     flex: 1 1 auto !important;
@@ -4310,7 +4310,7 @@ select {
     right: 0 !important;
     background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
     padding: 0.75rem 0 !important;
-    z-index: 50 !important;
+    z-index: 10 !important;
   }
   .compensation-dialog .md\:flex.col-span-7 input {
     flex: 1 1 auto !important;

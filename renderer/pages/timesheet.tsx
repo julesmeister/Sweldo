@@ -811,6 +811,8 @@ const TimesheetPage: React.FC = () => {
               onColumnSettings={() => setShowColumnMenu(!showColumnMenu)}
               hasPayrollAccess={hasAccess("MANAGE_PAYROLL")}
               onRecompute={() => setShowRecomputeDialog(true)}
+              entries={filteredTimesheetEntries}
+              compensations={compensationEntries}
             />
 
             {!selectedEmployeeId ? (

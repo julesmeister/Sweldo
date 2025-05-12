@@ -123,7 +123,7 @@ const LeaveForm: React.FC<LeaveFormProps> = ({
   // Adjust position for LeaveForm specific layout
   const adjustedPosition = position ? {
     ...position,
-    left: position.left - 100, // Apply the original offset
+    left: position.left - 300, // Apply the original offset
     // Caret position in BaseFormDialog is relative to its own body,
     // so if the main dialog is shifted left by 100, the caretLeft 
     // from the original event might still be okay, or might need adjustment 
@@ -142,7 +142,7 @@ const LeaveForm: React.FC<LeaveFormProps> = ({
     // and the button itself is not moving, then to make the caret appear at the same screen spot
     // relative to the button, but now relative to a dialog shifted left by 100px, 
     // caretLeft for BaseFormDialog needs to be position.caretLeft + 100.
-    caretLeft: position.caretLeft !== undefined ? position.caretLeft + 100 : undefined
+    caretLeft: position.caretLeft !== undefined ? position.caretLeft + 200 : undefined
   } : undefined;
 
   return (
