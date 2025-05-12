@@ -1,9 +1,9 @@
-import { Attendance } from "@/renderer/model/attendance";
+import { Attendance } from "../model/attendance";
 import {
   Compensation,
   CompensationModel,
   DayType,
-} from "@/renderer/model/compensation"; // Import Compensation types/model
+} from "../model/compensation"; // Import Compensation types/model
 import { toast } from "sonner";
 
 /**
@@ -186,9 +186,8 @@ export const useTimesheetHistoryOperations = ({
         // Reverting pay/deduction amounts and hours is usually sufficient.
         // Also, don't revert dailyRate unless it changed in backup (unlikely)
         manualOverride: true, // Mark as manually overridden since we are setting calculated values
-        notes: `${
-          currentCompensation.notes || ""
-        } (Reverted compensation from backup ${new Date().toISOString()})`.trim(),
+        notes: `${currentCompensation.notes || ""
+          } (Reverted compensation from backup ${new Date().toISOString()})`.trim(),
       };
 
       // Save the single reverted record
