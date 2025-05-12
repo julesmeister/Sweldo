@@ -13,7 +13,7 @@ import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestor
 // Add imports for PDF generation in web
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { generateWebPDF } from "./web/payrollPDFUtils";
+import { generateWebPDF } from "@/renderer/components/payroll/web/hooks/payrollPDFUtils";
 
 interface UsePayrollPDFGenerationProps {
   dbPath: string;

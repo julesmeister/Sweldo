@@ -7,13 +7,15 @@ import {
   IoCheckmarkCircleOutline,
   IoAlertCircleOutline,
   IoTimeOutline,
-  IoPeopleOutline
+  IoPeopleOutline,
+  IoCalendarOutline
 } from "react-icons/io5";
 import { toast } from "sonner";
 import { useFirestoreSync } from "../hooks/useFirestoreSync";
 import { Employee } from "../model/employee";
 import { createEmployeeModel } from "../model/employee";
 import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
+import { YearPickerDropdown } from "../components/YearPickerDropdown";
 
 interface DatabaseManagementSettingsProps {
   dbPath: string | null;
@@ -35,6 +37,11 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(false);
 
+  // Add state for selected year
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+
   // --- State for model selection ---
   const [selectedModels, setSelectedModels] = useState<Record<string, boolean>>(
     {}
@@ -52,8 +59,18 @@ const DatabaseManagementSettings: React.FC<DatabaseManagementSettingsProps> = ({
     dbPath: dbPath || "",
     companyName: companyName || "",
     employeeId: selectedEmployeeId || undefined,
-    year: new Date().getFullYear(), // Add current year for StatisticsModel
+    year: selectedYear, // Use selectedYear instead of hardcoded current year
   });
+
+  // Generate available years (current year and 5 years back)
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = 0; i < 6; i++) {
+      years.push(currentYear - i);
+    }
+    setAvailableYears(years);
+  }, []);
 
   // Load employees when component mounts
   useEffect(() => {
@@ -417,52 +434,67 @@ gap-6`}
                     <h3 className="text-md font-semibold">
                       Select models to sync:
                     </h3>
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id="select-all-models"
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-1"
-                        checked={
-                          availableModelNames.length > 0 &&
-                          availableModelNames.every(
-                            (name) => selectedModels[name]
-                          )
-                        }
-                        ref={(el) => {
-                          if (el) {
-                            const someSelected = availableModelNames.some(
+                    <div className="flex items-center gap-3">
+                      {/* Year dropdown moved here next to Select All */}
+                      <div className="flex items-center gap-1">
+                        <IoCalendarOutline className="text-blue-500 w-4 h-4" />
+                        <span className="text-xs text-gray-700">Sync data for year:</span>
+                        <YearPickerDropdown
+                          selectedYear={selectedYear}
+                          onSelectYear={setSelectedYear}
+                          years={availableYears}
+                          className="w-24"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="select-all-models"
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-1"
+                          checked={
+                            availableModelNames.length > 0 &&
+                            availableModelNames.every(
                               (name) => selectedModels[name]
-                            );
-                            const allSelected =
-                              availableModelNames.length > 0 &&
-                              availableModelNames.every(
+                            )
+                          }
+                          ref={(el) => {
+                            if (el) {
+                              const someSelected = availableModelNames.some(
                                 (name) => selectedModels[name]
                               );
-                            el.indeterminate = someSelected && !allSelected;
-                          }
-                        }}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          const newSelectedModels: Record<string, boolean> = {};
-                          availableModelNames.forEach((name) => {
-                            newSelectedModels[name] = isChecked;
-                          });
-                          setSelectedModels(newSelectedModels);
-                        }}
-                      />
-                      <label
-                        htmlFor="select-all-models"
-                        className="text-sm text-gray-700"
-                      >
-                        Select All
-                      </label>
+                              const allSelected =
+                                availableModelNames.length > 0 &&
+                                availableModelNames.every(
+                                  (name) => selectedModels[name]
+                                );
+                              el.indeterminate = someSelected && !allSelected;
+                            }
+                          }}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            const newSelectedModels: Record<string, boolean> = {};
+                            availableModelNames.forEach((name) => {
+                              newSelectedModels[name] = isChecked;
+                            });
+                            setSelectedModels(newSelectedModels);
+                          }}
+                        />
+                        <label
+                          htmlFor="select-all-models"
+                          className="text-sm text-gray-700"
+                        >
+                          Select All
+                        </label>
+                      </div>
                     </div>
                   </div>
 
                   <p className="text-xs text-gray-600 mb-3">
-                    Select which data models to sync. <strong>Note:</strong> When "shorts" is selected, data will be synced for {selectedEmployeeId ?
-                      `only ${employees.find(e => e.id === selectedEmployeeId)?.name || selectedEmployeeId}` :
-                      'ALL active employees'} based on your selection above.
+                    Select which data models to sync for the year {selectedYear}. {selectedModels.settings && <strong>Note:</strong>} {selectedModels.settings &&
+                      `Monthly schedules will be synced only for ${selectedYear}.`} {selectedModels.shorts && <strong>Additionally:</strong>} {selectedModels.shorts &&
+                        `Shorts data will be synced for ${selectedEmployeeId ?
+                          `only ${employees.find(e => e.id === selectedEmployeeId)?.name || selectedEmployeeId}` :
+                          'ALL active employees'} based on your selection above.`}
                   </p>
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">

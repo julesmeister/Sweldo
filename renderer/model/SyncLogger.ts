@@ -69,18 +69,58 @@ export const addLog = async (
 
   try {
     await ensureLogDirAndFile();
-    const fileContent = await window.electron.readFile(logFilePath);
+    let fileContent = ""; // Initialize fileContent
+    try {
+      fileContent = await window.electron.readFile(logFilePath);
+    } catch (readFileError: any) {
+      // If reading fails (e.g. file doesn't exist yet, which ensureLogDirAndFile should handle, but as a safeguard)
+      console.warn(
+        "[SyncLogger] Error reading log file initially, will attempt to create/overwrite:",
+        readFileError
+      );
+      // Proceed as if fileContent is empty, ensureLogDirAndFile should have created it or writeFile will.
+    }
+
     let logs: SyncLogEntry[] = [];
-    if (fileContent) {
+    if (fileContent && fileContent.trim() !== "") {
       try {
         logs = JSON.parse(fileContent);
-        if (!Array.isArray(logs)) logs = []; // Ensure it's an array
-      } catch (parseError) {
+        if (!Array.isArray(logs)) {
+          console.warn("[SyncLogger] Log content is not an array, resetting.");
+          logs = [];
+        }
+      } catch (parseError: any) {
         console.error(
-          "[SyncLogger] Error parsing existing log file, starting fresh:",
+          "[SyncLogger] Error parsing existing log file. Backing up corrupted log and starting fresh.",
           parseError
         );
-        logs = [];
+        const corruptedLogPath = logFilePath.replace(
+          ".json",
+          ".corrupted.json"
+        );
+        try {
+          await window.electron.writeFile(corruptedLogPath, fileContent); // Save the corrupted content
+          console.log(
+            `[SyncLogger] Corrupted log content saved to: ${corruptedLogPath}`
+          );
+        } catch (backupError) {
+          console.error(
+            "[SyncLogger] Failed to save corrupted log content:",
+            backupError
+          );
+        }
+
+        // Log a snippet around the potential error location if parseError has position
+        if (typeof parseError.position === "number") {
+          const position = parseError.position;
+          const snippetStart = Math.max(0, position - 30);
+          const snippetEnd = Math.min(fileContent.length, position + 30);
+          const snippet = fileContent.substring(snippetStart, snippetEnd);
+          console.error(
+            `[SyncLogger] Snippet near error (pos ${position}): ...${snippet}...`
+          );
+        }
+        logs = []; // Reset to start fresh
       }
     }
 

@@ -137,9 +137,8 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
         const [hour, minute] = time.split(":").map(Number);
         const period = hour >= 12 ? "PM" : "AM";
         const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12AM/PM
-        return `${hour12}${
-          minute > 0 ? `:${String(minute).padStart(2, "0")}` : ""
-        }${period}`;
+        return `${hour12}${minute > 0 ? `:${String(minute).padStart(2, "0")}` : ""
+          }${period}`;
       };
       return `${formatTime(schedule.timeIn)}-${formatTime(schedule.timeOut)}`;
     }
@@ -377,8 +376,42 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
 
   if (isLoading) {
     return (
-      <div className="bg-white p-6 rounded-xl border border-gray-200/50 shadow-sm flex justify-center items-center h-64">
-        <p className="text-gray-500">Loading Roster Data...</p>
+      <div className="bg-white p-6 rounded-xl border border-gray-200/50 shadow-sm flex flex-col justify-center items-center h-96 min-h-[300px]">
+        <div className="relative w-20 h-20 mb-6"> {/* Icon container */}
+          {/* Pulsating ring (standard animate-ping) */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="aspect-square w-full rounded-full bg-blue-400 opacity-75 animate-ping"></div>
+          </div>
+
+          {/* Spinner icon container with gradient background */}
+          <div className="relative z-10 bg-white rounded-full p-3 border border-gray-200 flex items-center justify-center w-full h-full shadow-md">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 rounded-full opacity-50"></div>
+            <svg
+              className="animate-spin h-10 w-10 text-blue-600 relative z-10" // Spinner SVG
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="3"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          </div>
+        </div>
+
+        {/* Text messages */}
+        <p className="text-xl font-semibold text-gray-700">Loading Roster Data</p>
+        <p className="text-md text-gray-500 mt-2">Please wait while we fetch the schedule...</p>
       </div>
     );
   }
@@ -480,9 +513,8 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
                   {dateRange.map((date, index) => (
                     <th
                       key={date.toISOString()}
-                      className={`border-b border-gray-300 p-1 font-medium text-xs text-gray-600 min-w-[60px] ${
-                        index > 0 ? "border-l" : ""
-                      }`}
+                      className={`border-b border-gray-300 p-1 font-medium text-xs text-gray-600 min-w-[60px] ${index > 0 ? "border-l" : ""
+                        }`}
                     >
                       <div>{date.getDate()}</div>
                       <div className="text-xs font-normal">
@@ -498,9 +530,8 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
                     {groupEmployees.map((employee, rowIndex) => (
                       <tr
                         key={employee.id}
-                        className={`hover:bg-gray-50 h-10 ${
-                          rowIndex > 0 ? "border-t border-gray-300" : ""
-                        }`}
+                        className={`hover:bg-gray-50 h-10 ${rowIndex > 0 ? "border-t border-gray-300" : ""
+                          }`}
                       >
                         <td className="border-r border-gray-300 p-2 text-sm font-medium text-gray-800 sticky left-0 bg-white group-hover:bg-gray-50 z-10 whitespace-nowrap">
                           {employee.name}
@@ -523,15 +554,13 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
                           return (
                             <td
                               key={dateStr}
-                              className={`text-xs text-center relative ${styles} ${
-                                isEditing
+                              className={`text-xs text-center relative ${styles} ${isEditing
                                   ? "p-0.5"
                                   : "p-0 font-mono cursor-grab"
-                              } ${
-                                isDropTarget
+                                } ${isDropTarget
                                   ? "ring-2 ring-blue-500 ring-inset"
                                   : ""
-                              } border-l border-gray-300`}
+                                } border-l border-gray-300`}
                               style={{ minHeight: "2.5rem" }}
                               onClick={() =>
                                 !isEditing &&

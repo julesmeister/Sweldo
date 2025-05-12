@@ -75,6 +75,15 @@ const MonthSpecificSchedule = React.memo(
     getScheduleForDate,
     onClearSchedulesForMonth,
   }: MonthSpecificScheduleProps) => {
+    // Add debug logging to check what data is being received
+    React.useEffect(() => {
+      console.log("[MonthSpecificSchedule] Component mounted/updated");
+      console.log("[MonthSpecificSchedule] Employment Type:", employmentType);
+      console.log("[MonthSpecificSchedule] Selected Month:", selectedMonth);
+      console.log("[MonthSpecificSchedule] Month Schedule Data:", monthScheduleData);
+      console.log("[MonthSpecificSchedule] Is Loading:", isLoading);
+    }, [employmentType, selectedMonth, monthScheduleData, isLoading]);
+
     const [copiedDaySchedule, setCopiedDaySchedule] = React.useState<{
       timeIn: string;
       timeOut: string;
@@ -227,6 +236,11 @@ const MonthSpecificSchedule = React.memo(
               day
             );
             const schedule = getScheduleForDate(employmentType.type, date);
+
+            // Add debug logging for each day's schedule
+            if (day === 1 || day === 15) {  // Log just a couple days to avoid console flood
+              console.log(`[MonthSpecificSchedule] Day ${day} schedule for ${employmentType.type}:`, schedule);
+            }
 
             return (
               <CalendarDayCell

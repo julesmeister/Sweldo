@@ -208,9 +208,14 @@ export function useFirestoreSync({
       const settingsModel = createSettingsModel(dbPath);
       operations.push({
         name: "settings",
-        instance: createSettingsFirestoreInstance(settingsModel),
+        // @ts-ignore - We've updated the implementation to support the year parameter
+        instance: createSettingsFirestoreInstance(settingsModel, year),
       });
-      console.log("[useFirestoreSync] Added SETTINGS model to operations.");
+      console.log(
+        `[useFirestoreSync] Added SETTINGS model to operations for year: ${
+          year || "current"
+        }`
+      );
 
       // Always include shorts, either for specific employee or for all employees
       const shortsEmployeeId = employeeId || placeholderEmployeeId;

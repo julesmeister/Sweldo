@@ -232,7 +232,8 @@ export async function saveAppSettingsFirestore(
  * Create a Firestore instance for the settings model
  */
 export function createSettingsFirestoreInstance(
-  model: AttendanceSettingsModel
+  model: AttendanceSettingsModel,
+  syncYear?: number // Optional parameter for year to sync
 ) {
   return {
     async syncToFirestore(
@@ -274,27 +275,43 @@ export function createSettingsFirestoreInstance(
         const timeSettings = await model.loadTimeSettings();
         await saveTimeSettingsFirestore(timeSettings, companyName);
 
-        // Sync month schedules
-        onProgress?.("Syncing current month schedules...");
-        const employmentTypes = await model.loadTimeSettings(); // Assuming these are needed to iterate
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1; // JS months are 0-indexed
+        // Sync month schedules - Use the specified year or default to current year
+        const yearToSync = syncYear || new Date().getFullYear();
+        onProgress?.(`Syncing month schedules for year ${yearToSync}...`);
+        const employmentTypes = await model.loadTimeSettings();
 
+        // For month schedules, we'll sync all months of the specified year
         for (const type of employmentTypes) {
-          const schedule = await model.loadMonthSchedule(
-            type.type,
-            currentYear,
-            currentMonth
-          );
-          if (schedule) {
-            await saveMonthScheduleFirestore(
-              type.type,
-              currentYear,
-              currentMonth,
-              schedule,
-              companyName
-            );
+          for (let month = 1; month <= 12; month++) {
+            try {
+              const schedule = await model.loadMonthSchedule(
+                type.type,
+                yearToSync,
+                month
+              );
+
+              if (schedule && Object.keys(schedule).length > 0) {
+                await saveMonthScheduleFirestore(
+                  type.type,
+                  yearToSync,
+                  month,
+                  schedule,
+                  companyName
+                );
+                onProgress?.(
+                  `Synced ${type.type} schedule for ${yearToSync}-${month}`
+                );
+              }
+            } catch (monthError) {
+              console.error(
+                `Error syncing ${type.type} schedule for ${yearToSync}-${month}:`,
+                monthError
+              );
+              onProgress?.(
+                `Failed to sync ${type.type} schedule for ${yearToSync}-${month}`
+              );
+              // Continue with other months rather than failing completely
+            }
           }
         }
 

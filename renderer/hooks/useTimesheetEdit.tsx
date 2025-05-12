@@ -1,16 +1,16 @@
-import { Attendance, AttendanceModel } from "@/renderer/model/attendance";
+import { Attendance, AttendanceModel } from "../model/attendance";
 import {
   Compensation,
   CompensationModel,
   DayType,
-} from "@/renderer/model/compensation";
-import { Employee } from "@/renderer/model/employee";
+} from "../model/compensation";
+import { Employee } from "../model/employee";
 import {
   AttendanceSettingsModel,
   EmploymentType,
   DailySchedule,
-} from "@/renderer/model/settings";
-import { createHolidayModel } from "@/renderer/model/holiday";
+} from "../model/settings";
+import { createHolidayModel } from "../model/holiday";
 import {
   createDateString,
   calculateTimeDifference,
@@ -22,7 +22,7 @@ import {
   calculatePayMetrics,
   createCompensationRecord,
 } from "./utils/compensationUtils";
-import { MissingTimeModel } from "@/renderer/model/missingTime";
+import { MissingTimeModel } from "../model/missingTime";
 import { toast } from "sonner";
 
 interface UseTimesheetEditProps {

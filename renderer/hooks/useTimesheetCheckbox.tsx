@@ -1,19 +1,19 @@
-import { Attendance } from "@/renderer/model/attendance";
-import { AttendanceModel } from "@/renderer/model/attendance";
+import { Attendance } from "../model/attendance";
+import { AttendanceModel } from "../model/attendance";
 import {
   CompensationModel,
   Compensation,
   DayType,
-} from "@/renderer/model/compensation";
-import { Employee } from "@/renderer/model/employee";
-import { createHolidayModel } from "@/renderer/model/holiday";
+} from "../model/compensation";
+import { Employee } from "../model/employee";
+import { createHolidayModel } from "../model/holiday";
 import {
   AttendanceSettings,
   AttendanceSettingsModel,
   EmploymentType,
   DailySchedule,
-} from "@/renderer/model/settings";
-import { MissingTimeModel } from "@/renderer/model/missingTime";
+} from "../model/settings";
+import { MissingTimeModel } from "../model/missingTime";
 
 interface UseTimesheetCheckboxProps {
   attendanceModel: AttendanceModel;
@@ -122,20 +122,20 @@ export const useTimesheetCheckbox = ({
         const entryDate = new Date(year, month - 1, foundEntry.day);
         return (
           entryDate >=
-            new Date(
-              h.startDate.getFullYear(),
-              h.startDate.getMonth(),
-              h.startDate.getDate()
-            ) &&
+          new Date(
+            h.startDate.getFullYear(),
+            h.startDate.getMonth(),
+            h.startDate.getDate()
+          ) &&
           entryDate <=
-            new Date(
-              h.endDate.getFullYear(),
-              h.endDate.getMonth(),
-              h.endDate.getDate(),
-              23,
-              59,
-              59
-            )
+          new Date(
+            h.endDate.getFullYear(),
+            h.endDate.getMonth(),
+            h.endDate.getDate(),
+            23,
+            59,
+            59
+          )
         );
       });
 

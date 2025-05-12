@@ -211,38 +211,88 @@ export default function ScheduleSettings({
         return;
       }
 
+      // TEST FUNCTION: Try loading January 2024 data to see if there's any data
+      const testLoadJanuary = async () => {
+        if (employmentTypes.length === 0) return;
+
+        try {
+          const testType = employmentTypes[0].type;
+          console.log(`[TEST LOAD] Attempting to load January 2024 data for ${testType}`);
+
+          if (isWebEnvironment()) {
+            if (companyName) {
+              const januaryData = await loadMonthScheduleFirestore(testType, 2024, 1, companyName);
+              console.log(`[TEST LOAD] January 2024 data for ${testType}:`, januaryData);
+              console.log(`[TEST LOAD] Has data: ${januaryData && Object.keys(januaryData).length > 0}`);
+            }
+          } else {
+            if (dbPath) {
+              const settingsModel = createAttendanceSettingsModel(dbPath);
+              const januaryData = await settingsModel.loadMonthSchedule(testType, 2024, 1);
+              console.log(`[TEST LOAD] January 2024 data for ${testType}:`, januaryData);
+              console.log(`[TEST LOAD] Has data: ${januaryData && Object.keys(januaryData).length > 0}`);
+            }
+          }
+        } catch (e) {
+          console.error("[TEST LOAD] Error testing January data:", e);
+        }
+      };
+
+      // Run the test function once
+      testLoadJanuary();
+
       // Load schedules only when in monthly OR roster mode
       if (
         (scheduleMode !== "monthly" && scheduleMode !== "roster") ||
         employmentTypes.length === 0
       ) {
+        console.log(`[ScheduleSettings Load Effect] Skipping load - mode: ${scheduleMode}, types: ${employmentTypes.length}`);
         setAllMonthSchedules({}); // Clear schedules if not in monthly/roster mode
         return;
       }
+
+      console.log(`[ScheduleSettings Load Effect] Starting schedule load for month: ${selectedMonth.toISOString()}`);
+      console.log(`[ScheduleSettings Load Effect] Environment: ${isWebEnvironment() ? 'Web' : 'Desktop'}`);
+      console.log(`[ScheduleSettings Load Effect] DB Path: ${dbPath}`);
+      console.log(`[ScheduleSettings Load Effect] Company: ${companyName}`);
+
       setIsLoadingMonthSchedule(true);
       const newSchedules: Record<string, MonthSchedule | null> = {};
       try {
         const year = selectedMonth.getFullYear();
         const month = selectedMonth.getMonth() + 1;
+        console.log(`[ScheduleSettings Load Effect] Loading schedules for Year: ${year}, Month: ${month}`);
 
         // Load schedule for all employment types
         for (const empType of employmentTypes) {
           if (empType.type) {
+            console.log(`[ScheduleSettings Load Effect] Loading schedule for type: ${empType.type}`);
             let schedule: MonthSchedule | null = null;
-            if (isWebEnvironment()) {
-              if (!companyName) {
-                console.warn(`[ScheduleSettings Load Effect] Web mode: Cannot load schedule for ${empType.type}, company name missing.`);
-                continue; // Skip this type if company name is missing
+            try {
+              if (isWebEnvironment()) {
+                if (!companyName) {
+                  console.warn(`[ScheduleSettings Load Effect] Web mode: Cannot load schedule for ${empType.type}, company name missing.`);
+                  continue; // Skip this type if company name is missing
+                }
+                console.log(`[DEBUG] Calling loadMonthScheduleFirestore with type=${empType.type}, year=${year}, month=${month}, company=${companyName}`);
+                schedule = await loadMonthScheduleFirestore(empType.type, year, month, companyName);
+                console.log(`[DEBUG] Raw Firestore response for ${empType.type}:`, JSON.stringify(schedule));
+              } else {
+                if (!dbPath) {
+                  console.warn(`[ScheduleSettings Load Effect] Desktop mode: Cannot load schedule for ${empType.type}, dbPath missing.`);
+                  continue; // Skip this type if dbPath is missing
+                }
+                console.log(`[DEBUG] Creating settings model with dbPath=${dbPath}`);
+                const settingsModel = createAttendanceSettingsModel(dbPath);
+                console.log(`[DEBUG] Calling loadMonthSchedule with type=${empType.type}, year=${year}, month=${month}`);
+                schedule = await settingsModel.loadMonthSchedule(empType.type, year, month);
+                console.log(`[DEBUG] Raw desktop DB response for ${empType.type}:`, JSON.stringify(schedule));
               }
-              schedule = await loadMonthScheduleFirestore(empType.type, year, month, companyName);
-            } else {
-              if (!dbPath) {
-                console.warn(`[ScheduleSettings Load Effect] Desktop mode: Cannot load schedule for ${empType.type}, dbPath missing.`);
-                continue; // Skip this type if dbPath is missing
-              }
-              const settingsModel = createAttendanceSettingsModel(dbPath);
-              schedule = await settingsModel.loadMonthSchedule(empType.type, year, month);
+            } catch (error) {
+              console.error(`[DEBUG] ERROR loading schedule for ${empType.type}:`, error);
+              schedule = {}; // Set empty on error for this type
             }
+            console.log(`[ScheduleSettings Load Effect] Loaded schedule for ${empType.type}:`, schedule);
             newSchedules[empType.type] = schedule || {}; // Store schedule (or empty obj) by type name
           } else {
             console.warn(
@@ -252,6 +302,7 @@ export default function ScheduleSettings({
           }
         }
 
+        console.log(`[ScheduleSettings Load Effect] All schedules loaded:`, newSchedules);
         setAllMonthSchedules(newSchedules);
       } catch (error) {
         console.error(
@@ -575,19 +626,24 @@ export default function ScheduleSettings({
   // Function to get schedule for a specific date *from the currently loaded month schedule*
   const getScheduleForDate = React.useCallback(
     (typeId: string, date: Date): DailySchedule => {
-      // Check if it's for the currently loaded type and month
-      if (
-        typeId !== employmentTypes[selectedTypeTab]?.type ||
-        date.getFullYear() !== selectedMonth.getFullYear() ||
-        date.getMonth() !== selectedMonth.getMonth() ||
-        !allMonthSchedules
-      ) {
-        // If not the current month/type, or not loaded, return default
-        // This might happen briefly during loading or if data is missing
+      // Enhanced logging for troubleshooting
+      const dateStr = formatDate(date);
+      const isValidRequest =
+        typeId === employmentTypes[selectedTypeTab]?.type &&
+        date.getFullYear() === selectedMonth.getFullYear() &&
+        date.getMonth() === selectedMonth.getMonth();
+
+      if (!isValidRequest) {
+        console.log(`[getScheduleForDate] Mismatch - requested: ${typeId}/${dateStr}, selected: ${employmentTypes[selectedTypeTab]?.type}/${selectedMonth.toISOString()}`);
         return { timeIn: "", timeOut: "", isOff: false };
       }
 
-      const dateStr = formatDate(date);
+      // Check if data exists for this type
+      if (!allMonthSchedules[typeId]) {
+        console.log(`[getScheduleForDate] No schedule data loaded for type: ${typeId}`);
+        return { timeIn: "", timeOut: "", isOff: false };
+      }
+
       // Access the schedule data for the specific typeId from allMonthSchedules
       const typeSchedule = allMonthSchedules[typeId];
       const result = typeSchedule?.[dateStr] || {
@@ -595,6 +651,12 @@ export default function ScheduleSettings({
         timeOut: "",
         isOff: false,
       };
+
+      // Log periodically to avoid flooding console
+      if (date.getDate() === 1 || date.getDate() === 15) {
+        console.log(`[getScheduleForDate] ${typeId}/${dateStr} result:`, result);
+        console.log(`[getScheduleForDate] Full schedule:`, typeSchedule);
+      }
 
       return result;
     },
