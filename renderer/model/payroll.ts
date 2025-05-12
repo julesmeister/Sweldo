@@ -29,6 +29,7 @@ import {
   updatePayrollStatisticsFirestore,
   reverseCashAdvanceDeductionFirestore,
   reverseShortDeductionFirestore,
+  getPayrollDocumentsForYear,
 } from "./payroll_firestore";
 
 // Import the old Payroll model for fallback logic
@@ -1670,7 +1671,7 @@ export class Payroll {
 
               // Find payroll files for the specified year
               const yearFiles = files.filter(
-                (file) =>
+                (file: { isFile: boolean; name: string }) =>
                   file.isFile &&
                   file.name.startsWith(`${year}_`) &&
                   file.name.endsWith("_payroll.json")

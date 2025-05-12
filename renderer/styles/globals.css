@@ -366,7 +366,7 @@
     right: 0 !important;
     background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
     padding: 0.75rem 0 !important;
-    z-index: 50 !important;
+    z-index: 10 !important;
   }
   
   /* Position the toggle separately */

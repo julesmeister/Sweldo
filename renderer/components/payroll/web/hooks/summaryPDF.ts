@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { FormattedPayrollPDFData } from "../usePayrollPDFGeneration";
+import { FormattedPayrollPDFData } from "@/renderer/hooks/usePayrollPDFGeneration";
 import { formatCurrency } from "./payslipPDF";
 
 // --- Centralized Style Configuration ---

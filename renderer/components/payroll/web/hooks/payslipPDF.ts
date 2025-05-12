@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import { FormattedPayrollPDFData } from "../usePayrollPDFGeneration";
+import { FormattedPayrollPDFData } from "@/renderer/hooks/usePayrollPDFGeneration";
 
 // --- Centralized Style Configuration for Payslips ---
 const STYLE_CONFIG_PAYSLIP = {

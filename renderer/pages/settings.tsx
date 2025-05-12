@@ -3242,7 +3242,7 @@ export default function SettingsPage() {
         gradientFrom="#9E7AFF"
         gradientTo="#FE8BBB"
       >
-        <div className="px-4 sm:px-0">
+        <div className="sm:px-0">
           <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
             <div className="border-b border-gray-100">
               <div className="flex items-center gap-1 px-6 bg-gray-50 overflow-x-auto scrollbar-thin">

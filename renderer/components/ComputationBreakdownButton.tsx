@@ -8,6 +8,7 @@ interface ComputationBreakdownButtonProps {
   breakdown: PaymentBreakdown;
   attendanceSettings: AttendanceSettings;
   holiday?: Holiday;
+  centerOnScreen?: boolean;
 }
 
 const formatNumber = (num: number) => {
@@ -17,7 +18,7 @@ const formatNumber = (num: number) => {
 
 export const ComputationBreakdownButton: React.FC<
   ComputationBreakdownButtonProps
-> = ({ breakdown, attendanceSettings, holiday }) => {
+> = ({ breakdown, attendanceSettings, holiday, centerOnScreen = false }) => {
   // Log when the component renders to help diagnose issues
   useEffect(() => {
     console.log("ComputationBreakdownButton rendered", {
@@ -43,7 +44,15 @@ export const ComputationBreakdownButton: React.FC<
       {/* Computation Breakdown Popover */}
       <div
         className="hidden group-hover:block absolute w-96 p-4 bg-gray-800 rounded-lg shadow-lg z-50 text-sm"
-        style={{
+        style={centerOnScreen ? {
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          borderRadius: '10px',
+        } : {
           top: "0",
           right: "calc(100% + 8px)", /* Position to the left of the button */
           maxHeight: "90vh",

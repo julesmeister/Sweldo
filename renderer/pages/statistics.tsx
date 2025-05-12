@@ -212,7 +212,7 @@ export default function StatisticsPage() {
         gradientFrom="#9E7AFF"
         gradientTo="#FE8BBB"
       >
-        <div className="px-4 sm:px-0">
+        <div className="sm:px-0">
           <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
             <StatisticsPageHeader
               isLoading={isLoading}

@@ -618,7 +618,7 @@ export function injectStyles() {
       right: 0 !important;
       background-color: rgba(17, 24, 39, 1) !important; /* Same as dialog bg */
       padding: 0.75rem 0 !important;
-      z-index: 50 !important;
+      z-index: 10 !important;
     }
     
     /* Position the toggle separately */
@@ -670,12 +670,6 @@ export function injectStyles() {
 
     /* timesheet-table section - auto-generated */
     .timesheet-table th,
-    .timesheet-table .timesheet-day-cell {
-  position: sticky;
-  left: 0;
-  z-index: 10;
-  background-color: inherit !important;
-}
     /* end timesheet-table section */
 
     /* scrollbar section - auto-generated */

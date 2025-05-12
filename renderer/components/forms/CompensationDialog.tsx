@@ -1216,6 +1216,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                   holiday={holidays.find((h) =>
                     isHolidayDate(new Date(year, month - 1, day), h)
                   )}
+                  centerOnScreen={true}
                 />
               )}
 
@@ -1465,7 +1466,7 @@ export const CompensationDialog: React.FC<CompensationDialogProps> = ({
                 </label>
               </div>
 
-              <div className="col-span-7 flex items-center space-x-3">
+              <div className="col-span-7 flex items-center space-x-3 z-10">
                 <input
                   type="text"
                   name="notes"

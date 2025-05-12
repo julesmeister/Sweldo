@@ -18,6 +18,10 @@ import {
 } from "react-icons/io5";
 import { toast } from "sonner"; // Import toast
 import { globalColorMap } from "@/renderer/lib/colorUtils"; // Import the color map
+import { isWebEnvironment } from "@/renderer/lib/firestoreService"; // Import isWebEnvironment
+import { generateSchedulePdf as generateWebSchedulePdf } from "./webPDFExport"; // Import web PDF generator using relative path
+// Import jsPDF directly as a fallback
+import { jsPDF } from "jspdf";
 
 interface RosterScheduleProps {
   employmentTypes: EmploymentType[];
@@ -54,6 +58,38 @@ const getAllDatesInMonth = (selectedMonth: Date): Date[] => {
     date.setDate(date.getDate() + 1);
   }
   return dates;
+};
+
+// Fallback function in case the import fails
+const generateFallbackPDF = (data: any) => {
+  console.log("Using fallback PDF generator");
+  try {
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4"
+    });
+
+    doc.text("Schedule PDF (Fallback version)", 10, 10);
+    doc.text(`Duty Roster - ${data.selectedMonth.toLocaleString("default", {
+      month: "long",
+      year: "numeric",
+    })}`, 10, 20);
+
+    // Basic table
+    doc.text("This is a simplified fallback PDF due to an import error.", 10, 30);
+
+    // Save the PDF
+    const filename = `Schedule-Fallback-${data.selectedMonth.getFullYear()}-${String(
+      data.selectedMonth.getMonth() + 1
+    ).padStart(2, "0")}.pdf`;
+
+    doc.save(filename);
+    return true;
+  } catch (error) {
+    console.error("Even fallback PDF failed:", error);
+    return false;
+  }
 };
 
 const RosterSchedule: React.FC<RosterScheduleProps> = ({
@@ -304,6 +340,12 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
 
   const handlePrintSchedule = () => {
     console.log("Preparing schedule data for printing...");
+
+    // Debug logs
+    console.log("DEBUG: Web environment check:", isWebEnvironment());
+    console.log("DEBUG: generateWebSchedulePdf imported:", typeof generateWebSchedulePdf);
+    console.log("DEBUG: window.electron available:", typeof window.electron !== 'undefined');
+
     // Gather all necessary data - including the *filtered* date range
     const scheduleDataForPrint = {
       employmentTypes,
@@ -312,8 +354,6 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
       selectedMonth,
       // Send the currently displayed date range, not all dates
       dateRange, // Send the filtered array
-      // formatShift, // REMOVE Functions - cannot be sent via IPC
-      // getShiftStyles // REMOVE Functions - cannot be sent via IPC
     };
 
     // Check if dateRange is empty, maybe prevent printing?
@@ -324,28 +364,70 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
 
     console.log("Schedule Data being sent:", scheduleDataForPrint);
 
-    // Send data to main process via IPC
-    window.electron
-      .generateSchedulePdf(scheduleDataForPrint)
-      .then((filePath: string | null) => {
-        if (filePath) {
-          console.log(`Schedule PDF saved to: ${filePath}`);
-          // Use IPC to ask main process to open the path
-          window.electron
-            .openPath(filePath) // Use the exposed function
-            .then(() => console.log(`Opened path: ${filePath}`))
-            .catch((openErr: Error) =>
-              console.error(`Failed to open path ${filePath}:`, openErr)
-            );
-          toast.success("Schedule PDF Generated Successfully!");
-        } else {
-          console.log("Schedule PDF save was cancelled.");
+    // Check if we're in web environment
+    try {
+      if (isWebEnvironment()) {
+        console.log("DEBUG: Using web PDF generator");
+        // Wrap in a try/catch to better isolate the error
+        try {
+          // Directly check if function exists
+          if (typeof generateWebSchedulePdf !== 'function') {
+            console.error("DEBUG: generateWebSchedulePdf is not a function:", generateWebSchedulePdf);
+            throw new Error("PDF generator function not available");
+          }
+
+          // Log function details
+          console.log("DEBUG: Function details:", {
+            name: generateWebSchedulePdf.name,
+            length: generateWebSchedulePdf.length,
+            toString: generateWebSchedulePdf.toString().substring(0, 100) + "..."
+          });
+
+          // Use web PDF generator
+          generateWebSchedulePdf(scheduleDataForPrint);
+          toast.success("Schedule PDF generated and downloaded successfully!");
+        } catch (webError) {
+          console.error("DEBUG: Detailed web PDF error:", webError);
+
+          // Try the fallback PDF generator
+          console.log("DEBUG: Trying fallback PDF generator");
+          const fallbackSuccess = generateFallbackPDF(scheduleDataForPrint);
+
+          if (fallbackSuccess) {
+            toast.success("Schedule PDF generated using fallback method");
+          } else {
+            toast.error("Failed to generate schedule PDF. Check console logs.");
+          }
         }
-      })
-      .catch((err: Error) => {
-        console.error("Error generating schedule PDF:", err);
-        toast.error("Failed to generate Schedule PDF. Check console logs.");
-      });
+      } else {
+        console.log("DEBUG: Using Electron PDF generator");
+        // Desktop environment - use Electron IPC
+        window.electron
+          .generateSchedulePdf(scheduleDataForPrint)
+          .then((filePath: string | null) => {
+            if (filePath) {
+              console.log(`Schedule PDF saved to: ${filePath}`);
+              // Use IPC to ask main process to open the path
+              window.electron
+                .openPath(filePath) // Use the exposed function
+                .then(() => console.log(`Opened path: ${filePath}`))
+                .catch((openErr: Error) =>
+                  console.error(`Failed to open path ${filePath}:`, openErr)
+                );
+              toast.success("Schedule PDF Generated Successfully!");
+            } else {
+              console.log("Schedule PDF save was cancelled.");
+            }
+          })
+          .catch((err: Error) => {
+            console.error("Error generating schedule PDF:", err);
+            toast.error("Failed to generate Schedule PDF. Check console logs.");
+          });
+      }
+    } catch (error) {
+      console.error("DEBUG: Fatal error in handlePrintSchedule:", error);
+      toast.error("An unexpected error occurred with PDF generation");
+    }
   };
 
   // Add new handlers that call the props
@@ -555,8 +637,8 @@ const RosterSchedule: React.FC<RosterScheduleProps> = ({
                             <td
                               key={dateStr}
                               className={`text-xs text-center relative ${styles} ${isEditing
-                                  ? "p-0.5"
-                                  : "p-0 font-mono cursor-grab"
+                                ? "p-0.5"
+                                : "p-0 font-mono cursor-grab"
                                 } ${isDropTarget
                                   ? "ring-2 ring-blue-500 ring-inset"
                                   : ""
