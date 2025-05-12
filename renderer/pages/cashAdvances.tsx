@@ -29,6 +29,10 @@ import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import { loadActiveEmployeesFirestore } from "@/renderer/model/employee_firestore";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 import DecryptedText from "../styles/DecryptedText/DecryptedText";
+import { IoInformationCircleOutline, IoPrintOutline } from "react-icons/io5";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { generateCashAdvancesWebPDF } from "@/renderer/components/cashAdvance/web/pdfGeneratorCashAdvance";
 
 export default function CashAdvancesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -401,6 +405,131 @@ export default function CashAdvancesPage() {
     }
   }
 
+  // Function to print cash advances as PDF
+  const handlePrintCashAdvances = async () => {
+    const currentYear = useDateSelectorStore.getState().selectedYear;
+    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
+    const monthName = new Date(currentYear, currentMonth - 1).toLocaleString('default', { month: 'long' });
+
+    setLoading(true);
+    toast.info("Preparing cash advances report...");
+
+    try {
+      // Fetch cash advances for all employees for the selected month
+      let allCashAdvances: CashAdvance[] = [];
+
+      if (isWebEnvironment()) {
+        if (!companyNameFromSettings) {
+          throw new Error("Company name not set for web mode.");
+        }
+
+        // Fetch advances for all employees
+        for (const emp of employees) {
+          try {
+            const advancesForEmployee = await loadCashAdvancesFirestore(
+              emp.id,
+              currentMonth,
+              currentYear,
+              companyNameFromSettings
+            );
+            allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
+          } catch (error) {
+            console.error(`Error loading cash advances for employee ${emp.id}:`, error);
+          }
+        }
+      } else {
+        if (!dbPath) {
+          throw new Error("Database path not set for desktop mode.");
+        }
+
+        // Fetch advances for all employees
+        for (const emp of employees) {
+          try {
+            const cashAdvanceModel = createCashAdvanceModel(
+              dbPath,
+              emp.id,
+              currentMonth,
+              currentYear
+            );
+            const advancesForEmployee = await cashAdvanceModel.loadCashAdvances(emp.id);
+            allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
+          } catch (error) {
+            console.error(`Error loading cash advances for employee ${emp.id}:`, error);
+          }
+        }
+      }
+
+      // Check if we've found any advances
+      if (allCashAdvances.length === 0) {
+        toast.info(`No cash advances found for ${monthName} ${currentYear}`);
+        setLoading(false);
+        return;
+      }
+
+      // Check if we're in web environment
+      if (isWebEnvironment()) {
+        try {
+          // Generate PDF using the utility function
+          const doc = generateCashAdvancesWebPDF(
+            allCashAdvances,
+            employees,
+            currentMonth,
+            currentYear
+          );
+
+          // Save PDF
+          doc.save(`CashAdvances-${currentYear}-${currentMonth.toString().padStart(2, '0')}.pdf`);
+          toast.success("Cash advances report downloaded successfully!");
+        } catch (error) {
+          console.error("Error generating PDF in web mode:", error);
+          toast.error("Failed to generate PDF. See console for details.");
+        }
+      } else {
+        // Desktop mode - use Electron IPC
+        try {
+          // Gather all data needed for PDF generation
+          const cashAdvancesData = {
+            advances: allCashAdvances,
+            employees: employees,
+            month: currentMonth,
+            year: currentYear,
+            monthName: monthName
+          };
+
+          if (window.electron) {
+            window.electron.generateCashAdvancesPdf(cashAdvancesData)
+              .then((filePath: string | null) => {
+                if (filePath) {
+                  console.log(`Cash advances PDF saved to: ${filePath}`);
+                  // Open the saved file
+                  window.electron.openPath(filePath)
+                    .then(() => console.log(`Opened path: ${filePath}`))
+                    .catch((openErr: Error) => console.error(`Failed to open path ${filePath}:`, openErr));
+                  toast.success("Cash advances report generated successfully!");
+                } else {
+                  console.log("Cash advances PDF save was cancelled.");
+                }
+              })
+              .catch((err: Error) => {
+                console.error("Error generating cash advances PDF:", err);
+                toast.error("Failed to generate PDF. See console for details.");
+              });
+          } else {
+            toast.error("Electron API not available");
+          }
+        } catch (error) {
+          console.error("Error generating PDF in desktop mode:", error);
+          toast.error("Failed to generate PDF. See console for details.");
+        }
+      }
+    } catch (error) {
+      console.error("Error preparing cash advances report:", error);
+      toast.error("Failed to prepare cash advances report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -426,10 +555,19 @@ export default function CashAdvancesPage() {
                           labelPrefix="Cash Advances"
                         />
                       ) : (
-                        <DecryptedText text="Cash Advances" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                        <DecryptedText text="Cash Advances" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
                     </h2>
                     <div className="relative flex items-center space-x-4">
+                      {/* Print PDF Button */}
+                      <button
+                        type="button"
+                        onClick={handlePrintCashAdvances}
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+                      >
+                        <IoPrintOutline className="h-4 w-4 mr-2" />
+                        Print Report
+                      </button>
                       <button
                         type="button"
                         onClick={handleButtonClick}

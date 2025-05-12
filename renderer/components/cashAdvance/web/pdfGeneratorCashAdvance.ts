@@ -58,9 +58,14 @@ export function generateCashAdvancesWebPDF(
 
   // Format the table data
   const tableData = advances.map((advance) => {
-    // Format currency without spaces between digits
+    // Format currency without any special characters
     const formatCurrency = (amount: number) => {
-      return `₱${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+      // Ensure positive value and format with 2 decimal places and commas
+      const amountStr = Math.abs(amount).toFixed(2);
+      const parts = amountStr.split(".");
+      const wholeNumber = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      // Restore the currency symbol
+      return `Php ${wholeNumber}.${parts[1]}`;
     };
 
     return [
@@ -98,6 +103,10 @@ export function generateCashAdvancesWebPDF(
     startY: 30,
     headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
     alternateRowStyles: { fillColor: [240, 244, 249] },
+    columnStyles: {
+      2: { halign: "right" }, // Amount column (index 2)
+      6: { halign: "right" }, // Remaining column (index 6)
+    },
   });
 
   return doc;
