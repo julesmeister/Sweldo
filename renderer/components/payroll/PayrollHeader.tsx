@@ -241,7 +241,7 @@ export const PayrollHeader: React.FC<PayrollHeaderProps> = ({
                             variant="outline"
                             role="combobox"
                             aria-expanded={open}
-                            className="mt-1 w-[350px] justify-between text-sm"
+                            className="mt-1 w-[350px] justify-between text-sm text-gray-700"
                         >
                             {selectedPeriod ? selectedPeriod.label : "Select payroll period..."}
                             <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -249,7 +249,7 @@ export const PayrollHeader: React.FC<PayrollHeaderProps> = ({
                     </PopoverTrigger>
                     <PopoverContent className="w-[380px] p-0 z-50">
                         <Command>
-                            <CommandList className="max-h-[300px]">
+                            <CommandList className="max-h-[300px] overflow-y-auto scrollbar-thin">
                                 {loading ? (
                                     <CommandEmpty>Loading...</CommandEmpty>
                                 ) : payrollPeriods.length === 0 ? (
