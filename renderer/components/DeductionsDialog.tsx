@@ -1110,17 +1110,17 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                     {unpaidAdvances.length > 0 && (
                       <div className="mb-3">
                         <h3 className="text-sm font-medium text-gray-300 mb-2">Cash Advances</h3>
-                        {unpaidAdvances.map((advance) => (
-                          <MemoizedCashAdvanceItem
-                            key={advance.id}
-                            advance={advance}
-                            isSelected={selectedAdvances.has(advance.id)}
-                            deductionAmount={deductionAmounts[advance.id]}
-                            isCalculating={isCalculating[advance.id]}
-                            onSelect={handleAdvanceSelect}
-                            onAmountChange={handleAdvanceAmountChange}
-                          />
-                        ))}
+                    {unpaidAdvances.map((advance) => (
+                      <MemoizedCashAdvanceItem
+                        key={advance.id}
+                        advance={advance}
+                        isSelected={selectedAdvances.has(advance.id)}
+                        deductionAmount={deductionAmounts[advance.id]}
+                        isCalculating={isCalculating[advance.id]}
+                        onSelect={handleAdvanceSelect}
+                        onAmountChange={handleAdvanceAmountChange}
+                      />
+                    ))}
                       </div>
                     )}
 
@@ -1128,17 +1128,17 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                     {unpaidShorts.length > 0 && (
                       <div className="mb-3">
                         <h3 className="text-sm font-medium text-gray-300 mb-2">Shorts</h3>
-                        {unpaidShorts.map((short) => (
-                          <MemoizedShortItem
-                            key={short.id}
-                            short={short}
-                            isSelected={selectedShorts.has(short.id)}
-                            deductionAmount={shortDeductionAmounts[short.id]}
-                            isCalculating={isCalculating[short.id]}
-                            onSelect={handleShortSelect}
-                            onAmountChange={handleShortAmountChange}
-                          />
-                        ))}
+                    {unpaidShorts.map((short) => (
+                      <MemoizedShortItem
+                        key={short.id}
+                        short={short}
+                        isSelected={selectedShorts.has(short.id)}
+                        deductionAmount={shortDeductionAmounts[short.id]}
+                        isCalculating={isCalculating[short.id]}
+                        onSelect={handleShortSelect}
+                        onAmountChange={handleShortAmountChange}
+                      />
+                    ))}
                       </div>
                     )}
                   </>

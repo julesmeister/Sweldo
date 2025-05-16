@@ -49,6 +49,7 @@ const STYLE_CONFIG = {
       sss: [250, 245, 245] as [number, number, number],
       philhealth: [250, 245, 245] as [number, number, number],
       pagibig: [250, 245, 245] as [number, number, number],
+      loan: [250, 245, 245] as [number, number, number],
       ca: [250, 245, 245] as [number, number, number],
       others: [250, 245, 245] as [number, number, number],
       totalDed: [250, 240, 240] as [number, number, number],
@@ -236,6 +237,7 @@ const formatTableData = (payrolls: FormattedPayrollPDFData[]) => {
       (payroll.deductions.sss || 0) +
       (payroll.deductions.philHealth || 0) +
       (payroll.deductions.pagIbig || 0) +
+      (payroll.deductions.loanDeductions || 0) +
       (payroll.deductions.cashAdvanceDeductions || 0) +
       ((payroll.deductions as any).shortDeductions || 0);
 
@@ -253,6 +255,7 @@ const formatTableData = (payrolls: FormattedPayrollPDFData[]) => {
       sss: formatCurrency(payroll.deductions.sss || 0),
       philhealth: formatCurrency(payroll.deductions.philHealth || 0),
       pagibig: formatCurrency(payroll.deductions.pagIbig || 0),
+      loan: formatCurrency(payroll.deductions.loanDeductions || 0),
       ca: formatCurrency(payroll.deductions.cashAdvanceDeductions || 0),
       others: formatCurrency((payroll.deductions as any).shortDeductions || 0),
       totalDed: formatCurrency(totalDeductions),
@@ -275,6 +278,7 @@ const formatTableData = (payrolls: FormattedPayrollPDFData[]) => {
     sss: formatCurrency(totals.sss),
     philhealth: formatCurrency(totals.philhealth),
     pagibig: formatCurrency(totals.pagibig),
+    loan: formatCurrency(totals.loan),
     ca: formatCurrency(totals.ca),
     others: formatCurrency(totals.others),
     totalDed: formatCurrency(totals.totalDed),
@@ -302,6 +306,7 @@ const calculateTotals = (payrolls: FormattedPayrollPDFData[]) => {
         (curr.deductions.sss || 0) +
         (curr.deductions.philHealth || 0) +
         (curr.deductions.pagIbig || 0) +
+        (curr.deductions.loanDeductions || 0) +
         (curr.deductions.cashAdvanceDeductions || 0) +
         ((curr.deductions as any).shortDeductions || 0);
 
@@ -317,6 +322,7 @@ const calculateTotals = (payrolls: FormattedPayrollPDFData[]) => {
         sss: acc.sss + (curr.deductions.sss || 0),
         philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
         pagibig: acc.pagibig + (curr.deductions.pagIbig || 0),
+        loan: acc.loan + (curr.deductions.loanDeductions || 0),
         ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
         others: acc.others + ((curr.deductions as any).shortDeductions || 0),
         totalDed: acc.totalDed + totalDeductions,
@@ -335,6 +341,7 @@ const calculateTotals = (payrolls: FormattedPayrollPDFData[]) => {
       sss: 0,
       philhealth: 0,
       pagibig: 0,
+      loan: 0,
       ca: 0,
       others: 0,
       totalDed: 0,
@@ -361,6 +368,7 @@ const drawDataTable = (doc: jsPDF, startY: number, tableData: any[]) => {
     { header: "SSS", dataKey: "sss" },
     { header: "PHILHEALTH", dataKey: "philhealth" },
     { header: "PAG-IBIG", dataKey: "pagibig" },
+    { header: "LOAN", dataKey: "loan" },
     { header: "CA", dataKey: "ca" },
     { header: "OTHERS", dataKey: "others" },
     { header: "TOTAL DED.", dataKey: "totalDed" },
@@ -381,6 +389,7 @@ const drawDataTable = (doc: jsPDF, startY: number, tableData: any[]) => {
     sss: { halign: "right" },
     philhealth: { halign: "right" },
     pagibig: { halign: "right" },
+    loan: { halign: "right" },
     ca: { halign: "right" },
     others: { halign: "right" },
     totalDed: { halign: "right", fontStyle: "bold" },

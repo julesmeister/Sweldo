@@ -186,6 +186,7 @@ export const generatePayslipsPDF = (
         (payroll.deductions.sss || 0) +
         (payroll.deductions.philHealth || 0) +
         (payroll.deductions.pagIbig || 0) +
+        (payroll.deductions.loanDeductions || 0) +
         (payroll.deductions.cashAdvanceDeductions || 0) +
         ((payroll.deductions as any).shortDeductions || 0);
       const grossPay =
@@ -288,6 +289,7 @@ export const generatePayslipsPDF = (
         ["SSS", formatCurrency(payroll.deductions.sss)],
         ["PhilHealth", formatCurrency(payroll.deductions.philHealth)],
         ["Pag-IBIG", formatCurrency(payroll.deductions.pagIbig)],
+        ["Loan", formatCurrency(payroll.deductions.loanDeductions || 0)],
         [
           "Cash Advance",
           formatCurrency(payroll.deductions.cashAdvanceDeductions || 0),
