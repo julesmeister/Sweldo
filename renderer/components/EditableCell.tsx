@@ -6,6 +6,33 @@ import { toast } from "sonner";
 import { createAttendanceModel } from "@/renderer/model/attendance"; // Import model factory
 import { isWebEnvironment } from "@/renderer/lib/firestoreService"; // Import to detect web mode
 
+// Define base time arrays and helper functions
+const morningTimesBase: string[] = ["05:00", "05:30", "06:00", "06:30", "07:00", "07:30", "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30"];
+const afternoonTimesBase: string[] = ["12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"];
+const eveningTimesBase: string[] = ["18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00", "23:30"];
+
+const timeSortFn = (a: string, b: string): number => {
+  const [aH, aM] = a.split(':').map(Number);
+  const [bH, bM] = b.split(':').map(Number);
+  if (aH !== bH) return aH - bH;
+  return aM - bM;
+};
+
+const getUniqueSortedTimes = (times: string[]): string[] => Array.from(new Set(times)).sort(timeSortFn);
+
+const COMPREHENSIVE_TIME_IN = getUniqueSortedTimes([
+  ...morningTimesBase,
+  ...afternoonTimesBase,
+  ...eveningTimesBase.filter(t => parseInt(t.split(':')[0], 10) < 23) // Up to 22:30
+]);
+
+const COMPREHENSIVE_TIME_OUT = getUniqueSortedTimes([
+  ...morningTimesBase, // Full morning for flexibility, as some "Time Out" might be AM for night shifts
+  ...afternoonTimesBase,
+  ...eveningTimesBase, // Full evening
+  "00:00" // Midnight
+]);
+
 interface EditableCellProps {
   value: string | number | null;
   column: {
@@ -326,29 +353,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({
       );
     }
 
-    // Generate default times when no alternatives are available
-    let timesToDisplay = loadedAlternatives;
-    if (!Array.isArray(loadedAlternatives) || loadedAlternatives.length === 0) {
-      // Generate common work times - more selective approach
-      timesToDisplay = [
-        // Morning times (start times)
-        "05:00", "05:30", "06:00", "06:30", "07:00", "07:30", "08:00", "08:30", "09:00", "09:30",
-        "10:00", "10:30", "11:00", "11:30",
-        // Afternoon times (lunch and afternoon)
-        "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
-        "17:00", "17:30",
-        // Evening times (overtime and end times)
-        "18:00", "18:30", "19:00", "19:30", "20:00", "21:00", "22:00", "23:00"
-      ];
+    const selectedCommonTimes = column.key === "timeOut" ? COMPREHENSIVE_TIME_OUT : COMPREHENSIVE_TIME_IN;
 
-      // If this is a timeOut column, add a few minutes after common start times
-      if (column.key === "timeOut") {
-        timesToDisplay = [
-          "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "16:30", "17:00", "17:30",
-          "18:00", "18:30", "19:00", "20:00", "21:00", "22:00", "23:00", "00:00"
-        ];
-      }
+    let timesToDisplaySet = new Set(selectedCommonTimes);
+    if (Array.isArray(loadedAlternatives) && loadedAlternatives.length > 0) {
+      loadedAlternatives.forEach(time => timesToDisplaySet.add(time));
     }
+
+    const timesToDisplay = Array.from(timesToDisplaySet).sort(timeSortFn);
 
     const timesByCategory = timesToDisplay.reduce(
       (acc: any, time: string) => {

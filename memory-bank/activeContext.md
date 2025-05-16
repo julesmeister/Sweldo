@@ -1,4 +1,47 @@
-# Active Context
+# Active Context - Sweldo Payroll Application
+
+## Current Project Status
+Sweldo is functioning in both desktop (Electron) and web modes with most core features working. The application allows tracking of employee attendance, time entries, and payroll generation.
+
+## Recent Accomplishments
+
+### CSS Production Build Issues Fixed
+We've resolved the longstanding issue with CSS distortion in production builds while maintaining correct styling in development mode. This required coordinated changes across multiple files including `package.json`, `electron-builder.yml`, `styleInjector.js`, `ensure-css-paths.js`, and `background.ts`. See the detailed documentation in `css-production-build-fix.md` for the comprehensive solution.
+
+### EditableCell Component Enhancements
+The `EditableCell` component has been improved to handle time entry better, including:
+1. Time alternatives now consistently include common times across all time periods
+2. Time selection dropdowns are now more user-friendly with appropriate options
+3. Time display is consistent in both web and desktop modes
+
+### Web Mode Improvements
+The application continues to be enhanced for web deployment with Firebase, addressing various issues:
+1. Fixed Firestore document loading patterns
+2. Improved date handling for consistent behavior 
+3. Enhanced CSS loading in web environment
+
+## Current Focus
+- Ensuring consistent UI/UX across both desktop and web modes
+- Finalizing payroll processing workflows
+- Enhancing data migration capabilities
+- Improving error handling and recovery
+
+## Technical Debt and Known Issues
+- Some UI components still need refinement for perfect consistency
+- Data validation could be strengthened in certain areas
+- More thorough error handling needed in some data operations
+
+## Next Steps
+1. Complete remaining UI/UX refinements
+2. Expand test coverage
+3. Add more comprehensive documentation
+4. Prepare for production deployment
+5. Consider additional features based on user feedback
+
+## Recent Decisions
+- Adopted a "redundant paths" approach for CSS loading to ensure maximum reliability
+- Standardized time entry patterns across the application
+- Enhanced error logging for easier debugging
 
 ## Current Focus: Web Mode Compatibility
 

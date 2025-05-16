@@ -22,46 +22,53 @@ if (isProd) {
 async function ensureCssAvailable() {
   if (!isProd) return; // Only needed in production
 
-  const cssFileName = "tailwind-web.css";
+  const cssFiles = ["tailwind-web.css", "globals.css"];
   const targetDirs = [
     path.join(app.getAppPath(), "app", "static", "css"),
     path.join(app.getAppPath(), "app", "styles"),
     path.join(app.getAppPath(), "resources", "css"),
   ];
 
-  // Check source files that might contain our CSS
-  const possibleSources = [
-    path.join(app.getAppPath(), "renderer", "public", "styles", cssFileName),
-    path.join(app.getAppPath(), "resources", "css", cssFileName),
-    path.join(app.getAppPath(), "app", "static", "css", cssFileName),
-  ];
+  for (const cssFileName of cssFiles) {
+    // Check source files that might contain our CSS
+    const possibleSources = [
+      path.join(app.getAppPath(), "renderer", "public", "styles", cssFileName),
+      path.join(app.getAppPath(), "renderer", "styles", cssFileName),
+      path.join(app.getAppPath(), "resources", "css", cssFileName),
+      path.join(app.getAppPath(), "app", "static", "css", cssFileName),
+    ];
 
-  // Find first available source
-  let sourceCssPath = null;
-  for (const source of possibleSources) {
-    if (await pathExists(source)) {
-      sourceCssPath = source;
-      console.log(`Found CSS source at: ${sourceCssPath}`);
-      break;
-    }
-  }
-
-  if (!sourceCssPath) {
-    console.error("No CSS source file found!");
-    return;
-  }
-
-  // Copy to all target directories
-  for (const dir of targetDirs) {
-    try {
-      if (!(await pathExists(dir))) {
-        await ensureDir(dir);
+    // Find first available source
+    let sourceCssPath = null;
+    for (const source of possibleSources) {
+      try {
+        if (await pathExists(source)) {
+          sourceCssPath = source;
+          console.log(`Found CSS source at: ${sourceCssPath}`);
+          break;
+        }
+      } catch (err) {
+        console.error(`Error checking path ${source}:`, err);
       }
-      const targetPath = path.join(dir, cssFileName);
-      await copy(sourceCssPath, targetPath, { overwrite: true });
-      console.log(`Copied CSS to: ${targetPath}`);
-    } catch (err) {
-      console.error(`Failed to copy CSS to ${dir}:`, err);
+    }
+
+    if (!sourceCssPath) {
+      console.error(`No CSS source file found for ${cssFileName}!`);
+      continue;
+    }
+
+    // Copy to all target directories
+    for (const dir of targetDirs) {
+      try {
+        if (!(await pathExists(dir))) {
+          await ensureDir(dir);
+        }
+        const targetPath = path.join(dir, cssFileName);
+        await copy(sourceCssPath, targetPath, { overwrite: true });
+        console.log(`Copied CSS to: ${targetPath}`);
+      } catch (err) {
+        console.error(`Failed to copy CSS to ${dir}:`, err);
+      }
     }
   }
 }

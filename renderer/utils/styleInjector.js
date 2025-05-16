@@ -40,6 +40,23 @@ export function injectStyles() {
           .catch((err) => {
             console.error("Error loading CSS via IPC:", err);
           });
+
+        // Also try to load globals.css specifically for Electron mode
+        window.electron
+          .loadCssPath("globals.css")
+          .then((cssPath) => {
+            if (cssPath) {
+              console.log("Found globals CSS path via IPC:", cssPath);
+              const globalsLink = document.createElement("link");
+              globalsLink.rel = "stylesheet";
+              globalsLink.href = cssPath;
+              globalsLink.id = "globals-css-electron";
+              document.head.appendChild(globalsLink);
+            }
+          })
+          .catch((err) => {
+            console.error("Error loading globals CSS via IPC:", err);
+          });
       }
     } else {
       // Web environment - try multiple paths
@@ -63,6 +80,12 @@ export function injectStyles() {
         "../styles/tailwind-web.css",
         "./styles/tailwind-web.css",
         "../../app/static/css/tailwind-web.css",
+        // Add additional paths for globals.css
+        "/styles/globals.css",
+        "/static/css/globals.css",
+        "../styles/globals.css",
+        "./styles/globals.css",
+        "../../app/static/css/globals.css",
       ];
 
       fallbackPaths.forEach((path, index) => {

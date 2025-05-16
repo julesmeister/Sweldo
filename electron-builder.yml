@@ -19,6 +19,10 @@ files:
     to: app/styles
   - from: renderer/public/styles
     to: app/static/css
+  - from: renderer/styles
+    to: app/styles
+  - from: renderer/styles
+    to: app/static/css
 publish: null
 win:
   target:
