@@ -13,7 +13,7 @@ import { PayrollSummary } from "@/renderer/components/PayrollSummary";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { MagicCard } from "@/renderer/components/magicui/magic-card";
-import { PayrollDeleteDialog } from "@/renderer/components/PayrollDeleteDialog";
+import { PayrollDeleteDialog } from "@/renderer/components/payroll/PayrollDeleteDialog";
 import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
 import { debugFirestorePayrolls } from "@/renderer/lib/employeeUtils";
 import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
@@ -508,6 +508,8 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
         cashAdvanceDeductions: payroll.deductions?.cashAdvanceDeductions,
         shortIDs: payroll.shortIDs,
         shortDeductions: payroll.deductions?.shortDeductions,
+        loanDeductionIds: payroll.loanDeductionIds,
+        loanDeductions: payroll.deductions?.loanDeductions,
       });
 
       setPayrollToDelete({
@@ -518,10 +520,12 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
           pagIbig: payroll.deductions?.pagIbig || 0,
           cashAdvanceDeductions: payroll.deductions?.cashAdvanceDeductions || 0,
           shortDeductions: payroll.deductions?.shortDeductions || 0,
+          loanDeductions: payroll.deductions?.loanDeductions || 0,
           others: payroll.deductions?.others || 0,
         },
         cashAdvanceIDs: payroll.cashAdvanceIDs || [],
         shortIDs: payroll.shortIDs || [],
+        loanDeductionIds: payroll.loanDeductionIds || [],
       });
     };
 
@@ -539,6 +543,8 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
             payrollToDelete.deductions?.cashAdvanceDeductions,
           shortIDs: payrollToDelete.shortIDs,
           shortDeductions: payrollToDelete.deductions?.shortDeductions,
+          loanDeductionIds: payrollToDelete.loanDeductionIds,
+          loanDeductions: payrollToDelete.deductions?.loanDeductions,
         });
 
         // Make sure we're passing the correct ID format
@@ -1097,6 +1103,8 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
                 shortDeductions: payrollToDelete?.deductions?.shortDeductions,
                 cashAdvanceDeductions:
                   payrollToDelete?.deductions?.cashAdvanceDeductions,
+                loanDeductionIds: payrollToDelete?.loanDeductionIds || [],
+                loanDeductions: payrollToDelete?.deductions?.loanDeductions,
               }}
               dbPath={dbPath}
             />

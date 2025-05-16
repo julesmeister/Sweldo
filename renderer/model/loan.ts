@@ -8,19 +8,34 @@ import {
 } from "./loan_firestore";
 import { isWebEnvironment, getCompanyName } from "../lib/firestoreService";
 
+export interface Deduction {
+  amountDeducted: number;
+  dateDeducted: Date;
+  payrollId?: string;
+  notes?: string;
+}
+
+export interface StoredDeduction {
+  amountDeducted: number;
+  dateDeducted: string; // ISO string
+  payrollId?: string;
+  notes?: string;
+}
+
 export interface Loan {
   id: string;
   employeeId: string;
-  date: Date;
-  amount: number;
-  type: "Personal" | "Housing" | "Emergency" | "Other";
+  date: Date; // Date loan was issued
+  amount: number; // Principal amount
+  type: "Personal" | "PagIbig" | "SSS" | "Other";
   status: "Pending" | "Approved" | "Rejected" | "Completed";
-  interestRate: number;
-  term: number; // in months
-  monthlyPayment: number;
-  remainingBalance: number;
-  nextPaymentDate: Date;
-  reason: string;
+  // interestRate?: number; // Removed
+  // term?: number; // Removed
+  // monthlyPayment?: number; // Removed
+  remainingBalance: number; // Current outstanding balance
+  // nextPaymentDate?: Date; // Removed
+  // reason?: string; // Removed
+  deductions?: Record<string, Deduction>; // Key is deductionId (e.g., UUID)
 }
 
 // New JSON structure interfaces
@@ -33,17 +48,19 @@ interface LoanJsonData {
   };
   loans: {
     [id: string]: {
+      // Represents a stored loan
       employeeId: string;
-      date: string;
+      date: string; // ISO string
       amount: number;
-      type: "Personal" | "Housing" | "Emergency" | "Other";
+      type: "Personal" | "PagIbig" | "SSS" | "Other";
       status: "Pending" | "Approved" | "Rejected" | "Completed";
-      interestRate: number;
-      term: number;
-      monthlyPayment: number;
+      // interestRate?: number; // Removed
+      // term?: number; // Removed
+      // monthlyPayment?: number; // Removed
       remainingBalance: number;
-      nextPaymentDate: string;
-      reason: string;
+      // nextPaymentDate?: string; // Removed
+      // reason?: string; // Removed
+      deductions?: Record<string, StoredDeduction>;
     };
   };
 }
@@ -109,7 +126,7 @@ export class LoanModel {
 
       // Desktop mode - use existing implementation
       console.log(`[LoanModel] Attempting to save loan`);
-      console.log(`[LoanModel] Loan data to save:`, loan);
+      // console.log(`[LoanModel] Loan data to save:`, loan); // Keep this for debugging if needed
 
       // Ensure directory exists
       await this.ensureDirectoryExists();
@@ -138,6 +155,17 @@ export class LoanModel {
           };
         }
 
+        const storedDeductions: Record<string, StoredDeduction> = {};
+        if (loan.deductions) {
+          for (const key in loan.deductions) {
+            const deduction = loan.deductions[key];
+            storedDeductions[key] = {
+              ...deduction,
+              dateDeducted: deduction.dateDeducted.toISOString(),
+            };
+          }
+        }
+
         // Add the loan to JSON data
         jsonData.loans[loan.id] = {
           employeeId: loan.employeeId,
@@ -145,12 +173,8 @@ export class LoanModel {
           amount: loan.amount,
           type: loan.type,
           status: loan.status,
-          interestRate: loan.interestRate,
-          term: loan.term,
-          monthlyPayment: loan.monthlyPayment,
           remainingBalance: loan.remainingBalance,
-          nextPaymentDate: loan.nextPaymentDate.toISOString(),
-          reason: loan.reason,
+          deductions: storedDeductions,
         };
 
         // Update last modified timestamp
@@ -170,11 +194,10 @@ export class LoanModel {
       console.log(`[LoanModel] Attempting to save loan to:`, filePath);
 
       const formatLoanToCSV = (l: Loan) => {
+        // CSV format: id,employeeId,date,amount,type,status,remainingBalance
         return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${
           l.type
-        },${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${
-          l.remainingBalance
-        },${l.nextPaymentDate.toISOString()},${l.reason}`;
+        },${l.status},${l.remainingBalance}`;
       };
 
       try {
@@ -231,7 +254,13 @@ export class LoanModel {
           const fileContent = await window.electron.readFile(jsonPath);
           jsonData = JSON.parse(fileContent) as LoanJsonData;
         } catch (error) {
-          // Create new JSON structure if file doesn't exist
+          // If file doesn't exist or is invalid, we can't update.
+          // For robustness, one might create it, but typically update implies existence.
+          console.error(
+            `[LoanModel] Error reading JSON file for update: ${jsonPath}`,
+            error
+          );
+          // Fallback: attempt to create if not found (matches createLoan behavior)
           jsonData = {
             meta: {
               employeeId: this.employeeId,
@@ -243,6 +272,17 @@ export class LoanModel {
           };
         }
 
+        const storedDeductions: Record<string, StoredDeduction> = {};
+        if (loan.deductions) {
+          for (const key in loan.deductions) {
+            const deduction = loan.deductions[key];
+            storedDeductions[key] = {
+              ...deduction,
+              dateDeducted: deduction.dateDeducted.toISOString(),
+            };
+          }
+        }
+
         // Update the loan in JSON data
         jsonData.loans[loan.id] = {
           employeeId: loan.employeeId,
@@ -250,12 +290,8 @@ export class LoanModel {
           amount: loan.amount,
           type: loan.type,
           status: loan.status,
-          interestRate: loan.interestRate,
-          term: loan.term,
-          monthlyPayment: loan.monthlyPayment,
           remainingBalance: loan.remainingBalance,
-          nextPaymentDate: loan.nextPaymentDate.toISOString(),
-          reason: loan.reason,
+          deductions: storedDeductions,
         };
 
         // Update last modified timestamp
@@ -275,11 +311,10 @@ export class LoanModel {
       console.log(`[LoanModel] Attempting to update loan in:`, filePath);
 
       const formatLoanToCSV = (l: Loan) => {
+        // CSV format: id,employeeId,date,amount,type,status,remainingBalance
         return `${l.id},${l.employeeId},${l.date.toISOString()},${l.amount},${
           l.type
-        },${l.status},${l.interestRate},${l.term},${l.monthlyPayment},${
-          l.remainingBalance
-        },${l.nextPaymentDate.toISOString()},${l.reason}`;
+        },${l.status},${l.remainingBalance}`;
       };
 
       const data = await window.electron.readFile(filePath);
@@ -317,7 +352,7 @@ export class LoanModel {
       }
 
       // Desktop mode - use existing implementation
-      console.log(`[LoanModel] Loading loans for ${year}-${month}`);
+      // console.log(`[LoanModel] Loading loans for ${year}-${month}`);
 
       // Ensure directory exists
       await this.ensureDirectoryExists();
@@ -333,6 +368,18 @@ export class LoanModel {
           // Convert JSON data to Loan objects
           const loans: Loan[] = Object.keys(jsonData.loans).map((id) => {
             const loanData = jsonData.loans[id];
+
+            const loadedDeductions: Record<string, Deduction> = {};
+            if (loanData.deductions) {
+              for (const key in loanData.deductions) {
+                const storedDeduction = loanData.deductions[key];
+                loadedDeductions[key] = {
+                  ...storedDeduction,
+                  dateDeducted: new Date(storedDeduction.dateDeducted),
+                };
+              }
+            }
+
             return {
               id,
               employeeId: loanData.employeeId,
@@ -340,18 +387,12 @@ export class LoanModel {
               amount: loanData.amount,
               type: loanData.type,
               status: loanData.status,
-              interestRate: loanData.interestRate,
-              term: loanData.term,
-              monthlyPayment: loanData.monthlyPayment,
               remainingBalance: loanData.remainingBalance,
-              nextPaymentDate: new Date(loanData.nextPaymentDate),
-              reason: loanData.reason,
+              deductions: loadedDeductions,
             };
           });
 
-          console.log(
-            `[LoanModel] Successfully loaded ${loans.length} loans from JSON`
-          );
+          // console.log(`[LoanModel] Successfully loaded ${loans.length} loans from JSON`);
           return loans;
         } catch (error: any) {
           if (
@@ -359,23 +400,23 @@ export class LoanModel {
             error instanceof SyntaxError ||
             (error instanceof Error && error.message.includes("ENOENT"))
           ) {
-            console.log(
-              `[LoanModel] No JSON file found or invalid JSON for ${year}-${month}. Trying CSV.`
-            );
+            // console.log(`[LoanModel] No JSON file found or invalid JSON for ${year}-${month}. Trying CSV.`);
             // Fall through to CSV loading
           } else {
             console.error(
               `[LoanModel] Error reading/parsing JSON file ${jsonPath}:`,
               error
             );
-            throw error;
+            // If JSON is primary and fails to parse (other than not found), maybe we shouldn't fall back to CSV?
+            // For now, maintain original fallback logic.
+            // throw error;
           }
         }
       }
 
       // CSV implementation (original code)
       const filePath = this.getFilePathByMonth(year, month);
-      console.log(`[LoanModel] Loading loans from:`, filePath);
+      // console.log(`[LoanModel] Loading loans from CSV:`, filePath);
 
       try {
         const data = await window.electron.readFile(filePath);
@@ -383,10 +424,12 @@ export class LoanModel {
 
         return lines.map((line) => {
           const fields = line.split(",");
+          // Expected CSV format: id,employeeId,date,amount,type,status,remainingBalance
+          // Minimum 7 fields expected.
 
           // Parse the dates from ISO format
           const date = new Date(fields[2]);
-          const nextPaymentDate = new Date(fields[10]);
+          // nextPaymentDate removed
 
           // Validate loan type
           let loanType = fields[4] as Loan["type"];
@@ -394,7 +437,7 @@ export class LoanModel {
             !["Personal", "Housing", "Emergency", "Other"].includes(loanType)
           ) {
             console.warn(
-              `[LoanModel] Invalid loan type "${loanType}" found, defaulting to "Other"`
+              `[LoanModel] Invalid loan type "${loanType}" in CSV, defaulting to "Other"`
             );
             loanType = "Other";
           }
@@ -406,12 +449,11 @@ export class LoanModel {
             amount: parseFloat(fields[3]),
             type: loanType,
             status: fields[5] as Loan["status"],
-            interestRate: parseFloat(fields[6]),
-            term: parseInt(fields[7]),
-            monthlyPayment: parseFloat(fields[8]),
-            remainingBalance: parseFloat(fields[9]),
-            nextPaymentDate,
-            reason: fields[11],
+            // interestRate, term, monthlyPayment removed
+            remainingBalance: parseFloat(fields[6]),
+            // nextPaymentDate removed
+            // reason removed
+            deductions: {}, // CSV does not store deductions
           };
         });
       } catch (error: any) {
@@ -419,13 +461,11 @@ export class LoanModel {
           error.code === "ENOENT" ||
           (error instanceof Error && error.message.includes("ENOENT"))
         ) {
-          console.log(
-            `[LoanModel] No loans file found for ${year}-${month}, returning empty array`
-          );
+          // console.log(`[LoanModel] No CSV loans file found for ${year}-${month}, returning empty array`);
           return [];
         }
         console.error(`[LoanModel] Error reading CSV file ${filePath}:`, error);
-        throw error;
+        throw error; // Rethrow if it's not a "file not found" error
       }
     } catch (error) {
       console.error("[LoanModel] Error loading loans:", error);
@@ -466,15 +506,23 @@ export class LoanModel {
               JSON.stringify(jsonData, null, 2)
             );
             console.log(`[LoanModel] Successfully deleted loan from JSON`);
+          } else {
+            console.log(
+              `[LoanModel] Loan ID ${id} not found in JSON ${jsonPath} for deletion.`
+            );
           }
-          return;
+          return; // Return after attempting JSON deletion
         } catch (error: any) {
           if (error.code === "ENOENT") {
-            console.log(`[LoanModel] No JSON file found for ${year}-${month}`);
-            // Fall through to CSV deletion
+            console.log(
+              `[LoanModel] No JSON file found for ${year}-${month} for deletion. Loan ID ${id} cannot be deleted if not in JSON.`
+            );
+            // If JSON is the primary format, and the file doesn't exist, there's nothing to delete.
+            // No fallback to CSV for deletion if JSON is preferred and file is missing.
+            return;
           } else {
             console.error(
-              `[LoanModel] Error processing JSON file ${jsonPath}:`,
+              `[LoanModel] Error processing JSON file ${jsonPath} for deletion:`,
               error
             );
             throw error;
@@ -483,14 +531,39 @@ export class LoanModel {
       }
 
       // CSV implementation (original code)
+      // This part will only be reached if useJsonFormat is false.
       const filePath = this.getFilePath(loan);
-      console.log(`[LoanModel] Attempting to delete loan from:`, filePath);
+      console.log(`[LoanModel] Attempting to delete loan from CSV:`, filePath);
 
-      const data = await window.electron.readFile(filePath);
-      const lines = data.split("\n").filter((line) => line.trim().length > 0);
-      const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
-      await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
-      console.log(`[LoanModel] Successfully deleted loan`);
+      try {
+        const data = await window.electron.readFile(filePath);
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
+        const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
+
+        if (lines.length === updatedLines.length) {
+          console.log(
+            `[LoanModel] Loan ID ${id} not found in CSV ${filePath} for deletion.`
+          );
+        } else {
+          await window.electron.writeFile(
+            filePath,
+            updatedLines.join("\n") + "\n"
+          );
+          console.log(`[LoanModel] Successfully deleted loan from CSV`);
+        }
+      } catch (error: any) {
+        if (error.code === "ENOENT") {
+          console.log(
+            `[LoanModel] CSV file ${filePath} not found for deletion.`
+          );
+          return; // Nothing to delete
+        }
+        console.error(
+          `[LoanModel] Error deleting loan from CSV ${filePath}:`,
+          error
+        );
+        throw error;
+      }
     } catch (error) {
       console.error("[LoanModel] Error deleting loan:", error);
       throw error;
@@ -498,8 +571,7 @@ export class LoanModel {
   }
 
   async loadAllLoansForSync(): Promise<Loan[]> {
-    const loansRootPath = path.dirname(this.basePath); // Should be SweldoDB/loans/
-    // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: START - Scanning for all loans in ${loansRootPath}`); // REMOVED
+    const loansRootPath = path.dirname(this.basePath);
     if (isWebEnvironment()) {
       console.warn(
         "[loan.ts] LoanModel.loadAllLoansForSync: Should not be called in web environment. Returning empty array."
@@ -511,22 +583,16 @@ export class LoanModel {
 
     try {
       const employeeIdFolders = await window.electron.readDir(loansRootPath);
-      // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Found ${employeeIdFolders.length} potential employee folders in ${loansRootPath}`); // REMOVED
 
       for (const empFolder of employeeIdFolders) {
         if (!empFolder.isDirectory) {
-          console.log(
-            `[loan.ts] LoanModel.loadAllLoansForSync: Skipping item ${empFolder.name} as it is not a directory.`
-          );
           continue;
         }
         const currentEmployeeId = empFolder.name;
         const employeeLoanPath = path.join(loansRootPath, currentEmployeeId);
-        // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing employee folder: ${employeeLoanPath}`); // REMOVED
 
         try {
           const loanFiles = await window.electron.readDir(employeeLoanPath);
-          // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Found ${loanFiles.length} files/subdirs in ${employeeLoanPath}`); // REMOVED
 
           const jsonLoanFiles = loanFiles.filter(
             (file: { name: string; isFile: boolean }) =>
@@ -536,17 +602,12 @@ export class LoanModel {
             (file: { name: string; isFile: boolean }) =>
               file.isFile && file.name.endsWith("_loans.csv")
           );
-          // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Employee ${currentEmployeeId} - Found ${jsonLoanFiles.length} JSON files, ${csvLoanFiles.length} CSV files.`); // REMOVED
 
           for (const jsonFile of jsonLoanFiles) {
             const filePath = path.join(employeeLoanPath, jsonFile.name);
-            // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing JSON file: ${filePath}`); // REMOVED
             try {
               const fileContent = await window.electron.readFile(filePath);
               if (!fileContent.trim()) {
-                console.log(
-                  `[loan.ts] LoanModel.loadAllLoansForSync: JSON file ${jsonFile.name} is empty. Skipping.`
-                );
                 continue;
               }
               const jsonData: LoanJsonData = JSON.parse(fileContent);
@@ -559,34 +620,38 @@ export class LoanModel {
               const loansFromFile: Loan[] = Object.entries(jsonData.loans)
                 .map(([id, loanData]) => {
                   const date = new Date(loanData.date);
-                  const nextPaymentDate = new Date(loanData.nextPaymentDate);
-                  if (
-                    isNaN(date.getTime()) ||
-                    isNaN(nextPaymentDate.getTime())
-                  ) {
+                  // nextPaymentDate removed from loanData parsing
+                  if (isNaN(date.getTime())) {
                     console.warn(
                       `[loan.ts] LoanModel.loadAllLoansForSync: Invalid date in JSON file ${jsonFile.name} for loan id ${id}. Skipping entry.`
                     );
                     return null;
                   }
+
+                  const loadedDeductions: Record<string, Deduction> = {};
+                  if (loanData.deductions) {
+                    for (const key in loanData.deductions) {
+                      const storedDeduction = loanData.deductions[key];
+                      loadedDeductions[key] = {
+                        ...storedDeduction,
+                        dateDeducted: new Date(storedDeduction.dateDeducted),
+                      };
+                    }
+                  }
+
                   return {
                     id,
-                    employeeId: currentEmployeeId, // MODIFIED: Use folder name as employeeId
+                    employeeId: currentEmployeeId,
                     date,
                     amount: loanData.amount,
                     type: loanData.type,
                     status: loanData.status,
-                    interestRate: loanData.interestRate,
-                    term: loanData.term,
-                    monthlyPayment: loanData.monthlyPayment,
                     remainingBalance: loanData.remainingBalance,
-                    nextPaymentDate,
-                    reason: loanData.reason,
+                    deductions: loadedDeductions,
                   };
                 })
                 .filter((loan) => loan !== null) as Loan[];
               allEmployeeLoans.push(...loansFromFile);
-              // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Added ${loansFromFile.length} loans from JSON ${jsonFile.name} for employee ${currentEmployeeId}`); // REMOVED
             } catch (error) {
               console.error(
                 `[loan.ts] LoanModel.loadAllLoansForSync: ERROR processing JSON file ${jsonFile.name} for emp ${currentEmployeeId}:`,
@@ -602,19 +667,13 @@ export class LoanModel {
                 jf.name.startsWith(baseName)
               )
             ) {
-              console.log(
-                `[loan.ts] LoanModel.loadAllLoansForSync: JSON version for ${csvFile.name} (emp ${currentEmployeeId}) processed. Skipping CSV.`
-              );
+              // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: JSON version for ${csvFile.name} (emp ${currentEmployeeId}) processed. Skipping CSV.`);
               continue;
             }
             const filePath = path.join(employeeLoanPath, csvFile.name);
-            // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Processing CSV file: ${filePath}`); // REMOVED
             try {
               const fileContent = await window.electron.readFile(filePath);
               if (!fileContent.trim()) {
-                console.log(
-                  `[loan.ts] LoanModel.loadAllLoansForSync: CSV file ${csvFile.name} is empty. Skipping.`
-                );
                 continue;
               }
               const lines = fileContent
@@ -623,9 +682,11 @@ export class LoanModel {
               const loansFromFile = lines
                 .map((line) => {
                   const fields = line.split(",");
-                  if (fields.length < 12) {
+                  // New CSV format: id,employeeId,date,amount,type,status,remainingBalance (7 fields)
+                  if (fields.length < 7) {
+                    // Updated field length check
                     console.warn(
-                      `[loan.ts] LoanModel.loadAllLoansForSync: Malformed CSV line in ${csvFile.name} (emp ${currentEmployeeId}). Line: "${line}". Skipping.`
+                      `[loan.ts] LoanModel.loadAllLoansForSync: Malformed CSV line in ${csvFile.name} (emp ${currentEmployeeId}). Expected 7 fields, got ${fields.length}. Line: "${line}". Skipping.`
                     );
                     return null;
                   }
@@ -635,11 +696,8 @@ export class LoanModel {
                     );
                   }
                   const date = new Date(fields[2]);
-                  const nextPaymentDate = new Date(fields[10]);
-                  if (
-                    isNaN(date.getTime()) ||
-                    isNaN(nextPaymentDate.getTime())
-                  ) {
+                  // nextPaymentDate parsing removed
+                  if (isNaN(date.getTime())) {
                     console.warn(
                       `[loan.ts] LoanModel.loadAllLoansForSync: Invalid date in CSV ${csvFile.name} (emp ${currentEmployeeId}) for loan id ${fields[0]}. Skipping.`
                     );
@@ -654,22 +712,17 @@ export class LoanModel {
                     loanType = "Other";
                   return {
                     id: fields[0],
-                    employeeId: currentEmployeeId, // MODIFIED: Use folder name as employeeId
+                    employeeId: currentEmployeeId,
                     date,
                     amount: parseFloat(fields[3]),
                     type: loanType,
                     status: fields[5] as Loan["status"],
-                    interestRate: parseFloat(fields[6]),
-                    term: parseInt(fields[7]),
-                    monthlyPayment: parseFloat(fields[8]),
-                    remainingBalance: parseFloat(fields[9]),
-                    nextPaymentDate,
-                    reason: fields[11],
+                    remainingBalance: parseFloat(fields[6]), // Adjusted index
+                    deductions: {}, // CSV does not store deductions
                   } as Loan;
                 })
                 .filter((loan) => loan !== null) as Loan[];
               allEmployeeLoans.push(...loansFromFile);
-              // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: Added ${loansFromFile.length} loans from CSV ${csvFile.name} for employee ${currentEmployeeId}`); // REMOVED
             } catch (error) {
               console.error(
                 `[loan.ts] LoanModel.loadAllLoansForSync: ERROR processing CSV file ${csvFile.name} for emp ${currentEmployeeId}:`,
@@ -691,7 +744,6 @@ export class LoanModel {
       );
       throw error;
     }
-    // console.log(`[loan.ts] LoanModel.loadAllLoansForSync: END - Loaded a total of ${allEmployeeLoans.length} loans from all employees and files.`); // REMOVED
     return allEmployeeLoans;
   }
 }
@@ -711,18 +763,17 @@ export async function migrateCsvToJson(
 
   try {
     onProgress?.("Starting loan CSV to JSON migration...");
-
-    // Get employee folders
     const loansBasePath = path.join(dbPath, "SweldoDB/loans");
 
     try {
       await window.electron.ensureDir(loansBasePath);
-    } catch (error) {
-      onProgress?.(`Error ensuring loans directory exists: ${error}`);
+    } catch (error: any) {
+      onProgress?.(
+        `Error ensuring loans directory exists: ${error.message || error}`
+      );
       throw error;
     }
 
-    // Get all employee folders
     const employees = await window.electron.readDir(loansBasePath);
     const employeeFolders = employees.filter(
       (item: { isDirectory: boolean; name: string }) => item.isDirectory
@@ -730,7 +781,6 @@ export async function migrateCsvToJson(
 
     onProgress?.(`Found ${employeeFolders.length} employee folders to process`);
 
-    // Process each employee folder
     for (let i = 0; i < employeeFolders.length; i++) {
       const employeeFolder = employeeFolders[i];
       const employeeId = employeeFolder.name;
@@ -739,8 +789,6 @@ export async function migrateCsvToJson(
       );
 
       const employeePath = path.join(loansBasePath, employeeId);
-
-      // Get all CSV files in the employee folder
       const files = await window.electron.readDir(employeePath);
       const csvFiles = files.filter(
         (file: { isFile: boolean; name: string }) =>
@@ -751,30 +799,49 @@ export async function migrateCsvToJson(
         `  Found ${csvFiles.length} loan CSV files for employee ${employeeId}`
       );
 
-      // Process each CSV file
       for (let j = 0; j < csvFiles.length; j++) {
         const csvFile = csvFiles[j];
         const csvFilePath = path.join(employeePath, csvFile.name);
 
+        // Check if a JSON file already exists for this CSV
+        const jsonFileName = csvFile.name.replace("_loans.csv", "_loans.json");
+        const jsonFilePathTarget = path.join(employeePath, jsonFileName);
         try {
-          // Extract year and month from filename
+          await window.electron.readFile(jsonFilePathTarget); // This will throw if file doesn't exist
+          onProgress?.(
+            `    JSON file ${jsonFileName} already exists. Skipping migration for ${csvFile.name}.`
+          );
+          continue; // Skip if JSON already exists
+        } catch (e: any) {
+          if (e.code !== "ENOENT") {
+            // If error is not 'file not found', log it and skip
+            onProgress?.(
+              `    Error checking for existing JSON file ${jsonFileName}: ${
+                e.message || e
+              }. Skipping migration for ${csvFile.name}.`
+            );
+            continue;
+          }
+          // ENOENT means JSON file does not exist, proceed with migration
+        }
+
+        try {
           const [year, month] = csvFile.name
             .replace("_loans.csv", "")
             .split("_")
             .map(Number);
+          onProgress?.(
+            `    Migrating ${year}-${month} loans from ${csvFile.name}`
+          );
 
-          onProgress?.(`    Processing ${year}-${month} loans`);
-
-          // Read the CSV file
           const csvContent = await window.electron.readFile(csvFilePath);
           const lines = csvContent.split("\n").filter((line) => line.trim());
 
           if (lines.length === 0) {
-            onProgress?.(`    - Skipping empty file: ${csvFile.name}`);
+            onProgress?.(`    - Skipping empty CSV file: ${csvFile.name}`);
             continue;
           }
 
-          // Create JSON structure
           const jsonData: LoanJsonData = {
             meta: {
               employeeId,
@@ -785,56 +852,71 @@ export async function migrateCsvToJson(
             loans: {},
           };
 
-          // Process each line/loan record
           for (const line of lines) {
             const fields = line.split(",");
-            if (fields.length < 12) continue; // Skip invalid lines
+            // Old CSV: id,employeeId,date,amount,type,status,interestRate,term,monthlyPayment,remainingBalance,nextPaymentDate,reason
+            // New CSV expected by migration (from potentially old files): We only care about the first few fields for the new structure
+            // We'll map to new structure if fields are available, otherwise they'll be undefined / default.
+            // A robust migration might check fields.length more granularly or handle various old formats.
+            // For minimal change: Assume old CSVs might have up to 12 fields.
+            // We need at least 7 for the *new* core fields if we were parsing a new CSV.
+            // Since this is migrating *old* CSVs, we check old lengths.
+            if (fields.length < 7) {
+              // If an old CSV has less than basic info, skip.
+              onProgress?.(
+                `    - Skipping malformed line in ${csvFile.name} (less than 7 fields): "${line}"`
+              );
+              continue;
+            }
 
             const id = fields[0];
             jsonData.loans[id] = {
               employeeId: fields[1],
-              date: fields[2], // ISO string
+              date: fields[2], // Keep as ISO string from CSV
               amount: parseFloat(fields[3]),
-              type: fields[4] as "Personal" | "Housing" | "Emergency" | "Other",
+              type: fields[4] as "Personal" | "PagIbig" | "SSS" | "Other",
               status: fields[5] as
                 | "Pending"
                 | "Approved"
                 | "Rejected"
                 | "Completed",
-              interestRate: parseFloat(fields[6]),
-              term: parseInt(fields[7]),
-              monthlyPayment: parseFloat(fields[8]),
-              remainingBalance: parseFloat(fields[9]),
-              nextPaymentDate: fields[10], // ISO string
-              reason: fields[11],
+              // Fields removed: interestRate (fields[6]), term (fields[7]), monthlyPayment (fields[8])
+              // nextPaymentDate (fields[10]), reason (fields[11])
+              remainingBalance: fields[9]
+                ? parseFloat(fields[9])
+                : parseFloat(fields[3]), // If old remainingBalance exists, use it. Otherwise default to amount.
+              deductions: {}, // Initialize empty deductions for migrated loans
             };
           }
 
-          // Write JSON file
-          const jsonFilePath = path.join(
-            employeePath,
-            `${year}_${month}_loans.json`
-          );
-
-          await window.electron.writeFile(
-            jsonFilePath,
-            JSON.stringify(jsonData, null, 2)
-          );
-
+          if (Object.keys(jsonData.loans).length > 0) {
+            await window.electron.writeFile(
+              jsonFilePathTarget, // Use the target path
+              JSON.stringify(jsonData, null, 2)
+            );
+            onProgress?.(
+              `    - Successfully migrated ${
+                Object.keys(jsonData.loans).length
+              } loan records to ${jsonFileName}`
+            );
+          } else {
+            onProgress?.(
+              `    - No valid loan records found in ${csvFile.name} to migrate.`
+            );
+          }
+        } catch (error: any) {
           onProgress?.(
-            `    - Successfully migrated ${
-              Object.keys(jsonData.loans).length
-            } loan records to JSON`
+            `    - Error processing file ${csvFile.name}: ${
+              error.message || error
+            }`
           );
-        } catch (error) {
-          onProgress?.(`    - Error processing file ${csvFile.name}: ${error}`);
         }
       }
     }
 
-    onProgress?.("Loan CSV to JSON migration completed successfully!");
-  } catch (error) {
-    onProgress?.(`Migration failed: ${error}`);
+    onProgress?.("Loan CSV to JSON migration completed!");
+  } catch (error: any) {
+    onProgress?.(`Migration failed: ${error.message || error}`);
     throw error;
   }
 }

@@ -12,7 +12,6 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
-import AddButton from "@/renderer/components/magicui/add-button";
 import { useAuthStore } from "@/renderer/stores/authStore";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import EmployeeDropdown from "@/renderer/components/EmployeeDropdown";
@@ -27,7 +26,7 @@ import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
-export default function ShortsPage() {
+export default function DeductionsPage() {
   const [shorts, setShorts] = useState<Short[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedShort, setSelectedShort] = useState<Short | null>(null);
@@ -96,28 +95,28 @@ export default function ShortsPage() {
         const currentShortYear = storeSelectedYear;
 
         if (isWebEnvironment()) {
-          console.log(`[ShortsPage WEB] Starting to load shorts for employee: ${selectedEmployeeId}`);
+          console.log(`[DeductionsPage WEB] Starting to load deductions for employee: ${selectedEmployeeId}`);
           if (!companyNameFromSettings) {
-            toast("Company name not configured for web mode. Cannot load shorts.");
+            toast("Company name not configured for web mode. Cannot load deductions.");
             if (mounted) setLoading(false);
             return;
           }
 
-          // Load shorts from Firestore
-          console.log(`[ShortsPage WEB] Loading shorts for ${selectedEmployeeId}, ${currentShortMonth}/${currentShortYear}, company: ${companyNameFromSettings}`);
+          // Load deductions from Firestore
+          console.log(`[DeductionsPage WEB] Loading deductions for ${selectedEmployeeId}, ${currentShortMonth}/${currentShortYear}, company: ${companyNameFromSettings}`);
           shortItems = await loadShortsFirestore(selectedEmployeeId, currentShortMonth, currentShortYear, companyNameFromSettings);
-          console.log(`[ShortsPage WEB] Loaded ${shortItems.length} shorts from Firestore.`);
+          console.log(`[DeductionsPage WEB] Loaded ${shortItems.length} deductions from Firestore.`);
 
         } else {
           // Desktop mode
-          console.log(`[ShortsPage DESKTOP] Starting to load shorts for employee: ${selectedEmployeeId}`);
+          console.log(`[DeductionsPage DESKTOP] Starting to load deductions for employee: ${selectedEmployeeId}`);
           if (!dbPath || !employeeModel || !shortModel) {
-            toast("System not fully initialized for desktop mode. Cannot load shorts.");
+            toast("System not fully initialized for desktop mode. Cannot load deductions.");
             if (mounted) setLoading(false);
             return;
           }
           shortItems = await shortModel.loadShorts(selectedEmployeeId);
-          console.log(`[ShortsPage DESKTOP] Loaded ${shortItems.length} shorts using shortModel.`);
+          console.log(`[DeductionsPage DESKTOP] Loaded ${shortItems.length} deductions using shortModel.`);
         }
 
         if (!mounted) return;
@@ -125,10 +124,10 @@ export default function ShortsPage() {
         setShorts(shortItems);
 
       } catch (error) {
-        console.error("Error loading shorts data:", error);
+        console.error("Error loading deductions data:", error);
         if (mounted) {
           toast(
-            error instanceof Error ? error.message : "Failed to load shorts data"
+            error instanceof Error ? error.message : "Failed to load deductions data"
           );
         }
       } finally {
@@ -164,9 +163,9 @@ export default function ShortsPage() {
           const foundEmp = employees.find(e => e.id === selectedEmployeeId);
           setEmployee(foundEmp || null);
           if (!foundEmp) {
-            console.warn(`[ShortsPage WEB] loadSelectedEmployee: Employee ${selectedEmployeeId} not found in preloaded list.`);
+            console.warn(`[DeductionsPage WEB] loadSelectedEmployee: Employee ${selectedEmployeeId} not found in preloaded list.`);
           } else {
-            console.log(`[ShortsPage WEB] loadSelectedEmployee: Successfully found employee ${selectedEmployeeId} in preloaded list.`);
+            console.log(`[DeductionsPage WEB] loadSelectedEmployee: Successfully found employee ${selectedEmployeeId} in preloaded list.`);
           }
         } else {
           if (!dbPath) {
@@ -182,7 +181,7 @@ export default function ShortsPage() {
           }
         }
       } catch (error) {
-        console.error("[ShortsPage] Error in loadSelectedEmployee:", error);
+        console.error("[DeductionsPage] Error in loadSelectedEmployee:", error);
         toast("Error loading selected employee details.");
         setEmployee(null);
       } finally {
@@ -203,7 +202,7 @@ export default function ShortsPage() {
             setEmployees([]);
             return;
           }
-          console.log("[ShortsPage WEB] Loading active employees from Firestore for dropdown.");
+          console.log("[DeductionsPage WEB] Loading active employees from Firestore for dropdown.");
           const firestoreEmployees = await loadActiveEmployeesFirestore(companyNameFromSettings);
           setEmployees(firestoreEmployees);
         } else {
@@ -212,7 +211,7 @@ export default function ShortsPage() {
             setEmployees([]);
             return;
           }
-          console.log("[ShortsPage DESKTOP] Loading active employees from local DB for dropdown.");
+          console.log("[DeductionsPage DESKTOP] Loading active employees from local DB for dropdown.");
           const employeeModel = createEmployeeModel(dbPath);
           const loadedEmployees = await employeeModel.loadActiveEmployees();
           setEmployees(loadedEmployees);
@@ -344,7 +343,7 @@ export default function ShortsPage() {
       if (isWebEnvironment()) {
         // Web Mode
         if (!companyNameFromSettings) {
-          toast("Company name not configured for web mode. Cannot save short.");
+          toast("Company name not configured for web mode. Cannot save deduction.");
           setLoading(false);
           return;
         }
@@ -353,19 +352,19 @@ export default function ShortsPage() {
         const currentYearForFirestore = storeSelectedYear;
 
         if (selectedShort) {
-          // Update existing short in Firestore
+          // Update existing deduction in Firestore
           await updateShortFirestore(
             { ...data, employeeId: selectedEmployeeId! }, // Ensure current employeeId is used
             currentMonthForFirestore,
             currentYearForFirestore,
             companyNameFromSettings
           );
-          toast("Short updated successfully", {
+          toast("Deduction updated successfully", {
             position: "bottom-right",
             duration: 3000,
           });
         } else {
-          // Create new short in Firestore
+          // Create new deduction in Firestore
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, ...shortDataForCreate } = data; // Firestore backend generates ID if needed, or uses provided if structured that way by the model
           await createShortFirestore(
@@ -375,13 +374,13 @@ export default function ShortsPage() {
             currentYearForFirestore,
             companyNameFromSettings
           );
-          toast("Short created successfully", {
+          toast("Deduction created successfully", {
             position: "bottom-right",
             duration: 3000,
           });
         }
 
-        // Reload the shorts from Firestore to get the updated list
+        // Reload the deductions from Firestore to get the updated list
         const shortItems = await loadShortsFirestore(
           selectedEmployeeId!,
           currentMonthForFirestore,
@@ -397,37 +396,37 @@ export default function ShortsPage() {
           return;
         }
         if (!shortModel) {
-          toast("Shorts system (desktop) not properly initialized. Please ensure:\n1. An employee is selected\n2. Database path is configured\n3. Month and year are set");
+          toast("Deductions system (desktop) not properly initialized. Ensure employee & date context.");
           setLoading(false);
           return;
         }
 
         if (selectedShort) {
-          // Update existing short
+          // Update existing deduction
           await shortModel.updateShort({
             ...data,
             id: selectedShort.id,
             employeeId: selectedEmployeeId!,
             date: data.date, // Use the new date from the form
           });
-          toast("Short updated successfully", {
+          toast("Deduction updated successfully", {
             position: "bottom-right",
             duration: 3000,
           });
         } else {
-          // Create new short
+          // Create new deduction
           await shortModel.createShort({
             ...data,
             employeeId: selectedEmployeeId!,
             date: data.date,
           });
-          toast("Short created successfully", {
+          toast("Deduction created successfully", {
             position: "bottom-right",
             duration: 3000,
           });
         }
 
-        // Reload the shorts to get the updated list
+        // Reload the deductions to get the updated list
         const shortItems = await shortModel.loadShorts(selectedEmployeeId!);
         setShorts(shortItems);
       }
@@ -435,11 +434,11 @@ export default function ShortsPage() {
       // Close the dialog
       handleCloseDialog();
     } catch (error) {
-      console.error("Error saving short:", error);
+      console.error("Error saving deduction:", error);
       toast(
         error instanceof Error
-          ? `Error saving short: ${error.message}`
-          : "Error saving short",
+          ? `Error saving deduction: ${error.message}`
+          : "Error saving deduction",
         {
           position: "bottom-right",
           duration: 3000,
@@ -451,10 +450,10 @@ export default function ShortsPage() {
   }
 
   const filteredShorts = useMemo(() => {
-    console.log(`[ShortsPage FILTER] Running filter. storeSelectedMonth: ${storeSelectedMonth}, storeSelectedYear: ${storeSelectedYear}`);
-    console.log(`[ShortsPage FILTER] Input 'shorts' array length: ${shorts.length}`);
+    console.log(`[DeductionsPage FILTER] Running filter. storeSelectedMonth: ${storeSelectedMonth}, storeSelectedYear: ${storeSelectedYear}`);
+    console.log(`[DeductionsPage FILTER] Input 'shorts' array length: ${shorts.length}`);
     if (shorts.length > 0) {
-      console.log("[ShortsPage FILTER] First short raw data:", JSON.stringify(shorts[0]));
+      console.log("[DeductionsPage FILTER] First short raw data:", JSON.stringify(shorts[0]));
     }
     const result = shorts.filter((short) => {
       const shortDate = new Date(short.date);
@@ -464,10 +463,10 @@ export default function ShortsPage() {
       const shortDateString = shortDate instanceof Date && !isNaN(shortDate.valueOf())
         ? shortDate.toISOString()
         : `Invalid Date (original value: ${short.date})`;
-      console.log(`[ShortsPage FILTER] Filtering short ID ${short.id}: shortDate: ${shortDateString}, parsedMonth: ${!isNaN(shortDate.valueOf()) ? shortDate.getMonth() : 'N/A'}, parsedYear: ${!isNaN(shortDate.valueOf()) ? shortDate.getFullYear() : 'N/A'}, matchesMonth: ${matchesMonth}, matchesYear: ${matchesYear}`);
+      console.log(`[DeductionsPage FILTER] Filtering deduction ID ${short.id}: shortDate: ${shortDateString}, parsedMonth: ${!isNaN(shortDate.valueOf()) ? shortDate.getMonth() : 'N/A'}, parsedYear: ${!isNaN(shortDate.valueOf()) ? shortDate.getFullYear() : 'N/A'}, matchesMonth: ${matchesMonth}, matchesYear: ${matchesYear}`);
       return matchesMonth && matchesYear;
     });
-    console.log(`[ShortsPage FILTER] Output 'filteredShorts' array length: ${result.length}`);
+    console.log(`[DeductionsPage FILTER] Output 'filteredDeductions' array length: ${result.length}`);
     return result;
   }, [shorts, storeSelectedMonth, storeSelectedYear]);
 
@@ -494,10 +493,10 @@ export default function ShortsPage() {
                             employees={employees}
                             selectedEmployeeId={selectedEmployeeId}
                             onSelectEmployee={setSelectedEmployeeId}
-                            labelPrefix="Shorts"
+                            labelPrefix="Deductions"
                           />
                         ) : (
-                          <DecryptedText text="Shorts" animateOn="view" revealDirection='start' speed={50} sequential={true} />
+                          <DecryptedText text="Deductions" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                         )}
                       </h2>
                       <div className="flex items-center gap-2">
@@ -521,21 +520,14 @@ export default function ShortsPage() {
                           onClick={handleButtonClick}
                           className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
                         >
-                          Apply for Short
+                          Add Deduction
                         </button>
                       </div>
                     </div>
                     <div className="relative">
                       {showTip && (
                         <div className="mt-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-md border border-blue-100">
-                          Shorts are deductions from employee pay for company
-                          purchases or unpaid payables. They represent amounts
-                          that employees owe to the company, such as when they
-                          purchase items from the company store, have
-                          insufficient funds for deductions, or need to cover
-                          other company-related expenses. These amounts are
-                          tracked and can be paid back over time as the employee
-                          earns wages.
+                          Deductions are amounts owed by an employee to the company. These can be for items like company store purchases, unpaid payables, or other company-related expenses. These are tracked and can be paid back over time.
                         </div>
                       )}
                     </div>
@@ -545,8 +537,8 @@ export default function ShortsPage() {
                       {filteredShorts.length === 0 ? (
                         <NoDataPlaceholder
                           employeeName={employee?.name}
-                          dataType="shorts"
-                          actionText="Apply for Short"
+                          dataType="deductions"
+                          actionText="Add Deduction"
                           onActionClick={handleButtonClick}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
@@ -565,6 +557,12 @@ export default function ShortsPage() {
                                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
                               >
                                 Amount
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
+                              >
+                                Type
                               </th>
                               <th
                                 scope="col"
@@ -605,6 +603,9 @@ export default function ShortsPage() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   ₱{short.amount.toLocaleString()}
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {short.type || "Short"}
+                                </td>
                                 <td className="px-6 py-4 text-sm text-gray-500 max-w-md">
                                   <div className="line-clamp-2 hover:line-clamp-none">
                                     {short.reason}
@@ -630,7 +631,7 @@ export default function ShortsPage() {
 
                                       if (!hasDeleteAccess) {
                                         toast(
-                                          "You don't have permission to delete short records"
+                                          "You don't have permission to delete deduction records"
                                         );
                                         return;
                                       }
@@ -644,7 +645,7 @@ export default function ShortsPage() {
 
                                       if (
                                         !confirm(
-                                          "Are you sure you want to delete this short?"
+                                          "Are you sure you want to delete this deduction?"
                                         )
                                       ) {
                                         return;
@@ -659,17 +660,17 @@ export default function ShortsPage() {
                                           );
                                         setShorts(shortItems);
                                         toast(
-                                          "Short deleted successfully"
+                                          "Deduction deleted successfully"
                                         );
                                       } catch (error) {
                                         console.error(
-                                          "Error deleting short:",
+                                          "Error deleting deduction:",
                                           error
                                         );
                                         toast(
                                           error instanceof Error
-                                            ? `Error deleting short: ${error.message}`
-                                            : "Error deleting short"
+                                            ? `Error deleting deduction: ${error.message}`
+                                            : "Error deleting deduction"
                                         );
                                       } finally {
                                         setLoading(false);
@@ -692,8 +693,8 @@ export default function ShortsPage() {
                     </div>
                   ) : (
                     <NoDataPlaceholder
-                      dataType="shorts"
-                      actionText="Apply for Short"
+                      dataType="deductions"
+                      actionText="Add Deduction"
                       onActionClick={handleButtonClick}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />

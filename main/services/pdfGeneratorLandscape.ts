@@ -190,6 +190,7 @@ export async function generatePayrollPDFLandscape(
           (payroll.deductions.sss || 0) +
           (payroll.deductions.philHealth || 0) +
           (payroll.deductions.pagIbig || 0) +
+          (payroll.deductions.loanDeductions || 0) +
           (payroll.deductions.cashAdvanceDeductions || 0) +
           (payroll.deductions.partial || 0) +
           (payroll.deductions.shortDeductions || 0);
@@ -232,7 +233,7 @@ export async function generatePayrollPDFLandscape(
               : column.id === "pagibig"
               ? formatCurrency(payroll.deductions.pagIbig || 0)
               : column.id === "loan"
-              ? formatCurrency(0)
+              ? formatCurrency(payroll.deductions.loanDeductions || 0)
               : column.id === "ca"
               ? formatCurrency(payroll.deductions.cashAdvanceDeductions || 0)
               : column.id === "partial"
@@ -330,6 +331,7 @@ export async function generatePayrollPDFLandscape(
             (curr.deductions.sss || 0) +
             (curr.deductions.philHealth || 0) +
             (curr.deductions.pagIbig || 0) +
+            (curr.deductions.loanDeductions || 0) +
             (curr.deductions.cashAdvanceDeductions || 0) +
             (curr.deductions.partial || 0) +
             (curr.deductions.shortDeductions || 0);
@@ -347,10 +349,7 @@ export async function generatePayrollPDFLandscape(
             sss: acc.sss + (curr.deductions.sss || 0),
             philhealth: acc.philhealth + (curr.deductions.philHealth || 0),
             pagibig: acc.pagibig + (curr.deductions.pagIbig || 0),
-            loan:
-              acc.loan +
-              (curr.deductions.sssLoan || 0) +
-              (curr.deductions.pagibigLoan || 0), // Sum loans if they should be part of the total row
+            loan: acc.loan + (curr.deductions.loanDeductions || 0),
             ca: acc.ca + (curr.deductions.cashAdvanceDeductions || 0),
             partial: acc.partial + (curr.deductions.partial || 0), // Sum partial if needed in total
             others: acc.others + othersValue, // Sum the calculated 'others' value

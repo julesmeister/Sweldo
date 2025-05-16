@@ -222,18 +222,26 @@ export function useFirestoreSync({
       const shortsModel = createShortModel(dbPath, shortsEmployeeId);
       operations.push({
         name: "shorts",
-        instance: createShortsFirestoreInstance(shortsModel, shortsEmployeeId),
+        instance: createShortsFirestoreInstance(
+          shortsModel,
+          shortsEmployeeId,
+          year
+        ),
       });
 
       if (employeeId) {
         console.log(
           "[useFirestoreSync] Added SHORTS model to operations (for employeeId:",
           employeeId,
-          ")."
+          `, year: ${
+            year || "all months of current year (if year undefined)"
+          }).`
         );
       } else {
         console.log(
-          "[useFirestoreSync] Added SHORTS model with placeholder employeeId for bulk sync"
+          `[useFirestoreSync] Added SHORTS model with placeholder employeeId for bulk sync (year: ${
+            year || "all months of current year (if year undefined)"
+          }).`
         );
       }
 

@@ -14,6 +14,7 @@ interface PayrollVariables {
   pagIbig: number;
   cashAdvanceDeductions: number;
   shorts: number;
+  loanDeductions: number;
   others: number;
   // Add other potential variables used in formulas
 }
@@ -56,6 +57,7 @@ export function evaluatePayrollFormulas(
     variables.pagIbig +
     variables.cashAdvanceDeductions +
     variables.shorts +
+    variables.loanDeductions +
     variables.others; // Consider if late/undertime should be here too
 
   try {
@@ -80,6 +82,7 @@ export function evaluatePayrollFormulas(
         pagIbig: variables.pagIbig,
         cashAdvanceDeductions: variables.cashAdvanceDeductions,
         shorts: variables.shorts,
+        loanDeductions: variables.loanDeductions,
         others: variables.others,
         lateDeduction: variables.lateDeduction, // Make available if needed
         undertimeDeduction: variables.undertimeDeduction, // Make available if needed

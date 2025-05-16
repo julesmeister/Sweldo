@@ -27,6 +27,7 @@ interface DiscrepancyCalculation {
       pagIbig: number;
       cashAdvance: number;
       shortDeductions: number;
+      loanDeductions?: number;
       others: number;
     };
   };
@@ -40,6 +41,13 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
   if (!data) {
     return null;
   }
+
+  // IMPORTANT: Calculate total loan deduction from loanDeductionIds
+  const loanDeduction = Array.isArray(data.loanDeductionIds)
+    ? data.loanDeductionIds.reduce((total, loan) => total + (loan.amount || 0), 0)
+    : 0;
+
+
 
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString("en-PH", {
@@ -81,7 +89,11 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
       data.deductions.pagIbig +
       data.deductions.cashAdvanceDeductions +
       (data.deductions.shortDeductions || 0) +
-      data.deductions.others; // Remove duplicate counting of late/undertime
+      loanDeduction +
+      data.deductions.others;
+
+
+
     const expectedNetPay = data.grossPay - totalDeductions;
     if (Math.abs(data.netPay - expectedNetPay) >= 0.01) {
       discrepancies.push({
@@ -97,10 +109,8 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
             pagIbig: data.deductions.pagIbig,
             cashAdvance: data.deductions.cashAdvanceDeductions,
             shortDeductions: data.deductions.shortDeductions || 0,
+            loanDeductions: loanDeduction,
             others: data.deductions.others,
-            // Remove these since they're included in others
-            // late: data.lateDeduction || 0,
-            // undertime: data.undertimeDeduction || 0
           },
         },
       });
@@ -484,12 +494,13 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                       <span className="text-2xl font-bold text-rose-600">
                         ₱-
                         {formatCurrency(
-                          Number(data.deductions.sss) +
-                            Number(data.deductions.philHealth) +
-                            Number(data.deductions.pagIbig) +
-                            Number(data.deductions.cashAdvanceDeductions) +
-                            Number(data.deductions.shortDeductions ?? 0) +
-                            Number(data.deductions.others)
+                          (data.deductions.sss || 0) +
+                          (data.deductions.philHealth || 0) +
+                          (data.deductions.pagIbig || 0) +
+                          (data.deductions.cashAdvanceDeductions || 0) +
+                          (data.deductions.shortDeductions || 0) +
+                          loanDeduction +
+                          (data.deductions.others || 0)
                         )}
                       </span>
                     </div>
@@ -544,7 +555,7 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                     </span>
                   </div>
                 )}
-                {(data.deductions.shortDeductions ?? 0) > 0 && (
+                {(data.deductions.shortDeductions || 0) > 0 && (
                   <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
                     <div className="flex items-center mb-1">
                       <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
@@ -553,7 +564,21 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                       </span>
                     </div>
                     <span className="text-2xl font-bold text-rose-600">
-                      ₱-{formatCurrency(data.deductions.shortDeductions ?? 0)}
+                      ₱-{formatCurrency(data.deductions.shortDeductions || 0)}
+                    </span>
+                  </div>
+                )}
+                {/* Display loan deductions if there are any loan deduction IDs with amounts */}
+                {loanDeduction > 0 && (
+                  <div className="flex flex-col bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+                    <div className="flex items-center mb-1">
+                      <div className="w-2 h-2 rounded-full bg-rose-500 mr-2"></div>
+                      <span className="text-xs uppercase tracking-wider font-medium text-slate-400">
+                        Loan Deductions
+                      </span>
+                    </div>
+                    <span className="text-2xl font-bold text-rose-600">
+                      ₱-{formatCurrency(loanDeduction)}
                     </span>
                   </div>
                 )}
@@ -604,17 +629,16 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                 <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
                   <div className="flex items-center">
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        Math.abs(
-                          data.grossPay -
-                            (data.basicPay +
-                              data.overtime +
-                              (data.holidayBonus || 0) +
-                              (data.nightDifferentialPay || 0))
-                        ) < 0.01
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      } mr-2`}
+                      className={`w-2 h-2 rounded-full ${Math.abs(
+                        data.grossPay -
+                        (data.basicPay +
+                          data.overtime +
+                          (data.holidayBonus || 0) +
+                          (data.nightDifferentialPay || 0))
+                      ) < 0.01
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                        } mr-2`}
                     ></div>
                     <span className="text-sm font-medium text-slate-600">
                       Gross Pay Calculation
@@ -628,21 +652,21 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                 <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
                   <div className="flex items-center">
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        Math.abs(
-                          data.netPay -
-                            (data.grossPay -
-                              (data.deductions.sss +
-                                data.deductions.philHealth +
-                                data.deductions.pagIbig +
-                                data.deductions.cashAdvanceDeductions +
-                                (data.deductions.shortDeductions ?? 0) +
-                                (data.lateDeduction || 0) +
-                                (data.undertimeDeduction || 0)))
-                        ) < 0.01
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      } mr-2`}
+                      className={`w-2 h-2 rounded-full ${Math.abs(
+                        data.netPay -
+                        (data.grossPay -
+                          (data.deductions.sss +
+                            data.deductions.philHealth +
+                            data.deductions.pagIbig +
+                            data.deductions.cashAdvanceDeductions +
+                            (data.deductions.shortDeductions || 0) +
+                            loanDeduction +
+                            (data.lateDeduction || 0) +
+                            (data.undertimeDeduction || 0)))
+                      ) < 0.01
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                        } mr-2`}
                     ></div>
                     <span className="text-sm font-medium text-slate-600">
                       Net Pay Calculation
@@ -656,13 +680,12 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                 <div className="flex items-center justify-between bg-slate-50/50 rounded-lg p-3 border border-slate-100">
                   <div className="flex items-center">
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        Math.abs(
-                          data.basicPay - data.dailyRate * data.daysWorked
-                        ) < 0.01
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      } mr-2`}
+                      className={`w-2 h-2 rounded-full ${Math.abs(
+                        data.basicPay - data.dailyRate * data.daysWorked
+                      ) < 0.01
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                        } mr-2`}
                     ></div>
                     <span className="text-sm font-medium text-slate-600">
                       Basic Pay Calculation
@@ -820,8 +843,15 @@ export const PayrollSummary: React.FC<PayrollSummaryProps> = ({
                                           ) || "0.00"}
                                         </div>
                                         <div>
+                                          - Loan Deductions: ₱
+                                          {discrepancy.calculation.deductions?.loanDeductions?.toLocaleString(
+                                            "en-PH",
+                                            { minimumFractionDigits: 2 }
+                                          ) || "0.00"}
+                                        </div>
+                                        <div>
                                           - Other Deductions: ₱
-                                          {discrepancy.calculation.deductions?.others.toLocaleString(
+                                          {discrepancy.calculation.deductions?.others?.toLocaleString(
                                             "en-PH",
                                             { minimumFractionDigits: 2 }
                                           ) || "0.00"}

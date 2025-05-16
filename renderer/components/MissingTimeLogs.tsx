@@ -95,7 +95,7 @@ export default function MissingTimeLogs() {
         } else {
           // In desktop mode, load from local files
           const employeeModel = createEmployeeModel(dbPath!);
-          const employees = await employeeModel.loadEmployees();
+          const employees = await employeeModel.loadActiveEmployees();
 
           activeEmployeeIds = new Set(
             employees.filter((emp) => emp.status === "active").map((emp) => emp.id)

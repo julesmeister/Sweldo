@@ -106,7 +106,7 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
       date: new Date(date),
       amount: parsedAmount,
       remainingUnpaid: parsedRemainingUnpaid,
-      reason,
+      reason: reason || "No reason indicated",
       approvalStatus,
       status: parsedRemainingUnpaid <= 0 ? "Paid" : "Unpaid",
       paymentSchedule,

@@ -843,6 +843,23 @@ select {
     border-color: white;
   }
 /* Fix for sticky day cells in timesheet to ensure consistent borders in both web and desktop */
+/* Fix for dropdown menus and popovers to ensure they're not clipped by parent containers */
+[data-radix-popper-content-wrapper],
+  [class*="PopoverContent-"],
+  [class*="DropdownMenuContent-"],
+  [class*="CommandDialog"],
+  [class*="DialogContent-"],
+  [class*="TooltipContent-"] {
+    z-index: 9999 !important;
+    position: absolute !important;
+  }
+/* Specifically target our component library popover */
+div[role="dialog"],
+  div[role="listbox"],
+  div[role="menu"] {
+    z-index: 9999 !important;
+    position: absolute !important;
+  }
 /* Timesheet-specific styles for consistent borders across environments */
 .timesheet-table {
     border-collapse: separate !important;
@@ -1083,6 +1100,9 @@ select {
 }
 .row-span-1 {
   grid-row: span 1 / span 1;
+}
+.row-span-2 {
+  grid-row: span 2 / span 2;
 }
 .row-span-3 {
   grid-row: span 3 / span 3;
@@ -1387,9 +1407,6 @@ select {
 }
 .max-h-\[220px\] {
   max-height: 220px;
-}
-.max-h-\[300px\] {
-  max-height: 300px;
 }
 .max-h-\[30vh\] {
   max-height: 30vh;
@@ -1824,6 +1841,9 @@ select {
 .grid-cols-7 {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
+.grid-rows-2 {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
 .grid-rows-3 {
   grid-template-rows: repeat(3, minmax(0, 1fr));
 }
@@ -1985,6 +2005,10 @@ select {
 .divide-gray-300 > :not([hidden]) ~ :not([hidden]) {
   --tw-divide-opacity: 1;
   border-color: rgb(209 213 219 / var(--tw-divide-opacity, 1));
+}
+.divide-gray-700 > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(55 65 81 / var(--tw-divide-opacity, 1));
 }
 .overflow-auto {
   overflow: auto;
@@ -2517,6 +2541,10 @@ select {
 .bg-emerald-50\/80 {
   background-color: rgb(236 253 245 / 0.8);
 }
+.bg-emerald-600 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(5 150 105 / var(--tw-bg-opacity, 1));
+}
 .bg-fuchsia-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(250 232 255 / var(--tw-bg-opacity, 1));
@@ -2815,6 +2843,9 @@ select {
 .bg-zinc-50 {
   --tw-bg-opacity: 1;
   background-color: rgb(250 250 250 / var(--tw-bg-opacity, 1));
+}
+.bg-opacity-50 {
+  --tw-bg-opacity: 0.5;
 }
 .bg-opacity-70 {
   --tw-bg-opacity: 0.7;
@@ -4714,6 +4745,11 @@ select {
   background-color: rgb(209 250 229 / var(--tw-bg-opacity, 1));
 }
 
+.hover\:bg-emerald-700:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(4 120 87 / var(--tw-bg-opacity, 1));
+}
+
 .hover\:bg-gray-100:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
@@ -5106,6 +5142,11 @@ select {
 
 .focus\:ring-blue-500\/30:focus {
   --tw-ring-color: rgb(59 130 246 / 0.3);
+}
+
+.focus\:ring-emerald-500:focus {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(16 185 129 / var(--tw-ring-opacity, 1));
 }
 
 .focus\:ring-gray-500:focus {

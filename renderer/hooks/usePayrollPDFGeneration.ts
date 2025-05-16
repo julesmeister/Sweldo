@@ -174,6 +174,7 @@ export function usePayrollPDFGeneration({
           cashAdvanceDeductions:
             Number(summary.deductions?.cashAdvanceDeductions) || 0,
           shorts: Number(summary.deductions?.shortDeductions) || 0,
+          loanDeductions: Number(summary.deductions?.loanDeductions) || 0,
           others: Number(summary.deductions?.others) || 0,
         };
         const calculatedPays = evaluatePayrollFormulas(
@@ -206,6 +207,7 @@ export function usePayrollPDFGeneration({
             pagIbig: variables.pagIbig,
             cashAdvanceDeductions: variables.cashAdvanceDeductions,
             shorts: variables.shorts,
+            loanDeductions: variables.loanDeductions,
             others: variables.others,
             totalDeduction: calculatedPays.totalDeductions,
           },

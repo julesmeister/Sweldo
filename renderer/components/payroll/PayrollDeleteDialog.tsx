@@ -2,6 +2,7 @@ import { IoTrashOutline } from "react-icons/io5";
 import { useState, useEffect } from "react";
 import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
 import { createShortModel } from "@/renderer/model/shorts";
+import { createLoanModel } from "@/renderer/model/loan";
 import { toast } from "sonner";
 
 interface PayrollDeleteDialogProps {
@@ -16,8 +17,10 @@ interface PayrollDeleteDialogProps {
     employeeId: string;
     shortIDs?: string[];
     cashAdvanceIDs?: string[];
+    loanDeductionIds?: { loanId: string; deductionId: string; amount: number }[];
     shortDeductions?: number;
     cashAdvanceDeductions?: number;
+    loanDeductions?: number;
   };
   dbPath: string;
 }
@@ -29,6 +32,14 @@ interface ReversalItem {
   description?: string;
 }
 
+interface LoanReversalItem {
+  loanId: string;
+  deductionId: string;
+  amount: number;
+  type: string;
+  date: string;
+}
+
 export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
   isOpen,
   onClose,
@@ -38,6 +49,7 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
 }) => {
   const [shorts, setShorts] = useState<ReversalItem[]>([]);
   const [cashAdvances, setCashAdvances] = useState<ReversalItem[]>([]);
+  const [loanDeductions, setLoanDeductions] = useState<LoanReversalItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -246,6 +258,91 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
             setCashAdvances([]);
           }
         }
+
+        // Load loan deductions if present
+        if (
+          payrollData.loanDeductions &&
+          payrollData.loanDeductions > 0 &&
+          payrollData.loanDeductionIds &&
+          payrollData.loanDeductionIds.length > 0
+        ) {
+          console.log("[PayrollDeleteDialog] Loading loan deductions for reversal:", {
+            loanDeductionIds: payrollData.loanDeductionIds,
+            deductionAmount: payrollData.loanDeductions,
+          });
+
+          // Load loans from both current and previous month
+          const currentMonth = startDate.getMonth() + 1;
+          const currentYear = startDate.getFullYear();
+
+          // Calculate previous month/year
+          let prevMonth = currentMonth - 1;
+          let prevYear = currentYear;
+          if (prevMonth < 1) {
+            prevMonth = 12;
+            prevYear--;
+          }
+
+          // Create loan model
+          const loanModel = createLoanModel(dbPath, payrollData.employeeId);
+
+          // Load loans from both months
+          const [currentMonthLoans, prevMonthLoans] = await Promise.all([
+            loanModel.loadLoans(currentYear, currentMonth),
+            loanModel.loadLoans(prevYear, prevMonth)
+          ]);
+
+          const allLoans = [...currentMonthLoans, ...prevMonthLoans];
+          console.log("[PayrollDeleteDialog] Loaded loans:", {
+            total: allLoans.length,
+            current: currentMonthLoans.length,
+            prev: prevMonthLoans.length,
+            loanDeductionIds: payrollData.loanDeductionIds
+          });
+
+          if (isMounted) {
+            const loanItems: LoanReversalItem[] = [];
+
+            for (const deductionInfo of payrollData.loanDeductionIds) {
+              const loan = allLoans.find(l => l.id === deductionInfo.loanId);
+
+              if (loan) {
+                loanItems.push({
+                  loanId: deductionInfo.loanId,
+                  deductionId: deductionInfo.deductionId,
+                  amount: deductionInfo.amount,
+                  type: loan.type,
+                  date: loan.date.toISOString()
+                });
+              } else {
+                // Still include the deduction even if we can't find the loan
+                loanItems.push({
+                  loanId: deductionInfo.loanId,
+                  deductionId: deductionInfo.deductionId,
+                  amount: deductionInfo.amount,
+                  type: "Unknown",
+                  date: startDate.toISOString()
+                });
+              }
+            }
+
+            console.log("[PayrollDeleteDialog] Filtered loan deductions:", {
+              loans: loanItems,
+              count: loanItems.length
+            });
+            setLoanDeductions(loanItems);
+          }
+        } else {
+          console.log("[PayrollDeleteDialog] No loan deductions to load:", {
+            hasDeductions: !!payrollData.loanDeductions,
+            deductionAmount: payrollData.loanDeductions,
+            hasIds: !!payrollData.loanDeductionIds,
+            idCount: payrollData.loanDeductionIds?.length
+          });
+          if (isMounted) {
+            setLoanDeductions([]);
+          }
+        }
       } catch (error) {
         if (isMounted) {
           toast.error("Failed to load reversal items");
@@ -271,6 +368,8 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
     payrollData.cashAdvanceIDs,
     payrollData.shortDeductions,
     payrollData.cashAdvanceDeductions,
+    payrollData.loanDeductionIds,
+    payrollData.loanDeductions
   ]);
 
   if (!isOpen) return null;
@@ -283,7 +382,7 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
     });
   };
 
-  const hasReversalItems = shorts.length > 0 || cashAdvances.length > 0;
+  const hasReversalItems = shorts.length > 0 || cashAdvances.length > 0 || loanDeductions.length > 0;
 
   return (
     <>
@@ -353,7 +452,7 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
                       )}
 
                       {cashAdvances.length > 0 && (
-                        <div>
+                        <div className="mb-4">
                           <h4 className="text-sm font-medium text-gray-600 mb-2">
                             Cash Advances (amounts will be marked as unpaid)
                           </h4>
@@ -375,6 +474,29 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
                         </div>
                       )}
 
+                      {loanDeductions.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-medium text-gray-600 mb-2">
+                            Loan Deductions (amounts will be added back to remaining balance)
+                          </h4>
+                          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                            {loanDeductions.map((loan) => (
+                              <div
+                                key={`${loan.loanId}-${loan.deductionId}`}
+                                className="flex justify-between text-sm"
+                              >
+                                <span className="text-gray-600">
+                                  {loan.type} Loan ({formatDate(loan.date)})
+                                </span>
+                                <span className="font-medium text-gray-900">
+                                  ₱{loan.amount.toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <p className="mt-4 text-sm text-gray-500 bg-yellow-50 p-3 rounded-lg border border-yellow-100">
                         Note: These items will be marked as unpaid and their
                         full amounts will be restored to the employee's record.
@@ -385,7 +507,7 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
                   ) : (
                     <p className="mt-4 text-sm text-gray-500">
                       No deductions will be reversed as this payroll record has
-                      no shorts or cash advances associated with it.
+                      no shorts, cash advances, or loans associated with it.
                     </p>
                   )}
                 </div>

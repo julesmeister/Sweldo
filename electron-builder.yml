@@ -9,6 +9,16 @@ files:
     filter:
       - package.json
       - app
+  - from: resources/css
+    to: app/static/css
+  - from: resources/css
+    to: app/styles
+  - from: resources/css
+    to: resources/css
+  - from: renderer/public/styles
+    to: app/styles
+  - from: renderer/public/styles
+    to: app/static/css
 publish: null
 win:
   target:

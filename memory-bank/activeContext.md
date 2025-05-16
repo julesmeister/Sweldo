@@ -196,3 +196,7 @@ This implementation serves as a template for other employee-specific data module
 2. Test web mode functionality for each implemented module
 
 3. Update documentation as we extend this pattern to other modules
+
+### Recent Updates and Bugs Fixed
+
+- **Loan Deductions Flow Fix**: Fixed a critical issue with loan deductions not appearing in the PayrollSummary view. The issue was that loan deduction data was stored at the root level in `loanDeductionIds` but the component was looking for it in `deductions.loanDeductions`. See `loan-deductions-flow.md` for detailed documentation on the correct data flow to prevent this issue in the future.

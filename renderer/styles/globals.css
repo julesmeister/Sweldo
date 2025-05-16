@@ -442,6 +442,25 @@
   }
   .sticky-day-cell::before { top: 0; }
   .sticky-day-cell::after { bottom: 0; }
+
+  /* Fix for dropdown menus and popovers to ensure they're not clipped by parent containers */
+  [data-radix-popper-content-wrapper],
+  [class*="PopoverContent-"],
+  [class*="DropdownMenuContent-"],
+  [class*="CommandDialog"],
+  [class*="DialogContent-"],
+  [class*="TooltipContent-"] {
+    z-index: 9999 !important;
+    position: absolute !important;
+  }
+
+  /* Specifically target our component library popover */
+  div[role="dialog"],
+  div[role="listbox"],
+  div[role="menu"] {
+    z-index: 9999 !important;
+    position: absolute !important;
+  }
   
   /* Timesheet-specific styles for consistent borders across environments */
   .timesheet-table {

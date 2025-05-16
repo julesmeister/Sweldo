@@ -3,8 +3,8 @@ import { app, ipcMain, dialog, protocol, shell, BrowserWindow } from "electron";
 import serve from "electron-serve";
 import { createWindow } from "./helpers";
 import fs from "fs/promises";
-import { createWriteStream } from "fs";
-import { ensureDir } from "fs-extra";
+import { createWriteStream, existsSync, copyFileSync, mkdirSync } from "fs";
+import { ensureDir, pathExists, copy } from "fs-extra";
 import PDFDocument from "pdfkit";
 import { generatePayrollPDF } from "./services/pdfGenerator";
 import { generatePayrollPDFLandscape } from "./services/pdfGeneratorLandscape";
@@ -18,13 +18,71 @@ if (isProd) {
   app.setPath("userData", `${app.getPath("userData")} (development)`);
 }
 
+// Function to ensure CSS files are available in production
+async function ensureCssAvailable() {
+  if (!isProd) return; // Only needed in production
+
+  const cssFileName = "tailwind-web.css";
+  const targetDirs = [
+    path.join(app.getAppPath(), "app", "static", "css"),
+    path.join(app.getAppPath(), "app", "styles"),
+    path.join(app.getAppPath(), "resources", "css"),
+  ];
+
+  // Check source files that might contain our CSS
+  const possibleSources = [
+    path.join(app.getAppPath(), "renderer", "public", "styles", cssFileName),
+    path.join(app.getAppPath(), "resources", "css", cssFileName),
+    path.join(app.getAppPath(), "app", "static", "css", cssFileName),
+  ];
+
+  // Find first available source
+  let sourceCssPath = null;
+  for (const source of possibleSources) {
+    if (await pathExists(source)) {
+      sourceCssPath = source;
+      console.log(`Found CSS source at: ${sourceCssPath}`);
+      break;
+    }
+  }
+
+  if (!sourceCssPath) {
+    console.error("No CSS source file found!");
+    return;
+  }
+
+  // Copy to all target directories
+  for (const dir of targetDirs) {
+    try {
+      if (!(await pathExists(dir))) {
+        await ensureDir(dir);
+      }
+      const targetPath = path.join(dir, cssFileName);
+      await copy(sourceCssPath, targetPath, { overwrite: true });
+      console.log(`Copied CSS to: ${targetPath}`);
+    } catch (err) {
+      console.error(`Failed to copy CSS to ${dir}:`, err);
+    }
+  }
+}
+
 (async () => {
   await app.whenReady();
+
+  // Ensure CSS files are available
+  await ensureCssAvailable();
 
   // Register protocol for loading local files
   protocol.registerFileProtocol("local-file", (request, callback) => {
     const filePath = request.url.replace("local-file://", "");
     callback({ path: decodeURIComponent(filePath) });
+  });
+
+  // Register additional protocol for style resources
+  protocol.registerFileProtocol("app-resource", (request, callback) => {
+    const url = request.url.replace("app-resource://", "");
+    const filePath = path.join(app.getAppPath(), url);
+    callback({ path: filePath });
   });
 
   const mainWindow = createWindow("main", {
@@ -35,6 +93,41 @@ if (isProd) {
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  // Register CSS loading IPC handler
+  ipcMain.handle("load:cssPath", async (_event, cssName) => {
+    const possiblePaths = [
+      path.join(app.getAppPath(), "app", "static", "css", cssName),
+      path.join(app.getAppPath(), "renderer", "public", "styles", cssName),
+      path.join(
+        app.getAppPath(),
+        "renderer",
+        "public",
+        "static",
+        "css",
+        cssName
+      ),
+      path.join(app.getAppPath(), "static", "css", cssName),
+      path.join(app.getAppPath(), "styles", cssName),
+      path.join(app.getAppPath(), "app", "styles", cssName),
+      path.join(app.getAppPath(), "resources", "css", cssName),
+    ];
+
+    for (const cssPath of possiblePaths) {
+      try {
+        const exists = await pathExists(cssPath);
+        if (exists) {
+          console.log(`CSS file found at: ${cssPath}`);
+          return `app-resource://${path.relative(app.getAppPath(), cssPath)}`;
+        }
+      } catch (error) {
+        console.error(`Error checking CSS path ${cssPath}:`, error);
+      }
+    }
+
+    console.error(`CSS file '${cssName}' not found in any location!`);
+    return null;
   });
 
   // File system operations
@@ -266,6 +359,7 @@ interface PayrollDeductions {
   others: number;
   sssLoan?: number;
   pagibigLoan?: number;
+  loanDeductions?: number;
   ca?: number;
   partial?: number;
   totalDeduction: number;

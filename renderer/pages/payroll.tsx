@@ -363,6 +363,8 @@ export default function PayrollPage() {
     pagIbig: number;
     cashAdvanceDeductions: number;
     shortDeductions: number;
+    loanDeductions?: number;
+    loanDeductionIds?: { loanId: string; deductionId: string; amount: number }[];
   }) => {
     if (!hasAccess("MANAGE_PAYROLL")) {
       toast.error("You don't have permission to modify payroll");
@@ -394,6 +396,8 @@ export default function PayrollPage() {
           pagIbig: deductions.pagIbig,
           cashAdvanceDeductions: deductions.cashAdvanceDeductions,
           shortDeductions: deductions.shortDeductions,
+          loanDeductions: deductions.loanDeductions,
+          loanDeductionIds: deductions.loanDeductionIds,
         }
       );
 

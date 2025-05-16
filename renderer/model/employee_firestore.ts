@@ -88,10 +88,22 @@ export async function loadActiveEmployeesFirestore(
       .toArray();
 
     if (cachedRecords.length > 0) {
-      return cachedRecords.map((rec) => rec.data);
+      // Filter cached records to ensure only active ones are returned
+      const activeCachedEmployees = cachedRecords
+        .map((rec) => rec.data)
+        .filter((emp) => emp.status === "active");
+
+      // If we found active employees in the cache, return them
+      if (activeCachedEmployees.length > 0) {
+        return activeCachedEmployees;
+      }
+      // If cache exists but has no active employees, proceed to query Firestore
     }
 
-    // Cache miss; query active employees from Firestore
+    // Cache miss or only inactive employees in cache; query active employees from Firestore
+    console.log(
+      `[${companyName}] Cache miss or no active employees found in cache. Querying Firestore...`
+    );
     const activeEmployees = await queryCollection<FirestoreEmployee>(
       "employees",
       [["status", "==", "active"]],
@@ -116,6 +128,8 @@ export async function loadActiveEmployeesFirestore(
       timestamp,
       data: emp,
     }));
+    // Consider clearing old cache entries for the company before bulkPut
+    // await db.employees.where("companyName").equals(companyName).delete();
     await db.employees.bulkPut(records);
 
     return employeesList;

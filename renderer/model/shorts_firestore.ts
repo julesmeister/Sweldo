@@ -120,6 +120,7 @@ export async function loadShortsFirestore(
       return {
         ...short,
         date: parsedDate, // Now, parsedDate is guaranteed to be a valid Date if not null
+        type: short.type || "Short", // Default type to "Short"
       };
     });
 
@@ -170,6 +171,7 @@ export async function createShortFirestore(
         shortInput.status ||
         (shortInput.remainingUnpaid === 0 ? "Paid" : "Unpaid"),
       remainingUnpaid: shortInput.remainingUnpaid ?? shortInput.amount,
+      type: shortInput.type || "Short", // Default type to "Short"
     };
 
     if (!existingDoc) {
@@ -246,6 +248,7 @@ export async function updateShortFirestore(
         shortUpdate.remainingUnpaid <= 0
           ? "Paid"
           : ("Unpaid" as "Paid" | "Unpaid"),
+      type: shortUpdate.type || "Short", // Ensure type is updated or defaulted
     };
 
     // Update the short in the array
@@ -317,10 +320,11 @@ export async function deleteShortFirestore(
  */
 export function createShortsFirestoreInstance(
   model: ShortModel,
-  employeeId: string
+  employeeId: string,
+  yearForSync?: number
 ) {
-  // Check if this is the placeholder employeeId for bulk sync
   const isPlaceholder = employeeId === "__SYNC_ALL__";
+  const effectiveYear = yearForSync || new Date().getFullYear();
 
   return {
     async syncToFirestore(
@@ -328,144 +332,84 @@ export function createShortsFirestoreInstance(
     ): Promise<void> {
       try {
         const companyName = await getCompanyName();
+        if (!companyName) {
+          onProgress?.("Error: Company name not found. Cannot sync shorts.");
+          throw new Error("Company name not found.");
+        }
+        const dbPath = model.getDbPath();
+        onProgress?.(`Shorts: Starting UPLOAD for year ${effectiveYear}.`);
+
+        const processEmployee = async (empId: string, empName?: string) => {
+          onProgress?.(
+            `Shorts: Processing UPLOAD for ${
+              empName || empId
+            } for year ${effectiveYear}.`
+          );
+          for (let month = 1; month <= 12; month++) {
+            const monthSpecificShortModel = new ShortModel(
+              dbPath,
+              empId,
+              month,
+              effectiveYear
+            );
+            const jsonData = await (
+              monthSpecificShortModel as any
+            ).readJsonFile();
+
+            if (jsonData && jsonData.shorts && jsonData.shorts.length > 0) {
+              onProgress?.(
+                `Shorts: Found ${jsonData.shorts.length} local shorts for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}. Uploading...`
+              );
+              const docId = createShortsDocId(empId, effectiveYear, month);
+              const dataToSave: ShortsFirestoreData = {
+                meta: {
+                  employeeId: empId,
+                  year: effectiveYear,
+                  month: month,
+                  lastModified: new Date().toISOString(),
+                },
+                shorts: jsonData.shorts,
+              };
+              await saveDocument("shorts", docId, dataToSave, companyName);
+              onProgress?.(
+                `Shorts: Uploaded data for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}.`
+              );
+            } else {
+              onProgress?.(
+                `Shorts: No local shorts data found for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}. Skipping upload for this month.`
+              );
+            }
+          }
+        };
 
         if (isPlaceholder) {
-          // Handle bulk sync for all employees
           onProgress?.(
-            "Starting bulk shorts sync to Firestore for ALL employees..."
+            `Shorts: UPLOAD - Syncing all employees for year ${effectiveYear}.`
           );
-
-          // Get employee model to load all employees
-          const dbPath = model.getDbPath();
           const employeeModel = createEmployeeModel(dbPath);
           const employees = await employeeModel.loadActiveEmployees();
-
           onProgress?.(
-            `Found ${employees.length} active employees for shorts sync`
+            `Shorts: UPLOAD - Found ${employees.length} active employees.`
           );
-
-          // Process each employee in sequence
-          for (let i = 0; i < employees.length; i++) {
-            const employee = employees[i];
-            onProgress?.(
-              `Processing employee ${i + 1}/${employees.length}: ${
-                employee.name
-              } (${employee.id})`
-            );
-
-            try {
-              // Create a model for this specific employee
-              const employeeModel = new ShortModel(dbPath, employee.id);
-              // Load all shorts for this employee
-              const shorts = await employeeModel.loadShorts(employee.id);
-              onProgress?.(
-                `Retrieved ${shorts.length} shorts for employee ${employee.id}`
-              );
-
-              // Group shorts by year and month
-              const shortsByMonth = shorts.reduce((acc, short) => {
-                const date = new Date(short.date);
-                const year = date.getFullYear();
-                const month = date.getMonth() + 1;
-                const key = `${year}_${month}`;
-                if (!acc[key]) {
-                  acc[key] = [];
-                }
-                acc[key].push(short);
-                return acc;
-              }, {} as Record<string, Short[]>);
-
-              // Process each month's shorts
-              const months = Object.keys(shortsByMonth);
-              for (let j = 0; j < months.length; j++) {
-                const [year, month] = months[j].split("_").map(Number);
-                const monthShorts = shortsByMonth[months[j]];
-
-                onProgress?.(
-                  `Processing shorts for ${employee.id}: ${month}/${year} (${
-                    j + 1
-                  }/${months.length})`
-                );
-
-                // Create or update the shorts document in Firestore
-                const docId = createShortsDocId(employee.id, year, month);
-                const data: ShortsFirestoreData = {
-                  meta: {
-                    employeeId: employee.id,
-                    year,
-                    month,
-                    lastModified: new Date().toISOString(),
-                  },
-                  shorts: monthShorts,
-                };
-
-                await saveDocument("shorts", docId, data, companyName);
-              }
-            } catch (error) {
-              // Log error but continue with next employee
-              const errorMsg = `Error syncing shorts for employee ${employee.id}: ${error}`;
-              console.error(errorMsg);
-              onProgress?.(errorMsg);
-            }
+          for (const emp of employees) {
+            await processEmployee(emp.id, emp.name);
           }
-
-          onProgress?.("Bulk shorts sync completed");
         } else {
-          // Regular single-employee sync
-          onProgress?.(
-            `Starting shorts sync to Firestore for employee: ${employeeId}...`
-          );
-
-          // Load all shorts for the employee
-          const shorts = await model.loadShorts(employeeId);
-          onProgress?.(
-            `Retrieved ${shorts.length} shorts for employee ${employeeId}`
-          );
-
-          // Group shorts by year and month
-          const shortsByMonth = shorts.reduce((acc, short) => {
-            const date = new Date(short.date);
-            const year = date.getFullYear();
-            const month = date.getMonth() + 1;
-            const key = `${year}_${month}`;
-            if (!acc[key]) {
-              acc[key] = [];
-            }
-            acc[key].push(short);
-            return acc;
-          }, {} as Record<string, Short[]>);
-
-          // Process each month's shorts
-          const months = Object.keys(shortsByMonth);
-          for (let i = 0; i < months.length; i++) {
-            const [year, month] = months[i].split("_").map(Number);
-            const monthShorts = shortsByMonth[months[i]];
-
-            onProgress?.(
-              `Processing shorts for ${month}/${year} (${i + 1}/${
-                months.length
-              })`
-            );
-
-            // Create or update the shorts document in Firestore
-            const docId = createShortsDocId(employeeId, year, month);
-            const data: ShortsFirestoreData = {
-              meta: {
-                employeeId,
-                year,
-                month,
-                lastModified: new Date().toISOString(),
-              },
-              shorts: monthShorts,
-            };
-
-            await saveDocument("shorts", docId, data, companyName);
-          }
-
-          onProgress?.("Shorts sync to Firestore completed successfully.");
+          await processEmployee(employeeId);
         }
+        onProgress?.(`Shorts: UPLOAD for year ${effectiveYear} completed.`);
       } catch (error) {
-        console.error("Error syncing shorts to Firestore:", error);
+        const errorMsg = `Shorts: Error during UPLOAD for year ${effectiveYear}: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        onProgress?.(errorMsg);
+        console.error(errorMsg, error);
         throw error;
       }
     },
@@ -475,118 +419,100 @@ export function createShortsFirestoreInstance(
     ): Promise<void> {
       try {
         const companyName = await getCompanyName();
+        if (!companyName) {
+          onProgress?.("Error: Company name not found. Cannot sync shorts.");
+          throw new Error("Company name not found.");
+        }
+        const dbPath = model.getDbPath();
+        onProgress?.(`Shorts: Starting DOWNLOAD for year ${effectiveYear}.`);
 
-        if (isPlaceholder) {
-          // Handle bulk sync from Firestore for all employees
+        const processEmployee = async (empId: string, empName?: string) => {
           onProgress?.(
-            "Starting bulk shorts download from Firestore for ALL employees..."
+            `Shorts: Processing DOWNLOAD for ${
+              empName || empId
+            } for year ${effectiveYear}.`
           );
-
-          // Get employee model to load all employees
-          const dbPath = model.getDbPath();
-          const employeeModel = createEmployeeModel(dbPath);
-          const employees = await employeeModel.loadActiveEmployees();
-
-          onProgress?.(
-            `Found ${employees.length} active employees for shorts download`
-          );
-
-          // Process each employee in sequence
-          for (let i = 0; i < employees.length; i++) {
-            const employee = employees[i];
+          let totalShortsDownloadedForEmployee = 0;
+          for (let month = 1; month <= 12; month++) {
             onProgress?.(
-              `Processing employee ${i + 1}/${employees.length}: ${
-                employee.name
-              } (${employee.id})`
+              `Shorts: Checking ${
+                empName || empId
+              } for ${effectiveYear}-${month}.`
             );
-
-            try {
-              // Create a model for this specific employee
-              const employeeModel = new ShortModel(dbPath, employee.id);
-
-              // Load shorts for current and previous months (more useful than all history)
-              const currentDate = new Date();
-              const currentYear = currentDate.getFullYear();
-              const currentMonth = currentDate.getMonth() + 1;
-
-              // Try to get previous 3 months of shorts
-              const monthsToGet = [
-                { year: currentYear, month: currentMonth },
-                {
-                  year: currentMonth > 1 ? currentYear : currentYear - 1,
-                  month: currentMonth > 1 ? currentMonth - 1 : 12,
-                },
-                {
-                  year: currentMonth > 2 ? currentYear : currentYear - 1,
-                  month:
-                    currentMonth > 2 ? currentMonth - 2 : currentMonth + 10,
-                },
-              ];
-
-              let shortsCount = 0;
-
-              for (const period of monthsToGet) {
-                const shorts = await loadShortsFirestore(
-                  employee.id,
-                  period.month,
-                  period.year,
-                  companyName
-                );
-
-                if (shorts.length > 0) {
-                  onProgress?.(
-                    `Found ${shorts.length} shorts for ${employee.id} in ${period.month}/${period.year}`
-                  );
-
-                  // Save each short to the model
-                  for (const short of shorts) {
-                    await employeeModel.createShort(short);
-                    shortsCount++;
-                  }
-                }
-              }
-
+            const firestoreShorts = await loadShortsFirestore(
+              empId,
+              month,
+              effectiveYear,
+              companyName
+            );
+            if (firestoreShorts && firestoreShorts.length > 0) {
               onProgress?.(
-                `Downloaded ${shortsCount} shorts for employee ${employee.id}`
+                `Shorts: Found ${
+                  firestoreShorts.length
+                } shorts in Firestore for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}.`
               );
-            } catch (error) {
-              // Log error but continue with next employee
-              const errorMsg = `Error downloading shorts for employee ${employee.id}: ${error}`;
-              console.error(errorMsg);
-              onProgress?.(errorMsg);
+              const monthSpecificShortModel = new ShortModel(
+                dbPath,
+                empId,
+                month,
+                effectiveYear
+              );
+
+              const localData: ShortsFirestoreData = {
+                meta: {
+                  employeeId: empId,
+                  year: effectiveYear,
+                  month: month,
+                  lastModified: new Date().toISOString(),
+                },
+                shorts: firestoreShorts,
+              };
+              await (monthSpecificShortModel as any).writeJsonFile(localData);
+              totalShortsDownloadedForEmployee += firestoreShorts.length;
+              onProgress?.(
+                `Shorts: Saved ${firestoreShorts.length} shorts locally for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}.`
+              );
+            } else {
+              onProgress?.(
+                `Shorts: No shorts found in Firestore for ${
+                  empName || empId
+                } for ${effectiveYear}-${month}.`
+              );
             }
           }
-
-          onProgress?.("Bulk shorts download completed");
-        } else {
-          // Regular single-employee download
           onProgress?.(
-            `Starting shorts download from Firestore for employee: ${employeeId}...`
+            `Shorts: Downloaded a total of ${totalShortsDownloadedForEmployee} shorts for ${
+              empName || empId
+            } for year ${effectiveYear}.`
           );
+        };
 
-          // Load shorts for the current month
-          const currentDate = new Date();
-          const currentYear = currentDate.getFullYear();
-          const currentMonth = currentDate.getMonth() + 1;
-
-          const shorts = await loadShortsFirestore(
-            employeeId,
-            currentMonth,
-            currentYear,
-            companyName
+        if (isPlaceholder) {
+          onProgress?.(
+            `Shorts: DOWNLOAD - Syncing all employees for year ${effectiveYear}.`
           );
-
-          onProgress?.(`Retrieved ${shorts.length} shorts from Firestore.`);
-
-          // Save each short to the model
-          for (const short of shorts) {
-            await model.createShort(short);
+          const employeeModel = createEmployeeModel(dbPath);
+          const employees = await employeeModel.loadActiveEmployees();
+          onProgress?.(
+            `Shorts: DOWNLOAD - Found ${employees.length} active employees.`
+          );
+          for (const emp of employees) {
+            await processEmployee(emp.id, emp.name);
           }
-
-          onProgress?.("Shorts sync from Firestore completed successfully.");
+        } else {
+          await processEmployee(employeeId);
         }
+        onProgress?.(`Shorts: DOWNLOAD for year ${effectiveYear} completed.`);
       } catch (error) {
-        console.error("Error syncing shorts from Firestore:", error);
+        const errorMsg = `Shorts: Error during DOWNLOAD for year ${effectiveYear}: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        onProgress?.(errorMsg);
+        console.error(errorMsg, error);
         throw error;
       }
     },

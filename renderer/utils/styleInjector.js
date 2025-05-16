@@ -3,9 +3,10 @@
  * This bypasses the Next.js CSS loader issues entirely
  */
 import { isWebEnvironment } from "@/renderer/lib/firestoreService";
+import { injectInlinedStyles } from "./inlinedStyles";
 
 export function injectStyles() {
-  if (typeof document === "undefined" || !isWebEnvironment()) {
+  if (typeof document === "undefined") {
     return;
   }
 
@@ -14,28 +15,97 @@ export function injectStyles() {
     return;
   }
 
-  // Add Tailwind CSS file
-  const tailwindLink = document.createElement("link");
-  tailwindLink.rel = "stylesheet";
-  // Try both paths - the browser will only successfully load one of them
-  tailwindLink.href = "/styles/tailwind-web.css";
-  tailwindLink.id = "tailwind-css";
-  document.head.appendChild(tailwindLink);
+  console.log(`Environment: ${isWebEnvironment() ? "Web" : "Electron"}`);
 
-  // Also try the static/css path as a fallback
-  const tailwindLinkFallback = document.createElement("link");
-  tailwindLinkFallback.rel = "stylesheet";
-  tailwindLinkFallback.href = "/static/css/tailwind-web.css";
-  tailwindLinkFallback.id = "tailwind-css-fallback";
-  document.head.appendChild(tailwindLinkFallback);
+  try {
+    // Always inject inlined styles first as the most reliable approach in both environments
+    injectInlinedStyles();
+    console.log("Base styles injected via inlinedStyles");
 
-  // Create style element for fonts
+    if (!isWebEnvironment()) {
+      // Additional Electron-specific styles
+      if (window.electron) {
+        window.electron
+          .loadCssPath("tailwind-web.css")
+          .then((cssPath) => {
+            if (cssPath) {
+              console.log("Found CSS path via IPC:", cssPath);
+              const tailwindLink = document.createElement("link");
+              tailwindLink.rel = "stylesheet";
+              tailwindLink.href = cssPath;
+              tailwindLink.id = "tailwind-css-electron";
+              document.head.appendChild(tailwindLink);
+            }
+          })
+          .catch((err) => {
+            console.error("Error loading CSS via IPC:", err);
+          });
+      }
+    } else {
+      // Web environment - try multiple paths
+      const tailwindLink = document.createElement("link");
+      tailwindLink.rel = "stylesheet";
+      tailwindLink.href = "/styles/tailwind-web.css";
+      tailwindLink.id = "tailwind-css";
+
+      // Add error listener to detect failures
+      tailwindLink.addEventListener("error", () => {
+        console.warn(
+          "Failed to load main CSS from /styles/tailwind-web.css, trying fallbacks"
+        );
+      });
+
+      document.head.appendChild(tailwindLink);
+
+      // Try multiple fallback paths for different environments
+      const fallbackPaths = [
+        "/static/css/tailwind-web.css",
+        "../styles/tailwind-web.css",
+        "./styles/tailwind-web.css",
+        "../../app/static/css/tailwind-web.css",
+      ];
+
+      fallbackPaths.forEach((path, index) => {
+        const tailwindLinkFallback = document.createElement("link");
+        tailwindLinkFallback.rel = "stylesheet";
+        tailwindLinkFallback.href = path;
+        tailwindLinkFallback.id = `tailwind-css-fallback-${index}`;
+
+        // Add listeners to log which CSS files actually load successfully
+        tailwindLinkFallback.addEventListener("load", () => {
+          console.log(`CSS loaded successfully from: ${path}`);
+        });
+
+        document.head.appendChild(tailwindLinkFallback);
+      });
+    }
+  } catch (error) {
+    console.error(
+      "Failed to inject styles, falling back to emergency styles:",
+      error
+    );
+    injectEmergencyStyles();
+  }
+
+  // Add error handling for CSS loading
+  const linkErrorListener = (event) => {
+    console.warn(`Failed to load CSS from path: ${event.target.href}`);
+  };
+
+  // Add event listeners to all links
+  document.querySelectorAll('link[id^="tailwind-css"]').forEach((link) => {
+    link.addEventListener("error", linkErrorListener);
+  });
+
+  // Create style element for fonts with multiple fallback paths
   const fontStyle = document.createElement("style");
   fontStyle.id = "font-styles";
   fontStyle.textContent = `
     @font-face {
       font-family: 'Pacifico';
-      src: url('/fonts/Pacifico.ttf') format('truetype');
+      src: url('/fonts/Pacifico.ttf') format('truetype'),
+           url('./fonts/Pacifico.ttf') format('truetype'),
+           url('../fonts/Pacifico.ttf') format('truetype');
       font-weight: normal;
       font-style: normal;
     }
@@ -213,6 +283,25 @@ export function injectStyles() {
     /* Firefox */
     .scrollbar-thin {
       scrollbar-width: thin;
+    }
+
+    /* Fix for dropdown menus and popovers to ensure they're not clipped by parent containers */
+    [data-radix-popper-content-wrapper],
+    [class*="PopoverContent-"],
+    [class*="DropdownMenuContent-"],
+    [class*="CommandDialog"],
+    [class*="DialogContent-"],
+    [class*="TooltipContent-"] {
+      z-index: 9999 !important;
+      position: absolute !important;
+    }
+    
+    /* Specifically target our component library popover */
+    div[role="dialog"],
+    div[role="listbox"],
+    div[role="menu"] {
+      z-index: 9999 !important;
+      position: absolute !important;
     }
 
     /* Timesheet-specific styles to fix cross-environment rendering issues */
@@ -730,5 +819,162 @@ export function injectStyles() {
     /* end rounded-corners section */`;
   document.head.appendChild(baseStyle);
 
-  console.log("Styles injected successfully");
+  console.log("Styles injection attempt completed");
+}
+
+// Fallback function to inject critical styles when CSS fails to load
+function injectEmergencyStyles() {
+  console.log("Injecting emergency inline styles");
+
+  // Inline Tailwind's most essential utility classes for the app
+  const emergencyStyle = document.createElement("style");
+  emergencyStyle.id = "emergency-styles";
+  emergencyStyle.textContent = `
+    /* Emergency critical styling */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f9fafb;
+      color: #111827;
+    }
+    
+    /* Text styles */
+    .text-center { text-align: center; }
+    .text-left { text-align: left; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: bold; }
+    .text-lg { font-size: 1.125rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .text-3xl { font-size: 1.875rem; }
+    
+    /* Colors */
+    .text-white { color: white; }
+    .text-black { color: black; }
+    .text-gray-600 { color: #4b5563; }
+    .text-blue-600 { color: #2563eb; }
+    .bg-white { background-color: white; }
+    .bg-gray-100 { background-color: #f3f4f6; }
+    .bg-blue-600 { background-color: #2563eb; }
+    
+    /* Layout */
+    .flex { display: flex; }
+    .inline-flex { display: inline-flex; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .flex-col { flex-direction: column; }
+    .flex-row { flex-direction: row; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-4 { gap: 1rem; }
+    
+    /* Spacing */
+    .p-2 { padding: 0.5rem; }
+    .p-4 { padding: 1rem; }
+    .px-4 { padding-left: 1rem; padding-right: 1rem; }
+    .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .m-2 { margin: 0.5rem; }
+    .m-4 { margin: 1rem; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .my-4 { margin-top: 1rem; margin-bottom: 1rem; }
+    
+    /* Borders and Rounded Corners */
+    .border { border: 1px solid #e5e7eb; }
+    .rounded { border-radius: 0.25rem; }
+    .rounded-lg { border-radius: 0.5rem; }
+    .rounded-full { border-radius: 9999px; }
+    
+    /* Fix for dropdown menus to ensure they're not clipped */
+    div[role="dialog"],
+    div[role="listbox"],
+    div[role="menu"] {
+      z-index: 9999 !important;
+      position: absolute !important;
+    }
+    
+    /* Login page specific styles */
+    .login-container {
+      max-width: 24rem;
+      margin: 4rem auto;
+      padding: 2rem;
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    .login-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 1.5rem;
+      text-align: center;
+      color: #1f2937;
+    }
+    
+    .login-input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    
+    .login-button {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 0.375rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .login-button:hover {
+      background-color: #1d4ed8;
+    }
+    
+    /* Employee cards */
+    .employee-card {
+      padding: 1rem;
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .employee-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    /* Button styling */
+    button {
+      cursor: pointer;
+    }
+    
+    .btn-blue {
+      background-color: #2563eb;
+      color: white;
+      font-weight: bold;
+      padding: 0.5rem 1rem;
+      border-radius: 0.25rem;
+      border: none;
+    }
+    
+    .btn-blue:hover {
+      background-color: #1d4ed8;
+    }
+
+    /* General layout utilities */
+    .min-h-screen { min-height: 100vh; }
+    .w-full { width: 100%; }
+    .max-w-md { max-width: 28rem; }
+    .h-8 { height: 2rem; }
+    .w-8 { width: 2rem; }
+    .space-y-3 > * + * { margin-top: 0.75rem; }
+  `;
+  document.head.appendChild(emergencyStyle);
 }

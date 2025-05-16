@@ -5,6 +5,7 @@ export interface PayrollDeductions {
   cashAdvanceDeductions: number;
   sssLoan?: number;
   pagibigLoan?: number;
+  loanDeductions?: number;
   ca?: number;
   partial?: number;
   shortDeductions?: number;

@@ -17,6 +17,7 @@ import {
 import { createHolidayModel } from "./holiday";
 import { createCashAdvanceModel, CashAdvance } from "./cashAdvance";
 import { createShortModel, Short } from "./shorts";
+import { createLoanModel } from "./loan";
 import * as fs from "fs";
 import { createStatisticsModel } from "./statistics";
 import { evaluateFormula } from "../utils/formula";
@@ -34,6 +35,12 @@ import {
 
 // Import the old Payroll model for fallback logic
 import { Payroll as OldPayroll } from "./payroll_old";
+
+// Re-export the payroll-related hooks
+export { usePayrollPeriods } from "../hooks/usePayrollPeriods";
+export { usePayrollDeductions } from "../hooks/usePayrollDeductions";
+export { usePayrollSummary } from "../hooks/usePayrollSummary";
+export { useLoanManagement } from "../hooks/useLoanManagement";
 
 export interface PayrollSummaryModel {
   id: string;
@@ -59,12 +66,14 @@ export interface PayrollSummaryModel {
   allowances: number;
   cashAdvanceIDs?: string[];
   shortIDs?: string[];
+  loanDeductionIds?: { loanId: string; deductionId: string; amount: number }[];
   deductions: {
     sss: number;
     philHealth: number;
     pagIbig: number;
     cashAdvanceDeductions: number;
     shortDeductions?: number;
+    loanDeductions?: number;
     others: number;
   };
   netPay: number;
@@ -483,6 +492,7 @@ export class Payroll {
         pagIbig: employee.pagIbig || 0,
         cashAdvanceDeductions,
         shortDeductions,
+        loanDeductions: 0,
         others: totalOtherDeductionsFromComp,
       },
       netPay: 0,
@@ -595,9 +605,23 @@ export class Payroll {
       pagIbig: number;
       cashAdvanceDeductions: number;
       shortDeductions?: number;
+      loanDeductions?: number;
+      loanDeductionIds?: {
+        loanId: string;
+        deductionId: string;
+        amount: number;
+      }[];
     }
   ): Promise<PayrollSummaryModel> {
     try {
+      console.log(
+        `[Payroll] Starting generatePayrollSummary for employee ${employeeId}`
+      );
+      console.log(
+        `[Payroll] Deductions received:`,
+        JSON.stringify(deductions, null, 2)
+      );
+
       const employeeModel = createEmployeeModel(this.dbPath);
       const employee = await employeeModel.loadEmployeeById(employeeId);
       if (!employee) {
@@ -624,7 +648,224 @@ export class Payroll {
         partial: 0,
         shorts: deductions?.shortDeductions || 0,
         cashAdvanceDeductions: deductions?.cashAdvanceDeductions || 0,
+        loanDeductions: deductions?.loanDeductions || 0,
       };
+
+      // Define the payroll summary ID before we need it for references
+      const payrollSummaryId = `${employeeId}_${start.getTime()}_${end.getTime()}`;
+      console.log(`[Payroll] Generated payrollSummaryId: ${payrollSummaryId}`);
+
+      // Apply loan deductions if provided
+      if (
+        deductions?.loanDeductionIds &&
+        deductions.loanDeductionIds.length > 0
+      ) {
+        console.log(
+          `[Payroll] Loan deductions found - processing ${deductions.loanDeductionIds.length} deductions`
+        );
+        console.log(
+          `[Payroll] Loan deduction data:`,
+          JSON.stringify(deductions.loanDeductionIds, null, 2)
+        );
+        console.log(
+          `[Payroll] Full deductions object:`,
+          JSON.stringify(deductions, null, 2)
+        );
+
+        try {
+          // Create the loan model for this employee
+          const { createLoanModel } = await import("./loan");
+          const loanModel = createLoanModel(this.dbPath, employeeId);
+
+          // Load all loans for this period
+          const loansForPeriod = await loanModel.loadLoans(
+            end.getFullYear(),
+            end.getMonth() + 1
+          );
+
+          console.log(
+            `[Payroll] Loaded ${
+              loansForPeriod.length
+            } loans for period ${end.getFullYear()}-${end.getMonth() + 1}`
+          );
+
+          // Log detailed information about each loan
+          console.log(`[Payroll] DETAILED LOAN DATA:`);
+          loansForPeriod.forEach((loan) => {
+            console.log(`[Payroll] Loan ${loan.id}:`, {
+              type: loan.type,
+              amount: loan.amount,
+              remainingBalance: loan.remainingBalance,
+              status: loan.status,
+              date: loan.date,
+              hasDeductions:
+                !!loan.deductions && Object.keys(loan.deductions).length > 0,
+              deductionCount: loan.deductions
+                ? Object.keys(loan.deductions).length
+                : 0,
+            });
+          });
+
+          // Process each loan deduction
+          let processedLoanDeductions = 0;
+
+          console.log(
+            `[Payroll] Processing ${deductions.loanDeductionIds.length} loan deductions`
+          );
+
+          for (const {
+            loanId,
+            deductionId,
+            amount,
+          } of deductions.loanDeductionIds) {
+            console.log(
+              `[Payroll] Processing loan ${loanId}, deductionId=${deductionId}, amount=${amount}`
+            );
+
+            const loan = loansForPeriod.find((l) => l.id === loanId);
+
+            if (!loan) {
+              console.warn(
+                `[Payroll] Could not find loan ${loanId} in loaded loans`
+              );
+              console.log(
+                `[Payroll] Available loans:`,
+                loansForPeriod.map((l) => ({
+                  id: l.id,
+                  amount: l.amount,
+                  status: l.status,
+                }))
+              );
+              continue;
+            }
+
+            if (amount <= 0) {
+              console.log(
+                `[Payroll] Skipping loan ${loanId} as amount is ${amount}`
+              );
+              continue;
+            }
+
+            console.log(
+              `[Payroll] Found loan ${loanId}: ${JSON.stringify({
+                type: loan.type,
+                amount: loan.amount,
+                remainingBalance: loan.remainingBalance,
+                status: loan.status,
+              })}`
+            );
+
+            // Create a deduction record
+            const deduction = {
+              amountDeducted: amount,
+              dateDeducted: new Date(),
+              payrollId: payrollSummaryId, // Use the actual payroll summary ID
+            };
+
+            console.log(
+              `[Payroll] Created deduction record: ${JSON.stringify(deduction)}`
+            );
+
+            // Update the loan with the new deduction
+            const updatedLoan = {
+              ...loan,
+              deductions: {
+                ...(loan.deductions || {}),
+                [deductionId]: deduction,
+              },
+              remainingBalance: Math.max(0, loan.remainingBalance - amount),
+              status:
+                loan.remainingBalance - amount <= 0 ? "Completed" : loan.status,
+            };
+
+            console.log(
+              `[Payroll] Updated loan: ${JSON.stringify({
+                id: updatedLoan.id,
+                remainingBalance: updatedLoan.remainingBalance,
+                status: updatedLoan.status,
+                deductionCount: Object.keys(updatedLoan.deductions || {})
+                  .length,
+              })}`
+            );
+
+            try {
+              // Save the updated loan
+              // Additional verification logs before update
+              console.log(
+                `[Payroll] Pre-update loan verification for ${loanId}:`,
+                {
+                  originalLoanBalance: loan.remainingBalance,
+                  originalStatus: loan.status,
+                  deductionAmount: amount,
+                  newRemainingBalance: updatedLoan.remainingBalance,
+                  newStatus: updatedLoan.status,
+                  deductionKeys: Object.keys(updatedLoan.deductions || {}),
+                  lastDeductionId: deductionId,
+                }
+              );
+
+              try {
+                await loanModel.updateLoan(updatedLoan);
+
+                // Verify the loan was updated correctly by reloading all loans
+                const updatedLoans = await loanModel.loadLoans(
+                  end.getFullYear(),
+                  end.getMonth() + 1
+                );
+                const verifiedLoan = updatedLoans.find((l) => l.id === loanId);
+
+                console.log(
+                  `[Payroll] Loan update verification for ${loanId}:`,
+                  {
+                    loadSuccessful: !!verifiedLoan,
+                    updatedBalance: verifiedLoan?.remainingBalance,
+                    expectedBalance: updatedLoan.remainingBalance,
+                    balanceMatch:
+                      verifiedLoan?.remainingBalance ===
+                      updatedLoan.remainingBalance,
+                    updatedStatus: verifiedLoan?.status,
+                    hasDeduction:
+                      verifiedLoan?.deductions?.[deductionId] !== undefined,
+                    allDeductions: verifiedLoan
+                      ? JSON.stringify(verifiedLoan.deductions)
+                      : "none",
+                  }
+                );
+
+                processedLoanDeductions += amount;
+                console.log(
+                  `[Payroll] Successfully applied loan deduction of ${amount} to loan ${loanId}`
+                );
+              } catch (updateError) {
+                console.error(
+                  `[Payroll] Critical error updating loan ${loanId}:`,
+                  updateError
+                );
+                throw updateError;
+              }
+            } catch (error) {
+              console.error(`[Payroll] Error updating loan ${loanId}:`, error);
+            }
+          }
+
+          // Verify the total amount matches what was expected
+          const totalLoanDeduction = deductions.loanDeductions || 0;
+          console.log(
+            `[Payroll] Total loan deductions - Expected: ${totalLoanDeduction}, Processed: ${processedLoanDeductions}`
+          );
+
+          if (Math.abs(processedLoanDeductions - totalLoanDeduction) > 0.01) {
+            console.warn(
+              `[Payroll] Warning: Processed loan deductions (${processedLoanDeductions}) doesn't match expected total (${totalLoanDeduction})`
+            );
+          }
+        } catch (error) {
+          console.error("[Payroll] Error applying loan deductions:", error);
+          // Continue with payroll generation even if loan deduction application fails
+        }
+      } else {
+        console.log(`[Payroll] No loan deductions provided for this payroll`);
+      }
 
       let grossPayValue = summary.grossPay;
       if (calculationSettings.grossPay?.formula) {
@@ -677,7 +918,9 @@ export class Payroll {
         philHealth: deductions?.philHealth ?? employee.philHealth ?? 0,
         pagIbig: deductions?.pagIbig ?? employee.pagIbig ?? 0,
         cashAdvanceDeductions: deductions?.cashAdvanceDeductions ?? 0,
-        others: deductions?.shortDeductions ?? 0,
+        shortDeductions: deductions?.shortDeductions ?? 0,
+        loanDeductions: deductions?.loanDeductions ?? 0,
+        others: 0,
         lateDeduction: summary.lateDeduction ?? 0,
         undertimeDeduction: summary.undertimeDeduction ?? 0,
       };
@@ -756,12 +999,16 @@ export class Payroll {
           typeof deductions?.shortDeductions === "string"
             ? parseFloat(deductions?.shortDeductions)
             : deductions?.shortDeductions ?? 0,
+        loanDeductions:
+          typeof deductions?.loanDeductions === "string"
+            ? parseFloat(deductions?.loanDeductions)
+            : deductions?.loanDeductions ?? 0,
         others: othersValue,
       };
 
       const payrollSummary: PayrollSummaryModel = {
         ...summary,
-        id: `${employeeId}_${start.getTime()}_${end.getTime()}`,
+        id: payrollSummaryId, // Use the predefined ID
         grossPay: grossPayValue,
         deductions: finalDeductions,
         netPay: netPayValue,
@@ -775,6 +1022,7 @@ export class Payroll {
         absences: summary.absences || 0,
         shortIDs: summary.shortIDs || [],
         cashAdvanceIDs: summary.cashAdvanceIDs || [],
+        loanDeductionIds: deductions?.loanDeductionIds || [],
       };
 
       const endMonth = end.getMonth() + 1;
@@ -900,6 +1148,17 @@ export class Payroll {
               endDate
             );
           }
+
+          // Reverse loan deductions if present
+          const loanDeductionIds = deletedPayroll.loanDeductionIds || [];
+          if (loanDeductionIds.length > 0) {
+            await Payroll.reverseLoanDeduction(
+              dbPath,
+              employeeId,
+              loanDeductionIds,
+              endDate
+            );
+          }
         } else {
           console.log(
             `[Payroll] No payroll summary found in Firestore to delete`
@@ -990,6 +1249,17 @@ export class Payroll {
             dbPath,
             employeeId,
             shortIDs,
+            endDate
+          );
+        }
+
+        // Reverse loan deductions if present
+        const loanDeductionIds = payrollToDelete.loanDeductionIds || [];
+        if (loanDeductionIds.length > 0) {
+          await Payroll.reverseLoanDeduction(
+            dbPath,
+            employeeId,
+            loanDeductionIds,
             endDate
           );
         }
@@ -1764,6 +2034,105 @@ export class Payroll {
         error
       );
       return [];
+    }
+  }
+
+  // Add a new method to reverse loan deductions
+  private static async reverseLoanDeduction(
+    dbPath: string,
+    employeeId: string,
+    loanDeductionIds: { loanId: string; deductionId: string; amount: number }[],
+    payrollDate: Date,
+    isApplyingDeduction: boolean = false
+  ): Promise<void> {
+    try {
+      if (isWebEnvironment()) {
+        const companyName = await getCompanyName();
+        // Web implementation - if you have a Firestore function
+        // TODO: Implement Firestore version if needed
+        console.log(
+          `[Payroll] Reversing ${loanDeductionIds.length} loan deductions in web mode`
+        );
+        return;
+      }
+
+      console.log(
+        `[Payroll] Reversing ${loanDeductionIds.length} loan deductions in desktop mode`
+      );
+
+      const loanModel = createLoanModel(dbPath, employeeId);
+
+      // Load loans from the payroll month and the previous month to ensure we find all
+      const payrollMonth = payrollDate.getMonth() + 1;
+      const payrollYear = payrollDate.getFullYear();
+
+      // Calculate previous month/year
+      let prevMonth = payrollMonth - 1;
+      let prevYear = payrollYear;
+      if (prevMonth < 1) {
+        prevMonth = 12;
+        prevYear--;
+      }
+
+      // Load loans from both current and previous month
+      const [currentMonthLoans, prevMonthLoans] = await Promise.all([
+        loanModel.loadLoans(payrollYear, payrollMonth),
+        loanModel.loadLoans(prevYear, prevMonth),
+      ]);
+
+      const allLoans = [...currentMonthLoans, ...prevMonthLoans];
+
+      // Process each loan deduction
+      for (const deductionInfo of loanDeductionIds) {
+        const { loanId, deductionId, amount } = deductionInfo;
+
+        // Find the loan with this ID
+        const loan = allLoans.find((l) => l.id === loanId);
+        if (!loan) {
+          console.warn(
+            `[Payroll] Could not find loan with ID ${loanId} to reverse deduction`
+          );
+          continue;
+        }
+
+        // If the loan has deductions and the specific deduction
+        if (loan.deductions && deductionId) {
+          // Create a copy of deductions without the one being reversed
+          const updatedDeductions = { ...loan.deductions };
+
+          // Check if the deduction exists
+          if (!updatedDeductions[deductionId]) {
+            console.warn(
+              `[Payroll] Could not find deduction with ID ${deductionId} in loan ${loanId}`
+            );
+            continue;
+          }
+
+          // Delete the deduction
+          delete updatedDeductions[deductionId];
+
+          // Update the loan with the new deductions and adjust remaining balance
+          const updatedLoan = {
+            ...loan,
+            deductions: updatedDeductions,
+            remainingBalance: loan.remainingBalance + amount,
+            // Update status if needed
+            status:
+              loan.status === "Completed" && loan.remainingBalance + amount > 0
+                ? "Approved"
+                : loan.status,
+          };
+
+          // Save the updated loan
+          await loanModel.updateLoan(updatedLoan);
+          console.log(
+            `[Payroll] Reversed loan deduction: ${loanId}, amount: ${amount}`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("[Payroll] Error reversing loan deductions:", error);
+      throw error;
     }
   }
 }

@@ -104,11 +104,10 @@ export default function DateSelector() {
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className={` rounded-lg px-3 py-1 text-sm font-medium  ${
-          isOpen
-            ? "bg-white text-black"
-            : "text-white hover:bg-white hover:text-black"
-        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500 transition-all duration-200 `}
+        className={` rounded-lg px-3 py-1 text-sm font-medium  ${isOpen
+          ? "bg-white text-black"
+          : "text-white hover:bg-white hover:text-black"
+          } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500 transition-all duration-200 `}
       >
         <button className="inline-flex items-end flex-col text-left leading-none">
           <span className="text-sm">
@@ -126,9 +125,9 @@ export default function DateSelector() {
       </div>
       {isOpen && (
         <div className="relative">
-          <div className="absolute right-0 z-10 mt-2 w-60 rounded-md shadow-lg bg-white">
+          <div className="absolute right-0 z-10 mt-2 w-60">
             <div
-              className="grid grid-cols-2 gap-2 p-2 max-h-[200px]"
+              className="grid grid-cols-2 gap-2 p-2 max-h-[200px] bg-white rounded-md shadow-lg"
               role="menu"
               aria-orientation="vertical"
               aria-labelledby="options-menu"
@@ -141,11 +140,10 @@ export default function DateSelector() {
                   {months.map((month, index) => (
                     <button
                       key={index}
-                      className={`block w-full text-left px-3 py-2 text-sm ${
-                        selectedMonth === index
-                          ? "bg-gray-100 text-blue-600"
-                          : "text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`block w-full text-left px-3 py-2 text-sm ${selectedMonth === index
+                        ? "bg-gray-100 text-blue-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                        }`}
                       onClick={() => {
                         setSelectedMonth(index);
                       }}
@@ -166,11 +164,10 @@ export default function DateSelector() {
                     .map((year) => (
                       <button
                         key={year}
-                        className={`block w-full text-left px-3 py-2 text-sm ${
-                          selectedYear === year
-                            ? "bg-gray-100 text-blue-600"
-                            : "text-gray-700 hover:bg-gray-50"
-                        }`}
+                        className={`block w-full text-left px-3 py-2 text-sm ${selectedYear === year
+                          ? "bg-gray-100 text-blue-600"
+                          : "text-gray-700 hover:bg-gray-50"
+                          }`}
                         onClick={() => setSelectedYear(year)}
                       >
                         {year}

@@ -61,6 +61,7 @@ const fileSystem = {
   },
   getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
   openPath: (path: string) => ipcRenderer.invoke("app:openPath", path),
+  loadCssPath: (cssName: string) => ipcRenderer.invoke("load:cssPath", cssName),
 };
 
 // Expose the APIs to renderer process
@@ -111,6 +112,7 @@ contextBridge.exposeInMainWorld("electron", {
   generateSchedulePdf: (data: any) =>
     ipcRenderer.invoke("generate-schedule-pdf", data),
   readDir: (dirPath: string) => ipcRenderer.invoke("fs:readdir", dirPath),
+  loadCssPath: (cssName: string) => ipcRenderer.invoke("load:cssPath", cssName),
 });
 
 export type IpcHandler = typeof handler;

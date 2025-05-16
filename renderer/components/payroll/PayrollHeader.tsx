@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DateRangePicker } from "@/renderer/components/DateRangePicker";
 import { Payroll } from "@/renderer/model/payroll";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
@@ -6,12 +6,11 @@ import { useDateRangeStore } from "@/renderer/stores/dateRangeStore";
 import { Check, ChevronDown } from "@/renderer/components/icons";
 import { safeLocalStorageGetItem } from "@/renderer/lib/utils";
 import { cn } from "@/renderer/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/renderer/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/renderer/components/ui/command";
 import { Button } from "@/renderer/components/ui/button";
 import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
 import { collection, getDocs } from "firebase/firestore";
 import { getFirestoreInstance } from "@/renderer/lib/firestoreService";
+import { createPortal } from "react-dom";
 
 interface PayrollHeaderProps {
     hasManageAccess: boolean;
@@ -56,8 +55,12 @@ export const PayrollHeader: React.FC<PayrollHeaderProps> = ({
     const { setDateRange } = useDateRangeStore();
     const [payrollPeriods, setPayrollPeriods] = useState<PayrollPeriod[]>([]);
     const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
-    const [open, setOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const triggerRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
     // Load payroll periods directly from Firestore without employee selection
     const loadAllPayrollPeriods = async () => {
@@ -174,11 +177,132 @@ export const PayrollHeader: React.FC<PayrollHeaderProps> = ({
     // Handler for selecting a payroll period
     const handleSelectPeriod = (period: PayrollPeriod) => {
         setSelectedPeriod(period);
-        setOpen(false);
+        setIsOpen(false);
 
         // Update the date range in the store
         setDateRange(period.startDate, period.endDate);
     };
+
+    // Set up portal
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    // Handle click outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (
+                isOpen &&
+                dropdownRef.current &&
+                !dropdownRef.current.contains(e.target as Node) &&
+                triggerRef.current &&
+                !triggerRef.current.contains(e.target as Node)
+            ) {
+                setIsOpen(false);
+            }
+        };
+
+        // Update position on scroll or resize
+        const handleReposition = () => {
+            if (isOpen) {
+                updatePosition();
+            }
+        };
+
+        document.addEventListener("click", handleClickOutside);
+        window.addEventListener("scroll", handleReposition, true);
+        window.addEventListener("resize", handleReposition);
+
+        return () => {
+            document.removeEventListener("click", handleClickOutside);
+            window.removeEventListener("scroll", handleReposition, true);
+            window.removeEventListener("resize", handleReposition);
+        };
+    }, [isOpen]);
+
+    // Update dropdown position based on trigger position
+    const updatePosition = () => {
+        if (triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setDropdownPosition({
+                top: rect.bottom + window.scrollY + 5,
+                left: rect.left + window.scrollX,
+            });
+        }
+    };
+
+    // Handle opening/closing the dropdown
+    const toggleDropdown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!isOpen) {
+            updatePosition();
+        }
+        setIsOpen(!isOpen);
+    };
+
+    // Dropdown menu rendered in portal
+    const dropdownMenu = useMemo(() => {
+        if (!isOpen || !mounted) return null;
+
+        const menu = (
+            <div
+                ref={dropdownRef}
+                className="fixed shadow-2xl border border-gray-200 bg-white rounded-xl overflow-hidden w-[380px]"
+                style={{
+                    top: `${dropdownPosition.top}px`,
+                    left: `${dropdownPosition.left}px`,
+                    zIndex: 9999,
+                }}
+            >
+                <div className="py-2 w-full overflow-y-auto max-h-[320px] scrollbar-thin">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                            <span className="ml-2 text-sm text-gray-600">Loading payroll periods...</span>
+                        </div>
+                    ) : payrollPeriods.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-gray-500">
+                            No payroll periods found
+                        </div>
+                    ) : (
+                        payrollPeriods.map((period) => (
+                            <div
+                                key={period.id}
+                                className={`mx-2 px-3 py-2.5 text-sm cursor-pointer rounded-lg transition-all duration-200 ${period.id === selectedPeriod?.id
+                                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm"
+                                    : "hover:bg-blue-50 hover:text-blue-700"
+                                    }`}
+                                onClick={() => handleSelectPeriod(period)}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span>{period.label}</span>
+                                    <Check
+                                        className={cn(
+                                            "ml-4 h-4 w-4",
+                                            selectedPeriod?.id === period.id
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                        )}
+                                    />
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        );
+
+        // Use portal to render outside of any containing elements that might have overflow: hidden
+        return createPortal(menu, document.body);
+    }, [
+        payrollPeriods,
+        selectedPeriod?.id,
+        isOpen,
+        mounted,
+        dropdownPosition,
+        loading,
+    ]);
 
     return (
         <div className="flex-1 flex items-start justify-between gap-4">
@@ -235,51 +359,22 @@ export const PayrollHeader: React.FC<PayrollHeaderProps> = ({
                     Select from existing payroll periods
                 </span>
 
-                <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={open}
-                            className="mt-1 w-[350px] justify-between text-sm text-gray-700"
-                        >
-                            {selectedPeriod ? selectedPeriod.label : "Select payroll period..."}
-                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[380px] p-0 z-50">
-                        <Command>
-                            <CommandList className="max-h-[300px] overflow-y-auto scrollbar-thin">
-                                {loading ? (
-                                    <CommandEmpty>Loading...</CommandEmpty>
-                                ) : payrollPeriods.length === 0 ? (
-                                    <CommandEmpty>No payroll periods found.</CommandEmpty>
-                                ) : (
-                                    <CommandGroup>
-                                        {payrollPeriods.map((period) => (
-                                            <CommandItem
-                                                key={period.id}
-                                                value={period.label}
-                                                onSelect={() => handleSelectPeriod(period)}
-                                                className="flex items-center justify-between py-2 px-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                                            >
-                                                <span>{period.label}</span>
-                                                <Check
-                                                    className={cn(
-                                                        "ml-4 h-4 w-4",
-                                                        selectedPeriod?.id === period.id
-                                                            ? "opacity-100"
-                                                            : "opacity-0"
-                                                    )}
-                                                />
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                )}
-                            </CommandList>
-                        </Command>
-                    </PopoverContent>
-                </Popover>
+                <div
+                    ref={triggerRef}
+                    onClick={toggleDropdown}
+                    className="relative mt-1"
+                >
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={isOpen}
+                        className="w-[350px] justify-between text-sm text-gray-700"
+                    >
+                        {selectedPeriod ? selectedPeriod.label : "Select payroll period..."}
+                        <ChevronDown className={`ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform duration-200 ${isOpen ? "transform rotate-180" : ""}`} />
+                    </Button>
+                </div>
+                {dropdownMenu}
             </div>
         </div>
     );

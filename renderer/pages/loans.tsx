@@ -5,14 +5,13 @@ import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
 import { toast } from "sonner";
-import { IoSettingsOutline } from "react-icons/io5";
+import { IoClose, IoSettingsOutline, IoPencil, IoTrash, IoList } from "react-icons/io5";
 import LoanForm from "@/renderer/components/forms/LoanForm";
 import { createEmployeeModel, Employee } from "@/renderer/model/employee";
-import { createLoanModel } from "@/renderer/model/loan";
+import { createLoanModel, Loan, Deduction } from "@/renderer/model/loan";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 
-import { Loan } from "@/renderer/model/loan";
 import RootLayout from "@/renderer/components/layout";
 import { MagicCard } from "../components/magicui/magic-card";
 import AddButton from "@/renderer/components/magicui/add-button";
@@ -24,10 +23,93 @@ import { useDateSelectorStore } from "@/renderer/components/DateSelector";
 import NoDataPlaceholder from "@/renderer/components/NoDataPlaceholder";
 import DecryptedText from "../styles/DecryptedText/DecryptedText";
 
+// Deductions Modal Component
+interface DeductionsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  loan: Loan | null;
+}
+
+const DeductionsModal: React.FC<DeductionsModalProps> = ({ isOpen, onClose, loan }) => {
+  if (!isOpen || !loan) return null;
+
+  const calculateTotalDeductions = (currentLoan: Loan): number => {
+    if (!currentLoan.deductions) return 0;
+    return Object.values(currentLoan.deductions).reduce((sum, deduction) => sum + deduction.amountDeducted, 0);
+  };
+
+  const totalDeducted = calculateTotalDeductions(loan);
+  const displayedRemainingBalance = loan.amount - totalDeducted;
+
+  const deductionsArray = loan.deductions ? Object.entries(loan.deductions) : [];
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
+      <div className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-gray-800 text-white">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Loan Deductions for Loan ID: {loan.id}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-200">
+            <IoClose size={24} />
+          </button>
+        </div>
+        <div className="mb-4">
+          <p><strong>Employee ID:</strong> {loan.employeeId}</p>
+          <p><strong>Loan Date:</strong> {new Date(loan.date).toLocaleDateString()}</p>
+          <p><strong>Loan Amount:</strong> ₱{loan.amount.toLocaleString()}</p>
+          <p><strong>Loan Type:</strong> {loan.type}</p>
+        </div>
+
+        {deductionsArray.length > 0 ? (
+          <div className="overflow-x-auto mb-4 max-h-80">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-700">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">Deduction ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">Date Deducted</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider">Amount</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">Payroll ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {deductionsArray.map(([deductionId, deduction]) => (
+                  <tr key={deductionId}>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm">{deductionId}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm">{new Date(deduction.dateDeducted).toLocaleDateString()}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-right">₱{deduction.amountDeducted.toLocaleString()}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm">{deduction.payrollId || "N/A"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm">{deduction.notes || "N/A"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mb-4 text-gray-400">No deductions recorded for this loan yet.</p>
+        )}
+
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <p className="text-md"><strong>Total Deducted:</strong> <span className="font-semibold">₱{totalDeducted.toLocaleString()}</span></p>
+          <p className="text-lg"><strong>Calculated Remaining Balance:</strong> <span className="font-bold text-green-400">₱{displayedRemainingBalance.toLocaleString()}</span></p>
+        </div>
+
+        <div className="text-right mt-5">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function LoansPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const [clickPosition, setClickPosition] = useState<{
+  const [loanFormPosition, setLoanFormPosition] = useState<{
     top: number;
     left: number;
     showAbove: boolean;
@@ -38,6 +120,9 @@ export default function LoansPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isWebMode, setIsWebMode] = useState(false);
   const [companyName, setCompanyName] = useState<string | null>(null);
+
+  const [isDeductionsModalOpen, setIsDeductionsModalOpen] = useState(false);
+  const [currentLoanForDeductions, setCurrentLoanForDeductions] = useState<Loan | null>(null);
 
   const pathname = usePathname();
   const { setLoading, activeLink, setActiveLink } = useLoadingStore();
@@ -148,25 +233,48 @@ export default function LoansPage() {
     }
   };
 
-  const handleButtonClick = (event: React.MouseEvent) => {
+  const handleEditLoanClick = (loan: Loan, event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const windowHeight = window.innerHeight;
     const spaceBelow = windowHeight - rect.bottom;
     const spaceAbove = rect.top;
-    const dialogHeight = 550; // Approximate height of dialog
-    const dialogWidth = 500; // Width of the dialog
-    const spacing = 8; // Space between dialog and row
+    const dialogHeight = 550; // Approximate height of LoanForm dialog
+    const dialogWidth = 500; // Width of the LoanForm dialog
+    const spacing = 8;
 
-    // If there's not enough space below and more space above, show above
     const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
 
-    setClickPosition({
-      top: showAbove ? rect.top - spacing : rect.bottom + spacing,
-      left: rect.right - dialogWidth,
+    setLoanFormPosition({
+      top: showAbove ? rect.top - dialogHeight - spacing : rect.bottom + spacing,
+      left: rect.right - dialogWidth + (rect.width / 2),
       showAbove,
-      caretLeft: dialogWidth - rect.width / 2 - 8,
+      caretLeft: dialogWidth - rect.width / 2 - 8, // Adjust caret based on button position
     });
+    setSelectedLoan(loan);
+    setIsDialogOpen(true);
+  };
 
+  const handleApplyForLoanClick = (event: React.MouseEvent | null) => {
+    if (event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceBelow = windowHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const dialogHeight = 550;
+      const dialogWidth = 500;
+      const spacing = 8;
+
+      const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
+
+      setLoanFormPosition({
+        top: showAbove ? rect.top - dialogHeight - spacing : rect.bottom + spacing,
+        left: rect.right - dialogWidth + (rect.width / 2),
+        showAbove,
+        caretLeft: dialogWidth - rect.width / 2 - 8,
+      });
+    } else {
+      setLoanFormPosition(null);
+    }
     setSelectedLoan(null);
     setIsDialogOpen(true);
   };
@@ -205,6 +313,27 @@ export default function LoansPage() {
     }
   };
 
+  const calculateDisplayedRemainingBalance = (loan: Loan): number => {
+    if (!loan.deductions) {
+      return loan.amount; // Or loan.remainingBalance if that's preferred as starting point before deductions
+    }
+    const totalDeducted = Object.values(loan.deductions).reduce(
+      (sum, deduction) => sum + deduction.amountDeducted,
+      0
+    );
+    return loan.amount - totalDeducted;
+  };
+
+  const handleOpenDeductionsModal = (loan: Loan) => {
+    setCurrentLoanForDeductions(loan);
+    setIsDeductionsModalOpen(true);
+  };
+
+  const handleCloseDeductionsModal = () => {
+    setIsDeductionsModalOpen(false);
+    setCurrentLoanForDeductions(null);
+  };
+
   return (
     <RootLayout>
       <main className="max-w-12xl mx-auto py-12 sm:px-6 lg:px-8">
@@ -235,7 +364,7 @@ export default function LoansPage() {
                     <div className="relative flex items-center space-x-4">
                       <button
                         type="button"
-                        onClick={handleButtonClick}
+                        onClick={handleApplyForLoanClick}
                         className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
                       >
                         Apply for Loan
@@ -249,7 +378,7 @@ export default function LoansPage() {
                           employeeName={employee?.name}
                           dataType="loans"
                           actionText="Apply for Loan"
-                          onActionClick={() => handleButtonClick}
+                          onActionClick={() => handleApplyForLoanClick(null)}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (
@@ -284,25 +413,13 @@ export default function LoansPage() {
                                 scope="col"
                                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                               >
-                                Monthly Payment
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
                                 Remaining Balance
                               </th>
                               <th
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
                               >
-                                Next Payment
-                              </th>
-                              <th
-                                scope="col"
-                                className="relative py-3.5 pl-3 pr-4 sm:pr-6"
-                              >
-                                <span className="sr-only">Actions</span>
+                                Actions
                               </th>
                             </tr>
                           </thead>
@@ -310,11 +427,7 @@ export default function LoansPage() {
                             {loans.map((loan) => (
                               <tr
                                 key={loan.id}
-                                className="hover:bg-gray-50 cursor-pointer"
-                                onClick={() => {
-                                  setSelectedLoan(loan);
-                                  setIsDialogOpen(true);
-                                }}
+                                className="hover:bg-gray-50"
                               >
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {new Date(loan.date).toLocaleDateString()}
@@ -340,30 +453,69 @@ export default function LoansPage() {
                                     {loan.status}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  ₱{loan.monthlyPayment.toLocaleString()}
+                                <td
+                                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                >
+                                  ₱{calculateDisplayedRemainingBalance(loan).toLocaleString()}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  ₱{loan.remainingBalance.toLocaleString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {new Date(
-                                    loan.nextPaymentDate
-                                  ).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
                                   <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Handle delete
-                                    }}
-                                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150 ease-in-out ${!hasDeleteAccess
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : "cursor-pointer"
-                                      }`}
+                                    onClick={() => handleOpenDeductionsModal(loan)}
+                                    className="inline-flex items-center justify-center px-3 py-1.5 rounded-md
+                                    text-emerald-700 bg-emerald-100 hover:bg-emerald-200
+                                    shadow-sm transition-all duration-200
+                                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
                                   >
-                                    Delete
+                                    <IoList className="mr-1.5 h-3.5 w-3.5" />
+                                    Show Deductions
                                   </button>
+                                  <button
+                                    onClick={(e) => handleEditLoanClick(loan, e)}
+                                    className="inline-flex items-center justify-center px-3 py-1.5 rounded-md 
+                                    text-indigo-700 bg-indigo-100 hover:bg-indigo-200 
+                                    shadow-sm transition-all duration-200 
+                                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                  >
+                                    <IoPencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                  </button>
+
+                                  {hasDeleteAccess && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (loanModel) {
+                                          try {
+                                            setLoading(true);
+                                            await loanModel.deleteLoan(loan.id, loan);
+                                            toast.success("Loan deleted successfully", {
+                                              position: "bottom-right",
+                                              duration: 3000,
+                                            });
+                                            refetch(); // Refetch loans after deletion
+                                          } catch (error) {
+                                            console.error("Error deleting loan:", error);
+                                            toast.error(`Error deleting loan: ${error instanceof Error ? error.message : String(error)}`, {
+                                              position: "bottom-right",
+                                              duration: 3000,
+                                            });
+                                          } finally {
+                                            setLoading(false);
+                                          }
+                                        } else {
+                                          console.error("Loan model is not initialized");
+                                          toast.error("Loan model is not initialized");
+                                        }
+                                      }}
+                                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-md
+                                        text-red-700 bg-red-100 hover:bg-red-200
+                                        shadow-sm transition-all duration-200
+                                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    >
+                                      <IoTrash className="mr-1.5 h-3.5 w-3.5" />
+                                      Delete
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -375,7 +527,7 @@ export default function LoansPage() {
                     <NoDataPlaceholder
                       dataType="loans"
                       actionText="Apply for Loan"
-                      onActionClick={() => handleButtonClick}
+                      onActionClick={() => handleApplyForLoanClick(null)}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   )}
@@ -393,23 +545,29 @@ export default function LoansPage() {
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 setIsDialogOpen(false);
-                setClickPosition(null);
+                setLoanFormPosition(null);
               }
             }}
           >
             <LoanForm
               onClose={() => {
                 setIsDialogOpen(false);
-                setClickPosition(null);
+                setLoanFormPosition(null);
               }}
               onSave={handleSaveLoan}
               initialData={selectedLoan}
-              position={clickPosition!}
+              position={loanFormPosition ? loanFormPosition : undefined}
               isWebMode={isWebMode}
               companyName={companyName}
             />
           </div>
         )}
+        {/* Render Deductions Modal */}
+        <DeductionsModal
+          isOpen={isDeductionsModalOpen}
+          onClose={handleCloseDeductionsModal}
+          loan={currentLoanForDeductions}
+        />
       </main>
     </RootLayout>
   );

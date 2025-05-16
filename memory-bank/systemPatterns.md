@@ -703,4 +703,40 @@ return { ...item, dateField: parsedDate };
 // const validItems = mappedItems.filter(item => item !== null) as ResultType[];
 // return validItems;
 ```
-This ensures that only data with valid, usable dates proceeds to the application logic and UI. 
+This ensures that only data with valid, usable dates proceeds to the application logic and UI.
+
+## Data Patterns
+
+### Payroll Data Flow Patterns
+
+#### Loan Deductions Pattern
+
+The payroll system handles loan deductions in a specific way that requires special attention:
+
+1. **Detailed vs Summary Data**: Loan deductions are tracked both as:
+   - Summary amount (`loanDeductions` - a single number representing total loan deductions)
+   - Detailed records (`loanDeductionIds` - an array of objects with loan IDs, deduction IDs, and amounts)
+
+2. **Root vs Nested Storage**: The detailed records (`loanDeductionIds`) are stored at the root level of the `PayrollSummaryModel`, not within the `deductions` object. This means:
+   ```typescript
+   // Correct structure
+   {
+     // ...other payroll fields
+     deductions: {
+       // ...other deduction types
+       loanDeductions: 40 // Summary amount
+     },
+     loanDeductionIds: [  // Detailed records at ROOT level
+       { loanId: "id1", deductionId: "dedId1", amount: 40 }
+     ]
+   }
+   ```
+
+3. **UI Display Pattern**: When displaying loan deductions in the UI, components must:
+   - Calculate the total from `loanDeductionIds` array
+   - NOT rely on `deductions.loanDeductions` 
+   - See `loan-deductions-flow.md` for detailed implementation guidance
+
+This pattern differs from other deduction types (SSS, PhilHealth, etc.) which are stored only as summary amounts within the `deductions` object.
+
+// ... rest of existing content ... 

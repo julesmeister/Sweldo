@@ -4,6 +4,17 @@ import BaseFormDialog from "../dialogs/BaseFormDialog"; // Adjust path as necess
 import FormField from "./FormField"; // Import the new FormField
 import { useDateSelectorStore } from "@/renderer/components/DateSelector"; // Import the store
 
+interface Short {
+  id: string;
+  employeeId: string;
+  date: Date;
+  amount: number;
+  remainingUnpaid: number;
+  reason: string;
+  status: "Paid" | "Unpaid";
+  type?: "Short" | "Withdrawal"; // Added type field
+}
+
 interface ShortsFormProps {
   onClose: () => void;
   onSave: (data: any) => void;
@@ -26,6 +37,7 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
   const storeSelectedYear = useDateSelectorStore((state) => state.selectedYear);
 
   const [amount, setAmount] = useState(initialData?.amount?.toString() || "");
+  const [type, setType] = useState(initialData?.type || "Short"); // Added type state
   const [remainingUnpaid, setRemainingUnpaid] = useState(
     initialData?.remainingUnpaid?.toString() || "0"
   );
@@ -53,6 +65,9 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
         if (!initialData) {
           setRemainingUnpaid(value); // Keep this logic
         }
+        break;
+      case "type": // Added case for type
+        setType(value);
         break;
       case "remainingUnpaid":
         setRemainingUnpaid(value);
@@ -93,6 +108,7 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
       employeeId: initialData?.employeeId || "", // This will be set by the parent component
       date: new Date(date),
       amount: parsedAmount,
+      type, // Added type to formData
       remainingUnpaid: parsedRemainingUnpaid,
       reason,
       status: parsedRemainingUnpaid <= 0 ? "Paid" : "Unpaid", // Auto-set status based on remainingUnpaid
@@ -104,15 +120,16 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
 
   return (
     <BaseFormDialog
-      title={initialData ? "Edit Short" : "Add New Short"}
-      isOpen={true} // ShortsForm is only rendered when it should be open
+      title={initialData ? "Edit Deduction" : "Add New Deduction"}
+      isOpen={true}
       onClose={onClose}
-      onSubmit={handleSubmit} // The BaseFormDialog's submit button will trigger this
+      onSubmit={handleSubmit}
       position={position}
-      submitText={initialData ? "Update" : "Submit"}
+      submitText={initialData ? "Update Deduction" : "Submit Deduction"}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 grid-rows-2 gap-4 items-start">
+          {/* Amount Field (Col 1, Row 1) */}
           <FormField
             label="Amount"
             name="amount"
@@ -122,6 +139,8 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
             prefix="₱"
             inputClassName="pl-7" // Ensure existing pl-7 is applied if FormField prefix logic changes
           />
+
+          {/* Date Field (Col 2, Row 1) */}
           <FormField
             label="Date"
             name="date"
@@ -129,6 +148,22 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
             onChange={handleInputChange}
             type="date"
           />
+
+          {/* Reason Field (Col 3, Rows 1 & 2) */}
+          <div className="row-span-2 flex flex-col h-full">
+            <FormField
+              label="Reason"
+              name="reason"
+              value={reason}
+              onChange={handleInputChange}
+              type="textarea"
+              rows={5} // Adjusted to better fit the spanned rows
+              className="flex-grow"
+              inputClassName="h-full"
+            />
+          </div>
+
+          {/* Remaining Unpaid Field (Col 1, Row 2) */}
           <FormField
             label="Remaining Unpaid"
             name="remainingUnpaid"
@@ -138,15 +173,20 @@ const ShortsForm: React.FC<ShortsFormProps> = ({
             prefix="₱"
             inputClassName="pl-7"
           />
+
+          {/* Type Field (Col 2, Row 2) */}
+          <FormField
+            label="Type"
+            name="type"
+            value={type}
+            onChange={handleInputChange}
+            type="select"
+            options={[
+              { value: "Short", label: "Short" },
+              { value: "Withdrawal", label: "Withdrawal" },
+            ]}
+          />
         </div>
-        <FormField
-          label="Reason"
-          name="reason"
-          value={reason}
-          onChange={handleInputChange}
-          type="textarea"
-          rows={3}
-        />
       </form>
     </BaseFormDialog>
   );

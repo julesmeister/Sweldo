@@ -11,7 +11,9 @@ import {
 // --- Interfaces --- //
 
 // Keep original Short interface
-export interface Short extends OldShort {}
+export interface Short extends OldShort {
+  type?: "Short" | "Withdrawal"; // Added type field
+}
 
 // JSON Structure
 interface ShortsJsonStructure {
@@ -155,6 +157,7 @@ export class ShortModel {
           shortInput.status ||
           (shortInput.remainingUnpaid === 0 ? "Paid" : "Unpaid"),
         remainingUnpaid: shortInput.remainingUnpaid ?? shortInput.amount,
+        type: shortInput.type || "Short", // Default type to "Short"
       };
 
       jsonData.shorts.push(newShort);
@@ -251,7 +254,9 @@ export class ShortModel {
       const jsonData = await this.readJsonFile();
       if (jsonData) {
         // Filter again by employeeId just in case (though should match meta)
-        return jsonData.shorts.filter((s) => s.employeeId === this.employeeId);
+        return jsonData.shorts
+          .map((s) => ({ ...s, type: s.type || "Short" }))
+          .filter((s) => s.employeeId === this.employeeId);
       } else {
         // Fallback to CSV
         console.warn(
@@ -262,7 +267,11 @@ export class ShortModel {
           const csvShorts = await this.oldModelInstance.loadShorts(
             this.employeeId
           );
-          return csvShorts;
+          // Add default type for CSV data
+          return csvShorts.map((s) => ({
+            ...s,
+            type: "Short" as "Short" | "Withdrawal",
+          }));
         } catch (csvError) {
           console.error(
             `[ShortModel] Error loading from CSV fallback (${this.year}-${this.month}):`,
@@ -431,7 +440,10 @@ export class ShortModel {
                     month,
                     lastModified: new Date().toISOString(),
                   },
-                  shorts: shortsFromCsv,
+                  shorts: shortsFromCsv.map((s) => ({
+                    ...s,
+                    type: "Short" as "Short" | "Withdrawal",
+                  })), // Add default type
                 };
 
                 // Use the new model's static helpers (or instance method via prototype) to write

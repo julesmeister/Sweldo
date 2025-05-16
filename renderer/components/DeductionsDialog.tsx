@@ -7,6 +7,8 @@ import { createShortModel } from "@/renderer/model/shorts";
 import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
 import { loadCashAdvancesFirestore } from "@/renderer/model/cashAdvance_firestore";
 import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
+import { Loan, Deduction as LoanDeduction } from "@/renderer/model/loan";
+import { useLoanManagement } from "@/renderer/hooks/useLoanManagement";
 
 interface Deductions {
   sss: number;
@@ -14,11 +16,13 @@ interface Deductions {
   pagIbig: number;
   cashAdvanceDeductions: number;
   shortDeductions: number;
+  loanDeductions: number;
   enableSss: boolean;
   enablePhilHealth: boolean;
   enablePagIbig: boolean;
   shortIDs?: string[];
   cashAdvanceIDs?: string[];
+  loanDeductionIds?: { loanId: string; deductionId: string; amount: number }[];
 }
 
 interface DeductionsDialogProps {
@@ -163,12 +167,7 @@ const MemoizedShortItem = React.memo(
     onSelect: (id: string, checked: boolean) => void;
     onAmountChange: (id: string, amount: number) => void;
   }) => {
-    console.log("MemoizedShortItem rendered:", {
-      id: short.id,
-      isSelected,
-      deductionAmount,
-      isCalculating,
-    });
+
 
     return (
       <div className="w-full">
@@ -252,19 +251,105 @@ const MemoizedShortItem = React.memo(
       prevProps.short.id !== nextProps.short.id ||
       prevProps.short.remainingUnpaid !== nextProps.short.remainingUnpaid;
 
-    console.log("MemoizedShortItem memo comparison:", {
-      id: prevProps.short.id,
-      shouldUpdate,
-      changes: {
-        isSelected: prevProps.isSelected !== nextProps.isSelected,
-        deductionAmount:
-          prevProps.deductionAmount !== nextProps.deductionAmount,
-        isCalculating: prevProps.isCalculating !== nextProps.isCalculating,
-        id: prevProps.short.id !== nextProps.short.id,
-        remainingUnpaid:
-          prevProps.short.remainingUnpaid !== nextProps.short.remainingUnpaid,
-      },
-    });
+
+
+    return !shouldUpdate;
+  }
+);
+
+const MemoizedLoanItem = React.memo(
+  ({
+    loan,
+    isSelected,
+    deductionAmount,
+    isCalculating,
+    onSelect,
+    onAmountChange,
+  }: {
+    loan: Loan;
+    isSelected: boolean;
+    deductionAmount: number;
+    isCalculating: boolean;
+    onSelect: (id: string, checked: boolean) => void;
+    onAmountChange: (id: string, amount: number) => void;
+  }) => {
+    return (
+      <div className="w-full">
+        <div
+          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
+            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+            }`}
+        >
+          <div className="flex justify-between items-start">
+            <div className="flex items-center space-x-2">
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  id={`loan-${loan.id}`}
+                  checked={isSelected}
+                  onChange={(e) => onSelect(loan.id, e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+              <label
+                htmlFor={`loan-${loan.id}`}
+                className="text-sm font-medium text-gray-200 leading-5 ml-2 group-hover:text-white transition-colors duration-200 cursor-pointer"
+              >
+                {loan.type || "Loan"}
+              </label>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors duration-200">
+                {new Date(loan.date).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+              <span className="text-xs font-medium text-blue-400/90 group-hover:text-blue-400 mt-1 transition-colors duration-200">
+                Remaining: {formatCurrency(loan.remainingBalance)}
+              </span>
+            </div>
+          </div>
+          {isSelected && (
+            <div className="mt-2">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-400 sm:text-sm">₱</span>
+                </div>
+                <input
+                  type="text"
+                  value={deductionAmount || ""}
+                  onChange={(e) =>
+                    onAmountChange(loan.id, parseFloat(e.target.value) || 0)
+                  }
+                  className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
+                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                    }`}
+                  placeholder="Enter deduction amount"
+                  disabled={isCalculating}
+                />
+                {isCalculating && (
+                  <div className="absolute inset-y-0 right-3 flex items-center">
+                    <div className="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  },
+  (prevProps, nextProps) => {
+    const shouldUpdate =
+      prevProps.isSelected !== nextProps.isSelected ||
+      prevProps.deductionAmount !== nextProps.deductionAmount ||
+      prevProps.isCalculating !== nextProps.isCalculating ||
+      prevProps.loan.id !== nextProps.loan.id ||
+      prevProps.loan.remainingBalance !== nextProps.loan.remainingBalance;
 
     return !shouldUpdate;
   }
@@ -290,6 +375,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       pagIbig: pagIbig,
       cashAdvanceDeductions: 0,
       shortDeductions: 0,
+      loanDeductions: 0,
       enableSss: false,
       enablePhilHealth: false,
       enablePagIbig: false,
@@ -302,10 +388,16 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     const [selectedShorts, setSelectedShorts] = useState<Set<string>>(
       new Set()
     );
+    const [selectedLoans, setSelectedLoans] = useState<Set<string>>(
+      new Set()
+    );
     const [deductionAmounts, setDeductionAmounts] = useState<
       Record<string, number>
     >({});
     const [shortDeductionAmounts, setShortDeductionAmounts] = useState<
+      Record<string, number>
+    >({});
+    const [loanDeductionAmounts, setLoanDeductionAmounts] = useState<
       Record<string, number>
     >({});
     const [isLoading, setIsLoading] = useState(false);
@@ -314,6 +406,23 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     );
     const [hasLoadedAdvances, setHasLoadedAdvances] = useState(false);
     const [hasLoadedShorts, setHasLoadedShorts] = useState(false);
+
+    // Load loans using our new hook
+    const { loans, isLoading: isLoadingLoans } = useLoanManagement({
+      employeeId,
+      year: startDate.getFullYear(),
+      month: startDate.getMonth() + 1
+    });
+
+    // Filter to only active loans with a remaining balance
+    const activeLoans = useMemo(() =>
+      loans.filter(loan =>
+        loan.status !== "Completed" &&
+        loan.status !== "Rejected" &&
+        loan.remainingBalance > 0
+      ),
+      [loans]
+    );
 
     // Memoize the dates to prevent unnecessary re-renders
     const memoizedStartDate = useMemo(
@@ -341,14 +450,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
         return;
       }
 
-      console.log("loadUnpaidAdvances called with:", {
-        employeeId,
-        dbPath,
-        startDate: memoizedStartDate.toISOString(),
-        endDate: memoizedEndDate.toISOString(),
-        memoizedCashAdvanceModel: !!memoizedCashAdvanceModel,
-        hasLoadedAdvances,
-      });
+
 
       setIsLoading(true);
       try {
@@ -375,7 +477,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
         if (isWeb) {
           const companyName = await getCompanyName();
-          console.log(`[DeductionsDialog] Web mode: Loading advances for ${companyName}`);
+
 
           for (const monthKey of months) {
             const [year, month] = monthKey.split("_").map(Number);
@@ -482,7 +584,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
         if (isWeb) {
           const companyName = await getCompanyName();
-          console.log(`[DeductionsDialog] Web mode: Loading shorts for ${companyName}`);
+
 
           for (const { month, year } of months) {
             const shorts = await loadShortsFirestore(
@@ -535,15 +637,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     ]);
 
     useEffect(() => {
-      console.log("DeductionsDialog useEffect triggered:", {
-        isOpen,
-        employeeId,
-        dbPath,
-        startDate: memoizedStartDate.toISOString(),
-        endDate: memoizedEndDate.toISOString(),
-        hasLoadedAdvances,
-        hasLoadedShorts,
-      });
+
 
       if (isOpen) {
         if (!hasLoadedAdvances) {
@@ -569,26 +663,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       }
     }, [isOpen]);
 
-    // Add a debug effect to track re-renders
-    useEffect(() => {
-      console.log("DeductionsDialog re-rendered:", {
-        selectedAdvances: Array.from(selectedAdvances),
-        selectedShorts: Array.from(selectedShorts),
-        unpaidAdvancesLength: unpaidAdvances.length,
-        unpaidShortsLength: unpaidShorts.length,
-        deductionAmountsKeys: Object.keys(deductionAmounts),
-        shortDeductionAmountsKeys: Object.keys(shortDeductionAmounts),
-        isCalculatingKeys: Object.keys(isCalculating),
-      });
-    }, [
-      selectedAdvances,
-      selectedShorts,
-      unpaidAdvances,
-      unpaidShorts,
-      deductionAmounts,
-      shortDeductionAmounts,
-      isCalculating,
-    ]);
+
 
     const handleAdvanceSelect = useCallback((id: string, checked: boolean) => {
       setSelectedAdvances((prev) => {
@@ -604,13 +679,16 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
     const handleAdvanceAmountChange = useCallback(
       async (id: string, amount: number) => {
-        setIsCalculating((prev) => ({ ...prev, [id]: true }));
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        // Update the value immediately to maintain focus
         setDeductionAmounts((prev) => ({
           ...prev,
           [id]: amount,
         }));
-        setIsCalculating((prev) => ({ ...prev, [id]: false }));
+
+        // Skip the calculation animation for better UX
+        // setIsCalculating((prev) => ({ ...prev, [id]: true }));
+        // await new Promise((resolve) => setTimeout(resolve, 150));
+        // setIsCalculating((prev) => ({ ...prev, [id]: false }));
       },
       []
     );
@@ -629,32 +707,50 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
 
     const handleShortAmountChange = useCallback(
       async (id: string, amount: number) => {
-        console.log("[DeductionsDialog] Changing short amount:", {
-          id,
-          amount,
-        });
-        setIsCalculating((prev) => ({ ...prev, [id]: true }));
-        await new Promise((resolve) => setTimeout(resolve, 150));
+
+
+        // Update the value immediately to maintain focus
         setShortDeductionAmounts((prev) => ({
           ...prev,
           [id]: amount,
         }));
-        setIsCalculating((prev) => ({ ...prev, [id]: false }));
+
+        // Skip the calculation animation for better UX
+        // setIsCalculating((prev) => ({ ...prev, [id]: true }));
+        // await new Promise((resolve) => setTimeout(resolve, 150));
+        // setIsCalculating((prev) => ({ ...prev, [id]: false }));
+      },
+      []
+    );
+
+    const handleLoanSelect = useCallback((id: string, checked: boolean) => {
+      setSelectedLoans((prev) => {
+        const newSet = new Set(prev);
+        if (checked) {
+          newSet.add(id);
+        } else {
+          newSet.delete(id);
+        }
+        return newSet;
+      });
+    }, []);
+
+    const handleLoanAmountChange = useCallback(
+      async (id: string, amount: number) => {
+        // Update the value immediately to maintain focus
+        setLoanDeductionAmounts((prev) => {
+          const updated = {
+            ...prev,
+            [id]: amount,
+          };
+          return updated;
+        });
       },
       []
     );
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-
-      console.log("[DeductionsDialog] Starting handleSubmit with shorts:", {
-        selectedShorts: Array.from(selectedShorts),
-        shortDeductionAmounts,
-        unpaidShorts: unpaidShorts.map((s) => ({
-          id: s.id,
-          remainingUnpaid: s.remainingUnpaid,
-        })),
-      });
 
       // Get all months between start and end date
       const months = [];
@@ -676,12 +772,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           const deductionAmount = shortDeductionAmounts[shortId] || 0;
           const newRemainingUnpaid = short.remainingUnpaid - deductionAmount;
 
-          console.log("[DeductionsDialog] Processing short:", {
-            shortId,
-            originalRemaining: short.remainingUnpaid,
-            deductionAmount,
-            newRemainingUnpaid,
-          });
+
 
           // Find the correct month for this short
           const shortDate = new Date(short.date);
@@ -720,35 +811,59 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       const totalShortDeductions = Array.from(selectedShorts).reduce(
         (total, shortId) => {
           const amount = shortDeductionAmounts[shortId] || 0;
-          console.log("[DeductionsDialog] Adding to total shorts:", {
-            shortId,
-            amount,
-            runningTotal: total + amount,
-          });
           return total + amount;
         },
         0
       );
 
-      console.log("[DeductionsDialog] Final deduction totals:", {
-        totalShortDeductions,
-        totalCashAdvanceDeductions,
-        selectedShortIds: Array.from(selectedShorts),
-        shortDeductionAmounts,
-      });
+      // Create loan deductions with detailed logging
+      const loanDeductionIds: { loanId: string; deductionId: string; amount: number }[] = [];
+      let totalLoanDeductions = 0;
 
-      onConfirm({
+      for (const loanId of selectedLoans) {
+        const loan = activeLoans.find(l => l.id === loanId);
+        if (loan) {
+          const deductionAmount = loanDeductionAmounts[loanId] || 0;
+
+          if (deductionAmount > 0) {
+            // Create a unique deduction ID
+            const deductionId = crypto.randomUUID();
+
+            // Add to the list of deduction IDs - include the amount
+            loanDeductionIds.push({
+              loanId,
+              deductionId,
+              amount: deductionAmount
+            });
+            totalLoanDeductions += deductionAmount;
+          }
+        }
+      }
+
+
+
+      // Prepare final deductions structure
+      const finalDeductions = {
         sss: formData.enableSss ? formData.sss : 0,
         philHealth: formData.enablePhilHealth ? formData.philHealth : 0,
         pagIbig: formData.enablePagIbig ? formData.pagIbig : 0,
         cashAdvanceDeductions: totalCashAdvanceDeductions,
         shortDeductions: totalShortDeductions,
+        loanDeductions: totalLoanDeductions,
         enableSss: formData.enableSss,
         enablePhilHealth: formData.enablePhilHealth,
         enablePagIbig: formData.enablePagIbig,
         shortIDs: Array.from(selectedShorts),
         cashAdvanceIDs: Array.from(selectedAdvances),
-      });
+        loanDeductionIds: loanDeductionIds,
+      };
+
+
+
+      // Log full object details for loan deductions
+
+
+      onConfirm(finalDeductions);
     };
 
     const handleInputChange =
@@ -955,14 +1070,14 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
               </div>
 
               <div className="bg-gray-800/50 rounded-lg p-3 space-y-3 border border-gray-700/50 transition-colors duration-200">
-                {isLoading ? (
+                {isLoading || isLoadingLoans ? (
                   <div className="flex flex-col items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-3"></div>
                     <p className="text-sm text-gray-400">
                       Loading deductions...
                     </p>
                   </div>
-                ) : unpaidAdvances.length === 0 && unpaidShorts.length === 0 ? (
+                ) : unpaidAdvances.length === 0 && unpaidShorts.length === 0 && activeLoans.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8">
                     <p className="text-sm text-gray-400">
                       No unpaid deductions available.
@@ -973,28 +1088,59 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                   </div>
                 ) : (
                   <>
-                    {unpaidAdvances.map((advance) => (
-                      <MemoizedCashAdvanceItem
-                        key={advance.id}
-                        advance={advance}
-                        isSelected={selectedAdvances.has(advance.id)}
-                        deductionAmount={deductionAmounts[advance.id]}
-                        isCalculating={isCalculating[advance.id]}
-                        onSelect={handleAdvanceSelect}
-                        onAmountChange={handleAdvanceAmountChange}
-                      />
-                    ))}
-                    {unpaidShorts.map((short) => (
-                      <MemoizedShortItem
-                        key={short.id}
-                        short={short}
-                        isSelected={selectedShorts.has(short.id)}
-                        deductionAmount={shortDeductionAmounts[short.id]}
-                        isCalculating={isCalculating[short.id]}
-                        onSelect={handleShortSelect}
-                        onAmountChange={handleShortAmountChange}
-                      />
-                    ))}
+                    {/* Render loans first */}
+                    {activeLoans.length > 0 && (
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-gray-300 mb-2">Loans</h3>
+                        {activeLoans.map((loan) => (
+                          <MemoizedLoanItem
+                            key={loan.id}
+                            loan={loan}
+                            isSelected={selectedLoans.has(loan.id)}
+                            deductionAmount={loanDeductionAmounts[loan.id]}
+                            isCalculating={isCalculating[loan.id]}
+                            onSelect={handleLoanSelect}
+                            onAmountChange={handleLoanAmountChange}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Cash advances */}
+                    {unpaidAdvances.length > 0 && (
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-gray-300 mb-2">Cash Advances</h3>
+                        {unpaidAdvances.map((advance) => (
+                          <MemoizedCashAdvanceItem
+                            key={advance.id}
+                            advance={advance}
+                            isSelected={selectedAdvances.has(advance.id)}
+                            deductionAmount={deductionAmounts[advance.id]}
+                            isCalculating={isCalculating[advance.id]}
+                            onSelect={handleAdvanceSelect}
+                            onAmountChange={handleAdvanceAmountChange}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Shorts */}
+                    {unpaidShorts.length > 0 && (
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-gray-300 mb-2">Shorts</h3>
+                        {unpaidShorts.map((short) => (
+                          <MemoizedShortItem
+                            key={short.id}
+                            short={short}
+                            isSelected={selectedShorts.has(short.id)}
+                            deductionAmount={shortDeductionAmounts[short.id]}
+                            isCalculating={isCalculating[short.id]}
+                            onSelect={handleShortSelect}
+                            onAmountChange={handleShortAmountChange}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

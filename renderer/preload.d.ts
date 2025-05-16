@@ -8,6 +8,7 @@ interface PayrollDeductions {
   others?: number;
   sssLoan?: number;
   pagibigLoan?: number;
+  loanDeductions?: number;
   ca?: number;
   partial?: number;
   totalDeduction: number;
