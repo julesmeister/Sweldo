@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { IoClose } from "react-icons/io5";
 import { CashAdvance } from "@/renderer/model/cashAdvance";
 import { createCashAdvanceModel } from "@/renderer/model/cashAdvance";
 import { Short } from "@/renderer/model/shorts";
@@ -7,8 +6,9 @@ import { createShortModel } from "@/renderer/model/shorts";
 import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreService";
 import { loadCashAdvancesFirestore } from "@/renderer/model/cashAdvance_firestore";
 import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
-import { Loan, Deduction as LoanDeduction } from "@/renderer/model/loan";
+import { Loan } from "@/renderer/model/loan";
 import { useLoanManagement } from "@/renderer/hooks/useLoanManagement";
+import BaseFormDialog from "./dialogs/BaseFormDialog";
 
 interface Deductions {
   sss: number;
@@ -71,13 +71,13 @@ const MemoizedCashAdvanceItem = React.memo(
     return (
       <div className="w-full">
         <div
-          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
-            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
-            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+          className={`group flex flex-col space-y-2 p-3 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-blue-50 border border-blue-200 shadow-sm"
+            : "bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300"
             }`}
         >
           <div className="flex justify-between items-start">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-1">
               <label className="inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -86,33 +86,33 @@ const MemoizedCashAdvanceItem = React.memo(
                   onChange={(e) => onSelect(advance.id, e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" ></div>
+                <div className="relative w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" ></div>
               </label>
               <label
                 htmlFor={`advance-${advance.id}`}
-                className="text-sm font-medium text-gray-200 leading-5 ml-2 group-hover:text-white transition-colors duration-200 cursor-pointer"
+                className="text-sm font-medium text-gray-700 leading-5 ml-1 group-hover:text-gray-900 transition-colors duration-200 cursor-pointer flex-1 truncate"
               >
                 {advance.reason}
               </label>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors duration-200">
+            <div className="flex flex-col items-end text-right">
+              <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors duration-200">
                 {new Date(advance.date).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
                 })}
               </span>
-              <span className="text-xs font-medium text-blue-400/90 group-hover:text-blue-400 mt-1 transition-colors duration-200">
-                Remaining: {formatCurrency(advance.remainingUnpaid)}
+              <span className="text-xs font-medium text-blue-600 group-hover:text-blue-700 transition-colors duration-200">
+                {formatCurrency(advance.remainingUnpaid)}
               </span>
             </div>
           </div>
           {isSelected && (
-            <div className="mt-2">
+            <div className="mt-1">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400 sm:text-sm">₱</span>
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
                 <input
                   type="text"
@@ -120,10 +120,10 @@ const MemoizedCashAdvanceItem = React.memo(
                   onChange={(e) =>
                     onAmountChange(advance.id, parseFloat(e.target.value) || 0)
                   }
-                  className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
-                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                  className={`block w-full pl-7 pr-3 py-1.5 text-sm rounded-md bg-white border border-gray-300 text-gray-900 placeholder-gray-400
+                  focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-gray-400 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
                     }`}
-                  placeholder="Enter deduction amount"
+                  placeholder="Enter amount"
                   disabled={isCalculating}
                 />
                 {isCalculating && (
@@ -172,13 +172,13 @@ const MemoizedShortItem = React.memo(
     return (
       <div className="w-full">
         <div
-          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
-            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
-            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+          className={`group flex flex-col space-y-2 p-3 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-blue-50 border border-blue-200 shadow-sm"
+            : "bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300"
             }`}
         >
           <div className="flex justify-between items-start">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-1">
               <label className="inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -187,37 +187,33 @@ const MemoizedShortItem = React.memo(
                   onChange={(e) => onSelect(short.id, e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                  style={{
-                    backgroundColor: isSelected ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
-                  }}
-                ></div>
+                <div className="relative w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
               <label
                 htmlFor={`short-${short.id}`}
-                className="text-sm font-medium text-gray-200 leading-5 ml-2 group-hover:text-white transition-colors duration-200 cursor-pointer"
+                className="text-sm font-medium text-gray-700 leading-5 ml-1 group-hover:text-gray-900 transition-colors duration-200 cursor-pointer flex-1 truncate"
               >
                 {short.reason}
               </label>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors duration-200">
+            <div className="flex flex-col items-end text-right">
+              <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors duration-200">
                 {new Date(short.date).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
                 })}
               </span>
-              <span className="text-xs font-medium text-blue-400/90 group-hover:text-blue-400 mt-1 transition-colors duration-200">
-                Remaining: {formatCurrency(short.remainingUnpaid)}
+              <span className="text-xs font-medium text-blue-600 group-hover:text-blue-700 transition-colors duration-200">
+                {formatCurrency(short.remainingUnpaid)}
               </span>
             </div>
           </div>
           {isSelected && (
-            <div className="mt-2">
+            <div className="mt-1">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400 sm:text-sm">₱</span>
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
                 <input
                   type="text"
@@ -225,10 +221,10 @@ const MemoizedShortItem = React.memo(
                   onChange={(e) =>
                     onAmountChange(short.id, parseFloat(e.target.value) || 0)
                   }
-                  className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
-                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                  className={`block w-full pl-7 pr-3 py-1.5 text-sm rounded-md bg-white border border-gray-300 text-gray-900 placeholder-gray-400
+                  focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-gray-400 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
                     }`}
-                  placeholder="Enter deduction amount"
+                  placeholder="Enter amount"
                   disabled={isCalculating}
                 />
                 {isCalculating && (
@@ -276,13 +272,13 @@ const MemoizedLoanItem = React.memo(
     return (
       <div className="w-full">
         <div
-          className={`group flex flex-col space-y-3 p-4 rounded-lg transition-all duration-200 ${isSelected
-            ? "bg-gray-800/80 border border-blue-500/30 shadow-lg shadow-blue-500/5"
-            : "bg-gray-900/50 hover:bg-gray-800/60 border border-gray-800/50 hover:border-gray-700/50"
+          className={`group flex flex-col space-y-2 p-3 rounded-lg transition-all duration-200 ${isSelected
+            ? "bg-blue-50 border border-blue-200 shadow-sm"
+            : "bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300"
             }`}
         >
           <div className="flex justify-between items-start">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-1">
               <label className="inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
@@ -291,33 +287,33 @@ const MemoizedLoanItem = React.memo(
                   onChange={(e) => onSelect(loan.id, e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="relative w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
               <label
                 htmlFor={`loan-${loan.id}`}
-                className="text-sm font-medium text-gray-200 leading-5 ml-2 group-hover:text-white transition-colors duration-200 cursor-pointer"
+                className="text-sm font-medium text-gray-700 leading-5 ml-1 group-hover:text-gray-900 transition-colors duration-200 cursor-pointer flex-1 truncate"
               >
                 {loan.type || "Loan"}
               </label>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-medium text-gray-400 group-hover:text-gray-300 transition-colors duration-200">
+            <div className="flex flex-col items-end text-right">
+              <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors duration-200">
                 {new Date(loan.date).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
                 })}
               </span>
-              <span className="text-xs font-medium text-blue-400/90 group-hover:text-blue-400 mt-1 transition-colors duration-200">
-                Remaining: {formatCurrency(loan.remainingBalance)}
+              <span className="text-xs font-medium text-blue-600 group-hover:text-blue-700 transition-colors duration-200">
+                {formatCurrency(loan.remainingBalance)}
               </span>
             </div>
           </div>
           {isSelected && (
-            <div className="mt-2">
+            <div className="mt-1">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400 sm:text-sm">₱</span>
+                  <span className="text-gray-500 sm:text-sm">₱</span>
                 </div>
                 <input
                   type="text"
@@ -325,10 +321,10 @@ const MemoizedLoanItem = React.memo(
                   onChange={(e) =>
                     onAmountChange(loan.id, parseFloat(e.target.value) || 0)
                   }
-                  className={`block w-full pl-7 pr-3 py-2 text-sm rounded-md bg-gray-800/80 border border-gray-700/50 text-white placeholder-gray-500
-                focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 hover:border-gray-600/50 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
+                  className={`block w-full pl-7 pr-3 py-1.5 text-sm rounded-md bg-white border border-gray-300 text-gray-900 placeholder-gray-400
+                  focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-gray-400 transition-all duration-200 ${isCalculating ? "opacity-50" : ""
                     }`}
-                  placeholder="Enter deduction amount"
+                  placeholder="Enter amount"
                   disabled={isCalculating}
                 />
                 {isCalculating && (
@@ -369,6 +365,8 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     endDate,
     position,
   }) => {
+    if (!isOpen) return null;
+
     const [formData, setFormData] = useState<Deductions>({
       sss: sss,
       philHealth: philHealth,
@@ -406,6 +404,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     );
     const [hasLoadedAdvances, setHasLoadedAdvances] = useState(false);
     const [hasLoadedShorts, setHasLoadedShorts] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     // Load loans using our new hook
     const { loans, isLoading: isLoadingLoans } = useLoanManagement({
@@ -881,217 +880,198 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           }));
         };
 
-    if (!isOpen) return null;
-
     return (
-      <div
-        className="fixed inset-0 z-50"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
+      <BaseFormDialog
+        title="Confirm Deductions"
+        isOpen={isOpen}
+        onClose={onClose}
+        onSubmit={handleSubmit}
+        position={position}
+        submitText="Confirm & Generate"
+        isBottomSheet={true}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: position?.top,
-            left: position!.left - 20,
-            width: "800px",
-            transform: position?.showAbove ? "translateY(-100%)" : "none",
-            maxHeight: "calc(100vh - 100px)",
-          }}
-          className="bg-gray-900 rounded-lg shadow-xl border border-gray-700"
-        >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-            <h2 className="text-xl font-semibold text-white">
-              Confirm Deductions
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors"
-            >
-              <IoClose size={24} />
-            </button>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-6">
+            <div className="sm:col-span-1 md:col-span-4">
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="sss"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  SSS Contribution
+                </label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="sss"
+                    checked={formData.enableSss}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        enableSss: e.target.checked,
+                        sss: e.target.checked ? prev.sss : 0,
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                    style={{
+                      backgroundColor: formData.enableSss ? '#2563eb' : '#d1d5db',
+                    }}
+                  ></div>
+                </label>
+              </div>
+              <div className="relative rounded-md">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
+                </div>
+                <input
+                  type="number"
+                  name="sss"
+                  id="sss"
+                  step="0.01"
+                  value={formData.enableSss ? formData.sss : 0}
+                  onChange={handleInputChange("sss")}
+                  className={`block w-full pl-7 pr-3 py-2 rounded-md border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enableSss
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                    }`}
+                  placeholder="0.00"
+                  disabled={!formData.enableSss}
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-1 md:col-span-4">
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="philHealth"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  PhilHealth Contribution
+                </label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="philHealth"
+                    checked={formData.enablePhilHealth}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        enablePhilHealth: e.target.checked,
+                        philHealth: e.target.checked ? prev.philHealth : 0,
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                    style={{
+                      backgroundColor: formData.enablePhilHealth ? '#2563eb' : '#d1d5db',
+                    }}
+                  ></div>
+                </label>
+              </div>
+              <div className="relative rounded-md">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
+                </div>
+                <input
+                  type="number"
+                  name="philHealth"
+                  id="philHealth"
+                  step="0.01"
+                  value={
+                    formData.enablePhilHealth ? formData.philHealth : 0
+                  }
+                  onChange={handleInputChange("philHealth")}
+                  className={`block w-full pl-7 pr-3 py-2 rounded-md border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePhilHealth
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                    }`}
+                  placeholder="0.00"
+                  disabled={!formData.enablePhilHealth}
+                />
+              </div>
+            </div>
+
+            <div className="sm:col-span-1 md:col-span-4">
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="pagIbig"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Pag-IBIG Contribution
+                </label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="pagIbig"
+                    checked={formData.enablePagIbig}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        enablePagIbig: e.target.checked,
+                        pagIbig: e.target.checked ? prev.pagIbig : 0,
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
+                    style={{
+                      backgroundColor: formData.enablePagIbig ? '#2563eb' : '#d1d5db',
+                    }}
+                  ></div>
+                </label>
+              </div>
+              <div className="relative rounded-md">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₱</span>
+                </div>
+                <input
+                  type="number"
+                  name="pagIbig"
+                  id="pagIbig"
+                  step="0.01"
+                  value={formData.enablePagIbig ? formData.pagIbig : 0}
+                  onChange={handleInputChange("pagIbig")}
+                  className={`block w-full pl-7 pr-3 py-2 rounded-md border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePagIbig
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                    }`}
+                  placeholder="0.00"
+                  disabled={!formData.enablePagIbig}
+                />
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6">
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label
-                      htmlFor="sss"
-                      className="text-sm font-medium text-gray-200"
-                    >
-                      SSS Contribution
-                    </label>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="sss"
-                        checked={formData.enableSss}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            enableSss: e.target.checked,
-                            sss: e.target.checked ? prev.sss : 0,
-                          }))
-                        }
-                        className="sr-only peer"
-                      />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                        style={{
-                          backgroundColor: formData.enableSss ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
-                        }}
-                      ></div>
-                    </label>
-                  </div>
-                  <div className="relative rounded-lg">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-400 sm:text-sm">₱</span>
-                    </div>
-                    <input
-                      type="number"
-                      name="sss"
-                      id="sss"
-                      step="0.01"
-                      value={formData.enableSss ? formData.sss : 0}
-                      onChange={handleInputChange("sss")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enableSss
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                        }`}
-                      placeholder="0.00"
-                      disabled={!formData.enableSss}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label
-                      htmlFor="philHealth"
-                      className="text-sm font-medium text-gray-200"
-                    >
-                      PhilHealth Contribution
-                    </label>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="philHealth"
-                        checked={formData.enablePhilHealth}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            enablePhilHealth: e.target.checked,
-                            philHealth: e.target.checked ? prev.philHealth : 0,
-                          }))
-                        }
-                        className="sr-only peer"
-                      />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                        style={{
-                          backgroundColor: formData.enablePhilHealth ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
-                        }}
-                      ></div>
-                    </label>
-                  </div>
-                  <div className="relative rounded-lg">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-400 sm:text-sm">₱</span>
-                    </div>
-                    <input
-                      type="number"
-                      name="philHealth"
-                      id="philHealth"
-                      step="0.01"
-                      value={
-                        formData.enablePhilHealth ? formData.philHealth : 0
-                      }
-                      onChange={handleInputChange("philHealth")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePhilHealth
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                        }`}
-                      placeholder="0.00"
-                      disabled={!formData.enablePhilHealth}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label
-                      htmlFor="pagIbig"
-                      className="text-sm font-medium text-gray-200"
-                    >
-                      Pag-IBIG Contribution
-                    </label>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="pagIbig"
-                        checked={formData.enablePagIbig}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            enablePagIbig: e.target.checked,
-                            pagIbig: e.target.checked ? prev.pagIbig : 0,
-                          }))
-                        }
-                        className="sr-only peer"
-                      />
-                      <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"
-                        style={{
-                          backgroundColor: formData.enablePagIbig ? '#2563eb' : '#374151', /* blue-600 : gray-700 */
-                        }}
-                      ></div>
-                    </label>
-                  </div>
-                  <div className="relative rounded-lg">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-400 sm:text-sm">₱</span>
-                    </div>
-                    <input
-                      type="number"
-                      name="pagIbig"
-                      id="pagIbig"
-                      step="0.01"
-                      value={formData.enablePagIbig ? formData.pagIbig : 0}
-                      onChange={handleInputChange("pagIbig")}
-                      className={`block w-full pl-7 pr-3 py-2 rounded-lg bg-gray-800 border-gray-700 text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${!formData.enablePagIbig
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                        }`}
-                      placeholder="0.00"
-                      disabled={!formData.enablePagIbig}
-                    />
-                  </div>
-                </div>
+          <div className="bg-gray-50 rounded-lg p-4 sm:p-6 space-y-4 border border-gray-200 transition-colors duration-200">
+            {isLoading || isLoadingLoans ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-3"></div>
+                <p className="text-sm text-gray-500">
+                  Loading deductions...
+                </p>
               </div>
+            ) : unpaidAdvances.length === 0 && unpaidShorts.length === 0 && activeLoans.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <p className="text-sm text-gray-500">
+                  No unpaid deductions available.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Please check back later or add new deductions.
+                </p>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-medium text-gray-900 text-base mb-4">Select items to include in deductions</h3>
 
-              <div className="bg-gray-800/50 rounded-lg p-3 space-y-3 border border-gray-700/50 transition-colors duration-200">
-                {isLoading || isLoadingLoans ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-3"></div>
-                    <p className="text-sm text-gray-400">
-                      Loading deductions...
-                    </p>
-                  </div>
-                ) : unpaidAdvances.length === 0 && unpaidShorts.length === 0 && activeLoans.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <p className="text-sm text-gray-400">
-                      No unpaid deductions available.
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Please check back later or add new deductions.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Render loans first */}
-                    {activeLoans.length > 0 && (
-                      <div className="mb-3">
-                        <h3 className="text-sm font-medium text-gray-300 mb-2">Loans</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Loans Column */}
+                  <div className="md:col-span-1">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 pb-1 border-b border-gray-200">Loans</h3>
+                    {activeLoans.length > 0 ? (
+                      <div className="space-y-3">
                         {activeLoans.map((loan) => (
                           <MemoizedLoanItem
                             key={loan.id}
@@ -1104,66 +1084,66 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
                           />
                         ))}
                       </div>
-                    )}
-
-                    {/* Cash advances */}
-                    {unpaidAdvances.length > 0 && (
-                      <div className="mb-3">
-                        <h3 className="text-sm font-medium text-gray-300 mb-2">Cash Advances</h3>
-                    {unpaidAdvances.map((advance) => (
-                      <MemoizedCashAdvanceItem
-                        key={advance.id}
-                        advance={advance}
-                        isSelected={selectedAdvances.has(advance.id)}
-                        deductionAmount={deductionAmounts[advance.id]}
-                        isCalculating={isCalculating[advance.id]}
-                        onSelect={handleAdvanceSelect}
-                        onAmountChange={handleAdvanceAmountChange}
-                      />
-                    ))}
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-6 bg-white rounded-lg border border-gray-200 text-center">
+                        <p className="text-sm text-gray-500">No active loans</p>
                       </div>
                     )}
+                  </div>
 
-                    {/* Shorts */}
-                    {unpaidShorts.length > 0 && (
-                      <div className="mb-3">
-                        <h3 className="text-sm font-medium text-gray-300 mb-2">Shorts</h3>
-                    {unpaidShorts.map((short) => (
-                      <MemoizedShortItem
-                        key={short.id}
-                        short={short}
-                        isSelected={selectedShorts.has(short.id)}
-                        deductionAmount={shortDeductionAmounts[short.id]}
-                        isCalculating={isCalculating[short.id]}
-                        onSelect={handleShortSelect}
-                        onAmountChange={handleShortAmountChange}
-                      />
-                    ))}
+                  {/* Cash Advances Column */}
+                  <div className="md:col-span-1">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 pb-1 border-b border-gray-200">Cash Advances</h3>
+                    {unpaidAdvances.length > 0 ? (
+                      <div className="space-y-3">
+                        {unpaidAdvances.map((advance) => (
+                          <MemoizedCashAdvanceItem
+                            key={advance.id}
+                            advance={advance}
+                            isSelected={selectedAdvances.has(advance.id)}
+                            deductionAmount={deductionAmounts[advance.id]}
+                            isCalculating={isCalculating[advance.id]}
+                            onSelect={handleAdvanceSelect}
+                            onAmountChange={handleAdvanceAmountChange}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-6 bg-white rounded-lg border border-gray-200 text-center">
+                        <p className="text-sm text-gray-500">No cash advances</p>
                       </div>
                     )}
-                  </>
-                )}
-              </div>
-            </div>
+                  </div>
 
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Confirm & Generate
-              </button>
-            </div>
-          </form>
+                  {/* Shorts Column */}
+                  <div className="md:col-span-1">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 pb-1 border-b border-gray-200">Deductions</h3>
+                    {unpaidShorts.length > 0 ? (
+                      <div className="space-y-3">
+                        {unpaidShorts.map((short) => (
+                          <MemoizedShortItem
+                            key={short.id}
+                            short={short}
+                            isSelected={selectedShorts.has(short.id)}
+                            deductionAmount={shortDeductionAmounts[short.id]}
+                            isCalculating={isCalculating[short.id]}
+                            onSelect={handleShortSelect}
+                            onAmountChange={handleShortAmountChange}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-6 bg-white rounded-lg border border-gray-200 text-center">
+                        <p className="text-sm text-gray-500">No deductions</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </BaseFormDialog>
     );
   },
   (prevProps, nextProps) => {

@@ -109,12 +109,6 @@ const DeductionsModal: React.FC<DeductionsModalProps> = ({ isOpen, onClose, loan
 export default function LoansPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const [loanFormPosition, setLoanFormPosition] = useState<{
-    top: number;
-    left: number;
-    showAbove: boolean;
-    caretLeft: number;
-  } | null>(null);
   const { dbPath } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -233,48 +227,12 @@ export default function LoansPage() {
     }
   };
 
-  const handleEditLoanClick = (loan: Loan, event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const spaceBelow = windowHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const dialogHeight = 550; // Approximate height of LoanForm dialog
-    const dialogWidth = 500; // Width of the LoanForm dialog
-    const spacing = 8;
-
-    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
-
-    setLoanFormPosition({
-      top: showAbove ? rect.top - dialogHeight - spacing : rect.bottom + spacing,
-      left: rect.right - dialogWidth + (rect.width / 2),
-      showAbove,
-      caretLeft: dialogWidth - rect.width / 2 - 8, // Adjust caret based on button position
-    });
+  const handleEditLoanClick = (loan: Loan) => {
     setSelectedLoan(loan);
     setIsDialogOpen(true);
   };
 
-  const handleApplyForLoanClick = (event: React.MouseEvent | null) => {
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const spaceBelow = windowHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const dialogHeight = 550;
-      const dialogWidth = 500;
-      const spacing = 8;
-
-      const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
-
-      setLoanFormPosition({
-        top: showAbove ? rect.top - dialogHeight - spacing : rect.bottom + spacing,
-        left: rect.right - dialogWidth + (rect.width / 2),
-        showAbove,
-        caretLeft: dialogWidth - rect.width / 2 - 8,
-      });
-    } else {
-      setLoanFormPosition(null);
-    }
+  const handleApplyForLoanClick = () => {
     setSelectedLoan(null);
     setIsDialogOpen(true);
   };
@@ -378,7 +336,7 @@ export default function LoansPage() {
                           employeeName={employee?.name}
                           dataType="loans"
                           actionText="Apply for Loan"
-                          onActionClick={() => handleApplyForLoanClick(null)}
+                          onActionClick={() => handleApplyForLoanClick()}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (
@@ -470,7 +428,7 @@ export default function LoansPage() {
                                     Show Deductions
                                   </button>
                                   <button
-                                    onClick={(e) => handleEditLoanClick(loan, e)}
+                                    onClick={(e) => handleEditLoanClick(loan)}
                                     className="inline-flex items-center justify-center px-3 py-1.5 rounded-md 
                                     text-indigo-700 bg-indigo-100 hover:bg-indigo-200 
                                     shadow-sm transition-all duration-200 
@@ -527,7 +485,7 @@ export default function LoansPage() {
                     <NoDataPlaceholder
                       dataType="loans"
                       actionText="Apply for Loan"
-                      onActionClick={() => handleApplyForLoanClick(null)}
+                      onActionClick={() => handleApplyForLoanClick()}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   )}
@@ -536,32 +494,16 @@ export default function LoansPage() {
             </div>
           </div>
         </MagicCard>
-        {isDialogOpen && (
-          <div className="fixed inset-0 bg-black opacity-50 z-40" />
-        )}
-        {isDialogOpen && (
-          <div
-            className="fixed inset-0 z-50"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setIsDialogOpen(false);
-                setLoanFormPosition(null);
-              }
-            }}
-          >
-            <LoanForm
-              onClose={() => {
-                setIsDialogOpen(false);
-                setLoanFormPosition(null);
-              }}
-              onSave={handleSaveLoan}
-              initialData={selectedLoan}
-              position={loanFormPosition ? loanFormPosition : undefined}
-              isWebMode={isWebMode}
-              companyName={companyName}
-            />
-          </div>
-        )}
+        <LoanForm
+          onClose={() => {
+            setIsDialogOpen(false);
+          }}
+          onSave={handleSaveLoan}
+          initialData={selectedLoan}
+          isWebMode={isWebMode}
+          companyName={companyName}
+          isOpen={isDialogOpen}
+        />
         {/* Render Deductions Modal */}
         <DeductionsModal
           isOpen={isDeductionsModalOpen}

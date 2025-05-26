@@ -56,7 +56,7 @@ const NoDataPlaceholder: React.FC<NoDataPlaceholderProps> = ({
                     </div>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 text-center">
-                    <DecryptedText text="No Employee Selected" animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                    <DecryptedText text="No Employee Selected" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                 </h3>
                 <p className="max-w-md text-center text-gray-500 mb-8 leading-relaxed">
                     Please select an employee from the dropdown menu to view their {dataType}.
@@ -102,7 +102,7 @@ const NoDataPlaceholder: React.FC<NoDataPlaceholderProps> = ({
                 </div>
 
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                    <DecryptedText text={`No ${dataType} found`} animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+                    <DecryptedText text={`No ${dataType} found`} animateOn="view" revealDirection='start' speed={50} sequential={true} />
                 </h3>
 
                 <div className="inline-flex items-center justify-center space-x-1 px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full mb-4">
@@ -121,6 +121,10 @@ const NoDataPlaceholder: React.FC<NoDataPlaceholderProps> = ({
                 <p className="text-gray-500 mb-6">
                     Get started by clicking the <span className="font-medium text-blue-600">"{actionText}"</span> button.
                 </p>
+
+                <div className="transform hover:scale-105 transition-transform duration-300">
+                    <AddButton text={actionText} onClick={onActionClick} />
+                </div>
 
             </div>
         </div>

@@ -327,31 +327,12 @@ export default function PayrollPage() {
       return;
     }
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 400; // Approximate height of dialog
-    const dialogWidth = 800; // Width of the dialog
-    const spacing = 8; // Space between dialog and trigger
-
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove ? rect.top - spacing : rect.bottom + spacing;
-
-    // Calculate horizontal position
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
+    // For bottom sheet layout, we don't need complex positioning
+    // Just pass a minimal position object for backward compatibility
     setClickPosition({
-      top,
-      left,
-      showAbove,
+      top: window.innerHeight - 20,
+      left: window.innerWidth / 2,
+      showAbove: false
     });
 
     setShowDeductionsDialog(true);
@@ -462,33 +443,30 @@ export default function PayrollPage() {
 
         {/* Deductions Dialog */}
         {showDeductionsDialog && hasAccess("MANAGE_PAYROLL") && (
-          <>
-            <div className="fixed inset-0 bg-black opacity-50 z-40" />
-            <DeductionsDialog
-              isOpen={showDeductionsDialog}
-              onClose={() => {
-                setShowDeductionsDialog(false);
-                setClickPosition(null);
-              }}
-              sss={employee?.sss || 0}
-              philHealth={employee?.philHealth || 0}
-              pagIbig={employee?.pagIbig || 0}
-              onConfirm={handleConfirmDeductions}
-              employeeId={selectedEmployeeId!}
-              dbPath={dbPath}
-              startDate={
-                typeof dateRange.startDate === "string"
-                  ? new Date(dateRange.startDate)
-                  : dateRange.startDate || new Date()
-              }
-              endDate={
-                typeof dateRange.endDate === "string"
-                  ? new Date(dateRange.endDate)
-                  : dateRange.endDate || new Date()
-              }
-              position={clickPosition}
-            />
-          </>
+          <DeductionsDialog
+            isOpen={showDeductionsDialog}
+            onClose={() => {
+              setShowDeductionsDialog(false);
+              setClickPosition(null);
+            }}
+            sss={employee?.sss || 0}
+            philHealth={employee?.philHealth || 0}
+            pagIbig={employee?.pagIbig || 0}
+            onConfirm={handleConfirmDeductions}
+            employeeId={selectedEmployeeId!}
+            dbPath={dbPath}
+            startDate={
+              typeof dateRange.startDate === "string"
+                ? new Date(dateRange.startDate)
+                : dateRange.startDate || new Date()
+            }
+            endDate={
+              typeof dateRange.endDate === "string"
+                ? new Date(dateRange.endDate)
+                : dateRange.endDate || new Date()
+            }
+            position={clickPosition}
+          />
         )}
 
         {/* Payroll View */}

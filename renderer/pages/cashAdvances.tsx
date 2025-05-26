@@ -40,12 +40,6 @@ export default function CashAdvancesPage() {
     useState<CashAdvance | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [clickPosition, setClickPosition] = useState<{
-    top: number;
-    left: number;
-    showAbove: boolean;
-    caretLeft: number;
-  } | null>(null);
 
   const { activeLink, setActiveLink } = useLoadingStore();
   const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
@@ -211,76 +205,20 @@ export default function CashAdvancesPage() {
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
-    setClickPosition(null);
     setSelectedCashAdvance(null);
   };
 
-  const handleButtonClick = (event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 450;
-    const dialogWidth = 850;
-    const spacing = 8;
-
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    left =
-      Math.max(spacing, Math.min(left, windowWidth - dialogWidth - spacing)) -
-      60;
-
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
+  const handleButtonClick = () => {
     setSelectedCashAdvance(null);
     setIsDialogOpen(true);
   };
 
-  const handleRowClick = (event: React.MouseEvent, advance: CashAdvance) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 450;
-    const dialogWidth = 850;
-    const spacing = 8;
-
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
+  const handleEditCashAdvance = (advance: CashAdvance) => {
     setSelectedCashAdvance(advance);
     setIsDialogOpen(true);
+    console.log("Editing cash advance:", advance);
   };
+
   const router = useRouter();
   const handleLinkClick = (path: string) => {
     if (path === pathname) return;
@@ -584,7 +522,7 @@ export default function CashAdvancesPage() {
                           employeeName={employee?.name}
                           dataType="cash advances"
                           actionText="Apply for Cash Advance"
-                          onActionClick={() => { }}
+                          onActionClick={handleButtonClick}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (
@@ -640,7 +578,7 @@ export default function CashAdvancesPage() {
                               <tr
                                 key={advance.id}
                                 className="hover:bg-gray-50 cursor-pointer"
-                                onClick={(e) => handleRowClick(e, advance)}
+                                onClick={() => handleEditCashAdvance(advance)}
                               >
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {new Date(advance.date).toLocaleDateString()}
@@ -713,7 +651,7 @@ export default function CashAdvancesPage() {
                     <NoDataPlaceholder
                       dataType="cash advances"
                       actionText="Apply for Cash Advance"
-                      onActionClick={() => { }}
+                      onActionClick={handleButtonClick}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   )}
@@ -722,33 +660,15 @@ export default function CashAdvancesPage() {
             </div>
           </div>
         </MagicCard>
-        {isDialogOpen && (
-          <>
-            <div className="fixed inset-0 bg-black/50 z-40" />
-            <div
-              className="fixed inset-0 z-50"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  handleCloseDialog();
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  handleCloseDialog();
-                }
-              }}
-              tabIndex={0}
-            >
-              <CashAdvanceForm
-                onClose={handleCloseDialog}
-                onSave={handleSaveCashAdvance}
-                initialData={selectedCashAdvance}
-                position={clickPosition!}
-              />
-            </div>
-          </>
-        )}
+        <CashAdvanceForm
+          key={selectedCashAdvance?.id || 'new-cash-advance'}
+          onClose={handleCloseDialog}
+          onSave={handleSaveCashAdvance}
+          initialData={selectedCashAdvance || undefined}
+          isOpen={isDialogOpen}
+        />
       </main>
     </RootLayout>
   );
 }
+

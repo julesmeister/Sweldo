@@ -57,13 +57,6 @@ export default function HolidaysPage() {
   const yearNum = selectedYear;
   const monthNum = selectedMonth + 1;
 
-  const [clickPosition, setClickPosition] = useState<{
-    top: number;
-    left: number;
-    showAbove: boolean;
-    caretLeft: number;
-  } | null>(null);
-
   const [currentHeight, setCurrentHeight] = useState(0);
 
   useEffect(() => {
@@ -115,98 +108,41 @@ export default function HolidaysPage() {
         const settingsModel = createAttendanceSettingsModel(dbPath);
         const settings = await settingsModel.loadAttendanceSettings();
         setAttendanceSettings(settings);
+
+        // Once settings are loaded, we can safely load holidays and suggestions
+        await loadHolidays();
+        await loadSuggestedHolidays();
       } catch (error) {
         console.error("Error loading attendance settings:", error);
+
+        // If settings fail to load, still try to load holidays with default values
+        loadHolidays();
+        loadSuggestedHolidays();
       }
     };
-    loadSettings();
-  }, [dbPath]);
 
-  const setDialogPosition = (event: React.MouseEvent, holiday: Holiday) => {
-    event.stopPropagation(); // Prevent event bubbling
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 400; // Approximate height of dialog
-    const dialogWidth = 400; // Approximate width of dialog
-    const spacing = 8; // Space between dialog and trigger
+    if (dbPath) {
+      loadSettings();
+    } else {
+      // If no dbPath, just load holidays with default values
+      loadHolidays();
+      loadSuggestedHolidays();
+    }
+  }, [dbPath, selectedYear, selectedMonth, companyName]);
 
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    // Calculate horizontal position
-    // Center the dialog relative to the clicked element
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
+  const handleEditHoliday = (holiday: Holiday) => {
     setSelectedHoliday(holiday);
     setIsDialogOpen(true);
   };
 
-  const handleNewHolidayClick = (event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent event bubbling
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 400; // Approximate height of dialog
-    const dialogWidth = 400; // Approximate width of dialog
-    const spacing = 8; // Space between dialog and trigger
-
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    // Calculate horizontal position
-    // Center the dialog relative to the clicked element
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
+  const handleNewHolidayClick = () => {
     setSelectedHoliday(undefined);
     setIsDialogOpen(true);
   };
 
-  const handleSuggestedHolidayClick = (
-    holiday: Holiday,
-    event: React.MouseEvent
-  ) => {
-    setDialogPosition(event, holiday);
+  const handleSuggestedHolidayClick = (holiday: Holiday) => {
+    setSelectedHoliday(holiday);
+    setIsDialogOpen(true);
   };
 
   const loadSuggestedHolidays = async () => {
@@ -215,7 +151,13 @@ export default function HolidaysPage() {
       try {
         const year = selectedYear;
         const month = selectedMonth + 1; // Convert from 0-based to 1-based
-        const suggestions = await fetchHolidays(year);
+
+        // Use multiplier values from attendance settings or use defaults that match your system
+        const regularMultiplier = attendanceSettings?.regularHolidayMultiplier || 1;
+        const specialMultiplier = attendanceSettings?.specialHolidayMultiplier || 0.3;
+
+        console.log(`[HolidaysPage] Fetching holidays with multipliers - Regular: ${regularMultiplier}, Special: ${specialMultiplier}`);
+        const suggestions = await fetchHolidays(year, regularMultiplier, specialMultiplier);
 
         // Filter holidays for the selected month
         const monthHolidays = suggestions.filter((holiday) => {
@@ -280,11 +222,6 @@ export default function HolidaysPage() {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadSuggestedHolidays();
-    loadHolidays();
-  }, [selectedYear, selectedMonth, holidays.length, companyName, dbPath]);
 
   useEffect(() => { }, [selectedHoliday]);
 
@@ -505,7 +442,7 @@ export default function HolidaysPage() {
                               <tr
                                 key={holiday.id}
                                 className="hover:bg-gray-50 cursor-pointer transition-colors duration-150 ease-in-out"
-                                onClick={(e) => setDialogPosition(e, holiday)}
+                                onClick={() => handleEditHoliday(holiday)}
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900">
@@ -640,9 +577,7 @@ export default function HolidaysPage() {
                       {suggestedHolidays.map((holiday) => (
                         <div
                           key={holiday.id}
-                          onClick={(e) =>
-                            handleSuggestedHolidayClick(holiday, e)
-                          }
+                          onClick={() => handleSuggestedHolidayClick(holiday)}
                           className="group relative flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer"
                         >
                           <div className="flex-1 min-w-0">
@@ -704,22 +639,14 @@ export default function HolidaysPage() {
             </MagicCard>
           </div>
         </div>
-        {isDialogOpen && (
-          <div className="fixed inset-0 bg-black opacity-50 z-40" />
-        )}
-        {isDialogOpen && (
-          <div className="fixed inset-0 z-50">
-            <HolidayForm
-              onClose={() => {
-                setIsDialogOpen(false);
-                setClickPosition(null);
-              }}
-              onSave={handleSaveHoliday}
-              initialData={selectedHoliday}
-              position={clickPosition!}
-            />
-          </div>
-        )}
+
+        {/* Holiday Form */}
+        <HolidayForm
+          onClose={() => setIsDialogOpen(false)}
+          onSave={handleSaveHoliday}
+          initialData={selectedHoliday}
+          isOpen={isDialogOpen}
+        />
       </main>
     </RootLayout>
   );

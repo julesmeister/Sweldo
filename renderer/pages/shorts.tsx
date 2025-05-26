@@ -32,12 +32,6 @@ export default function DeductionsPage() {
   const [selectedShort, setSelectedShort] = useState<Short | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [clickPosition, setClickPosition] = useState<{
-    top: number;
-    left: number;
-    showAbove: boolean;
-    caretLeft: number;
-  } | null>(null);
   const [showTip, setShowTip] = useState(false);
 
   // Initialize month/year from localStorage on first render - RETAIN for initial default, but prefer store for updates
@@ -241,85 +235,15 @@ export default function DeductionsPage() {
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
-    setClickPosition(null);
     setSelectedShort(null);
   };
 
-  const handleButtonClick = (event?: React.MouseEvent) => {
-    let top, left, showAbove, caretLeft;
-    const dialogHeight = 450;
-    const dialogWidth = 850;
-    const spacing = 8;
-
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const windowWidth = window.innerWidth;
-
-      // Calculate vertical position
-      const spaceBelow = windowHeight - rect.bottom;
-      showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-      top = showAbove
-        ? rect.top - dialogHeight - spacing
-        : rect.bottom + spacing;
-
-      // Calculate horizontal position
-      let tempLeft = rect.left + rect.width / 2 - dialogWidth / 2;
-      left = Math.max(spacing, Math.min(tempLeft, windowWidth - dialogWidth - spacing)) - 60; // Adjusted as per original logic
-      caretLeft = rect.left + rect.width / 2 - left;
-    } else {
-      // Default positioning logic (e.g., center screen)
-      top = window.innerHeight / 2 - dialogHeight / 2;
-      left = window.innerWidth / 2 - dialogWidth / 2;
-      showAbove = false;
-      caretLeft = dialogWidth / 2; // Caret in the middle of the dialog
-    }
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
+  const handleButtonClick = () => {
     setSelectedShort(null);
     setIsDialogOpen(true);
   };
 
   const handleRowClick = (event: React.MouseEvent, short: Short) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 450;
-    const dialogWidth = 850;
-    const spacing = 8;
-
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    // Calculate horizontal position
-    let left = rect.left + rect.width / 2 - dialogWidth / 2;
-
-    // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
     setSelectedShort(short);
     setIsDialogOpen(true);
   };
@@ -704,32 +628,12 @@ export default function DeductionsPage() {
             </div>
           </div>
         </MagicCard>
-        {isDialogOpen && (
-          <>
-            <div className="fixed inset-0 bg-black/50 z-40" />
-            <div
-              className="fixed inset-0 z-50"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  handleCloseDialog();
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  handleCloseDialog();
-                }
-              }}
-              tabIndex={0}
-            >
-              <ShortsForm
-                onClose={handleCloseDialog}
-                onSave={handleSaveShort}
-                initialData={selectedShort}
-                position={clickPosition!}
-              />
-            </div>
-          </>
-        )}
+        <ShortsForm
+          onClose={handleCloseDialog}
+          onSave={handleSaveShort}
+          initialData={selectedShort}
+          isOpen={isDialogOpen}
+        />
       </main>
     </RootLayout>
   );

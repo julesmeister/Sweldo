@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { useLoadingStore } from "@/renderer/stores/loadingStore";
 import { useEmployeeStore } from "@/renderer/stores/employeeStore";
@@ -34,9 +34,7 @@ interface Leave {
 export default function LeavesPage() {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedLeave, setSelectedLeave] = useState<Leave | undefined>(
-    undefined
-  );
+  const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
   const { setLoading, setActiveLink } = useLoadingStore();
   const { dbPath, companyName: companyNameFromSettings } = useSettingsStore();
   const { selectedEmployeeId, setSelectedEmployeeId } = useEmployeeStore();
@@ -186,83 +184,12 @@ export default function LeavesPage() {
     }
   };
 
-  const [clickPosition, setClickPosition] = useState<{
-    top: number;
-    left: number;
-    showAbove: boolean;
-    caretLeft: number;
-  } | null>(null);
-
-  const handleButtonClick = (event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent event bubbling
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 400; // Approximate height of dialog
-    const dialogWidth = 400; // Approximate width of dialog
-    const spacing = 8; // Space between dialog and trigger
-
-    // Calculate vertical position
-    const spaceBelow = windowHeight - rect.bottom;
-    const showAbove = spaceBelow < dialogHeight && rect.top > dialogHeight;
-    const top = showAbove
-      ? rect.top - dialogHeight - spacing
-      : rect.bottom + spacing;
-
-    // Calculate horizontal position
-    let left = rect.left + rect.width / 2 - dialogWidth / 2 - 180;
-
-    // Keep dialog within window bounds
-    left = Math.max(
-      spacing,
-      Math.min(left, windowWidth - dialogWidth - spacing)
-    );
-
-    // Calculate caret position relative to the dialog
-    const caretLeft = rect.left + rect.width / 2 - left;
-
-    setClickPosition({
-      top,
-      left,
-      showAbove,
-      caretLeft,
-    });
-
-    setSelectedLeave(undefined);
+  const handleButtonClick = () => {
+    setSelectedLeave(null);
     setIsDialogOpen(true);
   };
 
   const handleRowClick = (event: React.MouseEvent, leave: Leave) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const dialogHeight = 450;
-    const dialogWidth = 550;
-    const spacing = 8;
-
-    const spaceBelow = windowHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const showAbove = spaceBelow < dialogHeight && spaceAbove > spaceBelow;
-
-    // Calculate left position to align with button's right edge
-    let left = rect.right - dialogWidth + 5;
-
-    // Ensure the dialog stays within viewport bounds
-    if (left < 0) {
-      left = 0; // Align to left edge of viewport if it would go off-screen
-    } else if (left + dialogWidth > windowWidth) {
-      left = windowWidth - dialogWidth; // Align to right edge of viewport
-    }
-
-    setClickPosition({
-      top: showAbove
-        ? rect.top - dialogHeight - spacing
-        : rect.bottom + spacing,
-      left,
-      showAbove,
-      caretLeft: dialogWidth - rect.width / 2, // Adjusted caret position
-    });
-
     setSelectedLeave(leave);
     setIsDialogOpen(true);
   };
@@ -418,7 +345,7 @@ export default function LeavesPage() {
                     <NoDataPlaceholder
                       dataType="leave requests"
                       actionText="Request Leave"
-                      onActionClick={() => handleButtonClick}
+                      onActionClick={handleButtonClick}
                       onSelectEmployeeClick={() => handleLinkClick("/")}
                     />
                   ) : (
@@ -428,7 +355,7 @@ export default function LeavesPage() {
                           employeeName={employee?.name}
                           dataType="leave requests"
                           actionText="Request Leave"
-                          onActionClick={() => handleButtonClick}
+                          onActionClick={handleButtonClick}
                           onSelectEmployeeClick={() => handleLinkClick("/")}
                         />
                       ) : (
@@ -525,30 +452,14 @@ export default function LeavesPage() {
             </div>
           </div>
         </MagicCard>
-        {isDialogOpen && (
-          <Fragment>
-            <div className="fixed inset-0 bg-black/30 z-40" />
-            <div
-              className="fixed inset-0 z-50"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setIsDialogOpen(false);
-                  setClickPosition(null);
-                }
-              }}
-            >
-              <LeaveForm
-                onClose={() => {
-                  setIsDialogOpen(false);
-                  setClickPosition(null);
-                }}
-                onSave={handleSaveLeave}
-                initialData={selectedLeave}
-                position={clickPosition!}
-              />
-            </div>
-          </Fragment>
-        )}
+        <LeaveForm
+          onClose={() => {
+            setIsDialogOpen(false);
+          }}
+          onSave={handleSaveLeave}
+          initialData={selectedLeave || undefined}
+          isOpen={isDialogOpen}
+        />
       </main>
     </RootLayout>
   );
