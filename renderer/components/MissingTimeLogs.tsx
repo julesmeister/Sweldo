@@ -295,13 +295,13 @@ export default function MissingTimeLogs() {
         <div className="overflow-hidden bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-2 mb-4">
             <h2 className="text-lg font-semibold text-gray-900">
-              <DecryptedText text={isWebEnvironment() && companyName ? `${companyName} Missing Time Logs` : "Missing Time Logs"} animateOn="view" revealDirection='start' speed={50} sequential={true}/>
+              <DecryptedText text={isWebEnvironment() && companyName ? `${companyName} Missing Time Logs` : "Missing Time Logs"} animateOn="view" revealDirection='start' speed={50} sequential={true} />
             </h2>
             {yearNum !== undefined && monthNum !== undefined && isWebEnvironment() && (
               <button
                 type="button"
                 onClick={reloadMissingLogs}
-                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors duration-200"
               >
                 <IoReloadOutline className="w-5 h-5" />
               </button>
@@ -327,7 +327,7 @@ export default function MissingTimeLogs() {
                   missingLogs.map((log) => (
                     <tr
                       key={log.id}
-                      className="hover:bg-gray-50 cursor-pointer"
+                      className="hover:bg-gray-50 cursor-pointer transition-colors duration-200"
                       onClick={async (e) => {
                         e.preventDefault();
 
@@ -371,7 +371,10 @@ export default function MissingTimeLogs() {
                         {log.day}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-b border-gray-200">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.missingType === "timeIn"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-orange-100 text-orange-800"
+                          }`}>
                           {log.missingType === "timeIn"
                             ? "Time In"
                             : "Time Out"}

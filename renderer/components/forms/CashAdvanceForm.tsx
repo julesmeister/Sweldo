@@ -285,7 +285,7 @@ const CashAdvanceForm: React.FC<CashAdvanceFormProps> = ({
             </div>
           )}
 
-          <div className={`md:col-span-${paymentSchedule === "Installment" ? "5" : "8"}`}>
+          <div className={paymentSchedule === "Installment" ? "md:col-span-5" : "md:col-span-8"}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Approval Status
             </label>

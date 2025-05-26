@@ -11,6 +11,7 @@ import {
 import { useSettingsStore } from "@/renderer/stores/settingsStore";
 import { Attendance } from "@/renderer/model/attendance";
 import { toast } from "sonner";
+import BaseFormDialog from "@/renderer/components/dialogs/BaseFormDialog";
 
 interface TimeEditDialogProps {
   isOpen: boolean;
@@ -140,132 +141,50 @@ export const TimeEditDialog: React.FC<TimeEditDialogProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <BaseFormDialog
+      title={hasEditAccess ? "Edit Time" : "View Time"}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      submitText={hasEditAccess ? "Save" : "Close"}
+      position={position}
+      isBottomSheet={true}
     >
-      <div
-        className="absolute bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-md overflow-visible"
-        style={{
-          top: position?.top,
-          left: position?.left,
-          transform: position?.showAbove ? "translateY(-100%)" : "none",
-          maxHeight: "calc(100vh - 100px)",
-        }}
-      >
-        {/* Caret */}
-        <div
-          className="absolute left-8 w-0 h-0"
-          style={{
-            borderLeft: "8px solid transparent",
-            borderRight: "8px solid transparent",
-            ...(position?.showAbove
-              ? {
-                  bottom: "-8px",
-                  borderTop: "8px solid rgb(55, 65, 81)", // matches border-gray-700
-                }
-              : {
-                  top: "-8px",
-                  borderBottom: "8px solid rgb(55, 65, 81)", // matches border-gray-700
-                }),
-          }}
-        />
-        <div
-          className="absolute left-8 w-0 h-0"
-          style={{
-            borderLeft: "7px solid transparent",
-            borderRight: "7px solid transparent",
-            ...(position?.showAbove
-              ? {
-                  bottom: "-6px",
-                  borderTop: "7px solid rgb(17, 24, 39)", // matches bg-gray-900
-                }
-              : {
-                  top: "-6px",
-                  borderBottom: "7px solid rgb(17, 24, 39)", // matches bg-gray-900
-                }),
-          }}
-        />
-
-        {/* Dialog content */}
-        <div className="relative">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 rounded-t-lg">
-            <h3 className="text-lg font-medium text-gray-100">
-              {hasEditAccess ? "Edit Time" : "View Time"}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-300 focus:outline-none"
-            >
-              <IoClose className="h-5 w-5" />
-            </button>
+      <form className="space-y-4">
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time In
+            </label>
+            <input
+              type="time"
+              value={timeIn || ""}
+              onChange={(e) => setTimeIn(e.target.value || "")}
+              disabled={!hasEditAccess}
+              className={`w-full px-3 py-1.5 h-10 text-sm bg-white border border-gray-300 text-gray-900 ${hasEditAccess
+                ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-400"
+                : "opacity-50 cursor-not-allowed"
+                }`}
+            />
           </div>
-
-          <form onSubmit={handleSubmit} className="bg-gray-900 rounded-b-lg">
-            <div className="p-4 space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Time In
-                  </label>
-                  <input
-                    type="time"
-                    value={timeIn || ""}
-                    onChange={(e) => setTimeIn(e.target.value || "")}
-                    disabled={!hasEditAccess}
-                    className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 [color-scheme:dark] ${
-                      hasEditAccess
-                        ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                        : "opacity-50 cursor-not-allowed"
-                    }`}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Time Out
-                  </label>
-                  <input
-                    type="time"
-                    value={timeOut || ""}
-                    onChange={(e) => setTimeOut(e.target.value || "")}
-                    disabled={!hasEditAccess}
-                    className={`w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-100 [color-scheme:dark] ${
-                      hasEditAccess
-                        ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-600"
-                        : "opacity-50 cursor-not-allowed"
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
-              <div className="flex flex-row space-x-3 w-full">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-md border border-gray-700 hover:bg-gray-700 transition-colors duration-200"
-                >
-                  {hasEditAccess ? "Cancel" : "Close"}
-                </button>
-                {hasEditAccess && (
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                  >
-                    Save
-                  </button>
-                )}
-              </div>
-            </div>
-          </form>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time Out
+            </label>
+            <input
+              type="time"
+              value={timeOut || ""}
+              onChange={(e) => setTimeOut(e.target.value || "")}
+              disabled={!hasEditAccess}
+              className={`w-full px-3 py-1.5 h-10 text-sm bg-white border border-gray-300 text-gray-900 ${hasEditAccess
+                ? "focus:border-blue-500 focus:ring focus:ring-blue-500/20 transition-all duration-200 hover:border-gray-400"
+                : "opacity-50 cursor-not-allowed"
+                }`}
+            />
+          </div>
         </div>
-      </div>
-    </div>
+      </form>
+    </BaseFormDialog>
   );
 };

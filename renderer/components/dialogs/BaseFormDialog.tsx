@@ -76,11 +76,11 @@ const BaseFormDialog: React.FC<BaseFormDialogProps> = ({
                     style={{ maxWidth: maxWidth, width: "100%", margin: "0 auto" }}
                 >
                     {/* Header - with background color */}
-                    <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-3 border-b border-t border-gray-200 bg-gray-50">
-                        <h2 className="text-lg font-medium text-gray-900">{title}</h2>
+                    <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-3 border-b border-t border-gray-200 bg-gray-800">
+                        <h2 className="text-lg font-medium text-white">{title}</h2>
                         <button
                             onClick={onClose}
-                            className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                            className="text-white hover:text-gray-400 transition-colors duration-200"
                             aria-label="Close dialog"
                         >
                             <IoClose size={24} />
@@ -165,11 +165,11 @@ const BaseFormDialog: React.FC<BaseFormDialogProps> = ({
             )}
 
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg">
-                <h2 className="text-lg font-semibold text-gray-100">{title}</h2>
+            <div className="flex items-center justify-between px-6 py-4 bg-gray-900 border-b border-gray-700 rounded-t-lg">
+                <h2 className="text-lg font-semibold text-white">{title}</h2>
                 <button
                     onClick={onClose}
-                    className="text-gray-400 hover:text-gray-300 transition-colors duration-200"
+                    className="text-white hover:text-gray-300 transition-colors duration-200"
                     aria-label="Close dialog"
                 >
                     <IoClose size={24} />
