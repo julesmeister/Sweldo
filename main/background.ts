@@ -22,12 +22,17 @@ if (isProd) {
 async function ensureCssAvailable() {
   if (!isProd) return; // Only needed in production
 
+  console.log("Starting CSS file verification for production build...");
+
   const cssFiles = ["tailwind-web.css", "globals.css"];
   const targetDirs = [
     path.join(app.getAppPath(), "app", "static", "css"),
     path.join(app.getAppPath(), "app", "styles"),
     path.join(app.getAppPath(), "resources", "css"),
   ];
+
+  console.log("App path:", app.getAppPath());
+  console.log("Target directories:", targetDirs);
 
   for (const cssFileName of cssFiles) {
     // Check source files that might contain our CSS
@@ -36,7 +41,13 @@ async function ensureCssAvailable() {
       path.join(app.getAppPath(), "renderer", "styles", cssFileName),
       path.join(app.getAppPath(), "resources", "css", cssFileName),
       path.join(app.getAppPath(), "app", "static", "css", cssFileName),
+      path.join(app.getAppPath(), "app", "styles", cssFileName), // Add this explicit path
     ];
+
+    console.log(
+      `Checking possible sources for ${cssFileName}:`,
+      possibleSources
+    );
 
     // Find first available source
     let sourceCssPath = null;
@@ -62,6 +73,7 @@ async function ensureCssAvailable() {
       try {
         if (!(await pathExists(dir))) {
           await ensureDir(dir);
+          console.log(`Created directory: ${dir}`);
         }
         const targetPath = path.join(dir, cssFileName);
         await copy(sourceCssPath, targetPath, { overwrite: true });
@@ -71,6 +83,8 @@ async function ensureCssAvailable() {
       }
     }
   }
+
+  console.log("CSS verification and copying completed.");
 }
 
 (async () => {
@@ -95,6 +109,7 @@ async function ensureCssAvailable() {
   const mainWindow = createWindow("main", {
     width: 1600,
     height: 900,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
@@ -102,11 +117,22 @@ async function ensureCssAvailable() {
     },
   });
 
+  // Once ready-to-show, show the window
+  mainWindow.once("ready-to-show", () => {
+    console.log("[Main] Window ready to show");
+    mainWindow.show();
+  });
+
   // Register CSS loading IPC handler
   ipcMain.handle("load:cssPath", async (_event, cssName) => {
+    console.log(`[CSS Loader] Attempting to load CSS file: ${cssName}`);
+
     const possiblePaths = [
       path.join(app.getAppPath(), "app", "static", "css", cssName),
+      path.join(app.getAppPath(), "app", "styles", cssName),
+      path.join(app.getAppPath(), "resources", "css", cssName),
       path.join(app.getAppPath(), "renderer", "public", "styles", cssName),
+      path.join(app.getAppPath(), "renderer", "styles", cssName),
       path.join(
         app.getAppPath(),
         "renderer",
@@ -117,23 +143,66 @@ async function ensureCssAvailable() {
       ),
       path.join(app.getAppPath(), "static", "css", cssName),
       path.join(app.getAppPath(), "styles", cssName),
-      path.join(app.getAppPath(), "app", "styles", cssName),
-      path.join(app.getAppPath(), "resources", "css", cssName),
     ];
+
+    console.log(
+      `[CSS Loader] Checking ${possiblePaths.length} possible paths for ${cssName}:`
+    );
 
     for (const cssPath of possiblePaths) {
       try {
+        console.log(`[CSS Loader] Checking path: ${cssPath}`);
         const exists = await pathExists(cssPath);
         if (exists) {
-          console.log(`CSS file found at: ${cssPath}`);
+          console.log(`[CSS Loader] CSS file found at: ${cssPath}`);
           return `app-resource://${path.relative(app.getAppPath(), cssPath)}`;
         }
       } catch (error) {
-        console.error(`Error checking CSS path ${cssPath}:`, error);
+        console.error(
+          `[CSS Loader] Error checking CSS path ${cssPath}:`,
+          error
+        );
       }
     }
 
-    console.error(`CSS file '${cssName}' not found in any location!`);
+    console.error(
+      `[CSS Loader] CSS file '${cssName}' not found in any location!`
+    );
+
+    // Emergency CSS copy as last resort
+    if (isProd) {
+      try {
+        console.log(
+          `[CSS Loader] Attempting emergency CSS recovery for ${cssName}...`
+        );
+        // Try to find any source
+        const sourceDirs = [
+          path.join(app.getAppPath(), "resources", "css"),
+          path.join(app.getAppPath(), "renderer", "public", "styles"),
+          path.join(app.getAppPath(), "renderer", "styles"),
+        ];
+
+        // Target is app/static/css which is commonly used
+        const targetDir = path.join(app.getAppPath(), "app", "static", "css");
+        await ensureDir(targetDir);
+
+        for (const sourceDir of sourceDirs) {
+          const sourcePath = path.join(sourceDir, cssName);
+          if (await pathExists(sourcePath)) {
+            console.log(`[CSS Loader] Found emergency source at ${sourcePath}`);
+            const targetPath = path.join(targetDir, cssName);
+            await copy(sourcePath, targetPath, { overwrite: true });
+            console.log(
+              `[CSS Loader] Emergency copied ${cssName} to ${targetPath}`
+            );
+            return `app-resource://app/static/css/${cssName}`;
+          }
+        }
+      } catch (err) {
+        console.error(`[CSS Loader] Emergency CSS recovery failed:`, err);
+      }
+    }
+
     return null;
   });
 

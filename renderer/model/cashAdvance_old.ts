@@ -50,7 +50,6 @@ export class CashAdvanceModel {
   employeeId: string;
   month: number;
   year: number;
-  private useJsonFormat: boolean = true;
 
   constructor(
     dbPath: string,
@@ -62,19 +61,6 @@ export class CashAdvanceModel {
     this.employeeId = employeeId;
     this.month = month || new Date().getMonth() + 1;
     this.year = year || new Date().getFullYear();
-  }
-
-  // Add format toggle
-  public setUseJsonFormat(useJson: boolean): void {
-    this.useJsonFormat = useJson;
-  }
-
-  private getCsvFilePath(): string {
-    return `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
-  }
-
-  private getJsonFilePath(): string {
-    return `${this.filePath}/${this.year}_${this.month}_cashAdvances.json`;
   }
 
   private async ensureDirectoryExists(): Promise<void> {
@@ -90,63 +76,11 @@ export class CashAdvanceModel {
     try {
       await this.ensureDirectoryExists();
 
-      // Generate a unique ID for the new cash advance if not provided
-      const id = cashAdvance.id || crypto.randomUUID();
-      cashAdvance.id = id;
-
-      if (this.useJsonFormat) {
-        // JSON implementation
-        const jsonPath = this.getJsonFilePath();
-        let jsonData: CashAdvancesJson;
-
-        try {
-          const fileContent = await window.electron.readFile(jsonPath);
-          jsonData = JSON.parse(fileContent) as CashAdvancesJson;
-        } catch (error) {
-          // Create new JSON structure if file doesn't exist
-          jsonData = {
-            meta: {
-              employeeId: this.employeeId,
-              month: this.month,
-              year: this.year,
-              lastModified: new Date().toISOString(),
-            },
-            advances: {},
-          };
-        }
-
-        // Add the cash advance to JSON data
-        jsonData.advances[id] = {
-          id,
-          employeeId: cashAdvance.employeeId,
-          date: cashAdvance.date.toISOString(),
-          amount: cashAdvance.amount,
-          remainingUnpaid: cashAdvance.remainingUnpaid || cashAdvance.amount,
-          reason: cashAdvance.reason,
-          approvalStatus: cashAdvance.approvalStatus || "Pending",
-          status: cashAdvance.status || "Unpaid",
-          paymentSchedule: cashAdvance.paymentSchedule,
-          installmentDetails: cashAdvance.installmentDetails,
-        };
-
-        // Update last modified timestamp
-        jsonData.meta.lastModified = new Date().toISOString();
-
-        // Save JSON file
-        await window.electron.writeFile(
-          jsonPath,
-          JSON.stringify(jsonData, null, 2)
-        );
-        console.log(
-          `[CashAdvanceModel] Successfully saved cash advance to JSON`
-        );
-        return;
-      }
-
-      // CSV implementation (original code)
       const formattedDate = `${
         cashAdvance.date.getMonth() + 1
       }/${cashAdvance.date.getDate()}/${cashAdvance.date.getFullYear()}`;
+      // Generate a unique ID for the new cash advance
+      const id = crypto.randomUUID();
 
       // Save all necessary fields including status and remainingUnpaid
       const csvData =
@@ -162,7 +96,7 @@ export class CashAdvanceModel {
           cashAdvance.remainingUnpaid || cashAdvance.amount,
         ].join(",") + "\n";
 
-      const filePath = this.getCsvFilePath();
+      const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
 
       // Define headers for new files
       const headers =
@@ -200,69 +134,7 @@ export class CashAdvanceModel {
 
   async updateCashAdvance(cashAdvance: CashAdvance): Promise<void> {
     try {
-      await this.ensureDirectoryExists();
-
-      if (this.useJsonFormat) {
-        // JSON implementation
-        const jsonPath = this.getJsonFilePath();
-        let jsonData: CashAdvancesJson;
-
-        try {
-          const fileContent = await window.electron.readFile(jsonPath);
-          jsonData = JSON.parse(fileContent) as CashAdvancesJson;
-        } catch (error) {
-          // If file doesn't exist or is invalid, we can't update.
-          // For robustness, create it if not found
-          jsonData = {
-            meta: {
-              employeeId: this.employeeId,
-              month: this.month,
-              year: this.year,
-              lastModified: new Date().toISOString(),
-            },
-            advances: {},
-          };
-        }
-
-        // Check if the advance exists
-        if (!jsonData.advances[cashAdvance.id]) {
-          console.error(
-            "[CashAdvanceModel] Cash advance not found:",
-            cashAdvance.id
-          );
-          throw new Error("Cash advance not found");
-        }
-
-        // Update the cash advance in JSON data
-        jsonData.advances[cashAdvance.id] = {
-          id: cashAdvance.id,
-          employeeId: cashAdvance.employeeId,
-          date: cashAdvance.date.toISOString(),
-          amount: cashAdvance.amount,
-          remainingUnpaid: cashAdvance.remainingUnpaid,
-          reason: cashAdvance.reason,
-          approvalStatus: cashAdvance.approvalStatus,
-          status: cashAdvance.status,
-          paymentSchedule: cashAdvance.paymentSchedule,
-          installmentDetails: cashAdvance.installmentDetails,
-        };
-
-        // Update last modified timestamp
-        jsonData.meta.lastModified = new Date().toISOString();
-
-        // Save JSON file
-        await window.electron.writeFile(
-          jsonPath,
-          JSON.stringify(jsonData, null, 2)
-        );
-        console.log(
-          `[CashAdvanceModel] Successfully updated cash advance in JSON`
-        );
-        return;
-      }
-
-      // CSV implementation (original code)
-      const filePath = this.getCsvFilePath();
+      const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
 
       let data: string;
       try {
@@ -354,76 +226,7 @@ export class CashAdvanceModel {
       `[DEBUG] CashAdvanceModel.loadCashAdvances - Starting for employeeId: ${employeeId}, month: ${this.month}, year: ${this.year}`
     );
     try {
-      await this.ensureDirectoryExists();
-
-      if (this.useJsonFormat) {
-        // JSON implementation
-        const jsonPath = this.getJsonFilePath();
-        try {
-          const fileContent = await window.electron.readFile(jsonPath);
-          const jsonData = JSON.parse(fileContent) as CashAdvancesJson;
-
-          // Convert JSON data to CashAdvance objects
-          const advances: CashAdvance[] = Object.keys(jsonData.advances)
-            .map((id) => {
-              const advanceData = jsonData.advances[id];
-
-              // Skip if not the requested employee
-              if (advanceData.employeeId !== employeeId) {
-                return null;
-              }
-
-              // Skip if not approved
-              if (advanceData.approvalStatus !== "Approved") {
-                return null;
-              }
-
-              return {
-                id,
-                employeeId: advanceData.employeeId,
-                date: new Date(advanceData.date),
-                amount: advanceData.amount,
-                remainingUnpaid: advanceData.remainingUnpaid,
-                reason: advanceData.reason,
-                approvalStatus: advanceData.approvalStatus as
-                  | "Pending"
-                  | "Approved"
-                  | "Rejected",
-                status: advanceData.status as "Paid" | "Unpaid",
-                paymentSchedule: advanceData.paymentSchedule as
-                  | "One-time"
-                  | "Installment",
-                installmentDetails: advanceData.installmentDetails,
-              } as CashAdvance;
-            })
-            .filter((advance): advance is CashAdvance => advance !== null);
-
-          console.log(
-            `[DEBUG] CashAdvanceModel.loadCashAdvances - Loaded ${advances.length} advances from JSON`
-          );
-          return advances;
-        } catch (error: any) {
-          if (
-            error.code === "ENOENT" ||
-            error instanceof SyntaxError ||
-            (error instanceof Error && error.message.includes("ENOENT"))
-          ) {
-            console.log(
-              `[DEBUG] CashAdvanceModel.loadCashAdvances - No JSON file found or invalid JSON. Trying CSV.`
-            );
-            // Fall through to CSV loading if JSON file doesn't exist
-          } else {
-            console.error(
-              `[CashAdvanceModel] Error reading/parsing JSON file ${jsonPath}:`,
-              error
-            );
-            throw error;
-          }
-        }
-      }
-
-      // CSV implementation (original code)
-      const filePath = this.getCsvFilePath();
+      const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
       console.log(
         `[DEBUG] CashAdvanceModel.loadCashAdvances - File path: ${filePath}`
       );
@@ -556,42 +359,7 @@ export class CashAdvanceModel {
 
   async deleteCashAdvance(id: string): Promise<void> {
     try {
-      await this.ensureDirectoryExists();
-
-      if (this.useJsonFormat) {
-        // JSON implementation
-        const jsonPath = this.getJsonFilePath();
-        try {
-          const fileContent = await window.electron.readFile(jsonPath);
-          const jsonData = JSON.parse(fileContent) as CashAdvancesJson;
-
-          // Check if the cash advance exists
-          if (!jsonData.advances[id]) {
-            throw new Error("Cash advance not found");
-          }
-
-          // Remove the cash advance
-          delete jsonData.advances[id];
-
-          // Update last modified timestamp
-          jsonData.meta.lastModified = new Date().toISOString();
-
-          // Save the updated JSON
-          await window.electron.writeFile(
-            jsonPath,
-            JSON.stringify(jsonData, null, 2)
-          );
-          return;
-        } catch (error: any) {
-          if (error.code === "ENOENT") {
-            throw new Error("Cash advance not found");
-          }
-          throw error;
-        }
-      }
-
-      // CSV implementation (original code)
-      const filePath = this.getCsvFilePath();
+      const filePath = `${this.filePath}/${this.year}_${this.month}_cashAdvances.csv`;
 
       let data: string;
       try {
@@ -622,12 +390,6 @@ export class CashAdvanceModel {
     } catch (error) {
       throw error;
     }
-  }
-
-  async loadAllCashAdvancesForSync(): Promise<CashAdvance[]> {
-    // This method would follow the pattern of loadAllLeavesForSync and loadAllLoansForSync
-    // but is outside the scope of this specific update
-    return [];
   }
 }
 

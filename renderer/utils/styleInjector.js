@@ -25,37 +25,188 @@ export function injectStyles() {
     if (!isWebEnvironment()) {
       // Additional Electron-specific styles
       if (window.electron) {
+        console.log(
+          "[Style Injector] In Electron environment, attempting to load CSS files..."
+        );
+
+        // DIRECT APPROACH: Immediately inject known paths for CSS - more reliable than IPC
+        console.log(
+          "[Style Injector] Applying direct CSS injection for production build"
+        );
+
+        // Try multiple direct paths to ensure CSS is loaded
+        const directPaths = [
+          "app://./app/static/css/tailwind-web.css",
+          "app://./app/styles/tailwind-web.css",
+          "app://./resources/css/tailwind-web.css",
+          "app://./static/css/tailwind-web.css",
+        ];
+
+        directPaths.forEach((path, index) => {
+          const directLink = document.createElement("link");
+          directLink.rel = "stylesheet";
+          directLink.href = path;
+          directLink.id = `tailwind-css-direct-${index}`;
+          document.head.appendChild(directLink);
+          console.log(`[Style Injector] Added direct CSS link: ${path}`);
+
+          // Add load listener to see which one actually loads
+          directLink.addEventListener("load", () => {
+            console.log(
+              `[Style Injector] Successfully loaded CSS from direct path: ${path}`
+            );
+          });
+        });
+
+        // Also add direct paths for globals.css
+        const globalsPaths = [
+          "app://./app/static/css/globals.css",
+          "app://./app/styles/globals.css",
+          "app://./resources/css/globals.css",
+          "app://./static/css/globals.css",
+        ];
+
+        globalsPaths.forEach((path, index) => {
+          const globalsLink = document.createElement("link");
+          globalsLink.rel = "stylesheet";
+          globalsLink.href = path;
+          globalsLink.id = `globals-css-direct-${index}`;
+          document.head.appendChild(globalsLink);
+          console.log(
+            `[Style Injector] Added direct globals CSS link: ${path}`
+          );
+
+          // Add load listener to see which one actually loads
+          globalsLink.addEventListener("load", () => {
+            console.log(
+              `[Style Injector] Successfully loaded globals CSS from direct path: ${path}`
+            );
+          });
+        });
+
+        // Still try the IPC approach as fallback
         window.electron
           .loadCssPath("tailwind-web.css")
           .then((cssPath) => {
             if (cssPath) {
-              console.log("Found CSS path via IPC:", cssPath);
+              console.log(
+                "[Style Injector] Found tailwind CSS path via IPC:",
+                cssPath
+              );
               const tailwindLink = document.createElement("link");
               tailwindLink.rel = "stylesheet";
               tailwindLink.href = cssPath;
               tailwindLink.id = "tailwind-css-electron";
               document.head.appendChild(tailwindLink);
+
+              // Add load event listener to confirm successful loading
+              tailwindLink.addEventListener("load", () => {
+                console.log(
+                  "[Style Injector] Successfully loaded tailwind CSS from:",
+                  cssPath
+                );
+              });
+
+              // Add error listener to detect failures
+              tailwindLink.addEventListener("error", () => {
+                console.error(
+                  "[Style Injector] Failed to load tailwind CSS from:",
+                  cssPath
+                );
+                // Try emergency direct path as a fallback
+                const emergencyLink = document.createElement("link");
+                emergencyLink.rel = "stylesheet";
+                emergencyLink.href = "app://./app/static/css/tailwind-web.css";
+                emergencyLink.id = "tailwind-css-electron-emergency";
+                document.head.appendChild(emergencyLink);
+              });
+            } else {
+              console.error(
+                "[Style Injector] IPC returned null path for tailwind-web.css"
+              );
+              // Try multiple hard-coded paths as emergency fallback
+              const emergencyPaths = [
+                "app://./app/static/css/tailwind-web.css",
+                "app://./app/styles/tailwind-web.css",
+                "app://./resources/css/tailwind-web.css",
+              ];
+
+              emergencyPaths.forEach((path, index) => {
+                const emergencyLink = document.createElement("link");
+                emergencyLink.rel = "stylesheet";
+                emergencyLink.href = path;
+                emergencyLink.id = `tailwind-css-electron-emergency-${index}`;
+                document.head.appendChild(emergencyLink);
+                console.log("[Style Injector] Added emergency CSS link:", path);
+              });
             }
           })
           .catch((err) => {
-            console.error("Error loading CSS via IPC:", err);
+            console.error("[Style Injector] Error loading CSS via IPC:", err);
           });
 
-        // Also try to load globals.css specifically for Electron mode
+        // Also try to load globals.css specifically for Electron mode with enhanced error handling
         window.electron
           .loadCssPath("globals.css")
           .then((cssPath) => {
             if (cssPath) {
-              console.log("Found globals CSS path via IPC:", cssPath);
+              console.log(
+                "[Style Injector] Found globals CSS path via IPC:",
+                cssPath
+              );
               const globalsLink = document.createElement("link");
               globalsLink.rel = "stylesheet";
               globalsLink.href = cssPath;
               globalsLink.id = "globals-css-electron";
               document.head.appendChild(globalsLink);
+
+              // Add load event listener to confirm successful loading
+              globalsLink.addEventListener("load", () => {
+                console.log(
+                  "[Style Injector] Successfully loaded globals CSS from:",
+                  cssPath
+                );
+              });
+
+              // Add error listener to detect failures
+              globalsLink.addEventListener("error", () => {
+                console.error(
+                  "[Style Injector] Failed to load globals CSS from:",
+                  cssPath
+                );
+                // Try emergency direct path as a fallback
+                const emergencyLink = document.createElement("link");
+                emergencyLink.rel = "stylesheet";
+                emergencyLink.href = "app://./app/static/css/globals.css";
+                emergencyLink.id = "globals-css-electron-emergency";
+                document.head.appendChild(emergencyLink);
+              });
+            } else {
+              console.error(
+                "[Style Injector] IPC returned null path for globals.css"
+              );
+              // Try multiple hard-coded paths as emergency fallback
+              const emergencyPaths = [
+                "app://./app/static/css/globals.css",
+                "app://./app/styles/globals.css",
+                "app://./resources/css/globals.css",
+              ];
+
+              emergencyPaths.forEach((path, index) => {
+                const emergencyLink = document.createElement("link");
+                emergencyLink.rel = "stylesheet";
+                emergencyLink.href = path;
+                emergencyLink.id = `globals-css-electron-emergency-${index}`;
+                document.head.appendChild(emergencyLink);
+                console.log("[Style Injector] Added emergency CSS link:", path);
+              });
             }
           })
           .catch((err) => {
-            console.error("Error loading globals CSS via IPC:", err);
+            console.error(
+              "[Style Injector] Error loading globals CSS via IPC:",
+              err
+            );
           });
       }
     } else {

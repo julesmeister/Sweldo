@@ -9,20 +9,53 @@ files:
     filter:
       - package.json
       - app
+  - from: renderer/public/styles
+    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/public/styles
+    to: app/styles
+    filter:
+      - "**/*.css"
+  - from: renderer/public/styles
+    to: static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: app/styles
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: static/css
+    filter:
+      - "**/*.css"
   - from: resources/css
     to: app/static/css
+    filter:
+      - "**/*.css"
   - from: resources/css
     to: app/styles
+    filter:
+      - "**/*.css"
   - from: resources/css
     to: resources/css
-  - from: renderer/public/styles
-    to: app/styles
-  - from: renderer/public/styles
-    to: app/static/css
-  - from: renderer/styles
-    to: app/styles
-  - from: renderer/styles
-    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: resources/css
+    to: static/css
+    filter:
+      - "**/*.css"
+asar: true
+asarUnpack:
+  - "**/*.css"
+  - "**/app/static/css/**"
+  - "**/app/styles/**"
+  - "**/static/css/**"
+  - "**/resources/css/**"
 publish: null
 win:
   target:
