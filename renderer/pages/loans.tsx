@@ -185,7 +185,22 @@ export default function LoansPage() {
   // Use the date-aware data fetching hook
   const fetchLoans = async (year: number, month: number) => {
     if (!loanModel) return [];
-    return loanModel.loadLoans(year, month);
+
+    // Load loans from all months of the year
+    const allLoans: Loan[] = [];
+
+    for (let m = 1; m <= 12; m++) {
+      try {
+        const monthLoans = await loanModel.loadLoans(year, m);
+        allLoans.push(...monthLoans);
+      } catch (error) {
+        console.warn(`Error loading loans for month ${m}:`, error);
+        // Continue with other months even if one fails
+      }
+    }
+
+    // Sort loans by date (newest first)
+    return allLoans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const { data: loans, isLoading, error, refetch } = useDateAwareDataFetching<Loan[]>(
@@ -318,6 +333,9 @@ export default function LoansPage() {
                       ) : (
                         <DecryptedText text="Loans" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
+                      <span className="ml-2 text-sm text-gray-500">
+                        (Year {useDateSelectorStore.getState().selectedYear})
+                      </span>
                     </h2>
                     <div className="relative flex items-center space-x-4">
                       <button
@@ -365,12 +383,6 @@ export default function LoansPage() {
                                 scope="col"
                                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                               >
-                                Status
-                              </th>
-                              <th
-                                scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >
                                 Remaining Balance
                               </th>
                               <th
@@ -401,15 +413,6 @@ export default function LoansPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   ₱{loan.amount.toLocaleString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span
-                                    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(
-                                      loan.status
-                                    )}`}
-                                  >
-                                    {loan.status}
-                                  </span>
                                 </td>
                                 <td
                                   className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"

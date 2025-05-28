@@ -62,10 +62,10 @@ export default function CashAdvancesPage() {
       }
 
       const { year, month, dbPath: hookDbPath, companyName: hookCompanyName } = params;
-      console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Starting fetch for employee: ${selectedEmployeeId}, year: ${year}, month: ${month}`);
+      console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Starting fetch for employee: ${selectedEmployeeId}, year: ${year}`);
       console.log(`[DEBUG] fetchCashAdvancesAndEmployee - isWebEnvironment: ${isWebEnvironment()}, dbPath: ${hookDbPath}, companyName: ${hookCompanyName}`);
 
-      let advances: CashAdvance[] = [];
+      let allAdvances: CashAdvance[] = [];
       let emp: Employee | null = null;
 
       try {
@@ -76,14 +76,24 @@ export default function CashAdvancesPage() {
             toast.error("Company name not available for web mode.");
             throw new Error("Company name not available for web mode.");
           }
-          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Calling loadCashAdvancesFirestore with companyName: ${hookCompanyName}`);
-          advances = await loadCashAdvancesFirestore(
-            selectedEmployeeId,
-            month + 1,
-            year,
-            hookCompanyName
-          );
-          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Loaded ${advances.length} cash advances`);
+
+          // Load advances for all months in the year
+          for (let m = 1; m <= 12; m++) {
+            console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Loading month ${m}`);
+            try {
+              const monthAdvances = await loadCashAdvancesFirestore(
+                selectedEmployeeId,
+                m,
+                year,
+                hookCompanyName
+              );
+              allAdvances = [...allAdvances, ...monthAdvances];
+            } catch (error) {
+              console.warn(`[DEBUG] Error loading cash advances for month ${m}:`, error);
+              // Continue with other months even if one fails
+            }
+          }
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Web mode: Loaded ${allAdvances.length} total cash advances for the year`);
         } else {
           console.log(`[DEBUG] fetchCashAdvancesAndEmployee - In desktop mode`);
           if (!hookDbPath) {
@@ -91,23 +101,32 @@ export default function CashAdvancesPage() {
             toast.error("Database path not available for desktop mode.");
             throw new Error("Database path not available for desktop mode.");
           }
-          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Creating CashAdvanceModel with dbPath: ${hookDbPath}`);
-          const cashAdvanceModel = createCashAdvanceModel(
-            hookDbPath,
-            selectedEmployeeId,
-            month + 1,
-            year
-          );
-          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Calling cashAdvanceModel.loadCashAdvances`);
-          advances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId);
-          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Loaded ${advances.length} cash advances`);
+
+          // Load advances for all months in the year
+          for (let m = 1; m <= 12; m++) {
+            console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Loading month ${m}`);
+            try {
+              const cashAdvanceModel = createCashAdvanceModel(
+                hookDbPath,
+                selectedEmployeeId,
+                m,
+                year
+              );
+              const monthAdvances = await cashAdvanceModel.loadCashAdvances(selectedEmployeeId);
+              allAdvances = [...allAdvances, ...monthAdvances];
+            } catch (error) {
+              console.warn(`[DEBUG] Error loading cash advances for month ${m}:`, error);
+              // Continue with other months even if one fails
+            }
+          }
+          console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Desktop mode: Loaded ${allAdvances.length} total cash advances for the year`);
 
           const employeeModel = createEmployeeModel(hookDbPath);
           emp = await employeeModel.loadEmployeeById(selectedEmployeeId);
           setEmployee(emp);
         }
-        console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Successfully completed with ${advances.length} advances`);
-        return advances;
+        console.log(`[DEBUG] fetchCashAdvancesAndEmployee - Successfully completed with ${allAdvances.length} advances for the full year`);
+        return allAdvances;
       } catch (error) {
         console.error("[DEBUG] fetchCashAdvancesAndEmployee - Error loading cash advances data:", error);
         toast.error(
@@ -184,7 +203,14 @@ export default function CashAdvancesPage() {
     loadEmps();
   }, [dbPath, companyNameFromSettings]);
 
-  const filteredAdvances = cashAdvances || [];
+  const filteredAdvances = useMemo(() => {
+    if (!cashAdvances) return [];
+
+    // Sort cash advances by date, newest first
+    return [...cashAdvances].sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  }, [cashAdvances]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -233,8 +259,10 @@ export default function CashAdvancesPage() {
       return;
     }
 
-    const currentYear = useDateSelectorStore.getState().selectedYear;
-    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
+    // Use the month from the date field of the cash advance
+    const advanceDate = new Date(data.date);
+    const advanceMonth = advanceDate.getMonth() + 1; // Convert from 0-based to 1-based
+    const advanceYear = advanceDate.getFullYear();
 
     setLoading(true);
     try {
@@ -250,8 +278,8 @@ export default function CashAdvancesPage() {
         };
         await saveCashAdvanceFirestore(
           advanceToSave,
-          currentMonth,
-          currentYear,
+          advanceMonth,
+          advanceYear,
           companyNameFromSettings
         );
       } else {
@@ -262,8 +290,8 @@ export default function CashAdvancesPage() {
         const cashAdvanceModel = createCashAdvanceModel(
           dbPath,
           selectedEmployeeId,
-          currentMonth,
-          currentYear
+          advanceMonth,
+          advanceYear
         );
         if (selectedCashAdvance) {
           await cashAdvanceModel.updateCashAdvance({
@@ -300,14 +328,24 @@ export default function CashAdvancesPage() {
         }
       );
     } finally {
+      setLoading(false);
     }
   }
 
   async function handleDeleteCashAdvance(advanceId: string) {
     if (!selectedEmployeeId) return;
 
-    const currentYear = useDateSelectorStore.getState().selectedYear;
-    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
+    // Find the cash advance to get its date
+    const advanceToDelete = filteredAdvances.find(adv => adv.id === advanceId);
+    if (!advanceToDelete) {
+      toast.error("Cash advance not found");
+      return;
+    }
+
+    // Get month and year from the cash advance date
+    const advanceDate = new Date(advanceToDelete.date);
+    const advanceMonth = advanceDate.getMonth() + 1; // Convert from 0-based to 1-based
+    const advanceYear = advanceDate.getFullYear();
 
     setLoading(true);
     try {
@@ -316,8 +354,8 @@ export default function CashAdvancesPage() {
         await deleteCashAdvanceFirestore(
           advanceId,
           selectedEmployeeId,
-          currentMonth,
-          currentYear,
+          advanceMonth,
+          advanceYear,
           companyNameFromSettings
         );
       } else {
@@ -325,8 +363,8 @@ export default function CashAdvancesPage() {
         const cashAdvanceModel = createCashAdvanceModel(
           dbPath,
           selectedEmployeeId,
-          currentMonth,
-          currentYear
+          advanceMonth,
+          advanceYear
         );
         await cashAdvanceModel.deleteCashAdvance(advanceId);
       }
@@ -340,20 +378,19 @@ export default function CashAdvancesPage() {
           : "Error deleting cash advance"
       );
     } finally {
+      setLoading(false);
     }
   }
 
   // Function to print cash advances as PDF
   const handlePrintCashAdvances = async () => {
     const currentYear = useDateSelectorStore.getState().selectedYear;
-    const currentMonth = useDateSelectorStore.getState().selectedMonth + 1;
-    const monthName = new Date(currentYear, currentMonth - 1).toLocaleString('default', { month: 'long' });
 
     setLoading(true);
-    toast.info("Preparing cash advances report...");
+    toast.info("Preparing cash advances report for the entire year...");
 
     try {
-      // Fetch cash advances for all employees for the selected month
+      // Fetch cash advances for all employees for the entire year
       let allCashAdvances: CashAdvance[] = [];
 
       if (isWebEnvironment()) {
@@ -361,18 +398,21 @@ export default function CashAdvancesPage() {
           throw new Error("Company name not set for web mode.");
         }
 
-        // Fetch advances for all employees
+        // Fetch advances for all employees for all months
         for (const emp of employees) {
-          try {
-            const advancesForEmployee = await loadCashAdvancesFirestore(
-              emp.id,
-              currentMonth,
-              currentYear,
-              companyNameFromSettings
-            );
-            allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
-          } catch (error) {
-            console.error(`Error loading cash advances for employee ${emp.id}:`, error);
+          for (let month = 1; month <= 12; month++) {
+            try {
+              const advancesForEmployee = await loadCashAdvancesFirestore(
+                emp.id,
+                month,
+                currentYear,
+                companyNameFromSettings
+              );
+              allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
+            } catch (error) {
+              console.error(`Error loading cash advances for employee ${emp.id} in month ${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         }
       } else {
@@ -380,26 +420,29 @@ export default function CashAdvancesPage() {
           throw new Error("Database path not set for desktop mode.");
         }
 
-        // Fetch advances for all employees
+        // Fetch advances for all employees for all months
         for (const emp of employees) {
-          try {
-            const cashAdvanceModel = createCashAdvanceModel(
-              dbPath,
-              emp.id,
-              currentMonth,
-              currentYear
-            );
-            const advancesForEmployee = await cashAdvanceModel.loadCashAdvances(emp.id);
-            allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
-          } catch (error) {
-            console.error(`Error loading cash advances for employee ${emp.id}:`, error);
+          for (let month = 1; month <= 12; month++) {
+            try {
+              const cashAdvanceModel = createCashAdvanceModel(
+                dbPath,
+                emp.id,
+                month,
+                currentYear
+              );
+              const advancesForEmployee = await cashAdvanceModel.loadCashAdvances(emp.id);
+              allCashAdvances = [...allCashAdvances, ...advancesForEmployee];
+            } catch (error) {
+              console.error(`Error loading cash advances for employee ${emp.id} in month ${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         }
       }
 
       // Check if we've found any advances
       if (allCashAdvances.length === 0) {
-        toast.info(`No cash advances found for ${monthName} ${currentYear}`);
+        toast.info(`No cash advances found for the year ${currentYear}`);
         setLoading(false);
         return;
       }
@@ -411,12 +454,12 @@ export default function CashAdvancesPage() {
           const doc = generateCashAdvancesWebPDF(
             allCashAdvances,
             employees,
-            currentMonth,
+            0, // 0 indicates all months
             currentYear
           );
 
           // Save PDF
-          doc.save(`CashAdvances-${currentYear}-${currentMonth.toString().padStart(2, '0')}.pdf`);
+          doc.save(`CashAdvances-${currentYear}-AllMonths.pdf`);
           toast.success("Cash advances report downloaded successfully!");
         } catch (error) {
           console.error("Error generating PDF in web mode:", error);
@@ -429,9 +472,9 @@ export default function CashAdvancesPage() {
           const cashAdvancesData = {
             advances: allCashAdvances,
             employees: employees,
-            month: currentMonth,
+            month: 0, // 0 indicates all months
             year: currentYear,
-            monthName: monthName
+            monthName: "All Months"
           };
 
           if (window.electron) {
@@ -495,6 +538,9 @@ export default function CashAdvancesPage() {
                       ) : (
                         <DecryptedText text="Cash Advances" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
+                      <span className="ml-2 text-sm text-gray-500">
+                        (Year {useDateSelectorStore.getState().selectedYear})
+                      </span>
                     </h2>
                     <div className="relative flex items-center space-x-4">
                       {/* Print PDF Button */}
@@ -534,6 +580,12 @@ export default function CashAdvancesPage() {
                                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
                               >
                                 Date
+                              </th>
+                              <th
+                                scope="col"
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
+                              >
+                                Month
                               </th>
                               <th
                                 scope="col"
@@ -582,6 +634,9 @@ export default function CashAdvancesPage() {
                               >
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {new Date(advance.date).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(advance.date).toLocaleString('default', { month: 'long' })}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   ₱{advance.amount.toLocaleString()}

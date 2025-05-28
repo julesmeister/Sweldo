@@ -98,37 +98,68 @@ export default function LeavesPage() {
 
       setLoading(true);
       try {
-        const monthForQuery = storeSelectedMonth + 1;
+        // Get the year from the date selector store
+        const yearForQuery = storeSelectedYear;
+        const allLeaves: Leave[] = [];
 
         if (isWebEnvironment()) {
           if (companyNameFromSettings) {
-            console.log(`[LeavesPage WEB] Loading leaves for ${selectedEmployeeId}, ${storeSelectedYear}/${monthForQuery}, company: ${companyNameFromSettings}`);
-            const employeeLeaves = await loadLeavesFirestore(
-              selectedEmployeeId,
-              storeSelectedYear,
-              monthForQuery,
-              companyNameFromSettings
-            );
-            setLeaves(employeeLeaves);
+            console.log(`[LeavesPage WEB] Loading leaves for ${selectedEmployeeId}, year: ${yearForQuery}, company: ${companyNameFromSettings}`);
+
+            // Load leaves from all months of the year
+            for (let month = 1; month <= 12; month++) {
+              try {
+                const monthLeaves = await loadLeavesFirestore(
+                  selectedEmployeeId,
+                  yearForQuery,
+                  month,
+                  companyNameFromSettings
+                );
+                allLeaves.push(...monthLeaves);
+              } catch (error) {
+                console.warn(`[LeavesPage WEB] Error loading leaves for month ${month}:`, error);
+                // Continue with other months even if one fails
+              }
+            }
+
+            console.log(`[LeavesPage WEB] Loaded ${allLeaves.length} total leaves for the year`);
           } else {
             setLeaves([]);
             console.warn("[LeavesPage WEB] companyNameFromSettings is not set. Cannot load leaves.");
           }
         } else {
           if (dbPath) {
-            console.log(`[LeavesPage Desktop] Loading leaves for ${selectedEmployeeId}, ${monthForQuery}/${storeSelectedYear}`);
+            console.log(`[LeavesPage Desktop] Loading leaves for ${selectedEmployeeId}, year: ${yearForQuery}`);
             const leaveModel = createLeaveModel(dbPath, selectedEmployeeId);
-            const employeeLeaves = await leaveModel.loadLeaves(
-              selectedEmployeeId,
-              storeSelectedYear,
-              monthForQuery
-            );
-            setLeaves(employeeLeaves);
+
+            // Load leaves from all months of the year
+            for (let month = 1; month <= 12; month++) {
+              try {
+                const monthLeaves = await leaveModel.loadLeaves(
+                  selectedEmployeeId,
+                  yearForQuery,
+                  month
+                );
+                allLeaves.push(...monthLeaves);
+              } catch (error) {
+                console.warn(`[LeavesPage Desktop] Error loading leaves for month ${month}:`, error);
+                // Continue with other months even if one fails
+              }
+            }
+
+            console.log(`[LeavesPage Desktop] Loaded ${allLeaves.length} total leaves for the year`);
           } else {
             setLeaves([]);
             console.warn("[LeavesPage Desktop] dbPath is not set. Cannot load leaves.");
           }
         }
+
+        // Sort leaves by date (newest first)
+        const sortedLeaves = allLeaves.sort((a, b) =>
+          new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        );
+
+        setLeaves(sortedLeaves);
       } catch (error: any) {
         setLeaves([]);
         if (error.message?.includes("ENOENT")) {
@@ -147,7 +178,6 @@ export default function LeavesPage() {
     selectedEmployeeId,
     dbPath,
     companyNameFromSettings,
-    storeSelectedMonth,
     storeSelectedYear,
     setLoading,
   ]);
@@ -332,6 +362,9 @@ export default function LeavesPage() {
                       ) : (
                         <DecryptedText text="Leave Requests" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                       )}
+                      <span className="ml-2 text-sm text-gray-500">
+                        (Year {storeSelectedYear})
+                      </span>
                     </h2>
                     <button
                       type="button"

@@ -40,7 +40,10 @@ import { Payroll as OldPayroll } from "./payroll_old";
 export { usePayrollPeriods } from "../hooks/usePayrollPeriods";
 export { usePayrollDeductions } from "../hooks/usePayrollDeductions";
 export { usePayrollSummary } from "../hooks/usePayrollSummary";
-export { useLoanManagement } from "../hooks/useLoanManagement";
+export {
+  useLoanManagement,
+  useAllYearLoanManagement,
+} from "../hooks/useLoanManagement";
 
 export interface PayrollSummaryModel {
   id: string;

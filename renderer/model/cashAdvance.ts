@@ -279,9 +279,11 @@ export class CashAdvanceModel {
       let lineIndex = -1;
 
       // Check if first line is header
-      const hasHeader = lines[0]
-        ?.toLowerCase()
-        .includes("id,employeeid,date,amount");
+      const hasHeader =
+        lines[0]?.toLowerCase().includes("id") &&
+        lines[0]?.toLowerCase().includes("employeeid") &&
+        lines[0]?.toLowerCase().includes("date") &&
+        lines[0]?.toLowerCase().includes("amount");
       const dataStartIndex = hasHeader ? 1 : 0;
 
       // First, find the line with matching ID by parsing each line into a cash advance
@@ -668,32 +670,79 @@ export async function migrateCsvToJson(
     // Ensure the directory exists
     await window.electron.ensureDir(cashAdvancesBasePath);
 
-    // Since we can't get the list of directories, we'll approach by directly
-    // checking the specific cash advance files in the format {year}_{month}_cashAdvances.csv
-
-    // List of employee IDs we know exist (the folder names)
-    // We'll check for folders 1-100 as a reasonable range
+    // Since we can't get the list of directories directly, we'll need to try
+    // different employee IDs and check if those folders exist
     let employeeIds: string[] = [];
     let processedCount = 0;
     let convertedCount = 0;
 
     onProgress?.(`Looking for employee folders in ${cashAdvancesBasePath}...`);
 
-    // Loop through potential employee IDs to check if those folders exist
-    for (let i = 1; i <= 100; i++) {
-      const potentialEmployeeId = i.toString();
-      const employeeFolder = `${cashAdvancesBasePath}/${potentialEmployeeId}`;
+    try {
+      // First check for single and double-digit employee IDs (1-99)
+      for (let i = 1; i <= 99; i++) {
+        const potentialEmployeeId = i.toString();
+        const employeeFolder = `${cashAdvancesBasePath}/${potentialEmployeeId}`;
 
-      try {
-        // Check if this folder exists
-        const exists = await window.electron.fileExists(employeeFolder);
-        if (exists) {
-          employeeIds.push(potentialEmployeeId);
-          onProgress?.(`Found employee folder: ${potentialEmployeeId}`);
+        try {
+          // Check if this folder exists
+          const exists = await window.electron.fileExists(employeeFolder);
+          if (exists) {
+            employeeIds.push(potentialEmployeeId);
+            onProgress?.(`Found employee folder: ${potentialEmployeeId}`);
+          }
+        } catch (error) {
+          // Folder doesn't exist, continue checking
         }
-      } catch (error) {
-        // Folder doesn't exist, continue checking
       }
+
+      // Also check for potential 3-digit employee IDs (100-999)
+      for (let i = 100; i <= 999; i++) {
+        // Only check every 100th ID to avoid too many checks
+        if (i % 100 === 0 || i === 100) {
+          const potentialEmployeeId = i.toString();
+          const employeeFolder = `${cashAdvancesBasePath}/${potentialEmployeeId}`;
+
+          try {
+            const exists = await window.electron.fileExists(employeeFolder);
+            if (exists) {
+              // If one exists, check the next 99 IDs in this range
+              for (let j = i; j < i + 100 && j <= 999; j++) {
+                const subId = j.toString();
+                const subFolder = `${cashAdvancesBasePath}/${subId}`;
+                try {
+                  const subExists = await window.electron.fileExists(subFolder);
+                  if (subExists) {
+                    employeeIds.push(subId);
+                    onProgress?.(`Found employee folder: ${subId}`);
+                  }
+                } catch (error) {
+                  // Continue to next ID
+                }
+              }
+            }
+          } catch (error) {
+            // Continue to next ID
+          }
+        }
+      }
+
+      // Check for specific known 4-digit and higher employee IDs
+      const additionalIdsToCheck = ["1010", "10003"];
+      for (const id of additionalIdsToCheck) {
+        const employeeFolder = `${cashAdvancesBasePath}/${id}`;
+        try {
+          const exists = await window.electron.fileExists(employeeFolder);
+          if (exists) {
+            employeeIds.push(id);
+            onProgress?.(`Found employee folder: ${id}`);
+          }
+        } catch (error) {
+          // Folder doesn't exist, continue checking
+        }
+      }
+    } catch (error) {
+      onProgress?.(`Error checking for employee folders: ${error}`);
     }
 
     onProgress?.(`Found ${employeeIds.length} employee folders to process`);
@@ -744,9 +793,11 @@ export async function migrateCsvToJson(
                 .filter((line) => line.trim());
 
               // Check for header
-              const hasHeader = lines[0]
-                ?.toLowerCase()
-                .includes("id,employeeid,date,amount");
+              const hasHeader =
+                lines[0]?.toLowerCase().includes("id") &&
+                lines[0]?.toLowerCase().includes("employeeid") &&
+                lines[0]?.toLowerCase().includes("date") &&
+                lines[0]?.toLowerCase().includes("amount");
               const dataStartIndex = hasHeader ? 1 : 0;
 
               // Parse cash advances
@@ -766,7 +817,15 @@ export async function migrateCsvToJson(
                 const line = lines[i];
                 const fields = line.split(",");
 
-                if (fields.length < 5) continue; // Skip if not enough fields
+                // Update minimum field count to ensure id, employeeId, date, and amount are present
+                if (fields.length < 4) {
+                  onProgress?.(
+                    `Skipping line ${
+                      i + 1
+                    } in ${csvFilePath} - insufficient fields: ${line}`
+                  );
+                  continue; // Skip if not enough fields
+                }
 
                 try {
                   const [
@@ -774,7 +833,7 @@ export async function migrateCsvToJson(
                     advanceEmployeeId,
                     dateStr,
                     amountStr,
-                    reason,
+                    reason = "",
                     approvalStatus = "Pending",
                     paymentSchedule = "One-time",
                     status = "Unpaid",

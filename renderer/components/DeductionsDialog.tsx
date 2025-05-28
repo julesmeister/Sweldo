@@ -7,7 +7,7 @@ import { isWebEnvironment, getCompanyName } from "@/renderer/lib/firestoreServic
 import { loadCashAdvancesFirestore } from "@/renderer/model/cashAdvance_firestore";
 import { loadShortsFirestore } from "@/renderer/model/shorts_firestore";
 import { Loan } from "@/renderer/model/loan";
-import { useLoanManagement } from "@/renderer/hooks/useLoanManagement";
+import { useAllYearLoanManagement } from "@/renderer/hooks/useLoanManagement";
 import BaseFormDialog from "./dialogs/BaseFormDialog";
 
 interface Deductions {
@@ -406,11 +406,10 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     const [hasLoadedShorts, setHasLoadedShorts] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Load loans using our new hook
-    const { loans, isLoading: isLoadingLoans } = useLoanManagement({
+    // Load loans using our new hook that loads from all months of the year
+    const { loans, isLoading: isLoadingLoans } = useAllYearLoanManagement({
       employeeId,
-      year: startDate.getFullYear(),
-      month: startDate.getMonth() + 1
+      year: startDate.getFullYear()
     });
 
     // Filter to only active loans with a remaining balance
@@ -427,10 +426,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
     const memoizedStartDate = useMemo(
       () => new Date(startDate),
       [startDate.getTime()]
-    );
-    const memoizedEndDate = useMemo(
-      () => new Date(endDate),
-      [endDate.getTime()]
     );
 
     const memoizedCashAdvanceModel = useMemo(() => {
@@ -449,8 +444,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
         return;
       }
 
-
-
       setIsLoading(true);
       try {
         if (!employeeId || !dbPath) {
@@ -458,69 +451,76 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           return;
         }
 
-        // Get all months between start and end date
-        const months = new Set<string>();
-        let currentDate = new Date(memoizedStartDate);
-        while (currentDate <= memoizedEndDate) {
-          months.add(
-            `${currentDate.getFullYear()}_${currentDate.getMonth() + 1}`
-          );
-          currentDate.setDate(currentDate.getDate() + 1);
+        // Get all months of the current year
+        const currentYear = memoizedStartDate.getFullYear();
+        const months = [];
+        for (let month = 1; month <= 12; month++) {
+          months.push({ year: currentYear, month });
         }
 
-        console.log("Loading advances for months:", Array.from(months));
+        console.log(`Loading advances for all months of year ${currentYear}`);
 
-        // Load cash advances from all relevant months
+        // Load cash advances from all months of the year
         const allAdvances: CashAdvance[] = [];
         const isWeb = isWebEnvironment();
 
         if (isWeb) {
           const companyName = await getCompanyName();
 
-
-          for (const monthKey of months) {
-            const [year, month] = monthKey.split("_").map(Number);
-            const advances = await loadCashAdvancesFirestore(
-              employeeId,
-              month,
-              year,
-              companyName
-            );
-            allAdvances.push(...advances);
+          for (const { year, month } of months) {
+            try {
+              console.log(`Loading web advances for ${year}-${month}`);
+              const advances = await loadCashAdvancesFirestore(
+                employeeId,
+                month,
+                year,
+                companyName
+              );
+              allAdvances.push(...advances);
+            } catch (error) {
+              console.warn(`Error loading advances for ${year}-${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         } else {
           // Desktop mode - use existing implementation
-          for (const monthKey of months) {
-            const [year, month] = monthKey.split("_").map(Number);
-            const cashAdvanceModel = createCashAdvanceModel(
-              dbPath,
-              employeeId,
-              month,
-              year
-            );
+          for (const { year, month } of months) {
+            try {
+              console.log(`Loading desktop advances for ${year}-${month}`);
+              const cashAdvanceModel = createCashAdvanceModel(
+                dbPath,
+                employeeId,
+                month,
+                year
+              );
 
-            const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
-            allAdvances.push(...advances);
+              const advances = await cashAdvanceModel.loadCashAdvances(employeeId);
+              allAdvances.push(...advances);
+            } catch (error) {
+              console.warn(`Error loading advances for ${year}-${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         }
 
-        // Filter advances by date range
-        const filteredAdvances = allAdvances.filter((advance) => {
-          const advanceDate = new Date(advance.date);
-          return (
-            advanceDate >= memoizedStartDate && advanceDate <= memoizedEndDate
-          );
-        });
+        console.log(`Loaded total of ${allAdvances.length} advances from all months`);
 
-        console.log("Filtered advances:", filteredAdvances);
+        // Filter to only unpaid advances with remaining balance
+        const unpaidAdvances = allAdvances.filter(advance =>
+          advance.status === "Unpaid" &&
+          advance.remainingUnpaid > 0 &&
+          advance.approvalStatus === "Approved"
+        );
+
+        console.log(`Filtered to ${unpaidAdvances.length} unpaid advances with remaining balance`);
 
         // Sort by date (oldest first)
-        filteredAdvances.sort(
+        unpaidAdvances.sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
         const initialDeductions: Record<string, number> = {};
-        filteredAdvances.forEach((advance) => {
+        unpaidAdvances.forEach((advance) => {
           initialDeductions[advance.id] =
             advance.paymentSchedule === "Installment"
               ? advance.installmentDetails?.amountPerPayment || 0
@@ -528,7 +528,7 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
         });
 
         setDeductionAmounts(initialDeductions);
-        setUnpaidAdvances(filteredAdvances);
+        setUnpaidAdvances(unpaidAdvances);
         setHasLoadedAdvances(true);
       } catch (error) {
         console.error("Error loading unpaid advances:", error);
@@ -539,7 +539,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       employeeId,
       dbPath,
       memoizedStartDate,
-      memoizedEndDate,
       hasLoadedAdvances,
       isOpen,
     ]);
@@ -555,7 +554,6 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
         employeeId,
         dbPath,
         startDate: memoizedStartDate.toISOString(),
-        endDate: memoizedEndDate.toISOString(),
         hasLoadedShorts,
       });
 
@@ -566,60 +564,73 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
           return;
         }
 
-        // Get all months between start and end date
+        // Get all months of the current year
+        const currentYear = memoizedStartDate.getFullYear();
         const months = [];
-        let currentDate = new Date(memoizedStartDate);
-        while (currentDate <= memoizedEndDate) {
-          months.push({
-            month: currentDate.getMonth() + 1,
-            year: currentDate.getFullYear(),
-          });
-          currentDate.setMonth(currentDate.getMonth() + 1);
+        for (let month = 1; month <= 12; month++) {
+          months.push({ year: currentYear, month });
         }
 
-        // Load shorts from all relevant months
+        console.log(`Loading shorts for all months of year ${currentYear}`);
+
+        // Load shorts from all months of the year
         const allShorts: Short[] = [];
         const isWeb = isWebEnvironment();
 
         if (isWeb) {
           const companyName = await getCompanyName();
 
-
-          for (const { month, year } of months) {
-            const shorts = await loadShortsFirestore(
-              employeeId,
-              month,
-              year,
-              companyName
-            );
-            allShorts.push(...shorts);
+          for (const { year, month } of months) {
+            try {
+              console.log(`Loading web shorts for ${year}-${month}`);
+              const shorts = await loadShortsFirestore(
+                employeeId,
+                month,
+                year,
+                companyName
+              );
+              allShorts.push(...shorts);
+            } catch (error) {
+              console.warn(`Error loading shorts for ${year}-${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         } else {
           // Desktop mode - use existing implementation
-          for (const { month, year } of months) {
-            const shortModel = createShortModel(dbPath, employeeId, month, year);
-            const shorts = await shortModel.loadShorts(employeeId);
-            allShorts.push(...shorts);
+          for (const { year, month } of months) {
+            try {
+              console.log(`Loading desktop shorts for ${year}-${month}`);
+              const shortModel = createShortModel(dbPath, employeeId, month, year);
+              const shorts = await shortModel.loadShorts(employeeId);
+              allShorts.push(...shorts);
+            } catch (error) {
+              console.warn(`Error loading shorts for ${year}-${month}:`, error);
+              // Continue with other months even if one fails
+            }
           }
         }
 
-        // Filter unpaid shorts
-        const unpaid = allShorts.filter((short) => {
-          const hasRemaining = short.remainingUnpaid > 0;
-          return hasRemaining;
-        });
+        console.log(`Loaded total of ${allShorts.length} shorts from all months`);
+
+        // Filter to only unpaid shorts with remaining balance
+        const unpaidShorts = allShorts.filter(short =>
+          short.status === "Unpaid" &&
+          short.remainingUnpaid > 0
+        );
+
+        console.log(`Filtered to ${unpaidShorts.length} unpaid shorts with remaining balance`);
 
         // Sort by date (oldest first)
-        unpaid.sort(
+        unpaidShorts.sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
         const initialDeductions: Record<string, number> = {};
-        unpaid.forEach((short) => {
+        unpaidShorts.forEach((short) => {
           initialDeductions[short.id] = short.remainingUnpaid;
         });
         setShortDeductionAmounts(initialDeductions);
-        setUnpaidShorts(unpaid);
+        setUnpaidShorts(unpaidShorts);
         setHasLoadedShorts(true);
       } catch (error) {
         console.error("Error loading unpaid shorts:", error);
@@ -630,14 +641,11 @@ export const DeductionsDialog: React.FC<DeductionsDialogProps> = React.memo(
       employeeId,
       dbPath,
       memoizedStartDate,
-      memoizedEndDate,
       hasLoadedShorts,
       isOpen,
     ]);
 
     useEffect(() => {
-
-
       if (isOpen) {
         if (!hasLoadedAdvances) {
           loadUnpaidAdvances();

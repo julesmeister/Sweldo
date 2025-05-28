@@ -209,3 +209,72 @@ export function useLoanManagement({
     addDeduction,
   };
 }
+
+export function useAllYearLoanManagement({
+  employeeId,
+  year = new Date().getFullYear(),
+}: Omit<UseLoanManagementOptions, "month">) {
+  const { dbPath } = useSettingsStore();
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load loans from all months of the year
+  const loadLoans = useCallback(async () => {
+    if (!dbPath || !employeeId) {
+      setError("Missing required parameters");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const allLoans: Loan[] = [];
+
+      // Load loans from all months of the year
+      for (let month = 1; month <= 12; month++) {
+        try {
+          const loanModel = createLoanModel(dbPath, employeeId);
+          const monthLoans = await loanModel.loadLoans(year, month);
+          allLoans.push(...monthLoans);
+        } catch (err) {
+          console.warn(`Error loading loans for month ${month}:`, err);
+          // Continue with other months even if one fails
+        }
+      }
+
+      // Remove any duplicate loans (same ID)
+      const uniqueLoans = Array.from(
+        new Map(allLoans.map((loan) => [loan.id, loan])).values()
+      );
+
+      console.log(
+        `Loaded ${allLoans.length} total loans (${uniqueLoans.length} unique) from all months of year ${year}`
+      );
+
+      setLoans(uniqueLoans);
+    } catch (err) {
+      console.error("Error loading loans:", err);
+      setError(err instanceof Error ? err.message : "Failed to load loans");
+      toast.error("Failed to load loans. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dbPath, employeeId, year]);
+
+  // Initial load
+  useEffect(() => {
+    loadLoans();
+  }, [loadLoans]);
+
+  return {
+    loans,
+    isLoading,
+    error,
+    loadLoans,
+  };
+}
+
+// Note: useLoanManagement is already exported at the top of the file
+// Do not add another export statement here to avoid duplicate exports

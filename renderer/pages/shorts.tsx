@@ -77,46 +77,75 @@ export default function DeductionsPage() {
     const loadData = async () => {
       if (!selectedEmployeeId) {
         setShorts([]);
-        // setLoading(false); // setLoading is handled by the new employee loading effect mostly
         return;
       }
 
-      // setLoading(true); // setLoading primarily handled by employee loading effect, or here if still needed
+      setLoading(true);
       try {
-        let shortItems: Short[] = [];
-        // Use month/year from the Zustand store directly
-        const currentShortMonth = storeSelectedMonth + 1; // Zustand month is 0-indexed
+        let allShorts: Short[] = [];
+        // Use year from the Zustand store
         const currentShortYear = storeSelectedYear;
 
         if (isWebEnvironment()) {
-          console.log(`[DeductionsPage WEB] Starting to load deductions for employee: ${selectedEmployeeId}`);
+          console.log(`[DeductionsPage WEB] Starting to load deductions for employee: ${selectedEmployeeId}, year: ${currentShortYear}`);
           if (!companyNameFromSettings) {
             toast("Company name not configured for web mode. Cannot load deductions.");
             if (mounted) setLoading(false);
             return;
           }
 
-          // Load deductions from Firestore
-          console.log(`[DeductionsPage WEB] Loading deductions for ${selectedEmployeeId}, ${currentShortMonth}/${currentShortYear}, company: ${companyNameFromSettings}`);
-          shortItems = await loadShortsFirestore(selectedEmployeeId, currentShortMonth, currentShortYear, companyNameFromSettings);
-          console.log(`[DeductionsPage WEB] Loaded ${shortItems.length} deductions from Firestore.`);
+          // Load deductions from all months in Firestore
+          for (let month = 1; month <= 12; month++) {
+            try {
+              console.log(`[DeductionsPage WEB] Loading deductions for ${selectedEmployeeId}, month: ${month}, year: ${currentShortYear}`);
+              const monthShorts = await loadShortsFirestore(
+                selectedEmployeeId,
+                month,
+                currentShortYear,
+                companyNameFromSettings
+              );
+              allShorts.push(...monthShorts);
+            } catch (error) {
+              console.warn(`[DeductionsPage WEB] Error loading shorts for month ${month}:`, error);
+              // Continue with other months even if one fails
+            }
+          }
 
+          console.log(`[DeductionsPage WEB] Loaded ${allShorts.length} total deductions for the year from Firestore.`);
         } else {
           // Desktop mode
-          console.log(`[DeductionsPage DESKTOP] Starting to load deductions for employee: ${selectedEmployeeId}`);
-          if (!dbPath || !employeeModel || !shortModel) {
+          console.log(`[DeductionsPage DESKTOP] Starting to load deductions for employee: ${selectedEmployeeId}, year: ${currentShortYear}`);
+          if (!dbPath || !employeeModel) {
             toast("System not fully initialized for desktop mode. Cannot load deductions.");
             if (mounted) setLoading(false);
             return;
           }
-          shortItems = await shortModel.loadShorts(selectedEmployeeId);
-          console.log(`[DeductionsPage DESKTOP] Loaded ${shortItems.length} deductions using shortModel.`);
+
+          // Load deductions from all months using the model
+          for (let month = 1; month <= 12; month++) {
+            try {
+              const monthModel = createShortModel(
+                dbPath,
+                selectedEmployeeId,
+                month,
+                currentShortYear
+              );
+              const monthShorts = await monthModel.loadShorts(selectedEmployeeId);
+              allShorts.push(...monthShorts);
+            } catch (error) {
+              console.warn(`[DeductionsPage DESKTOP] Error loading shorts for month ${month}:`, error);
+              // Continue with other months even if one fails
+            }
+          }
+
+          console.log(`[DeductionsPage DESKTOP] Loaded ${allShorts.length} total deductions for the year.`);
         }
 
         if (!mounted) return;
 
-        setShorts(shortItems);
-
+        // Sort shorts by date (newest first)
+        allShorts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setShorts(allShorts);
       } catch (error) {
         console.error("Error loading deductions data:", error);
         if (mounted) {
@@ -136,7 +165,7 @@ export default function DeductionsPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedEmployeeId, dbPath, companyNameFromSettings, shortModel, storeSelectedMonth, storeSelectedYear, setLoading]);
+  }, [selectedEmployeeId, dbPath, companyNameFromSettings, employeeModel, storeSelectedYear, setLoading]);
 
   // New useEffect to load selected employee details (similar to cashAdvances.tsx)
   useEffect(() => {
@@ -374,25 +403,10 @@ export default function DeductionsPage() {
   }
 
   const filteredShorts = useMemo(() => {
-    console.log(`[DeductionsPage FILTER] Running filter. storeSelectedMonth: ${storeSelectedMonth}, storeSelectedYear: ${storeSelectedYear}`);
-    console.log(`[DeductionsPage FILTER] Input 'shorts' array length: ${shorts.length}`);
-    if (shorts.length > 0) {
-      console.log("[DeductionsPage FILTER] First short raw data:", JSON.stringify(shorts[0]));
-    }
-    const result = shorts.filter((short) => {
-      const shortDate = new Date(short.date);
-      const matchesMonth = shortDate.getMonth() === storeSelectedMonth; // storeSelectedMonth is 0-indexed
-      const matchesYear = shortDate.getFullYear() === storeSelectedYear;
-      // Safer logging for date
-      const shortDateString = shortDate instanceof Date && !isNaN(shortDate.valueOf())
-        ? shortDate.toISOString()
-        : `Invalid Date (original value: ${short.date})`;
-      console.log(`[DeductionsPage FILTER] Filtering deduction ID ${short.id}: shortDate: ${shortDateString}, parsedMonth: ${!isNaN(shortDate.valueOf()) ? shortDate.getMonth() : 'N/A'}, parsedYear: ${!isNaN(shortDate.valueOf()) ? shortDate.getFullYear() : 'N/A'}, matchesMonth: ${matchesMonth}, matchesYear: ${matchesYear}`);
-      return matchesMonth && matchesYear;
-    });
-    console.log(`[DeductionsPage FILTER] Output 'filteredDeductions' array length: ${result.length}`);
-    return result;
-  }, [shorts, storeSelectedMonth, storeSelectedYear]);
+    console.log(`[DeductionsPage FILTER] Total shorts loaded: ${shorts.length}`);
+    // We're already loading shorts for the entire year, so we don't need to filter by month anymore
+    return shorts;
+  }, [shorts]);
 
   return (
     <RootLayout>
@@ -422,6 +436,9 @@ export default function DeductionsPage() {
                         ) : (
                           <DecryptedText text="Deductions" animateOn="view" revealDirection='start' speed={50} sequential={true} />
                         )}
+                        <span className="ml-2 text-sm text-gray-500">
+                          (Year {storeSelectedYear})
+                        </span>
                       </h2>
                       <div className="flex items-center gap-2">
                         <button
