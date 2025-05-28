@@ -48,9 +48,42 @@ export class MissingTimeModel {
     }
     try {
       const content = await window.electron.readFile(filePath);
-      return JSON.parse(content);
+      try {
+        return JSON.parse(content);
+      } catch (parseError) {
+        console.error(`Error parsing JSON file ${filePath}:`, parseError);
+
+        // Attempt to fix common JSON syntax errors
+        try {
+          // Create a default structure with empty logs
+          const defaultStructure: MissingTimeJsonStructure = {
+            meta: {
+              month,
+              year,
+              lastModified: new Date().toISOString(),
+            },
+            logs: [],
+          };
+
+          // Make a backup of the corrupted file
+          const backupPath = `${filePath}.backup.${Date.now()}`;
+          await window.electron.writeFile(backupPath, content);
+
+          // Write the repaired JSON file
+          await this.writeJsonFile(month, year, defaultStructure);
+          console.log(`Repaired JSON file ${filePath} with empty structure`);
+
+          return defaultStructure;
+        } catch (recoveryError) {
+          console.error(
+            `Failed to recover corrupted JSON file ${filePath}:`,
+            recoveryError
+          );
+          return null;
+        }
+      }
     } catch (error) {
-      console.error(`Error reading or parsing JSON file ${filePath}:`, error);
+      console.error(`Error reading file ${filePath}:`, error);
       return null; // Handle error or corrupted file
     }
   }
@@ -87,10 +120,8 @@ export class MissingTimeModel {
     // Desktop mode - use existing implementation
     const jsonData = await this.readJsonFile(month, year);
 
-    let logs: MissingTimeLog[] = [];
-    if (jsonData) {
-      logs = jsonData.logs;
-    }
+    // Initialize with an empty structure if the file doesn't exist or is corrupted
+    const logs: MissingTimeLog[] = jsonData ? jsonData.logs : [];
 
     // Simple check for duplicates based on employee, day, and type before adding
     const exists = logs.some(
@@ -248,7 +279,31 @@ export class MissingTimeModel {
             );
             continue;
           }
-          const jsonData: MissingTimeJsonStructure = JSON.parse(fileContent);
+
+          let jsonData: MissingTimeJsonStructure;
+          try {
+            jsonData = JSON.parse(fileContent);
+          } catch (parseError) {
+            console.error(
+              `[missingTime.ts] MissingTimeModel.loadAllMissingTimeLogsForSync: ERROR parsing JSON file ${jsonFile.name}:`,
+              parseError
+            );
+
+            // Try to extract file metadata from filename
+            const fileNameParts = jsonFile.name.split("_");
+            if (fileNameParts.length >= 2) {
+              const year = parseInt(fileNameParts[0], 10);
+              const month = parseInt(fileNameParts[1], 10);
+
+              if (!isNaN(year) && !isNaN(month)) {
+                // Create backup and repair the file
+                const backupPath = `${filePath}.backup.${Date.now()}`;
+                await window.electron.writeFile(backupPath, fileContent);
+              }
+            }
+            continue;
+          }
+
           if (jsonData && jsonData.logs && Array.isArray(jsonData.logs)) {
             // Add validation for individual logs if necessary (e.g., date parsing)
             const validLogs = jsonData.logs.filter((log) => {
@@ -404,5 +459,50 @@ export class MissingTimeModel {
   // ----- Factory Function -----
   static createMissingTimeModel(dbPath: string): MissingTimeModel {
     return new MissingTimeModel(dbPath);
+  }
+
+  // Utility method to repair a corrupted missing time log file
+  static async repairMissingTimeLogFile(
+    dbPath: string,
+    month: number,
+    year: number
+  ): Promise<boolean> {
+    const logsFolderPath = `${dbPath}/SweldoDB/missing_time_logs`;
+    const filePath = `${logsFolderPath}/${year}_${month}_missing_times.json`;
+
+    try {
+      // Check if file exists
+      if (!(await window.electron.fileExists(filePath))) {
+        console.error(`File does not exist: ${filePath}`);
+        return false;
+      }
+
+      // Create backup
+      const backupPath = `${filePath}.backup.${Date.now()}`;
+      const content = await window.electron.readFile(filePath);
+      await window.electron.writeFile(backupPath, content);
+      console.log(`Created backup of file at ${backupPath}`);
+
+      // Create a fresh structure
+      const repairedData = {
+        meta: {
+          month,
+          year,
+          lastModified: new Date().toISOString(),
+        },
+        logs: [],
+      };
+
+      // Write the repaired file
+      await window.electron.writeFile(
+        filePath,
+        JSON.stringify(repairedData, null, 2)
+      );
+      console.log(`Successfully repaired ${filePath}`);
+      return true;
+    } catch (error) {
+      console.error(`Failed to repair ${filePath}:`, error);
+      return false;
+    }
   }
 }

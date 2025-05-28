@@ -140,6 +140,22 @@ export async function saveAttendanceFirestore(
     return;
   }
 
+  // Add detailed debugging for employee 10003
+  const isTargetEmployee = employeeId === "10003";
+  if (isTargetEmployee) {
+    console.log(
+      `[DEBUG-10003-FS] Starting saveAttendanceFirestore for employee ${employeeId}`
+    );
+    console.log(`[DEBUG-10003-FS] Month: ${month}, Year: ${year}`);
+    console.log(
+      `[DEBUG-10003-FS] Records to save: ${JSON.stringify(
+        attendances,
+        null,
+        2
+      )}`
+    );
+  }
+
   try {
     const docId = createTimeBasedDocId(employeeId, year, month);
     console.log(`[Firestore] Saving/Updating attendance for docId: ${docId}`);
@@ -150,6 +166,23 @@ export async function saveAttendanceFirestore(
       docId,
       companyName
     );
+
+    if (isTargetEmployee) {
+      console.log(
+        `[DEBUG-10003-FS] Existing month document: ${
+          existingMonthDoc ? "Found" : "Not found"
+        }`
+      );
+      if (existingMonthDoc) {
+        console.log(
+          `[DEBUG-10003-FS] Existing document days: ${JSON.stringify(
+            existingMonthDoc.days,
+            null,
+            2
+          )}`
+        );
+      }
+    }
 
     let currentMonthData: AttendanceJsonMonth;
     if (existingMonthDoc) {
@@ -196,6 +229,18 @@ export async function saveAttendanceFirestore(
       const dayStr = attendanceRecord.day.toString();
       const existingDayData = currentMonthData.days[dayStr];
 
+      if (isTargetEmployee) {
+        console.log(`[DEBUG-10003-FS] Processing day ${dayStr}`);
+        console.log(
+          `[DEBUG-10003-FS] New record: timeIn=${attendanceRecord.timeIn}, timeOut=${attendanceRecord.timeOut}`
+        );
+        console.log(
+          `[DEBUG-10003-FS] Existing day data: ${
+            existingDayData ? JSON.stringify(existingDayData) : "None"
+          }`
+        );
+      }
+
       // Prepare new day data from the incoming record
       // Convert undefined schedule to null for Firestore compatibility
       const newDayData: AttendanceJsonDay = {
@@ -209,23 +254,76 @@ export async function saveAttendanceFirestore(
 
       // Check for changes to create backup entries
       if (existingDayData) {
-        if (existingDayData.timeIn !== newDayData.timeIn) {
+        // Modified logic: Don't override existing non-null values with null
+        if (
+          attendanceRecord.timeIn === null &&
+          existingDayData.timeIn !== null
+        ) {
+          // Keep existing non-null timeIn value
+          newDayData.timeIn = existingDayData.timeIn;
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Keeping existing timeIn value: ${existingDayData.timeIn}`
+            );
+            console.log(
+              `[DEBUG-10003-FS]   Reason: New timeIn is null, existing is not null`
+            );
+          }
+        } else if (existingDayData.timeIn !== newDayData.timeIn) {
           backupEntries.push({
             day: attendanceRecord.day,
             field: "timeIn",
             oldValue: existingDayData.timeIn,
             newValue: newDayData.timeIn,
           });
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Updating timeIn: ${existingDayData.timeIn} -> ${newDayData.timeIn}`
+            );
+            console.log(
+              `[DEBUG-10003-FS]   Reason: Either new timeIn is not null or existing was null`
+            );
+          }
+        } else if (isTargetEmployee) {
+          console.log(`[DEBUG-10003-FS] No change needed for timeIn`);
         }
-        if (existingDayData.timeOut !== newDayData.timeOut) {
+
+        if (
+          attendanceRecord.timeOut === null &&
+          existingDayData.timeOut !== null
+        ) {
+          // Keep existing non-null timeOut value
+          newDayData.timeOut = existingDayData.timeOut;
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Keeping existing timeOut value: ${existingDayData.timeOut}`
+            );
+            console.log(
+              `[DEBUG-10003-FS]   Reason: New timeOut is null, existing is not null`
+            );
+          }
+        } else if (existingDayData.timeOut !== newDayData.timeOut) {
           backupEntries.push({
             day: attendanceRecord.day,
             field: "timeOut",
             oldValue: existingDayData.timeOut,
             newValue: newDayData.timeOut,
           });
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Updating timeOut: ${existingDayData.timeOut} -> ${newDayData.timeOut}`
+            );
+            console.log(
+              `[DEBUG-10003-FS]   Reason: Either new timeOut is not null or existing was null`
+            );
+          }
+        } else if (isTargetEmployee) {
+          console.log(`[DEBUG-10003-FS] No change needed for timeOut`);
         }
-        // Add more checks if schedule changes need to be backed up
       } else {
         // This is a new day entry, so old values are null
         if (newDayData.timeIn !== null) {
@@ -235,6 +333,12 @@ export async function saveAttendanceFirestore(
             oldValue: null,
             newValue: newDayData.timeIn,
           });
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Adding new timeIn value: ${newDayData.timeIn}`
+            );
+          }
         }
         if (newDayData.timeOut !== null) {
           backupEntries.push({
@@ -243,11 +347,26 @@ export async function saveAttendanceFirestore(
             oldValue: null,
             newValue: newDayData.timeOut,
           });
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-FS] Adding new timeOut value: ${newDayData.timeOut}`
+            );
+          }
         }
       }
 
       // Update the specific day in the month's data
       currentMonthData.days[dayStr] = newDayData;
+
+      if (isTargetEmployee) {
+        console.log(
+          `[DEBUG-10003-FS] Final day data for day ${dayStr}: ${JSON.stringify(
+            newDayData
+          )}`
+        );
+      }
+
       console.log(
         `[Firestore] Updated day ${dayStr} for ${docId} with TimeIn: ${newDayData.timeIn}, TimeOut: ${newDayData.timeOut}`
       );
@@ -255,6 +374,16 @@ export async function saveAttendanceFirestore(
 
     // Update the lastModified timestamp for the whole document
     currentMonthData.meta.lastModified = new Date().toISOString();
+
+    if (isTargetEmployee) {
+      console.log(
+        `[DEBUG-10003-FS] Final month data to save: ${JSON.stringify(
+          currentMonthData,
+          null,
+          2
+        )}`
+      );
+    }
 
     // Save the entire updated month document
     // The saveDocument utility handles merge:true by default, but here we are providing the full desired state.

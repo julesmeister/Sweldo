@@ -233,16 +233,18 @@ export function processTimeEntries(
   attendances: Attendance[];
   missingTimeLogs: MissingTimeLog[];
 } {
-  const isTargetEmployee = employeeId === (window as any).targetEmployeeId;
+  // Check for target employee
+  const isTargetEmployee = employeeId === "10003";
 
   if (isTargetEmployee) {
     console.log(
-      "\n========== PROCESSING TIME ENTRIES FOR EMPLOYEE ID 2 =========="
+      "\n========== PROCESSING TIME ENTRIES FOR EMPLOYEE 10003 =========="
     );
     console.log("Employee:", employeeName);
     console.log("Employment Type:", employeeType);
     console.log("Month/Year:", month, "/", year);
     console.log("Number of days to process:", timeList.length);
+    console.log("Raw time list:", JSON.stringify(timeList, null, 2));
   }
 
   const attendances: Attendance[] = [];
@@ -250,8 +252,8 @@ export function processTimeEntries(
 
   timeList.forEach((timeString, j) => {
     if (isTargetEmployee) {
-      console.log(`\nProcessing Day ${j + 1}`);
-      console.log("Time string:", timeString);
+      console.log(`\n[DEBUG-10003-TP] Processing Day ${j + 1}`);
+      console.log(`[DEBUG-10003-TP] Time string: ${timeString}`);
     }
 
     const nextDayString = j < timeList.length - 1 ? timeList[j + 1] : null;
@@ -268,6 +270,18 @@ export function processTimeEntries(
       nextDayString
     );
 
+    if (isTargetEmployee) {
+      console.log(`[DEBUG-10003-TP] Processed result for day ${j + 1}:`);
+      console.log(
+        `[DEBUG-10003-TP] timeIn: ${result.attendance.timeIn}, timeOut: ${result.attendance.timeOut}`
+      );
+      if (result.missingTimeLog) {
+        console.log(
+          `[DEBUG-10003-TP] Missing time log detected: ${result.missingTimeLog.missingType}`
+        );
+      }
+    }
+
     attendances.push(result.attendance);
     if (result.missingTimeLog) {
       missingTimeLogs.push(result.missingTimeLog);
@@ -275,10 +289,14 @@ export function processTimeEntries(
   });
 
   if (isTargetEmployee) {
-    console.log("\n========== PROCESSING COMPLETE ==========");
-    console.log("Total days processed:", attendances.length);
-    console.log("Missing time logs:", missingTimeLogs.length);
-    console.log("=========================================\n");
+    console.log("\n[DEBUG-10003-TP] ========== PROCESSING COMPLETE ==========");
+    console.log("[DEBUG-10003-TP] Total days processed:", attendances.length);
+    console.log(
+      "[DEBUG-10003-TP] Final attendance records:",
+      JSON.stringify(attendances, null, 2)
+    );
+    console.log("[DEBUG-10003-TP] Missing time logs:", missingTimeLogs.length);
+    console.log("[DEBUG-10003-TP] =========================================\n");
   }
 
   return { attendances, missingTimeLogs };

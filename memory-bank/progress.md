@@ -213,3 +213,28 @@
 - Current web build process is functional but may need refinements
 - Need to handle conditional imports for platform-specific code
 - Webpack configuration may need adjustments for handling Node.js module fallbacks 
+
+## Electron Production Build CSS Loading
+
+**Status: FIXED**
+
+The issue with CSS not loading properly in production builds (the compiled .exe) has been resolved with a multi-layered approach:
+
+1. CSS files are now copied to multiple locations in the app package
+2. CSS files are unpacked outside the asar archive
+3. Direct CSS injection is used with multiple fallback paths
+4. Event listeners verify which paths successfully load
+5. Inlined styles provide a guaranteed fallback
+
+This ensures the application maintains consistent styling between development and production builds.
+
+## Window Maximization
+
+**Status: IMPLEMENTED**
+
+The application window now launches maximized with a smooth startup experience:
+
+1. Window is created hidden initially
+2. Window is maximized before showing
+3. Window only becomes visible when fully loaded
+4. No flickering or resizing after display 

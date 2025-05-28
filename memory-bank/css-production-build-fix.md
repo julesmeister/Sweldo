@@ -250,6 +250,200 @@ Key changes:
 - Enhanced error handling and retry logic
 - Improved logging for debugging
 
+## Latest Solutions (2023)
+
+### Direct CSS Injection Approach
+
+The most effective solution implemented was a direct CSS injection approach in `styleInjector.js`:
+
+```javascript
+// DIRECT APPROACH: Immediately inject known paths for CSS - more reliable than IPC
+console.log("[Style Injector] Applying direct CSS injection for production build");
+
+// Try multiple direct paths to ensure CSS is loaded
+const directPaths = [
+  "app://./app/static/css/tailwind-web.css",
+  "app://./app/styles/tailwind-web.css",
+  "app://./resources/css/tailwind-web.css",
+  "app://./static/css/tailwind-web.css"
+];
+
+directPaths.forEach((path, index) => {
+  const directLink = document.createElement("link");
+  directLink.rel = "stylesheet";
+  directLink.href = path;
+  directLink.id = `tailwind-css-direct-${index}`;
+  document.head.appendChild(directLink);
+  console.log(`[Style Injector] Added direct CSS link: ${path}`);
+
+  // Add load listener to see which one actually loads
+  directLink.addEventListener("load", () => {
+    console.log(`[Style Injector] Successfully loaded CSS from direct path: ${path}`);
+  });
+});
+```
+
+This approach:
+1. Bypasses the IPC mechanism entirely
+2. Tries multiple possible paths simultaneously
+3. Uses event listeners to verify which paths successfully load
+4. Provides detailed logging for debugging
+
+### AsarUnpack Configuration
+
+A critical fix was to update the `electron-builder.yml` to unpack CSS files outside the asar archive:
+
+```yaml
+asar: true
+asarUnpack:
+  - "**/*.css"
+  - "**/app/static/css/**"
+  - "**/app/styles/**"
+  - "**/static/css/**"
+  - "**/resources/css/**"
+```
+
+This ensures CSS files remain accessible as normal files, not compressed within the asar archive, making them easier to load directly.
+
+### Improved File Copying Configuration
+
+The electron-builder.yml configuration was enhanced to copy CSS files to multiple locations:
+
+```yaml
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+  # More explicit CSS paths with specific file inclusions
+  - from: renderer/public/styles
+    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/public/styles
+    to: app/styles
+    filter:
+      - "**/*.css"
+  - from: renderer/public/styles
+    to: static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: app/styles
+    filter:
+      - "**/*.css"
+  - from: renderer/styles
+    to: static/css
+    filter:
+      - "**/*.css"
+  - from: resources/css
+    to: app/static/css
+    filter:
+      - "**/*.css"
+  - from: resources/css
+    to: app/styles
+    filter:
+      - "**/*.css"
+  - from: resources/css
+    to: resources/css
+    filter:
+      - "**/*.css"
+  - from: resources/css
+    to: static/css
+    filter:
+      - "**/*.css"
+```
+
+This provides maximum redundancy by copying all CSS files to multiple locations within the app package.
+
+### Inlined Styles as Backup
+
+The inlined styles mechanism was enhanced with better logging:
+
+```javascript
+export function injectInlinedStyles() {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  console.log("[inlinedStyles] Injecting inlined Tailwind CSS into document head");
+  
+  // Add the inlined styles only if they don't exist already
+  if (!document.getElementById("inlined-tailwind-css")) {
+    const styleElement = document.createElement("style");
+    styleElement.id = "inlined-tailwind-css";
+    styleElement.textContent = inlinedTailwindCSS;
+    document.head.appendChild(styleElement);
+    console.log("[inlinedStyles] Successfully injected inlined Tailwind CSS");
+  } else {
+    console.log("[inlinedStyles] Inlined Tailwind CSS already exists in document");
+  }
+}
+```
+
+### Window Configuration for Proper Display
+
+To ensure the application launches with a maximized window without flickering:
+
+```typescript
+// In main/background.ts
+const mainWindow = createWindow("main", {
+  width: 1600,
+  height: 900,
+  show: false, // Initially hide window to prevent flashing before maximizing
+  webPreferences: {
+    preload: path.join(__dirname, "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+  },
+});
+
+// Once ready-to-show, show the window
+mainWindow.once('ready-to-show', () => {
+  console.log('[Main] Window ready to show');
+  mainWindow.show();
+});
+```
+
+And in `create-window.ts`:
+
+```typescript
+window.maximize();
+console.log(`[Window Helper] Window "${windowName}" created and maximized`);
+```
+
+This approach:
+1. Creates the window hidden initially
+2. Maximizes it before showing it
+3. Only shows the window once it's fully loaded and ready
+4. Prevents flickering or resizing after display
+
+## CSS Loading Process
+
+The complete CSS loading process now follows this sequence:
+
+1. **Build Phase**:
+   - CSS files are generated with `npm run generate:tailwind`
+   - Files are copied to multiple locations in the app structure
+   - Some CSS is inlined into JavaScript for guaranteed loading
+
+2. **Application Startup**:
+   - Main process verifies CSS files in production
+   - Electron window is configured for proper display
+
+3. **Renderer Loading**:
+   - Inlined CSS is injected first for basic styling
+   - Direct CSS links are added to multiple possible paths
+   - IPC mechanism is used as a fallback
+   - Event listeners track which paths successfully load
+   - Detailed logging helps identify loading issues
+
+This multi-layered approach ensures CSS will be available in the production build regardless of packaging quirks or path resolution issues.
+
 ## How This Resolves the Issue
 
 The combination of these changes ensures that:

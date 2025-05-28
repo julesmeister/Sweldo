@@ -214,6 +214,17 @@ export class Payroll {
         });
       }
 
+      // Debug logging for employee 10003
+      const isTargetEmployee = employeeId === "10003";
+      if (isTargetEmployee) {
+        console.log(
+          `[DEBUG-10003-PAYROLL] Processing timeList for employee ${employeeId}`
+        );
+        console.log(
+          `[DEBUG-10003-PAYROLL] TimeList: ${JSON.stringify(timeList, null, 2)}`
+        );
+      }
+
       const { attendances, missingTimeLogs } = processTimeEntries(
         timeList || [],
         employeeId,
@@ -224,6 +235,19 @@ export class Payroll {
         this.dateRange.start.getFullYear()
       );
 
+      if (isTargetEmployee) {
+        console.log(
+          `[DEBUG-10003-PAYROLL] Generated attendance records: ${JSON.stringify(
+            attendances,
+            null,
+            2
+          )}`
+        );
+        console.log(
+          `[DEBUG-10003-PAYROLL] Generated missing time logs: ${missingTimeLogs.length}`
+        );
+      }
+
       if (employee) {
         const attendanceModel = createAttendanceModel(this.dbPath);
         const existingAttendances = await attendanceModel.loadAttendancesById(
@@ -231,16 +255,132 @@ export class Payroll {
           this.dateRange.start.getFullYear(),
           employee.id
         );
+
+        if (isTargetEmployee) {
+          console.log(
+            `[DEBUG-10003-PAYROLL] Existing attendance records loaded: ${existingAttendances.length}`
+          );
+          console.log(
+            `[DEBUG-10003-PAYROLL] Existing attendance records: ${JSON.stringify(
+              existingAttendances,
+              null,
+              2
+            )}`
+          );
+        }
+
         const existingDays = new Set(existingAttendances.map((att) => att.day));
-        const newAttendancesToSave = attendances.filter(
+
+        // Create a map of existing attendance records by day for quick lookup
+        const existingAttendancesByDay = new Map();
+        existingAttendances.forEach((att) => {
+          existingAttendancesByDay.set(att.day, att);
+        });
+
+        // First, filter for completely new days
+        let newAttendancesToSave = attendances.filter(
           (att) => !existingDays.has(att.day)
         );
+
+        // Then, find days that exist but have null values that could be updated with non-null values
+        const daysWithUpdates = attendances.filter((att) => {
+          // Skip days that are already going to be saved as new
+          if (!existingDays.has(att.day)) return false;
+
+          const existingAtt = existingAttendancesByDay.get(att.day);
+
+          // Only consider updates for days where:
+          // 1. The new record has a non-null timeIn and the existing record has a null timeIn, OR
+          // 2. The new record has a non-null timeOut and the existing record has a null timeOut
+          const hasTimeInUpdate =
+            att.timeIn !== null && existingAtt.timeIn === null;
+          const hasTimeOutUpdate =
+            att.timeOut !== null && existingAtt.timeOut === null;
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-PAYROLL] Day ${att.day} - Checking for updates:`
+            );
+            console.log(
+              `[DEBUG-10003-PAYROLL]   Existing: timeIn=${existingAtt.timeIn}, timeOut=${existingAtt.timeOut}`
+            );
+            console.log(
+              `[DEBUG-10003-PAYROLL]   New: timeIn=${att.timeIn}, timeOut=${att.timeOut}`
+            );
+            console.log(
+              `[DEBUG-10003-PAYROLL]   Has timeIn update: ${hasTimeInUpdate}`
+            );
+            console.log(
+              `[DEBUG-10003-PAYROLL]   Has timeOut update: ${hasTimeOutUpdate}`
+            );
+          }
+
+          return hasTimeInUpdate || hasTimeOutUpdate;
+        });
+
+        // Add days with updates to the list of records to save
+        if (daysWithUpdates.length > 0) {
+          newAttendancesToSave = [...newAttendancesToSave, ...daysWithUpdates];
+        }
+
+        if (isTargetEmployee) {
+          console.log(
+            `[DEBUG-10003-PAYROLL] Existing days: ${JSON.stringify(
+              Array.from(existingDays)
+            )}`
+          );
+          console.log(
+            `[DEBUG-10003-PAYROLL] Initial new attendances: ${JSON.stringify(
+              attendances.filter((att) => !existingDays.has(att.day)),
+              null,
+              2
+            )}`
+          );
+          console.log(
+            `[DEBUG-10003-PAYROLL] Found ${daysWithUpdates.length} days with potential updates for null values`
+          );
+
+          if (daysWithUpdates.length > 0) {
+            console.log(
+              `[DEBUG-10003-PAYROLL] Days with updates: ${JSON.stringify(
+                daysWithUpdates,
+                null,
+                2
+              )}`
+            );
+          }
+
+          console.log(
+            `[DEBUG-10003-PAYROLL] Final attendances to save: ${JSON.stringify(
+              newAttendancesToSave,
+              null,
+              2
+            )}`
+          );
+        }
+
         if (newAttendancesToSave.length > 0) {
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-PAYROLL] Saving ${newAttendancesToSave.length} new attendance records`
+            );
+          }
+
           await attendanceModel.saveOrUpdateAttendances(
             newAttendancesToSave,
             this.dateRange.start.getMonth() + 1,
             this.dateRange.start.getFullYear(),
             employee.id
+          );
+
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003-PAYROLL] Attendance records saved successfully`
+            );
+          }
+        } else if (isTargetEmployee) {
+          console.log(
+            `[DEBUG-10003-PAYROLL] No new attendance records to save`
           );
         }
 

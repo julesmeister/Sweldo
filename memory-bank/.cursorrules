@@ -263,3 +263,27 @@ export function injectFontStyles() {
 - Include loading and error states
 - Use React Portal for dropdowns to avoid z-index issues
 - Properly handle window resize and scroll events
+
+## Electron CSS Loading in Production Builds
+
+- For CSS to load properly in production builds (the .exe file), multiple techniques must be combined:
+
+1. CSS files must be copied to multiple locations: app/static/css, app/styles, resources/css, and static/css
+2. CSS files must be unpacked outside the asar archive using asarUnpack in electron-builder.yml
+3. Direct CSS injection should be used with app:// protocol paths
+4. Multiple fallback paths should be tried simultaneously
+5. Inlined styles should be used as a guaranteed fallback
+
+- Important files for CSS loading:
+  - renderer/utils/styleInjector.js - Handles runtime CSS injection
+  - renderer/utils/inlinedStyles.js - Contains inlined CSS backup
+  - electron-builder.yml - Controls file copying and unpacking
+  - main/background.ts - Contains IPC handler for CSS path resolution
+
+## Window Configuration
+
+- For proper window behavior, use this configuration pattern:
+  - Create window with show: false initially
+  - Call window.maximize() in create-window.ts
+  - Use mainWindow.once('ready-to-show', ...) to show window when ready
+  - This prevents flickering and ensures smooth startup

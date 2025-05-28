@@ -243,3 +243,23 @@ This implementation serves as a template for other employee-specific data module
 ### Recent Updates and Bugs Fixed
 
 - **Loan Deductions Flow Fix**: Fixed a critical issue with loan deductions not appearing in the PayrollSummary view. The issue was that loan deduction data was stored at the root level in `loanDeductionIds` but the component was looking for it in `deductions.loanDeductions`. See `loan-deductions-flow.md` for detailed documentation on the correct data flow to prevent this issue in the future.
+
+## CSS in Production Builds
+
+We've resolved an issue with CSS not loading properly in production builds (when running the .exe file). The solution involves:
+
+1. **Direct CSS Injection**: The `styleInjector.js` file now uses direct path injection with multiple fallbacks.
+2. **AsarUnpack Configuration**: CSS files are unpacked outside the asar archive in `electron-builder.yml`.
+3. **Multiple Copy Locations**: CSS files are copied to multiple locations during the build process.
+4. **Inlined Styles Backup**: Critical styles are inlined as JavaScript to ensure basic styling always works.
+
+See `memory-bank/css-production-build-fix.md` for complete details on the implementation.
+
+## Window Configuration
+
+The application window is configured to:
+1. Start hidden (`show: false` in BrowserWindow options)
+2. Maximize when created (`window.maximize()` in create-window.ts)
+3. Only become visible when ready (`mainWindow.once('ready-to-show', ...)`)
+
+This approach prevents the window from flashing or resizing after being displayed, providing a smoother user experience.

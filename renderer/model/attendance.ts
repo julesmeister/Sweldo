@@ -546,6 +546,22 @@ export class AttendanceModel {
   ): Promise<void> {
     if (!attendancesToSave.length) return;
 
+    // Add detailed debugging for employee 10003
+    const isTargetEmployee = employeeId === "10003";
+    if (isTargetEmployee) {
+      console.log(
+        `[DEBUG-10003] Starting saveOrUpdateAttendances for employee ${employeeId}`
+      );
+      console.log(`[DEBUG-10003] Month: ${month}, Year: ${year}`);
+      console.log(
+        `[DEBUG-10003] Records to save: ${JSON.stringify(
+          attendancesToSave,
+          null,
+          2
+        )}`
+      );
+    }
+
     // If in web mode, use Firestore
     if (this.isWebMode()) {
       // Convert to full Attendance objects
@@ -558,6 +574,17 @@ export class AttendanceModel {
         timeOut: att.timeOut ?? null,
         schedule: att.schedule,
       }));
+
+      if (isTargetEmployee) {
+        console.log(`[DEBUG-10003] Web mode - saving to Firestore`);
+        console.log(
+          `[DEBUG-10003] Full attendances: ${JSON.stringify(
+            fullAttendances,
+            null,
+            2
+          )}`
+        );
+      }
 
       // Save to Firestore
       const companyName = await getCompanyName();
@@ -631,6 +658,20 @@ export class AttendanceModel {
         year,
         employeeId
       );
+
+      if (isTargetEmployee) {
+        console.log(
+          `[DEBUG-10003] Desktop mode - Existing attendances loaded: ${existingAttendances.length}`
+        );
+        console.log(
+          `[DEBUG-10003] Existing attendances: ${JSON.stringify(
+            existingAttendances,
+            null,
+            2
+          )}`
+        );
+      }
+
       const recordsToBackup: Attendance[] = [];
 
       // Process each record to be saved/updated
@@ -639,19 +680,87 @@ export class AttendanceModel {
           (att) => att.day === newAttendance.day
         );
 
+        if (isTargetEmployee) {
+          console.log(`[DEBUG-10003] Processing day ${newAttendance.day}`);
+          console.log(
+            `[DEBUG-10003] New timeIn: ${newAttendance.timeIn}, timeOut: ${newAttendance.timeOut}`
+          );
+          console.log(
+            `[DEBUG-10003] Existing record found: ${
+              existingAttendanceIndex !== -1
+            }`
+          );
+          if (existingAttendanceIndex !== -1) {
+            console.log(
+              `[DEBUG-10003] Existing timeIn: ${existingAttendances[existingAttendanceIndex].timeIn}, timeOut: ${existingAttendances[existingAttendanceIndex].timeOut}`
+            );
+          }
+        }
+
         if (existingAttendanceIndex !== -1) {
           const existingRecord = existingAttendances[existingAttendanceIndex];
           // Update existing attendance
+          // Modified logic: Only update if the new value is not null OR the existing value is null
+          const timeInBefore = existingRecord.timeIn;
+          const timeOutBefore = existingRecord.timeOut;
+
+          const newTimeIn =
+            newAttendance.timeIn !== undefined
+              ? newAttendance.timeIn !== null || existingRecord.timeIn === null
+                ? newAttendance.timeIn
+                : existingRecord.timeIn
+              : existingRecord.timeIn;
+
+          const newTimeOut =
+            newAttendance.timeOut !== undefined
+              ? newAttendance.timeOut !== null ||
+                existingRecord.timeOut === null
+                ? newAttendance.timeOut
+                : existingRecord.timeOut
+              : existingRecord.timeOut;
+
+          if (isTargetEmployee) {
+            console.log(`[DEBUG-10003] Decision process for timeIn:`);
+            console.log(
+              `[DEBUG-10003]   newAttendance.timeIn !== undefined: ${
+                newAttendance.timeIn !== undefined
+              }`
+            );
+            console.log(
+              `[DEBUG-10003]   newAttendance.timeIn !== null: ${
+                newAttendance.timeIn !== null
+              }`
+            );
+            console.log(
+              `[DEBUG-10003]   existingRecord.timeIn === null: ${
+                existingRecord.timeIn === null
+              }`
+            );
+            console.log(`[DEBUG-10003]   Final timeIn value: ${newTimeIn}`);
+
+            console.log(`[DEBUG-10003] Decision process for timeOut:`);
+            console.log(
+              `[DEBUG-10003]   newAttendance.timeOut !== undefined: ${
+                newAttendance.timeOut !== undefined
+              }`
+            );
+            console.log(
+              `[DEBUG-10003]   newAttendance.timeOut !== null: ${
+                newAttendance.timeOut !== null
+              }`
+            );
+            console.log(
+              `[DEBUG-10003]   existingRecord.timeOut === null: ${
+                existingRecord.timeOut === null
+              }`
+            );
+            console.log(`[DEBUG-10003]   Final timeOut value: ${newTimeOut}`);
+          }
+
           const updatedRecord: Attendance = {
             ...existingRecord,
-            timeIn:
-              newAttendance.timeIn !== undefined
-                ? newAttendance.timeIn
-                : existingRecord.timeIn,
-            timeOut:
-              newAttendance.timeOut !== undefined
-                ? newAttendance.timeOut
-                : existingRecord.timeOut,
+            timeIn: newTimeIn,
+            timeOut: newTimeOut,
           };
 
           // Check if data changed
@@ -659,8 +768,19 @@ export class AttendanceModel {
             updatedRecord.timeIn !== existingRecord.timeIn ||
             updatedRecord.timeOut !== existingRecord.timeOut
           ) {
+            if (isTargetEmployee) {
+              console.log(`[DEBUG-10003] Record changed, updating:`);
+              console.log(
+                `[DEBUG-10003]   timeIn: ${existingRecord.timeIn} -> ${updatedRecord.timeIn}`
+              );
+              console.log(
+                `[DEBUG-10003]   timeOut: ${existingRecord.timeOut} -> ${updatedRecord.timeOut}`
+              );
+            }
             existingAttendances[existingAttendanceIndex] = updatedRecord;
             recordsToBackup.push(updatedRecord);
+          } else if (isTargetEmployee) {
+            console.log(`[DEBUG-10003] No changes detected, skipping update`);
           }
         } else {
           // Add new attendance
@@ -672,6 +792,14 @@ export class AttendanceModel {
             timeIn: newAttendance.timeIn ?? null,
             timeOut: newAttendance.timeOut ?? null,
           };
+          if (isTargetEmployee) {
+            console.log(
+              `[DEBUG-10003] Adding new record for day ${newAttendance.day}`
+            );
+            console.log(
+              `[DEBUG-10003]   timeIn: ${addedRecord.timeIn}, timeOut: ${addedRecord.timeOut}`
+            );
+          }
           existingAttendances.push(addedRecord);
           recordsToBackup.push(addedRecord);
         }
@@ -680,6 +808,19 @@ export class AttendanceModel {
       if (recordsToBackup.length > 0) {
         // Sort records by day before saving
         existingAttendances.sort((a, b) => a.day - b.day);
+
+        if (isTargetEmployee) {
+          console.log(
+            `[DEBUG-10003] ${recordsToBackup.length} records modified, saving to storage`
+          );
+          console.log(
+            `[DEBUG-10003] Modified records: ${JSON.stringify(
+              recordsToBackup,
+              null,
+              2
+            )}`
+          );
+        }
 
         // Check if we're using JSON format
         if (this.useJsonFormat) {
@@ -744,6 +885,8 @@ export class AttendanceModel {
             altError
           );
         }
+      } else if (isTargetEmployee) {
+        console.log(`[DEBUG-10003] No records modified, skipping save`);
       }
     } catch (error) {
       console.error(
