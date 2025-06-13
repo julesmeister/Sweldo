@@ -242,15 +242,30 @@ export default function LeavesPage() {
       await leaveModel.saveOrUpdateLeave(leaveWithEmployee);
       setIsDialogOpen(false);
 
-      // Refresh leaves list
+      // Refresh leaves list - load all months for the year
       if (employee) {
-        const updatedLeaves = await leaveModel.loadLeaves(
-          employee.id,
-          storeSelectedYear,
-          storeSelectedMonth + 1
+        const allLeaves: Leave[] = [];
+        for (let month = 1; month <= 12; month++) {
+          try {
+            const monthLeaves = await leaveModel.loadLeaves(
+              employee.id,
+              storeSelectedYear,
+              month
+            );
+            allLeaves.push(...monthLeaves);
+          } catch (error) {
+            console.warn(`Error loading leaves for month ${month}:`, error);
+          }
+        }
+        // Sort leaves by date (newest first)
+        const sortedLeaves = allLeaves.sort((a, b) =>
+          new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
         );
-        setLeaves(updatedLeaves);
-        toast.success(`Leave request saved successfully`);
+        setLeaves(sortedLeaves);
+        toast.success(`Leave request saved successfully`, {
+          position: "bottom-right",
+          duration: 3000,
+        });
       }
     } catch (error: any) {
       console.error("Error saving leave:", error);
@@ -280,13 +295,29 @@ export default function LeavesPage() {
       await leaveModel.deleteLeave(leave.id, leave);
 
       if (employee) {
-        const loadedLeaves = await leaveModel.loadLeaves(
-          employee.id,
-          storeSelectedYear,
-          storeSelectedMonth + 1
+        // Reload all months for the year after deletion
+        const allLeaves: Leave[] = [];
+        for (let month = 1; month <= 12; month++) {
+          try {
+            const monthLeaves = await leaveModel.loadLeaves(
+              employee.id,
+              storeSelectedYear,
+              month
+            );
+            allLeaves.push(...monthLeaves);
+          } catch (error) {
+            console.warn(`Error loading leaves for month ${month}:`, error);
+          }
+        }
+        // Sort leaves by date (newest first)
+        const sortedLeaves = allLeaves.sort((a, b) =>
+          new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
         );
-        setLeaves(loadedLeaves);
-        toast.success("Leave request deleted successfully");
+        setLeaves(sortedLeaves);
+        toast.success("Leave request deleted successfully", {
+          position: "bottom-right",
+          duration: 3000,
+        });
       }
     } catch (error) {
       console.error("Error deleting leave:", error);

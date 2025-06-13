@@ -333,14 +333,23 @@ export default function DeductionsPage() {
           });
         }
 
-        // Reload the deductions from Firestore to get the updated list
-        const shortItems = await loadShortsFirestore(
-          selectedEmployeeId!,
-          currentMonthForFirestore,
-          currentYearForFirestore,
-          companyNameFromSettings
-        );
-        setShorts(shortItems);
+        // Reload the deductions from Firestore for all months to get the updated list
+        let allShorts: Short[] = [];
+        for (let month = 1; month <= 12; month++) {
+          try {
+            const monthShorts = await loadShortsFirestore(
+              selectedEmployeeId!,
+              month,
+              currentYearForFirestore,
+              companyNameFromSettings
+            );
+            allShorts.push(...monthShorts);
+          } catch (error) {
+            console.warn(`Error loading shorts for month ${month}:`, error);
+          }
+        }
+        allShorts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setShorts(allShorts);
       } else {
         // Desktop Mode (Existing Logic)
         if (!dbPath) {
@@ -379,9 +388,24 @@ export default function DeductionsPage() {
           });
         }
 
-        // Reload the deductions to get the updated list
-        const shortItems = await shortModel.loadShorts(selectedEmployeeId!);
-        setShorts(shortItems);
+        // Reload the deductions from all months to get the updated list
+        let allShorts: Short[] = [];
+        for (let month = 1; month <= 12; month++) {
+          try {
+            const monthModel = createShortModel(
+              dbPath,
+              selectedEmployeeId!,
+              month,
+              storeSelectedYear
+            );
+            const monthShorts = await monthModel.loadShorts(selectedEmployeeId!);
+            allShorts.push(...monthShorts);
+          } catch (error) {
+            console.warn(`Error loading shorts for month ${month}:`, error);
+          }
+        }
+        allShorts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setShorts(allShorts);
       }
 
       // Close the dialog
@@ -594,14 +618,67 @@ export default function DeductionsPage() {
 
                                       setLoading(true);
                                       try {
-                                        await shortModel.deleteShort(short.id);
-                                        const shortItems =
-                                          await shortModel.loadShorts(
-                                            selectedEmployeeId!
-                                          );
-                                        setShorts(shortItems);
+                                        if (isWebEnvironment()) {
+                                          // Web mode - use Firestore delete and reload all months
+                                          const companyName = companyNameFromSettings;
+                                          if (!companyName) {
+                                            toast("Company name not configured", {
+                                              position: "bottom-right",
+                                              duration: 3000,
+                                            });
+                                            return;
+                                          }
+                                          
+                                          // Delete using Firestore (need to implement deleteShortFirestore)
+                                          // For now, we'll use the model's delete method
+                                          await shortModel.deleteShort(short.id);
+                                          
+                                          // Reload all months from Firestore
+                                          let allShorts: Short[] = [];
+                                          for (let month = 1; month <= 12; month++) {
+                                            try {
+                                              const monthShorts = await loadShortsFirestore(
+                                                selectedEmployeeId!,
+                                                month,
+                                                storeSelectedYear,
+                                                companyName
+                                              );
+                                              allShorts.push(...monthShorts);
+                                            } catch (error) {
+                                              console.warn(`Error loading shorts for month ${month}:`, error);
+                                            }
+                                          }
+                                          allShorts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                          setShorts(allShorts);
+                                        } else {
+                                          // Desktop mode - delete and reload all months
+                                          await shortModel.deleteShort(short.id);
+                                          
+                                          let allShorts: Short[] = [];
+                                          for (let month = 1; month <= 12; month++) {
+                                            try {
+                                              const monthModel = createShortModel(
+                                                dbPath!,
+                                                selectedEmployeeId!,
+                                                month,
+                                                storeSelectedYear
+                                              );
+                                              const monthShorts = await monthModel.loadShorts(selectedEmployeeId!);
+                                              allShorts.push(...monthShorts);
+                                            } catch (error) {
+                                              console.warn(`Error loading shorts for month ${month}:`, error);
+                                            }
+                                          }
+                                          allShorts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                          setShorts(allShorts);
+                                        }
+                                        
                                         toast(
-                                          "Deduction deleted successfully"
+                                          "Deduction deleted successfully",
+                                          {
+                                            position: "bottom-right",
+                                            duration: 3000,
+                                          }
                                         );
                                       } catch (error) {
                                         console.error(
@@ -611,7 +688,11 @@ export default function DeductionsPage() {
                                         toast(
                                           error instanceof Error
                                             ? `Error deleting deduction: ${error.message}`
-                                            : "Error deleting deduction"
+                                            : "Error deleting deduction",
+                                          {
+                                            position: "bottom-right",
+                                            duration: 3000,
+                                          }
                                         );
                                       } finally {
                                         setLoading(false);

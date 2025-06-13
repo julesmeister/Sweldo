@@ -286,6 +286,41 @@ export class ShortModel {
     }
   }
 
+  // Helper method to search for a short across all months
+  private async findShortAcrossMonths(id: string): Promise<{ found: boolean; year?: number; month?: number }> {
+    const currentYear = new Date().getFullYear();
+    const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+    
+    for (const year of yearsToCheck) {
+      for (let month = 1; month <= 12; month++) {
+        try {
+          const jsonFilePath = path.join(
+            this.folderPath,
+            `${year}_${month}_shorts.json`
+          );
+          
+          const fileExists = await window.electron.fileExists(jsonFilePath);
+          if (!fileExists) continue;
+          
+          const content = await window.electron.readFile(jsonFilePath);
+          if (!content || content.trim() === "") continue;
+          
+          const data = JSON.parse(content) as ShortsJsonStructure;
+          const shortFound = data.shorts.some(s => s.id === id);
+          
+          if (shortFound) {
+            return { found: true, year, month };
+          }
+        } catch (error) {
+          // Continue searching other months if this one fails
+          continue;
+        }
+      }
+    }
+    
+    return { found: false };
+  }
+
   async deleteShort(id: string): Promise<void> {
     try {
       // Web mode - use Firestore
@@ -302,6 +337,7 @@ export class ShortModel {
       }
 
       // Desktop mode - use existing implementation
+      // First try the current month's JSON file
       const jsonData = await this.readJsonFile();
       let deleted = false;
 
@@ -311,43 +347,82 @@ export class ShortModel {
         if (jsonData.shorts.length < initialLength) {
           await this.writeJsonFile(jsonData);
           deleted = true;
-          console.log(`[ShortModel] Deleted short ${id} from JSON.`);
+          console.log(`[ShortModel] Deleted short ${id} from JSON (${this.year}-${this.month}).`);
         }
       }
 
-      // Fallback to CSV ONLY if not found/deleted in JSON
+      // If not found in current month's JSON, search across all months
       if (!deleted) {
-        console.warn(
-          `[ShortModel] Short ${id} not found in JSON (${this.year}-${this.month}), attempting CSV fallback delete.`
-        );
-        try {
-          await this.oldModelInstance.deleteShort(id);
-          console.log(`[ShortModel] Deleted short ${id} from CSV (fallback).`);
-          deleted = true; // Mark as deleted even if via fallback
-        } catch (csvError) {
-          console.error(
-            `[ShortModel] Error during fallback CSV delete for ${id}:`,
-            csvError
-          );
-          // If JSON existed but didn't contain ID, and CSV delete failed, maybe throw?
-          if (jsonData) {
-            throw new Error(
-              `Short ${id} not found in JSON and CSV delete failed: ${
-                (csvError as Error).message
-              }`
-            );
+        console.log(`[ShortModel] Short ${id} not found in current month (${this.year}-${this.month}), searching across all months...`);
+        
+        const searchResult = await this.findShortAcrossMonths(id);
+        
+        if (searchResult.found && searchResult.year && searchResult.month) {
+          console.log(`[ShortModel] Found short ${id} in ${searchResult.year}-${searchResult.month}, attempting deletion...`);
+          
+          // Create a temporary model instance for the found month/year
+          const tempModel = new ShortModel(this.dbPath, this.employeeId, searchResult.month, searchResult.year);
+          const tempJsonData = await tempModel.readJsonFile();
+          
+          if (tempJsonData) {
+            const initialLength = tempJsonData.shorts.length;
+            tempJsonData.shorts = tempJsonData.shorts.filter((s) => s.id !== id);
+            if (tempJsonData.shorts.length < initialLength) {
+              await tempModel.writeJsonFile(tempJsonData);
+              deleted = true;
+              console.log(`[ShortModel] Deleted short ${id} from JSON (${searchResult.year}-${searchResult.month}).`);
+            }
           }
-          // If JSON didn't exist and CSV delete failed, throw original error?
-          throw new Error(`Short ${id} not found in JSON or CSV.`);
+        }
+      }
+
+      // Fallback to CSV search across all months if still not found
+      if (!deleted) {
+        console.warn(
+          `[ShortModel] Short ${id} not found in any JSON files, attempting CSV fallback delete across months.`
+        );
+        
+        const currentYear = new Date().getFullYear();
+        const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+        
+        for (const year of yearsToCheck) {
+          for (let month = 1; month <= 12; month++) {
+            try {
+              const tempOldModel = new OldShortModel(
+                this.folderPath,
+                this.employeeId,
+                month,
+                year
+              );
+              
+              await tempOldModel.deleteShort(id);
+              console.log(`[ShortModel] Deleted short ${id} from CSV (${year}-${month}).`);
+              deleted = true;
+              break;
+            } catch (csvError: any) {
+              // Check if it's a file not found error
+              if (csvError.code === "ENOENT" || csvError.message?.includes("ENOENT") || csvError.message?.includes("no such file")) {
+                continue; // File doesn't exist for this month, try next
+              } else {
+                // Some other error, continue to next month but log it
+                console.error(`[ShortModel] Error trying to delete from CSV (${year}-${month}):`, csvError);
+                continue;
+              }
+            }
+          }
+          if (deleted) break;
+        }
+        
+        if (!deleted) {
+          console.log(`[ShortModel] Short ${id} not found in any CSV files either, considering it already deleted`);
+          return; // Short not found anywhere, consider it already deleted
         }
       }
 
       if (!deleted) {
-        // This should only happen if JSON exists, but ID not found, AND CSV fallback failed
         console.warn(
-          `[ShortModel] Short with id ${id} not found for deletion in either JSON or CSV.`
+          `[ShortModel] Short with id ${id} not found for deletion in any JSON or CSV files.`
         );
-        // Optionally throw new Error(`Short with id ${id} not found for deletion.`);
       }
     } catch (error) {
       console.error("[ShortModel] Error deleting short:", error);

@@ -319,6 +319,38 @@ export class LeaveModel {
     }
   }
 
+  // Helper method to search for a leave across all months
+  private async findLeaveAcrossMonths(id: string): Promise<{ found: boolean; year?: number; month?: number }> {
+    const currentYear = new Date().getFullYear();
+    const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+    
+    for (const year of yearsToCheck) {
+      for (let month = 1; month <= 12; month++) {
+        try {
+          const jsonFilePath = this.getJsonFilePath(year, month);
+          
+          const fileExists = await window.electron.fileExists(jsonFilePath);
+          if (!fileExists) continue;
+          
+          const content = await window.electron.readFile(jsonFilePath);
+          if (!content || content.trim() === "") continue;
+          
+          const data = JSON.parse(content) as LeaveJsonData;
+          const leaveFound = data.leaves[id];
+          
+          if (leaveFound) {
+            return { found: true, year, month };
+          }
+        } catch (error) {
+          // Continue searching other months if this one fails
+          continue;
+        }
+      }
+    }
+    
+    return { found: false };
+  }
+
   async deleteLeave(id: string, leave: Leave): Promise<void> {
     try {
       if (isWebEnvironment()) {
@@ -331,9 +363,10 @@ export class LeaveModel {
       // Desktop mode - use existing implementation
       const year = leave.startDate.getFullYear();
       const month = leave.startDate.getMonth() + 1;
+      let deleted = false;
 
       if (this.useJsonFormat) {
-        // Delete from JSON
+        // First try the specified month's JSON file
         const jsonPath = this.getJsonFilePath(year, month);
 
         try {
@@ -350,23 +383,112 @@ export class LeaveModel {
               jsonPath,
               JSON.stringify(jsonData, null, 2)
             );
+            console.log(`[LeaveModel] Successfully deleted leave from JSON (${year}-${month})`);
+            deleted = true;
           }
-          return;
         } catch (error: any) {
-          if (error.code === "ENOENT") {
-            // Fall through to CSV deletion
+          if (error.code === "ENOENT" || error.message?.includes("ENOENT")) {
+            // File doesn't exist for this month, continue to search other months
           } else {
+            console.error(`[LeaveModel] Error processing JSON file ${jsonPath} for deletion:`, error);
             throw error;
           }
         }
+
+        // If not found in specified month, search across all months
+        if (!deleted) {
+          console.log(`[LeaveModel] Leave ${id} not found in specified month (${year}-${month}), searching across all months...`);
+          
+          const searchResult = await this.findLeaveAcrossMonths(id);
+          
+          if (searchResult.found && searchResult.year && searchResult.month) {
+            console.log(`[LeaveModel] Found leave ${id} in ${searchResult.year}-${searchResult.month}, attempting deletion...`);
+            
+            const foundJsonPath = this.getJsonFilePath(searchResult.year, searchResult.month);
+            try {
+              const fileContent = await window.electron.readFile(foundJsonPath);
+              const jsonData = JSON.parse(fileContent) as LeaveJsonData;
+              
+              if (jsonData.leaves[id]) {
+                delete jsonData.leaves[id];
+                jsonData.meta.lastModified = new Date().toISOString();
+                
+                await window.electron.writeFile(
+                  foundJsonPath,
+                  JSON.stringify(jsonData, null, 2)
+                );
+                console.log(`[LeaveModel] Successfully deleted leave from JSON (${searchResult.year}-${searchResult.month})`);
+                deleted = true;
+              }
+            } catch (error) {
+              console.error(`[LeaveModel] Error deleting from found JSON file:`, error);
+            }
+          }
+        }
+
+        // If still not found in JSON, search CSV files across all months
+        if (!deleted) {
+          console.log(`[LeaveModel] Leave ${id} not found in any JSON files, attempting CSV search across months...`);
+          
+          const currentYear = new Date().getFullYear();
+          const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+          
+          for (const searchYear of yearsToCheck) {
+            for (let searchMonth = 1; searchMonth <= 12; searchMonth++) {
+              try {
+                const csvPath = this.getFilePathByMonth(searchYear, searchMonth);
+                const data = await window.electron.readFile(csvPath);
+                const lines = data.split("\n").filter((line) => line.trim().length > 0);
+                const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
+
+                if (lines.length !== updatedLines.length) {
+                  await window.electron.writeFile(csvPath, updatedLines.join("\n") + "\n");
+                  console.log(`[LeaveModel] Successfully deleted leave from CSV (${searchYear}-${searchMonth})`);
+                  deleted = true;
+                  break;
+                }
+              } catch (csvError: any) {
+                if (csvError.code === "ENOENT" || csvError.message?.includes("ENOENT")) {
+                  continue; // File doesn't exist for this month, try next
+                } else {
+                  console.error(`[LeaveModel] Error trying CSV delete (${searchYear}-${searchMonth}):`, csvError);
+                  continue;
+                }
+              }
+            }
+            if (deleted) break;
+          }
+        }
+
+        if (!deleted) {
+          console.log(`[LeaveModel] Leave ${id} not found in any JSON or CSV files, considering it already deleted`);
+        }
+        
+        return;
       }
 
-      // Delete from CSV (original implementation)
+      // CSV implementation (original code) - only for when useJsonFormat is false
       const filePath = this.getFilePath(leave);
-      const data = await window.electron.readFile(filePath);
-      const lines = data.split("\n");
-      const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
-      await window.electron.writeFile(filePath, updatedLines.join("\n"));
+      
+      try {
+        const data = await window.electron.readFile(filePath);
+        const lines = data.split("\n").filter((line) => line.trim().length > 0);
+        const updatedLines = lines.filter((line) => line.split(",")[0] !== id);
+        
+        if (lines.length !== updatedLines.length) {
+          await window.electron.writeFile(filePath, updatedLines.join("\n") + "\n");
+          console.log(`[LeaveModel] Successfully deleted leave from CSV`);
+        } else {
+          console.log(`[LeaveModel] Leave ${id} not found in CSV for deletion`);
+        }
+      } catch (error: any) {
+        if (error.code === "ENOENT" || error.message?.includes("ENOENT")) {
+          console.log(`[LeaveModel] CSV file ${filePath} not found for deletion, considering it already deleted`);
+          return; // Nothing to delete
+        }
+        console.error(`[LeaveModel] Error deleting leave from CSV ${filePath}:`, error);
+        throw error;
+      }
     } catch (error) {
       console.error("[LeaveModel] Error deleting leave:", error);
       throw error;
