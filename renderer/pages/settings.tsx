@@ -2773,7 +2773,8 @@ export default function SettingsPage() {
       return false;
     }
     // Then, apply original access check
-    return section.key === "roles" && !hasRoles
+    // Allow access to roles and database sections when no roles exist
+    return (section.key === "roles" && !hasRoles) || (section.key === "database" && !hasRoles)
       ? true
       : hasAccess(section.requiredAccess);
   });

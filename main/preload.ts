@@ -32,6 +32,9 @@ const fileSystem = {
   async fileExists(filePath: string): Promise<boolean> {
     return await ipcRenderer.invoke("fs:fileExists", filePath);
   },
+  async deleteFile(filePath: string): Promise<boolean> {
+    return await ipcRenderer.invoke("fs:deleteFile", filePath);
+  },
   async openFolderDialog(options?: {
     defaultPath?: string;
   }): Promise<string | null> {
@@ -76,6 +79,8 @@ contextBridge.exposeInMainWorld("electron", {
   ensureDir: (dirPath: string) => ipcRenderer.invoke("fs:ensureDir", dirPath),
   fileExists: (filePath: string) =>
     ipcRenderer.invoke("fs:fileExists", filePath),
+  deleteFile: (filePath: string) =>
+    ipcRenderer.invoke("fs:deleteFile", filePath),
   openFolderDialog: (options?: { defaultPath?: string }) =>
     ipcRenderer.invoke("dialog:openFolder", options),
   getFullPath: (relativePath: string) =>

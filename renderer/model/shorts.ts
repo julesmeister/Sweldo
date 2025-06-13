@@ -477,6 +477,11 @@ export class ShortModel {
           }
         }
       }
+
+      // After successful migration, delete CSV files
+      onProgress?.("Starting cleanup of shorts CSV files...");
+      await deleteCsvFiles(baseShortsPath, "shorts", onProgress);
+
       onProgress?.("Shorts migration finished.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -496,4 +501,53 @@ export const createShortModel = (
 ): ShortModel => {
   // The constructor now handles joining the paths correctly
   return new ShortModel(dbPath, employeeId, month, year);
+};
+
+/**
+ * Delete CSV files after successful migration
+ */
+const deleteCsvFiles = async (basePath: string, filePattern: string, progressCallback?: (message: string) => void) => {
+  try {
+    progressCallback?.("Starting cleanup of CSV files...");
+    
+    const findAndDeleteInDirectory = async (dirPath: string): Promise<number> => {
+      try {
+        const items = await window.electron.readDir(dirPath);
+        let deletedCount = 0;
+        
+        for (const item of items) {
+          const itemPath = `${dirPath}/${item.name}`;
+          
+          if (item.isFile && item.name.endsWith('.csv') && item.name.includes(filePattern)) {
+            try {
+              await window.electron.deleteFile(itemPath);
+              progressCallback?.(`Deleted: ${item.name}`);
+              deletedCount++;
+            } catch (error) {
+              progressCallback?.(`Failed to delete: ${item.name} - ${error}`);
+            }
+          } else if (!item.isFile) {
+            // Recursively search subdirectories
+            const subDeleted = await findAndDeleteInDirectory(itemPath);
+            deletedCount += subDeleted;
+          }
+        }
+        
+        return deletedCount;
+      } catch (error) {
+        progressCallback?.(`Error reading directory ${dirPath}: ${error}`);
+        return 0;
+      }
+    };
+    
+    const totalDeleted = await findAndDeleteInDirectory(basePath);
+    
+    if (totalDeleted > 0) {
+      progressCallback?.(`Cleanup completed: ${totalDeleted} CSV files deleted successfully`);
+    } else {
+      progressCallback?.("No CSV files found to delete");
+    }
+  } catch (error) {
+    progressCallback?.(`CSV cleanup error: ${error}`);
+  }
 };

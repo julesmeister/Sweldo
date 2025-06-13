@@ -295,6 +295,19 @@ async function ensureCssAvailable() {
     }
   });
 
+  ipcMain.handle("fs:deleteFile", async (_event, filePath: string) => {
+    try {
+      if (!validatePath(filePath)) {
+        throw new Error("Invalid file path");
+      }
+      await fs.unlink(filePath);
+      return true;
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      throw error;
+    }
+  });
+
   // Dialog operations
   ipcMain.handle("dialog:openFolder", async () => {
     try {

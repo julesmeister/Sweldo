@@ -136,9 +136,9 @@ const MigrationLogSection: React.FC<MigrationLogProps> = ({
         </button>
       )}
     </div>
-    <ul className="space-y-1 text-xs text-gray-600">
+    <ul className="space-y-1 text-xs text-gray-600 max-h-40 overflow-y-auto">
       {messages.map((msg, index) => (
-        <li key={index} className="font-mono">
+        <li key={index} className="font-mono break-words">
           {msg}
         </li>
       ))}
@@ -423,6 +423,16 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       await migrateEmployeeCsvToJson(dbPath, (message) => {
         setEmployeeProgressMessages((prev) => [...prev, message]);
       });
+      
+      // Delete CSV files after successful migration
+      await deleteCsvFiles(
+        `${dbPath}/SweldoDB/employees`, 
+        "employees", 
+        (message) => {
+          setEmployeeProgressMessages((prev) => [...prev, message]);
+        }
+      );
+      
       setEmployeeMigrationStatus("success");
       toast.success("Employee CSV to JSON migration completed successfully!");
       setEmployeeProgressMessages((prev) => [
@@ -744,6 +754,53 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
     }
   }, [dbPath, shortsMigrationStatus]);
 
+  // Helper function to find and delete CSV files after successful migration
+  const deleteCsvFiles = async (basePath: string, filePattern: string, progressCallback: (message: string) => void) => {
+    try {
+      progressCallback("Starting cleanup of CSV files...");
+      
+      const findAndDeleteInDirectory = async (dirPath: string): Promise<number> => {
+        try {
+          const items = await window.electron.readDir(dirPath);
+          let deletedCount = 0;
+          
+          for (const item of items) {
+            const itemPath = `${dirPath}/${item.name}`;
+            
+            if (item.isFile && item.name.endsWith('.csv') && item.name.includes(filePattern)) {
+              try {
+                await window.electron.deleteFile(itemPath);
+                progressCallback(`Deleted: ${item.name}`);
+                deletedCount++;
+              } catch (error) {
+                progressCallback(`Failed to delete: ${item.name} - ${error}`);
+              }
+            } else if (!item.isFile) {
+              // Recursively search subdirectories
+              const subDeleted = await findAndDeleteInDirectory(itemPath);
+              deletedCount += subDeleted;
+            }
+          }
+          
+          return deletedCount;
+        } catch (error) {
+          progressCallback(`Error reading directory ${dirPath}: ${error}`);
+          return 0;
+        }
+      };
+      
+      const totalDeleted = await findAndDeleteInDirectory(basePath);
+      
+      if (totalDeleted > 0) {
+        progressCallback(`Cleanup completed: ${totalDeleted} CSV files deleted successfully`);
+      } else {
+        progressCallback("No CSV files found to delete");
+      }
+    } catch (error) {
+      progressCallback(`CSV cleanup error: ${error}`);
+    }
+  };
+
   const handleCashAdvanceCsvToJsonMigration = useCallback(async () => {
     if (!dbPath) {
       toast.error("Database path is not set. Please configure it first.");
@@ -762,6 +819,16 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
       await migrateCashAdvanceCsvToJson(dbPath, (message) => {
         setCashAdvanceProgressMessages((prev) => [...prev, message]);
       });
+      
+      // Delete CSV files after successful migration
+      await deleteCsvFiles(
+        `${dbPath}/SweldoDB/cashAdvances`, 
+        "_cashAdvances", 
+        (message) => {
+          setCashAdvanceProgressMessages((prev) => [...prev, message]);
+        }
+      );
+      
       setCashAdvanceMigrationStatus("success");
       toast.success("Cash Advance CSV to JSON migration completed successfully!");
       setCashAdvanceProgressMessages((prev) => [
@@ -926,7 +993,7 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
         {(status === "running" ||
           status === "success" ||
           status === "error") && (
-            <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto">
+            <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
               <div className="flex justify-between items-center mb-2">
                 <h4 className="font-medium text-gray-700">Migration Log:</h4>
                 <button
@@ -971,11 +1038,14 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
             CSV to JSON Migration
           </h3>
           <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 text-sm text-blue-800">
-            <p>
+            <p className="mb-2">
               <span className="font-medium">Information:</span> This process
               will convert your data CSV files to the new JSON format,
               optimizing data storage and preparing for Firebase integration.
-              Both formats will be maintained during the transition.
+            </p>
+            <p className="text-xs italic">
+              <span className="font-medium">Note:</span> After successful migration, 
+              the original CSV files will be automatically deleted to avoid data duplication.
             </p>
           </div>
 
@@ -1127,7 +1197,7 @@ const DataMigrationSettings: React.FC<DataMigrationSettingsProps> = ({
 
           {/* JSON Migration Logs */}
           {shouldShowMigrationLogs() && (
-            <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-96 overflow-y-auto">
+            <div className="mt-6 p-4 border rounded-lg bg-gray-50 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" style={{scrollBehavior: 'smooth'}}>
               {/* Attendance JSON Migration Log */}
               {(jsonMigrationStatus !== "idle" ||
                 jsonProgressMessages.length > 0) && (

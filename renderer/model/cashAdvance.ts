@@ -585,8 +585,10 @@ export class CashAdvanceModel {
           );
           return;
         } catch (error: any) {
-          if (error.code === "ENOENT") {
-            throw new Error("Cash advance not found");
+          if (error.code === "ENOENT" || error.message?.includes("ENOENT")) {
+            // File doesn't exist, nothing to delete
+            console.log(`[CashAdvanceModel] No cash advance file found at ${jsonPath}, nothing to delete`);
+            return;
           }
           throw error;
         }
@@ -598,7 +600,12 @@ export class CashAdvanceModel {
       let data: string;
       try {
         data = await window.electron.readFile(filePath);
-      } catch (error) {
+      } catch (error: any) {
+        if (error.code === "ENOENT" || error.message?.includes("ENOENT")) {
+          // File doesn't exist, nothing to delete
+          console.log(`[CashAdvanceModel] No cash advance file found at ${filePath}, nothing to delete`);
+          return;
+        }
         throw new Error(
           `Failed to read cash advances file: ${(error as any).message}`
         );
@@ -670,8 +677,7 @@ export async function migrateCsvToJson(
     // Ensure the directory exists
     await window.electron.ensureDir(cashAdvancesBasePath);
 
-    // Since we can't get the list of directories directly, we'll need to try
-    // different employee IDs and check if those folders exist
+    // Read the directory to find all employee folders
     let employeeIds: string[] = [];
     let processedCount = 0;
     let convertedCount = 0;
@@ -679,13 +685,31 @@ export async function migrateCsvToJson(
     onProgress?.(`Looking for employee folders in ${cashAdvancesBasePath}...`);
 
     try {
-      // First check for single and double-digit employee IDs (1-99)
-      for (let i = 1; i <= 99; i++) {
+      // Use readDir to get all directories in the cashAdvances folder
+      const items = await window.electron.readDir(cashAdvancesBasePath);
+      
+      // Filter for directories only and extract employee IDs
+      employeeIds = items
+        .filter((item: { isFile: boolean; name: string }) => !item.isFile)
+        .map((item: { name: string }) => item.name)
+        .filter((name: string) => {
+          // Validate that the folder name looks like an employee ID (numeric)
+          return /^\d+$/.test(name);
+        });
+
+      onProgress?.(`Found ${employeeIds.length} employee folders: ${employeeIds.join(', ')}`);
+    } catch (error) {
+      onProgress?.(`Error reading employee folders: ${error}`);
+      
+      // Fallback to the old method if readDir fails
+      onProgress?.(`Falling back to manual employee ID checking...`);
+      
+      // Check common employee ID ranges as fallback
+      for (let i = 1; i <= 99999; i++) {
         const potentialEmployeeId = i.toString();
         const employeeFolder = `${cashAdvancesBasePath}/${potentialEmployeeId}`;
 
         try {
-          // Check if this folder exists
           const exists = await window.electron.fileExists(employeeFolder);
           if (exists) {
             employeeIds.push(potentialEmployeeId);
@@ -695,54 +719,6 @@ export async function migrateCsvToJson(
           // Folder doesn't exist, continue checking
         }
       }
-
-      // Also check for potential 3-digit employee IDs (100-999)
-      for (let i = 100; i <= 999; i++) {
-        // Only check every 100th ID to avoid too many checks
-        if (i % 100 === 0 || i === 100) {
-          const potentialEmployeeId = i.toString();
-          const employeeFolder = `${cashAdvancesBasePath}/${potentialEmployeeId}`;
-
-          try {
-            const exists = await window.electron.fileExists(employeeFolder);
-            if (exists) {
-              // If one exists, check the next 99 IDs in this range
-              for (let j = i; j < i + 100 && j <= 999; j++) {
-                const subId = j.toString();
-                const subFolder = `${cashAdvancesBasePath}/${subId}`;
-                try {
-                  const subExists = await window.electron.fileExists(subFolder);
-                  if (subExists) {
-                    employeeIds.push(subId);
-                    onProgress?.(`Found employee folder: ${subId}`);
-                  }
-                } catch (error) {
-                  // Continue to next ID
-                }
-              }
-            }
-          } catch (error) {
-            // Continue to next ID
-          }
-        }
-      }
-
-      // Check for specific known 4-digit and higher employee IDs
-      const additionalIdsToCheck = ["1010", "10003"];
-      for (const id of additionalIdsToCheck) {
-        const employeeFolder = `${cashAdvancesBasePath}/${id}`;
-        try {
-          const exists = await window.electron.fileExists(employeeFolder);
-          if (exists) {
-            employeeIds.push(id);
-            onProgress?.(`Found employee folder: ${id}`);
-          }
-        } catch (error) {
-          // Folder doesn't exist, continue checking
-        }
-      }
-    } catch (error) {
-      onProgress?.(`Error checking for employee folders: ${error}`);
     }
 
     onProgress?.(`Found ${employeeIds.length} employee folders to process`);
@@ -800,8 +776,8 @@ export async function migrateCsvToJson(
                 lines[0]?.toLowerCase().includes("amount");
               const dataStartIndex = hasHeader ? 1 : 0;
 
-              // Parse cash advances
-              const jsonData: CashAdvancesJson = {
+              // Parse cash advances - check if JSON file already exists
+              let jsonData: CashAdvancesJson = {
                 meta: {
                   employeeId,
                   year,
@@ -810,6 +786,21 @@ export async function migrateCsvToJson(
                 },
                 advances: {},
               };
+
+              // If JSON file already exists, load existing data to merge
+              try {
+                const jsonExists = await window.electron.fileExists(jsonFilePath);
+                if (jsonExists) {
+                  const existingContent = await window.electron.readFile(jsonFilePath);
+                  const existingData = JSON.parse(existingContent) as CashAdvancesJson;
+                  // Keep existing advances and merge with new ones from CSV
+                  jsonData.advances = { ...existingData.advances };
+                  onProgress?.(`Merging with existing JSON data: ${Object.keys(existingData.advances).length} existing advances found`);
+                }
+              } catch (error) {
+                onProgress?.(`Could not load existing JSON file (will create new): ${error}`);
+                // Continue with empty jsonData if existing file can't be read
+              }
 
               let validAdvanceCount = 0;
 
@@ -909,16 +900,23 @@ export async function migrateCsvToJson(
                 }
               }
 
-              // Write JSON file if we found valid advances
-              if (validAdvanceCount > 0) {
+              // Write JSON file if we found valid advances or have existing data
+              const existingAdvanceCount = Object.keys(jsonData.advances).length - validAdvanceCount;
+              if (validAdvanceCount > 0 || existingAdvanceCount > 0) {
                 await window.electron.writeFile(
                   jsonFilePath,
                   JSON.stringify(jsonData, null, 2)
                 );
                 convertedCount++;
-                onProgress?.(
-                  `Converted ${csvFilePath} to JSON with ${validAdvanceCount} valid advances`
-                );
+                if (existingAdvanceCount > 0) {
+                  onProgress?.(
+                    `Merged ${csvFilePath} to JSON: ${validAdvanceCount} from CSV + ${existingAdvanceCount} existing = ${Object.keys(jsonData.advances).length} total advances`
+                  );
+                } else {
+                  onProgress?.(
+                    `Converted ${csvFilePath} to JSON with ${validAdvanceCount} valid advances`
+                  );
+                }
               } else {
                 onProgress?.(
                   `No valid advances found in ${csvFilePath}, skipping JSON creation`
