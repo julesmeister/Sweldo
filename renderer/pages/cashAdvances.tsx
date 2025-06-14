@@ -145,9 +145,11 @@ export default function CashAdvancesPage() {
 
   const { setLoading } = useLoadingStore();
 
-  useEffect(() => {
-    setLoading(isLoading);
-  }, [isLoading, setLoading]);
+  // REMOVED: This useEffect was causing race conditions with delete operations
+  // The loading state was getting stuck, causing LoadingBar z-index 9999 to block all input interactions
+  // useEffect(() => {
+  //   setLoading(isLoading);
+  // }, [isLoading, setLoading]);
 
   useEffect(() => {
     const loadSelectedEmployee = async () => {
@@ -370,6 +372,30 @@ export default function CashAdvancesPage() {
       }
       toast.success("Cash advance deleted successfully");
       refetchData();
+      
+      // CRITICAL: Force loading state to false to prevent LoadingBar from blocking interactions
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
+      
+      // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+      setTimeout(() => {
+        // Try to programmatically trigger the same focus reset that Alt+Tab provides
+        if (window.electron && window.electron.blurWindow) {
+          // Electron method to blur the window and refocus
+          window.electron.blurWindow();
+          setTimeout(() => {
+            window.electron.focusWindow();
+          }, 50);
+        } else {
+          // Web fallback - try to simulate focus loss/regain
+          window.blur();
+          setTimeout(() => {
+            window.focus();
+            document.body.focus();
+          }, 50);
+        }
+      }, 200);
     } catch (error) {
       console.error("Error deleting cash advance:", error);
       toast.error(

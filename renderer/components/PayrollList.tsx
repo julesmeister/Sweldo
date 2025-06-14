@@ -562,6 +562,22 @@ export const PayrollList: React.FC<PayrollListProps> = React.memo(
 
         setPayrollToDelete(null);
         onPayrollDeleted();
+        
+        // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+        setTimeout(() => {
+          if (window.electron && window.electron.blurWindow) {
+            window.electron.blurWindow();
+            setTimeout(() => {
+              window.electron.focusWindow();
+            }, 50);
+          } else {
+            window.blur();
+            setTimeout(() => {
+              window.focus();
+              document.body.focus();
+            }, 50);
+          }
+        }, 200);
       } catch (error) {
         console.error("[PayrollList] Error deleting payroll:", error);
         toast.error("Failed to delete payroll record");

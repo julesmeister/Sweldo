@@ -44,10 +44,18 @@ const BaseFormDialog: React.FC<BaseFormDialogProps> = ({
             }, 10);
         } else {
             setIsVisible(false);
+            // Immediate cleanup to prevent focus issues
+            document.body.style.overflow = '';
             // Wait for animation to complete before removing from DOM
             setTimeout(() => {
                 setIsAnimating(false);
-                document.body.style.overflow = '';
+                // Ensure focus is properly restored after modal closes
+                const activeElement = document.activeElement as HTMLElement;
+                if (activeElement && activeElement.blur) {
+                    activeElement.blur();
+                }
+                // Force focus back to body to reset focus state
+                document.body.focus();
             }, 300);
         }
 

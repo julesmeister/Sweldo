@@ -389,7 +389,24 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-        onClick={onClose}
+        onClick={() => {
+          onClose();
+          // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+          setTimeout(() => {
+            if (window.electron && window.electron.blurWindow) {
+              window.electron.blurWindow();
+              setTimeout(() => {
+                window.electron.focusWindow();
+              }, 50);
+            } else {
+              window.blur();
+              setTimeout(() => {
+                window.focus();
+                document.body.focus();
+              }, 50);
+            }
+          }, 200);
+        }}
       />
 
       {/* Dialog */}
@@ -517,14 +534,48 @@ export const PayrollDeleteDialog: React.FC<PayrollDeleteDialogProps> = ({
               <button
                 type="button"
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                onClick={onClose}
+                onClick={() => {
+                  onClose();
+                  // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+                  setTimeout(() => {
+                    if (window.electron && window.electron.blurWindow) {
+                      window.electron.blurWindow();
+                      setTimeout(() => {
+                        window.electron.focusWindow();
+                      }, 50);
+                    } else {
+                      window.blur();
+                      setTimeout(() => {
+                        window.focus();
+                        document.body.focus();
+                      }, 50);
+                    }
+                  }, 200);
+                }}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-                onClick={onConfirm}
+                onClick={() => {
+                  onConfirm();
+                  // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+                  setTimeout(() => {
+                    if (window.electron && window.electron.blurWindow) {
+                      window.electron.blurWindow();
+                      setTimeout(() => {
+                        window.electron.focusWindow();
+                      }, 50);
+                    } else {
+                      window.blur();
+                      setTimeout(() => {
+                        window.focus();
+                        document.body.focus();
+                      }, 50);
+                    }
+                  }, 200);
+                }}
               >
                 Delete Payroll
               </button>

@@ -388,6 +388,21 @@ async function ensureCssAvailable() {
     return shell.openPath(path);
   });
 
+  // CRITICAL: Window focus management for fixing input focus issues after delete operations
+  ipcMain.handle("window:blur", async (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (sourceWindow) {
+      sourceWindow.blur();
+    }
+  });
+
+  ipcMain.handle("window:focus", async (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    if (sourceWindow) {
+      sourceWindow.focus();
+    }
+  });
+
   // Add Schedule PDF Handler HERE in background.ts
   ipcMain.handle("generate-schedule-pdf", async (event, data) => {
     console.log("[IPC Background] Received generate-schedule-pdf request."); // Log specific to this file

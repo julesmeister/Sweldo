@@ -23,18 +23,17 @@ const RefreshWrapper = memo(({ children }: { children: React.ReactNode }) => {
   const selectedYear = useDateSelectorStore((state) => state.selectedYear);
   const pathname = usePathname();
 
+  // CRITICAL FIX: Disable key-based remounting which breaks form interactions
+  // The key-based refresh was causing entire component tree remounts during delete operations
+  // This made form fields unresponsive across the entire application
   // Only force re-renders on date changes for specific routes that need it
-  const needsDateRefresh =
-    pathname?.includes("/timesheet") ||
-    pathname?.includes("/payroll") ||
-    pathname?.includes("/attendance");
+  const needsDateRefresh = false; // Temporarily disabled to fix form field freeze issue
+    // pathname?.includes("/timesheet") ||
+    // pathname?.includes("/payroll") ||
+    // pathname?.includes("/attendance");
 
-  // Only use key-based refresh for routes that need it
-  return needsDateRefresh ? (
-    <div key={`${selectedMonth}-${selectedYear}-${pathname}`}>{children}</div>
-  ) : (
-    <>{children}</>
-  );
+  // Use normal rendering without key-based remounting to preserve form state
+  return <>{children}</>;
 });
 
 RefreshWrapper.displayName = "RefreshWrapper";
@@ -303,20 +302,37 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // CRITICAL FIX: Debounce activity updates to prevent blocking keyboard input
+    let activityTimeout: NodeJS.Timeout | null = null;
+    
     const updateActivity = () => {
       const now = Date.now();
       setLastActivity(now);
-      useAuthStore.getState().updateLastActivity();
+      
+      // Debounce auth store updates to prevent file I/O blocking keyboard events
+      if (activityTimeout) {
+        clearTimeout(activityTimeout);
+      }
+      
+      activityTimeout = setTimeout(() => {
+        useAuthStore.getState().updateLastActivity();
+      }, 100); // 100ms debounce
     };
 
+    // CRITICAL FIX: Use passive listeners to improve performance and prevent event blocking
+    const options = { passive: true };
+
     // Track various user activities
-    window.addEventListener("mousemove", updateActivity);
+    window.addEventListener("mousemove", updateActivity, options);
     window.addEventListener("mousedown", updateActivity);
     window.addEventListener("keydown", updateActivity);
-    window.addEventListener("scroll", updateActivity);
-    window.addEventListener("touchstart", updateActivity);
+    window.addEventListener("scroll", updateActivity, options);
+    window.addEventListener("touchstart", updateActivity, options);
 
     return () => {
+      if (activityTimeout) {
+        clearTimeout(activityTimeout);
+      }
       window.removeEventListener("mousemove", updateActivity);
       window.removeEventListener("mousedown", updateActivity);
       window.removeEventListener("keydown", updateActivity);

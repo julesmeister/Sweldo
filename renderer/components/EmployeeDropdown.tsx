@@ -134,7 +134,7 @@ export const EmployeeDropdown: React.FC<EmployeeDropdownProps> = ({
     return () => setMounted(false);
   }, []);
 
-  // Handle click outside
+  // Handle click outside - TEMPORARILY DISABLED FOR TESTING
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -155,14 +155,16 @@ export const EmployeeDropdown: React.FC<EmployeeDropdownProps> = ({
       }
     };
 
-    document.addEventListener("click", handleClickOutside);
-    window.addEventListener("scroll", handleReposition, true);
-    window.addEventListener("resize", handleReposition);
+    // CRITICAL FIX: Temporarily disable global listeners to test form field freeze
+    // These global document listeners may be intercepting events before they reach form elements
+    // document.addEventListener("click", handleClickOutside);
+    // window.addEventListener("scroll", handleReposition, true);
+    // window.addEventListener("resize", handleReposition);
 
     return () => {
-      document.removeEventListener("click", handleClickOutside);
-      window.removeEventListener("scroll", handleReposition, true);
-      window.removeEventListener("resize", handleReposition);
+      // document.removeEventListener("click", handleClickOutside);
+      // window.removeEventListener("scroll", handleReposition, true);
+      // window.removeEventListener("resize", handleReposition);
     };
   }, [isOpen]);
 

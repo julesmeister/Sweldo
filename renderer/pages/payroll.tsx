@@ -80,6 +80,22 @@ export default function PayrollPage() {
         setPayrolls((currentPayrolls) =>
           currentPayrolls.filter((p) => p.id !== payrollId)
         );
+        
+        // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+        setTimeout(() => {
+          if (window.electron && window.electron.blurWindow) {
+            window.electron.blurWindow();
+            setTimeout(() => {
+              window.electron.focusWindow();
+            }, 50);
+          } else {
+            window.blur();
+            setTimeout(() => {
+              window.focus();
+              document.body.focus();
+            }, 50);
+          }
+        }, 200);
       } catch (error) {
         toast.error("Failed to delete payroll");
       } finally {

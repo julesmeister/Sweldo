@@ -299,6 +299,22 @@ export default function HolidaysPage() {
         const loadedHolidays = await holidayModel.loadHolidays();
         setHolidays(loadedHolidays);
       }
+      
+      // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+      setTimeout(() => {
+        if (window.electron && window.electron.blurWindow) {
+          window.electron.blurWindow();
+          setTimeout(() => {
+            window.electron.focusWindow();
+          }, 50);
+        } else {
+          window.blur();
+          setTimeout(() => {
+            window.focus();
+            document.body.focus();
+          }, 50);
+        }
+      }, 200);
     } catch (error) {
       console.error('[HolidaysPage] Error deleting holiday:', error);
       toast.error('Failed to delete holiday');

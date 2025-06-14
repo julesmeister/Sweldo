@@ -118,6 +118,9 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("generate-schedule-pdf", data),
   readDir: (dirPath: string) => ipcRenderer.invoke("fs:readdir", dirPath),
   loadCssPath: (cssName: string) => ipcRenderer.invoke("load:cssPath", cssName),
+  // CRITICAL: Window focus management for fixing input focus issues
+  blurWindow: () => ipcRenderer.invoke("window:blur"),
+  focusWindow: () => ipcRenderer.invoke("window:focus"),
 });
 
 export type IpcHandler = typeof handler;

@@ -234,7 +234,12 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       // Only update if time has changed significantly (more than 1 minute)
       if (now - currentLastActivity > 60000) {
         set({ lastActivity: now });
-        _saveAuthState();
+        
+        // CRITICAL FIX: Defer file I/O to prevent blocking keyboard input
+        // Use setTimeout to avoid blocking the main thread during user interactions
+        setTimeout(() => {
+          _saveAuthState();
+        }, 0);
       }
     },
 

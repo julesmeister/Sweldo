@@ -273,6 +273,8 @@ export default function LoansPage() {
         });
         // Refetch loans after saving
         refetch();
+        // Close the modal after successful save
+        setIsDialogOpen(false);
       } catch (error) {
         console.error("Error saving loan:", error);
         toast.error(`Error saving loan: ${error instanceof Error ? error.message : String(error)}`, {
@@ -454,6 +456,22 @@ export default function LoansPage() {
                                               duration: 3000,
                                             });
                                             refetch(); // Refetch loans after deletion
+                                            
+                                            // CRITICAL: Simulate focus context reset that fixes the issue (like Alt+Tab)
+                                            setTimeout(() => {
+                                              if (window.electron && window.electron.blurWindow) {
+                                                window.electron.blurWindow();
+                                                setTimeout(() => {
+                                                  window.electron.focusWindow();
+                                                }, 50);
+                                              } else {
+                                                window.blur();
+                                                setTimeout(() => {
+                                                  window.focus();
+                                                  document.body.focus();
+                                                }, 50);
+                                              }
+                                            }, 200);
                                           } catch (error) {
                                             console.error("Error deleting loan:", error);
                                             toast.error(`Error deleting loan: ${error instanceof Error ? error.message : String(error)}`, {
